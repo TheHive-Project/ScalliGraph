@@ -6,7 +6,7 @@ import play.api.libs.json.{JsObject, JsValue, Writes}
 
 import scala.collection.TraversableLike
 import scala.collection.generic.CanBuildFrom
-import scala.concurrent.duration.{Duration, DurationInt, FiniteDuration, span}
+import scala.concurrent.duration.{span, Duration, DurationInt, FiniteDuration}
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import scala.util.{Failure, Success, Try}
 

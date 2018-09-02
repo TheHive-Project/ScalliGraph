@@ -13,7 +13,7 @@ import play.api.Logger
 
 import scala.collection.JavaConverters._
 import scala.reflect.runtime.{universe ⇒ ru}
-import scala.reflect.{ClassTag, classTag}
+import scala.reflect.{classTag, ClassTag}
 
 trait Database {
   lazy val logger = Logger("org.thp.scalligraph.models.Database")

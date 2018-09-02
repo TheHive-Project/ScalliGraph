@@ -12,7 +12,7 @@ import play.api.libs.json.{Json, Writes}
 import play.api.mvc.Results.BadRequest
 import play.api.mvc._
 import shapeless.labelled.FieldType
-import shapeless.{::, HList, HNil, Witness, labelled}
+import shapeless.{::, labelled, HList, HNil, Witness}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.higherKinds

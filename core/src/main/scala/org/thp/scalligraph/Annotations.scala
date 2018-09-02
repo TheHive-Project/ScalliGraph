@@ -3,7 +3,7 @@ package org.thp.scalligraph
 import org.thp.scalligraph.macros.AnnotationMacro
 import play.api.libs.json.Writes
 
-import scala.annotation.{StaticAnnotation, compileTimeOnly}
+import scala.annotation.{compileTimeOnly, StaticAnnotation}
 import scala.language.experimental.{macros ⇒ enableMacros}
 
 @compileTimeOnly("enable macro paradise to expand macro annotations")

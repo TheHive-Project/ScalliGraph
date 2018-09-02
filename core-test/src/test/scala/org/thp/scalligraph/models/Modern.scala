@@ -1,6 +1,6 @@
 package org.thp.scalligraph.models
 
-import gremlin.scala.{Graph, GremlinScala, Key, Vertex, asScalaGraph}
+import gremlin.scala.{asScalaGraph, Graph, GremlinScala, Key, Vertex}
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.services.{EdgeSrv, VertexSrv}
