@@ -1,0 +1,109 @@
+scalar Long
+schema {
+    query: ModernQueryExecutor
+}
+
+type IntTraversal {
+    toList: [Int!]!
+    head: Int!
+    headOption: Int
+    sort: IntTraversal!
+}
+
+type ModernQueryExecutor {
+    allPeople: PersonTraversal!
+}
+
+type Person {
+    name: String!
+    age: Int!
+}
+
+input PersonFilter {
+    name: String
+    name_not: String
+    name_in: [String!]
+    name_not_in: [String!]
+    name_lt: String
+    name_lte: String
+    name_gt: String
+    name_gte: String
+    name_contains: String
+    name_not_contains: String
+    name_starts_with: String
+    name_not_starts_with: String
+    name_ends_with: String
+    name_not_ends_with: String
+    age: Int
+    age_not: Int
+    age_in: [Int!]
+    age_not_in: [Int!]
+    age_lt: Int
+    age_lte: Int
+    age_gt: Int
+    age_gte: Int
+}
+
+type PersonTraversal {
+    created: SoftwareTraversal!
+    age: IntTraversal!
+    name: StringTraversal!
+    filter(filter: PersonFilter!): PersonTraversal!
+    toList: [Person!]!
+    head: Person!
+    headOption: Person
+    sort: PersonTraversal!
+}
+
+type Software {
+    name: String!
+    lang: String!
+}
+
+input SoftwareFilter {
+    name: String
+    name_not: String
+    name_in: [String!]
+    name_not_in: [String!]
+    name_lt: String
+    name_lte: String
+    name_gt: String
+    name_gte: String
+    name_contains: String
+    name_not_contains: String
+    name_starts_with: String
+    name_not_starts_with: String
+    name_ends_with: String
+    name_not_ends_with: String
+    lang: String
+    lang_not: String
+    lang_in: [String!]
+    lang_not_in: [String!]
+    lang_lt: String
+    lang_lte: String
+    lang_gt: String
+    lang_gte: String
+    lang_contains: String
+    lang_not_contains: String
+    lang_starts_with: String
+    lang_not_starts_with: String
+    lang_ends_with: String
+    lang_not_ends_with: String
+}
+
+type SoftwareTraversal {
+    lang: StringTraversal!
+    name: StringTraversal!
+    filter(filter: SoftwareFilter!): SoftwareTraversal!
+    toList: [Software!]!
+    head: Software!
+    headOption: Software
+    sort: SoftwareTraversal!
+}
+
+type StringTraversal {
+    toList: [String!]!
+    head: String!
+    headOption: String
+    sort: StringTraversal!
+}

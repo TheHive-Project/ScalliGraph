@@ -1,0 +1,9 @@
+query AllPerson {
+    allPeople {
+        name {
+            sort {
+                toList
+            }
+        }
+    }
+}

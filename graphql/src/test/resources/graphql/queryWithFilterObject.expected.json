@@ -1,0 +1,16 @@
+{
+  "data": {
+    "allPeople": {
+      "filter": {
+        "age": {
+          "sort": {
+            "toList": [
+              29,
+              32
+            ]
+          }
+        }
+      }
+    }
+  }
+}
