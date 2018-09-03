@@ -67,7 +67,7 @@ lazy val coreTest = (project in file("core-test"))
     )
   )
 
-lazy val janus = (project in file("janus"))
+lazy val janus = (project in file("database/janusgraph"))
   .dependsOn(core)
   .settings(
     name := "scalligraph-janus",
@@ -77,7 +77,7 @@ lazy val janus = (project in file("janus"))
     )
   )
 
-lazy val orientdb = (project in file("orientdb"))
+lazy val orientdb = (project in file("database/orientdb"))
   .dependsOn(core)
   .settings(
     name := "scalligraph-orientdb",
@@ -88,7 +88,7 @@ lazy val orientdb = (project in file("orientdb"))
     )
   )
 
-lazy val neo4j = (project in file("neo4j"))
+lazy val neo4j = (project in file("database/neo4j"))
   .dependsOn(core)
   .settings(
     name := "scalligraph-neo4j",
