@@ -2,6 +2,10 @@ package org.thp.scalligraph.janus
 
 import java.util.Date
 
+import scala.util.Try
+
+import play.api.Configuration
+
 import gremlin.scala._
 import javax.inject.Singleton
 import org.apache.tinkerpop.gremlin.structure.{Edge ⇒ _, Element ⇒ _, Graph ⇒ _, Vertex ⇒ _}
@@ -11,9 +15,6 @@ import org.janusgraph.diskstorage.locking.PermanentLockingException
 import org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.{Config, InternalError, Retry}
-import play.api.Configuration
-
-import scala.util.Try
 
 @Singleton
 class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chunkSize: Int) extends Database {
@@ -36,15 +37,13 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
     32 * 1024
   )
 
-  override def drop(): Unit = JanusGraphFactory.drop(graph)
-
-  override def noTransaction[A](body: Graph ⇒ A): A =
-    body(graph)
+  override def noTransaction[A](body: Graph ⇒ A): A = body(graph)
 
   override def transaction[A](body: Graph ⇒ A): A = Retry(maxRetryOnConflict, classOf[PermanentLockingException], classOf[SchemaViolationException]) {
     logger.debug(s"Begin of transaction")
     //    val tx = graph.tx()
     //    tx.open() /*.createThreadedTx[JanusGraphTransaction]()*/
+    // Transaction is automatically open at the first operation.
     try {
       val a = body(graph)
       graph.tx.commit()
@@ -69,6 +68,13 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
     else c
 
   private def createEntityProperties(mgmt: JanusGraphManagement): Unit = {
+    Option(mgmt.getPropertyKey("_id")).getOrElse {
+      mgmt
+        .makePropertyKey("_id")
+        .dataType(convertToJava(classOf[String]))
+        .cardinality(Cardinality.SINGLE)
+        .make()
+    }
     Option(mgmt.getPropertyKey("_createdBy")).getOrElse {
       mgmt
         .makePropertyKey("_createdBy")
@@ -186,6 +192,22 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
           createEntityProperties(mgmt)
           createElementLabels(mgmt, models)
           createProperties(mgmt, models)
+
+          Option(mgmt.getGraphIndex("_id_vertex_index")).getOrElse {
+            logger.debug("Creating unique index on fields _id")
+            mgmt
+              .buildIndex("_id_vertex_index", classOf[Vertex])
+              .addKey(mgmt.getPropertyKey("_id"))
+              .unique()
+              .buildCompositeIndex()
+          }
+          Option(mgmt.getGraphIndex("_id_edge_index")).getOrElse {
+            mgmt
+              .buildIndex("_id_edge_index", classOf[Vertex])
+              .addKey(mgmt.getPropertyKey("_id"))
+              .unique()
+              .buildCompositeIndex()
+          }
 
           for {
             model                   ← models

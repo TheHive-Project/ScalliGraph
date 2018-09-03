@@ -2,28 +2,29 @@ package org.thp.scalligraph.models
 
 import java.io.InputStream
 import java.lang.reflect.Modifier
-import java.util.{Base64, Date}
-
-import gremlin.scala.{Graph, _}
-import org.thp.scalligraph.FPath
-import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.controllers.UpdateOps
-import org.thp.scalligraph.services.{EdgeSrv, VertexSrv}
-import play.api.Logger
+import java.util.{Base64, Date, UUID}
 
 import scala.collection.JavaConverters._
 import scala.reflect.runtime.{universe ⇒ ru}
 import scala.reflect.{classTag, ClassTag}
 
+import play.api.Logger
+
+import gremlin.scala.{Graph, _}
+import org.thp.scalligraph.auth.AuthContext
+import org.thp.scalligraph.controllers.UpdateOps
+import org.thp.scalligraph.services.{EdgeSrv, VertexSrv}
+import org.thp.scalligraph.{FPath, InternalError}
+
 trait Database {
   lazy val logger = Logger("org.thp.scalligraph.models.Database")
 
+  val idMapping: SingleMapping[UUID, String]          = SingleMapping[UUID, String](classOf[String], uuid ⇒ Some(uuid.toString), UUID.fromString)
   val createdAtMapping: SingleMapping[Date, Date]     = UniMapping.dateMapping
   val createdByMapping: SingleMapping[String, String] = UniMapping.stringMapping
   val updatedAtMapping: OptionMapping[Date, Date]     = UniMapping.dateMapping.optional
   val updatedByMapping: OptionMapping[String, String] = UniMapping.stringMapping.optional
 
-  def drop(): Unit
   def noTransaction[A](body: Graph ⇒ A): A
   def transaction[A](body: Graph ⇒ A): A
 
@@ -33,7 +34,7 @@ trait Database {
       rm.reflectModule(ru.typeOf[E].typeSymbol.companion.asModule)
     companionMirror.instance match {
       case hm: HasModel[_] ⇒ hm.model.asInstanceOf[Model.Base[E]]
-      case _               ⇒ ???
+      case _               ⇒ throw InternalError(s"Class ${companionMirror.symbol} is not a model")
     }
   }
 
@@ -44,7 +45,7 @@ trait Database {
     val companionMirror = rm.reflectModule(companionSymbol.asModule)
     companionMirror.instance match {
       case hm: HasVertexModel[_] ⇒ hm.model.asInstanceOf[Model.Vertex[E]]
-      case _                     ⇒ ???
+      case _                     ⇒ throw InternalError(s"Class ${companionMirror.symbol} is not a vertex model")
     }
   }
 
@@ -53,9 +54,8 @@ trait Database {
     val companionMirror =
       rm.reflectModule(ru.typeOf[E].typeSymbol.companion.asModule)
     companionMirror.instance match {
-      case hm: HasEdgeModel[_, _, _] ⇒
-        hm.model.asInstanceOf[Model.Edge[E, FROM, TO]]
-      case _ ⇒ ???
+      case hm: HasEdgeModel[_, _, _] ⇒ hm.model.asInstanceOf[Model.Edge[E, FROM, TO]]
+      case _                         ⇒ throw InternalError(s"Class ${companionMirror.symbol} is not an edge model")
     }
   }
 
@@ -88,6 +88,7 @@ trait Database {
 
   def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
     val createdVertex = model.create(v)(this, graph)
+    setSingleProperty(createdVertex, "_id", UUID.randomUUID, idMapping)
     setSingleProperty(createdVertex, "_createdAt", new Date, createdAtMapping)
     setSingleProperty(createdVertex, "_createdBy", authContext.userId, createdByMapping)
     logger.trace(s"Created vertex is ${Model.printElement(createdVertex)}")
@@ -102,10 +103,11 @@ trait Database {
       from: FROM with Entity,
       to: TO with Entity): E with Entity = {
     val edgeMaybe = for {
-      f ← graph.V(from._id).headOption()
-      t ← graph.V(to._id).headOption()
+      f ← graph.V().has(Key("_id") of from._id).headOption()
+      t ← graph.V().has(Key("_id") of to._id).headOption()
     } yield {
       val createdEdge = model.create(e, f, t)(this, graph)
+      setSingleProperty(createdEdge, "_id", UUID.randomUUID, idMapping)
       setSingleProperty(createdEdge, "_createdAt", new Date, createdAtMapping)
       setSingleProperty(createdEdge, "_createdBy", authContext.userId, createdByMapping)
       logger.trace(s"Create edge ${model.label} from $f to $t: ${Model.printElement(createdEdge)}")
@@ -122,6 +124,8 @@ trait Database {
       case (key, UpdateOps.SetAttribute(value)) ⇒
         val mapping = model.fields(key.toString).asInstanceOf[Mapping[Any, _, _]]
         setProperty(element, key.toString, value, mapping)
+      case (_, UpdateOps.UnsetAttribute) ⇒ throw InternalError("Unset an attribute is not yet implemented")
+      // TODO
     }
   }
 
@@ -129,9 +133,10 @@ trait Database {
     val values = element.properties[G](key)
     if (values.hasNext) {
       val v = mapping.toDomain(values.next().value)
-      if (values.hasNext) ???
+      if (values.hasNext)
+        throw InternalError(s"Property $key must have only one value but is multivalued on element $element" + Model.printElement(element))
       else v
-    } else ???
+    } else throw InternalError(s"Property $key is missing on element $element" + Model.printElement(element))
   }
 
   protected def getOptionProperty[D, G](element: Element, key: String, mapping: OptionMapping[D, G]): Option[D] = {
@@ -139,7 +144,8 @@ trait Database {
       .properties[G](key)
     if (values.hasNext) {
       val v = Some(mapping.toDomain(values.next().value))
-      if (values.hasNext) ???
+      if (values.hasNext)
+        throw InternalError(s"Property $key must have at most one value but is multivalued on element $element" + Model.printElement(element))
       else v
     } else None
   }
@@ -193,11 +199,11 @@ trait Database {
 
   val chunkSize: Int = 32 * 1024
 
-  def loadBinary(initialVertex: Vertex)(implicit graph: Graph): InputStream = loadBinary(initialVertex.id.toString)
+  def loadBinary(initialVertex: Vertex)(implicit graph: Graph): InputStream = loadBinary(initialVertex.value[String]("_id"))
 
   def loadBinary(id: String)(implicit graph: Graph): InputStream =
     new InputStream {
-      var vertex: GremlinScala[Vertex] = graph.V(id)
+      var vertex: GremlinScala[Vertex] = graph.V().has(Key("_id") of id)
       var buffer: Option[Array[Byte]]  = vertex.clone.value[String]("binary").map(Base64.getDecoder.decode).headOption()
       var index                        = 0
 

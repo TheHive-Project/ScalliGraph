@@ -1,12 +1,12 @@
 package org.thp.scalligraph.models
 import java.io.InputStream
 
+import scala.reflect.runtime.{universe ⇒ ru}
+
 import gremlin.scala._
 import org.thp.scalligraph.FPath
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.UpdateOps
-
-import scala.reflect.runtime.{universe ⇒ ru}
 
 trait CreateVertex[V <: Product] extends ((Graph, AuthContext, Model.Vertex[V], V) ⇒ V with Entity) {
   def compose(hook: CreateVertexHook[V]): CreateVertex[V] =
@@ -38,7 +38,6 @@ trait UpdateHook extends (Update ⇒ Update)
 
 class HookableDatabase(db: Database) extends Database {
 
-  override def drop(): Unit                           = db.drop()
   override def noTransaction[A](body: Graph ⇒ A): A   = db.noTransaction(body)
   override def transaction[A](body: Graph ⇒ A): A     = db.transaction(body)
   override def createSchema(models: Seq[Model]): Unit = db.createSchema(models)

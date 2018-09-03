@@ -3,6 +3,11 @@ package org.thp.scalligraph.orientdb
 import java.io.InputStream
 import java.util.{List ⇒ JList, Set ⇒ JSet}
 
+import scala.collection.JavaConverters._
+import scala.util.Try
+
+import play.api.Configuration
+
 import com.orientechnologies.orient.core.db.record.OIdentifiable
 import com.orientechnologies.orient.core.exception.OConcurrentModificationException
 import com.orientechnologies.orient.core.intent.OIntentMassiveInsert
@@ -13,12 +18,8 @@ import gremlin.scala.{Element, Vertex, _}
 import javax.inject.Singleton
 import org.apache.tinkerpop.gremlin.orientdb.{OrientGraph, OrientGraphFactory}
 import org.apache.tinkerpop.gremlin.structure.Graph
-import org.thp.scalligraph.Retry
 import org.thp.scalligraph.models.{IndexType, _}
-import play.api.Configuration
-
-import scala.collection.JavaConverters._
-import scala.util.Try
+import org.thp.scalligraph.{InternalError, Retry}
 
 @Singleton
 class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, override val chunkSize: Int) extends Database {
@@ -36,10 +37,7 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
 
   def this() = this(Configuration.empty)
 
-  override def drop(): Unit = graphFactory.getNoTx.drop()
-
-  override def noTransaction[A](body: Graph ⇒ A): A =
-    body(graphFactory.getNoTx)
+  override def noTransaction[A](body: Graph ⇒ A): A = body(graphFactory.getNoTx)
 
   override def transaction[A](body: Graph ⇒ A): A = Retry(maxRetryOnConflict, classOf[OConcurrentModificationException]) {
     val tx = graphFactory.getTx
@@ -78,13 +76,15 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
           .setMandatory(false)
           .setNotNull(false)
           .setReadonly(isReadonly)
-
     }
+    clazz.createProperty("_id", OType.STRING).setMandatory(strict).setNotNull(true).setReadonly(true)
     clazz.createProperty("_createdBy", OType.STRING).setMandatory(strict).setNotNull(true).setReadonly(true)
     clazz.createProperty("_createdAt", OType.DATETIME).setMandatory(strict).setNotNull(true).setReadonly(true)
     clazz.createProperty("_updatedBy", OType.STRING).setMandatory(false).setNotNull(false)
     clazz.createProperty("_updatedAt", OType.DATETIME).setMandatory(false).setNotNull(false)
     clazz.setStrictMode(strict)
+
+    clazz.createIndex(s"${model.label}__id", INDEX_TYPE.UNIQUE, "_id")
 
     model.indexes.foreach {
       case (IndexType.unique, fields) ⇒
@@ -93,6 +93,7 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
         clazz.createIndex(s"${model.label}_${fields.mkString("_")}", INDEX_TYPE.DICTIONARY, fields: _*)
       case (IndexType.fulltext, fields) ⇒
         clazz.createIndex(s"${model.label}_${fields.mkString("_")}", INDEX_TYPE.FULLTEXT, fields: _*)
+      case indexType ⇒ throw InternalError(s"Unrecognized index type: $indexType")
     }
     clazz
   }
@@ -148,7 +149,7 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
     ()
   }
 
-  override def loadBinary(id: String)(implicit graph: Graph): InputStream = loadBinary(graph.V(id).head()) // check
+  override def loadBinary(id: String)(implicit graph: Graph): InputStream = loadBinary(graph.V().has(Key("_id") of id).head()) // check
 
   override def loadBinary(vertex: Vertex)(implicit graph: Graph): InputStream =
     new InputStream {

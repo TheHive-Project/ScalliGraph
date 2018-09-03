@@ -21,7 +21,7 @@ object MappingCardinality extends Enumeration {
       (c1 == single && c2 == option) ||
       (c1 == option && c2 == single)
 }
-trait Mapping[D, SD, G] extends UniMapping[D] with Converter[SD] {
+sealed trait Mapping[D, SD, G] extends UniMapping[D] with Converter[SD] {
   override type GraphType = G
   val graphTypeClass: Class[_]
   val cardinality: MappingCardinality.Value

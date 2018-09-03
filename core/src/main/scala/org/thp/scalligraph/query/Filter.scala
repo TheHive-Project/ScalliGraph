@@ -8,14 +8,15 @@ import org.scalactic.Accumulation._
 import org.scalactic.Good
 import org.thp.scalligraph.controllers.{FSeq, FieldsParser}
 import org.thp.scalligraph.models.{ElementSteps, VertexOrEdge}
-
 import scala.reflect.runtime.{universe ⇒ ru}
+
+import org.thp.scalligraph.BadRequestError
 
 abstract class Filter[E <: Element] extends (GremlinScala[E] ⇒ GremlinScala[E]) { thisFilter ⇒
   def compose[T](q: InitQuery[T]): InitQuery[T] =
     if (q.toType <:< ru.typeOf[ElementSteps[_, _, _]]) new InitQuery[T](s"${q.name}_filter", q.toType) {
       override def apply(g: AuthGraph): T = q(g).asInstanceOf[ElementSteps[_, E, _]].filter(thisFilter).asInstanceOf[T]
-    } else ???
+    } else throw BadRequestError(s"Invalid result type for ${q.name}. Expected ElementSteps, found ${q.toType}")
 }
 
 object Filter {

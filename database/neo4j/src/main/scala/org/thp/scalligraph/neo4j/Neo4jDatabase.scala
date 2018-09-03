@@ -3,6 +3,11 @@ package org.thp.scalligraph.neo4j
 import java.nio.file.{Files, Paths}
 import java.util.Date
 
+import scala.reflect.ClassTag
+import scala.util.Try
+
+import play.api.Configuration
+
 import gremlin.scala._
 import javax.inject.Singleton
 import org.apache.tinkerpop.gremlin.neo4j.structure.Neo4jGraph
@@ -12,10 +17,6 @@ import org.neo4j.io.fs.FileUtils
 import org.neo4j.tinkerpop.api.impl.Neo4jGraphAPIImpl
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.{Config, Retry}
-import play.api.Configuration
-
-import scala.reflect.ClassTag
-import scala.util.Try
 
 @Singleton
 class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends Database {
@@ -44,8 +45,6 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends Database
         Neo4jGraph.CONFIG_META_PROPERTIES  → true
       ))
 
-  override def drop(): Unit = ???
-
   override def noTransaction[A](body: Graph ⇒ A): A = graph.synchronized {
     body(graph)
   }
@@ -71,11 +70,17 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends Database
   }
 
   override def createSchema(models: Seq[Model]): Unit =
+    // Cypher can't be used here to create schema as it is not compatible with scala 2.12
     // https://github.com/neo4j/neo4j/issues/8832
     transaction { _ ⇒
       val neo4jGraph = graph.getBaseGraph.asInstanceOf[Neo4jGraphAPIImpl].getGraphDatabase
       for {
-        model                   ← models
+        model ← models
+        _ = neo4jGraph
+          .schema()
+          .constraintFor(Label.label(model.label))
+          .assertPropertyIsUnique("_id")
+          .create()
         (indexType, properties) ← model.indexes
       } {
         if (properties.size != 1)

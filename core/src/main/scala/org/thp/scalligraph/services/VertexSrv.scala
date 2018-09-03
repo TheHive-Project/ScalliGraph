@@ -12,7 +12,7 @@ class VertexSrv[V <: Product: ru.TypeTag](implicit db: Database) extends Element
   def steps(implicit graph: Graph): ElementSteps[V, _, _]     = new VertexSteps[V](graph.V.hasLabel(model.label))
   def steps(raw: GremlinScala[Vertex]): BaseVertexSteps[V, _] = new VertexSteps[V](raw)
 
-  override def get(id: String)(implicit graph: Graph): ElementSteps[V, _, _] = steps(graph.V(id))
+  override def get(id: String)(implicit graph: Graph): ElementSteps[V, _, _] = steps(graph.V().has(Key("_id") of id))
 
   def create(e: V)(implicit graph: Graph, authContext: AuthContext): V with Entity =
     db.createVertex[V](graph, authContext, model, e)

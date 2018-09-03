@@ -101,7 +101,7 @@ abstract class VertexModel extends Model { thisModel ⇒
   def create(e: E)(implicit db: Database, graph: Graph): Vertex
 
   override def get(id: String)(implicit db: Database, graph: Graph): Vertex =
-    graph.V(id).headOption().getOrElse(throw NotFoundError(s"Vertex $id not found"))
+    graph.V().has(Key("_id") of id).headOption().getOrElse(throw NotFoundError(s"Vertex $id not found"))
 
   override def converter(db: Database, graph: Graph): Converter.Aux[EEntity, Vertex] =
     new Converter[EEntity] {
@@ -120,7 +120,7 @@ abstract class EdgeModel[FROM <: Product, TO <: Product] extends Model { thisMod
   def create(e: E, from: Vertex, to: Vertex)(implicit db: Database, graph: Graph): Edge
 
   override def get(id: String)(implicit db: Database, graph: Graph): Edge =
-    graph.E(id).headOption().getOrElse(throw NotFoundError(s"Edge $id not found"))
+    graph.E().has(Key("_id") of id).headOption().getOrElse(throw NotFoundError(s"Edge $id not found"))
 
   override def converter(db: Database, graph: Graph): Converter.Aux[EEntity, Edge] =
     new Converter[EEntity] {
