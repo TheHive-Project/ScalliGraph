@@ -1,5 +1,8 @@
 package org.thp.scalligraph.models
 
+import play.api.{Configuration, Environment}
+import play.api.libs.logback.LogbackLoggerConfigurator
+
 import org.apache.tinkerpop.gremlin.structure.T
 import org.specs2.mock.Mockito
 import org.specs2.specification.core.Fragments
@@ -19,6 +22,7 @@ class SimpleEntityTest extends PlaySpecification with Mockito {
 
   val userSrv: UserSrv                  = DummyUserSrv()
   implicit val authContext: AuthContext = userSrv.initialAuthContext
+  (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
   Fragments.foreach(DatabaseProviders.list) { dbProvider ⇒
     implicit val db: Database = dbProvider.get()

@@ -11,12 +11,13 @@ import scala.reflect.{classTag, ClassTag}
 import play.api.Logger
 
 import gremlin.scala.{Graph, _}
+import org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.UpdateOps
 import org.thp.scalligraph.services.{EdgeSrv, VertexSrv}
 import org.thp.scalligraph.{FPath, InternalError}
 
-trait Database {
+abstract class Database {
   lazy val logger = Logger("org.thp.scalligraph.models.Database")
 
   val idMapping: SingleMapping[UUID, String]          = SingleMapping[UUID, String](classOf[String], uuid ⇒ Some(uuid.toString), UUID.fromString)
@@ -180,12 +181,18 @@ trait Database {
 
   protected def setListProperty[D, G](element: Element, key: String, values: Seq[D], mapping: ListMapping[D, _]): Unit = {
     element.properties(key).asScala.foreach(_.remove)
-    values.flatMap(mapping.toGraphOpt).foreach(element.property(key, _))
+    element match {
+      case vertex: Vertex ⇒ values.flatMap(mapping.toGraphOpt).foreach(vertex.property(Cardinality.list, key, _))
+      case _              ⇒ throw InternalError("Edge doesn't support multi-valued properties")
+    }
   }
 
   protected def setSetProperty[D, G](element: Element, key: String, values: Set[D], mapping: SetMapping[D, _]): Unit = {
     element.properties(key).asScala.foreach(_.remove)
-    values.flatMap(mapping.toGraphOpt).foreach(element.property(key, _))
+    element match {
+      case vertex: Vertex ⇒ values.flatMap(mapping.toGraphOpt).foreach(vertex.property(Cardinality.set, key, _))
+      case _              ⇒ throw InternalError("Edge doesn't support multi-valued properties")
+    }
   }
 
   def setProperty[D](element: Element, key: String, value: D, mapping: Mapping[D, _, _]): Unit =

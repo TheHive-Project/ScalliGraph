@@ -50,6 +50,9 @@ trait MappingMacro extends MacroUtil with MacroLogger {
       case SeqType(subType) ⇒
         val subMapping = getMapping(subType.typeSymbol, subType)
         Some(q"$subMapping.sequence")
+      case SetType(subType) ⇒
+        val subMapping = getMapping(subType.typeSymbol, subType)
+        Some(q"$subMapping.set")
       case OptionType(subType) ⇒
         val subMapping = getMapping(subType.typeSymbol, subType)
         Some(q"$subMapping.optional")

@@ -114,10 +114,7 @@ case class FieldsParser[T](formatName: String)(val parse: PartialFunction[(FPath
         field match {
           case FSeq(subFields) ⇒
             subFields.zipWithIndex
-              .map { case (f, i) ⇒ apply(path.toSeq(i), f) }
-              .foldRight[List[T] Or Every[AttributeError]](Good(Nil)) { (x, xs) ⇒
-                withGood(x, xs)(_ :: _)
-              }
+              .validatedBy { case (f, i) ⇒ apply(path.toSeq(i), f) }
           case FNull | FUndefined ⇒ Good(Nil)
           case other ⇒
             Bad(One(InvalidFormatAttributeError(path.toString, "object", other)))

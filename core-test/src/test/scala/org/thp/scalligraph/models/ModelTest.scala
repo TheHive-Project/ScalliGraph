@@ -2,19 +2,18 @@ package org.thp.scalligraph.models
 
 import java.util.Date
 
+import play.api.{Configuration, Environment}
+
 import org.specs2.mock.Mockito
 import org.specs2.mutable.Specification
 import org.thp.scalligraph.JsonOutput
 import play.api.libs.json.{JsNull, Json}
-
-//@VertexEntity
-//case class MyEntity(name: String, value: Int)
+import play.api.libs.logback.LogbackLoggerConfigurator
 
 class ModelTest extends Specification with Mockito {
 
-//  case class MyEntity(u: String, e: String, d: Double, v: Boolean)
-
   "model macro" should {
+    (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
     "create model companion" in {
 

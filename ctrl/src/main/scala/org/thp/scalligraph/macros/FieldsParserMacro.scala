@@ -30,7 +30,7 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroUtil with MacroLog
   }
 
   private def getParserFromAnnotation(symbol: Symbol, eType: Type): Option[Tree] = {
-    val withParserType = appliedType(weakTypeOf[WithParser[_]], eType)
+    val withParserType = appliedType(typeOf[WithParser[_]], eType)
     (symbol.annotations ::: eType.typeSymbol.annotations)
       .find(_.tree.tpe <:< withParserType)
       .map(annotation ⇒ annotation.tree.children.tail.head)
@@ -55,8 +55,6 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroUtil with MacroLog
           case 1 ⇒ q"($companion.apply _)"
           case _ ⇒ q"($companion.apply _).curried"
         }
-//          if (paramSymbols.length > 1) q"($companion.apply _).curried"
-//          else q"($companion.apply _)"
         val entityBuilder = paramSymbols
           .foldLeft[Option[Tree]](Some(q"org.scalactic.Good($initialBuilder).orBad[org.scalactic.Every[org.thp.scalligraph.AttributeError]]")) {
             case (maybeBuilder, s) ⇒
@@ -111,7 +109,7 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroUtil with MacroLog
               ". Possible values are " + ${values.map(_._1).mkString(",")})"""
         Some(q"""org.thp.scalligraph.controllers.FieldsParser.string.map("enum") { case ..$caseValues }""")
       case _ ⇒
-        c.abort(c.enclosingPosition, s"Can't build parser for $eType (${eType.typeSymbol.fullName})")
+        None
     }
 
   /** ***********************************************/
@@ -131,9 +129,9 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroUtil with MacroLog
     else Some(fieldsParser)
   }
 
-  private def buildUpdateParser(eType: Type): Tree = {
+  private def buildUpdateParser(symbol: Symbol, eType: Type): Tree = {
     val className: String = eType.toString.split("\\.").last
-    val updateFieldsParser = _getFieldsParser(eType.typeSymbol, eType)
+    val updateFieldsParser = _getFieldsParser(symbol, eType)
       .map { parser ⇒
         q"""
          import org.thp.scalligraph.controllers.UpdateFieldsParser
@@ -173,11 +171,12 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroUtil with MacroLog
 
   def getUpdateFieldsParser[E: WeakTypeTag]: Tree = {
     val eType = weakTypeOf[E]
+    initLogger(eType.typeSymbol)
     _getUpdateFieldsParser(eType.typeSymbol, eType)
   }
 
   private def _getUpdateFieldsParser(symbol: Symbol, eType: Type): Tree =
     getUpdateParserFromAnnotation(symbol, eType)
       .orElse(getUpdateParserFromImplicit(eType))
-      .getOrElse(buildUpdateParser(eType))
+      .getOrElse(buildUpdateParser(symbol, eType))
 }

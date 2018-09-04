@@ -34,6 +34,20 @@ trait MacroUtil extends MacroLogger {
       } else None
   }
 
+  object SetType {
+    def unapply(s: Symbol): Option[Type] =
+      s match {
+        case _: TypeSymbol ⇒ unapply(s.asType.toType)
+        case _: TermSymbol ⇒ unapply(s.typeSignature)
+      }
+
+    def unapply(tpe: Type): Option[Type] =
+      if (tpe <:< weakTypeOf[Set[_]]) {
+        val TypeRef(_, _, List(subElementType)) = tpe
+        Some(subElementType)
+      } else None
+  }
+
   object OptionType {
     def unapply(s: Symbol): Option[Type] =
       s match {
