@@ -1,40 +1,25 @@
 package org.thp.scalligraph.services.auth
 
+import scala.collection.immutable
+import scala.concurrent.{ExecutionContext, Future}
+
+import play.api.Logger
+import play.api.mvc.RequestHeader
+
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.auth.AuthCapability.Type
 import org.thp.scalligraph.auth.{AuthContext, AuthSrv}
 import org.thp.scalligraph.{AuthenticationError, OAuth2Redirect}
-import play.api.mvc.RequestHeader
-import play.api.{Configuration, Logger}
-
-import scala.collection.immutable
-import scala.concurrent.{ExecutionContext, Future}
 
 object MultiAuthSrv {
   private[MultiAuthSrv] lazy val logger = Logger(getClass)
 }
 
 @Singleton
-class MultiAuthSrv(val authProviders: Seq[AuthSrv], implicit val ec: ExecutionContext) extends AuthSrv {
-
-  @Inject() def this(configuration: Configuration, authModules: immutable.Set[AuthSrv], ec: ExecutionContext) =
-    this(
-      configuration
-        .getDeprecated[Option[Seq[String]]]("auth.provider", "auth.type")
-        .getOrElse(Nil)
-        .flatMap { authType ⇒
-          authModules
-            .find(_.name == authType)
-            .orElse {
-              MultiAuthSrv.logger.error(s"Authentication module $authType not found")
-              None
-            }
-        },
-      ec
-    )
+class MultiAuthSrv @Inject()(val authProviders: immutable.Set[AuthSrv], implicit val ec: ExecutionContext) extends AuthSrv {
 
   val name                             = "multi"
-  override val capabilities: Set[Type] = authProviders.flatMap(_.capabilities).toSet
+  override val capabilities: Set[Type] = authProviders.flatMap(_.capabilities)
 
   private[auth] def forAllAuthProvider[A](body: AuthSrv ⇒ Future[A]) =
     authProviders.foldLeft(Future.failed[A](new Exception("no authentication provider found"))) { (f, a) ⇒

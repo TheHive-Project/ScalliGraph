@@ -2,13 +2,9 @@ package org.thp.scalligraph.models
 
 import java.util.Date
 
-import gremlin.scala.dsl.Converter
-import play.api.Logger
 import play.api.libs.json.{JsObject, Json}
 
-object Schema {
-  val logger = Logger(getClass)
-}
+import gremlin.scala.dsl.Converter
 
 trait UniMapping[D] {
   _: Mapping[D, _, _] ⇒

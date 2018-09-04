@@ -1,14 +1,17 @@
 package org.thp.scalligraph.auth
 
-import java.util.concurrent.atomic.AtomicBoolean
+import scala.concurrent.Future
 
-import org.thp.scalligraph.{AuthenticationError, AuthorizationError}
+import play.api.libs.json.{JsString, Writes}
 import play.api.mvc.RequestHeader
 
-import scala.concurrent.Future
+import org.thp.scalligraph.{AuthenticationError, AuthorizationError}
 
 abstract class Permission(val name: String) {
   override def toString: String = name
+}
+object Permission {
+  implicit val writes: Writes[Permission] = Writes[Permission](p ⇒ JsString(p.name))
 }
 
 trait AuthContext {
@@ -16,21 +19,17 @@ trait AuthContext {
   def userName: String
   def requestId: String
   def permissions: Seq[Permission]
-  private val baseAudit       = new AtomicBoolean(true)
-  def getBaseAudit(): Boolean = baseAudit.get && baseAudit.getAndSet(false)
 }
 
 trait UserSrv {
   def getFromId(request: RequestHeader, userId: String): Future[AuthContext]
   def getFromUser(request: RequestHeader, user: User): Future[AuthContext]
   def getInitialUser(request: RequestHeader): Future[AuthContext]
-//  def inInitAuthContext[A](block: AuthContext ⇒ Future[A]): Future[A]
   val initialAuthContext: AuthContext
   def getUser(userId: String): Future[User]
 }
 
 trait User {
-  //  val attributes: JsObject
   val id: String
   def getUserName: String
   def getPermissions: Seq[Permission]

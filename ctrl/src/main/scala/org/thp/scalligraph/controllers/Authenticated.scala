@@ -71,7 +71,7 @@ class Authenticated(
     this(
       configuration.getMillis("session.inactivity").millis,
       configuration.getMillis("session.warning").millis,
-      configuration.get[String]("session.username"),
+      configuration.getOptional[String]("session.username").getOrElse("username"),
       configuration.getOptional[String]("auth.pki.certificateField"),
       configuration.getOptional[Boolean]("auth.method.session").getOrElse(true),
       configuration.getOptional[Boolean]("auth.method.key").getOrElse(true),

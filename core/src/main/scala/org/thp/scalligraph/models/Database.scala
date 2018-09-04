@@ -29,6 +29,10 @@ abstract class Database {
   def noTransaction[A](body: Graph ⇒ A): A
   def transaction[A](body: Graph ⇒ A): A
 
+  def version: Int = noTransaction(_.variables.get[Int]("version").orElse(0))
+
+  def setVersion(v: Int): Unit = noTransaction(_.variables.set("version", v))
+
   def getModel[E <: Product: ru.TypeTag]: Model.Base[E] = {
     val rm = ru.runtimeMirror(getClass.getClassLoader)
     val companionMirror =
