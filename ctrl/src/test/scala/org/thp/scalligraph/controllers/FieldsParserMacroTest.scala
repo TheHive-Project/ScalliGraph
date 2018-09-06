@@ -98,5 +98,22 @@ class FieldsParserMacroTest extends Specification with TestUtils {
 
       fieldsParser(fields) must_=== Good("stringValue")
     }
+
+    "parse a sequence of string" in {
+      val fieldsParser = FieldsParser.string.sequence
+      val fields       = FSeq(FString("value1"), FString("value2"), FString("value3"))
+
+      fieldsParser(fields) must_=== Good(Seq("value1", "value2", "value3"))
+    }
+
+    "parse a sequence of object" in {
+      val fieldsParser = getFieldsParser[SimpleClassForFieldsParserMacroTest].sequence
+      val fields =
+        FSeq(FObject("name" → FString("simpleClass"), "value" → FNumber(42)), FObject("name" → FString("simpleClassBis"), "value" → FNumber(43)))
+      val simpleClass = Seq(SimpleClassForFieldsParserMacroTest("simpleClass", 42), SimpleClassForFieldsParserMacroTest("simpleClassBis", 43))
+
+      fieldsParser(fields) must_=== Good(simpleClass)
+
+    }
   }
 }

@@ -39,10 +39,10 @@ case class OptionMapping[D, G](
     toDomainFn: G ⇒ D = (g: G) ⇒ g.asInstanceOf[D],
     isReadonly: Boolean = false
 ) extends Mapping[Option[D], D, G] {
-  override val cardinality                   = MappingCardinality.option
-  override def toGraphOpt(d: D): Option[G]   = toGraphOptFn(d)
-  override def toDomain(g: G): D             = toDomainFn(g)
-  override def readonly: OptionMapping[D, G] = copy(isReadonly = true)
+  override val cardinality: MappingCardinality.Value = MappingCardinality.option
+  override def toGraphOpt(d: D): Option[G]           = toGraphOptFn(d)
+  override def toDomain(g: G): D                     = toDomainFn(g)
+  override def readonly: OptionMapping[D, G]         = copy(isReadonly = true)
 }
 
 case class SingleMapping[D, G](
@@ -51,13 +51,13 @@ case class SingleMapping[D, G](
     toDomainFn: G ⇒ D = (g: G) ⇒ g.asInstanceOf[D],
     isReadonly: Boolean = false
 ) extends Mapping[D, D, G] {
-  override val cardinality                   = MappingCardinality.single
-  override def toGraphOpt(d: D): Option[G]   = toGraphOptFn(d)
-  override def toDomain(g: G): D             = toDomainFn(g)
-  override def readonly: SingleMapping[D, G] = copy(isReadonly = true)
-  override def optional: OptionMapping[D, G] = OptionMapping[D, G](graphTypeClass, toGraphOptFn, toDomainFn, isReadonly)
-  override def sequence: ListMapping[D, G]   = ListMapping[D, G](graphTypeClass, toGraphOptFn, toDomainFn, isReadonly)
-  override def set: SetMapping[D, G]         = SetMapping[D, G](graphTypeClass, toGraphOptFn, toDomainFn, isReadonly)
+  override val cardinality: MappingCardinality.Value = MappingCardinality.single
+  override def toGraphOpt(d: D): Option[G]           = toGraphOptFn(d)
+  override def toDomain(g: G): D                     = toDomainFn(g)
+  override def readonly: SingleMapping[D, G]         = copy(isReadonly = true)
+  override def optional: OptionMapping[D, G]         = OptionMapping[D, G](graphTypeClass, toGraphOptFn, toDomainFn, isReadonly)
+  override def sequence: ListMapping[D, G]           = ListMapping[D, G](graphTypeClass, toGraphOptFn, toDomainFn, isReadonly)
+  override def set: SetMapping[D, G]                 = SetMapping[D, G](graphTypeClass, toGraphOptFn, toDomainFn, isReadonly)
 }
 
 case class ListMapping[D, G](
@@ -66,10 +66,10 @@ case class ListMapping[D, G](
     toDomainFn: G ⇒ D = (g: G) ⇒ g.asInstanceOf[D],
     isReadonly: Boolean = false
 ) extends Mapping[Seq[D], D, G] {
-  override val cardinality                 = MappingCardinality.list
-  override def toGraphOpt(d: D): Option[G] = toGraphOptFn(d)
-  override def toDomain(g: G): D           = toDomainFn(g)
-  override def readonly: ListMapping[D, G] = copy(isReadonly = true)
+  override val cardinality: MappingCardinality.Value = MappingCardinality.list
+  override def toGraphOpt(d: D): Option[G]           = toGraphOptFn(d)
+  override def toDomain(g: G): D                     = toDomainFn(g)
+  override def readonly: ListMapping[D, G]           = copy(isReadonly = true)
 }
 
 case class SetMapping[D, G](
@@ -78,10 +78,10 @@ case class SetMapping[D, G](
     toDomainFn: G ⇒ D = (g: G) ⇒ g.asInstanceOf[D],
     isReadonly: Boolean = false
 ) extends Mapping[Set[D], D, G] {
-  override val cardinality                 = MappingCardinality.set
-  override def toGraphOpt(d: D): Option[G] = toGraphOptFn(d)
-  override def toDomain(g: G): D           = toDomainFn(g)
-  override def readonly: SetMapping[D, G]  = copy(isReadonly = true)
+  override val cardinality: MappingCardinality.Value = MappingCardinality.set
+  override def toGraphOpt(d: D): Option[G]           = toGraphOptFn(d)
+  override def toDomain(g: G): D                     = toDomainFn(g)
+  override def readonly: SetMapping[D, G]            = copy(isReadonly = true)
 
 }
 

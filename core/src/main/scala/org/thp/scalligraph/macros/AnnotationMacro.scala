@@ -46,7 +46,7 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
         c.abort(c.enclosingPosition, s"macroApplication = ${showRaw(c.macroApplication)}")
     }
     annottees.toList match {
-      case (modelClass @ ClassDef(classMods, className, Nil, classTemplate)) :: tail if classMods.hasFlag(Flag.CASE) ⇒
+      case (modelClass @ ClassDef(classMods, className, Nil, _)) :: tail if classMods.hasFlag(Flag.CASE) ⇒
         val modelDef = Seq(
           q"val model = org.thp.scalligraph.models.Model.edge[$className, $fromType, $toType]"
 //          q"def unapply(e: gremlin.scala.Element): Option[$className] = scala.util.Try(model.toDomain(e.asInstanceOf[gremlin.scala.Edge])).toOption"

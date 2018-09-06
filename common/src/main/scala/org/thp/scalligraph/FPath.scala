@@ -14,7 +14,7 @@ object FPathEmpty extends FPath {
   def /(elem: FPath): FPath     = elem
   override def toString: String = ""
   def toSeq: FPath              = sys.error("ERROR: empty.toSeq")
-  def toSeq(index: Int): FPath  = sys.error(s"ERROR: empty.toSeq($index)")
+  def toSeq(index: Int): FPath  = this // sys.error(s"ERROR: empty.toSeq($index)")
   def toBare: FPath             = this
 }
 case class FPathElem(head: String, tail: FPath) extends FPath {

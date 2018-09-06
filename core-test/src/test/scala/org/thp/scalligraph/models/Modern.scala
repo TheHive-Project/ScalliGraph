@@ -75,7 +75,7 @@ class ModernSchema(implicit db: Database, authContext: AuthContext) {
   val createdSrv  = new EdgeSrv[Created, Person, Software]
 
   db.createSchemaFrom(this)
-  val a = db.transaction { implicit graph ⇒
+  db.transaction { implicit graph ⇒
     val marko  = personSrv.create(Person("marko", 29))
     val vadas  = personSrv.create(Person("vadas", 17))
     val josh   = personSrv.create(Person("josh", 32))
@@ -89,5 +89,4 @@ class ModernSchema(implicit db: Database, authContext: AuthContext) {
     createdSrv.create(Created(0.4), josh, lop)
     createdSrv.create(Created(0.2), peter, lop)
   }
-
 }

@@ -12,8 +12,8 @@ class ModernTest extends PlaySpecification {
   implicit val authContext: AuthContext = DummyAuthContext("me")
 
   Fragments.foreach(DatabaseProviders.list) { dbProvider ⇒
-    implicit val db  = dbProvider.get()
-    val modernSchema = new ModernSchema
+    implicit val db: Database = dbProvider.get()
+    val modernSchema          = new ModernSchema
     s"[${dbProvider.name}] graph" should {
       "remove connected edge when a vertex is removed" in db.transaction { implicit graph ⇒
         // Check that marko is connected to two other people, with known level 0.5 and 1.0
