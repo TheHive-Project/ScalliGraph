@@ -75,8 +75,8 @@ abstract class Database {
       }.toSeq
 
     val models     = extract[Model](schemaObject)
-    val vertexSrvs = extract[VertexSrv[_]](schemaObject)
-    val edgeSrvs   = extract[EdgeSrv[_, _, _]](schemaObject)
+    val vertexSrvs = extract[VertexSrv[_, _]](schemaObject)
+    val edgeSrvs   = extract[EdgeSrv[_, _, _]](schemaObject) ++ vertexSrvs.flatMap(extract[EdgeSrv[_, _, _]])
     createSchema(models, vertexSrvs, edgeSrvs)
   }
 
@@ -84,7 +84,7 @@ abstract class Database {
 
   def createSchema(models: Seq[Model]): Unit
 
-  def createSchema(models: Seq[Model], vertexSrvs: Seq[VertexSrv[_]], edgeSrvs: Seq[EdgeSrv[_, _, _]])(implicit authContext: AuthContext): Unit = {
+  def createSchema(models: Seq[Model], vertexSrvs: Seq[VertexSrv[_, _]], edgeSrvs: Seq[EdgeSrv[_, _, _]])(implicit authContext: AuthContext): Unit = {
     createSchema(vertexSrvs.map(_.model) ++ edgeSrvs.map(_.model) ++ models)
     transaction { implicit graph ⇒
       vertexSrvs.foreach(_.createInitialValues())
@@ -125,10 +125,12 @@ abstract class Database {
     val element: Element = model.get(id)(this, graph)
     setOptionProperty(element, "_updatedAt", Some(new Date), updatedAtMapping)
     setOptionProperty(element, "_updatedBy", Some(authContext.userId), updatedByMapping)
+    logger.trace(s"Update $id by ${authContext.userId}")
     fields.foreach {
       case (key, UpdateOps.SetAttribute(value)) ⇒
         val mapping = model.fields(key.toString).asInstanceOf[Mapping[Any, _, _]]
         setProperty(element, key.toString, value, mapping)
+        logger.trace(s" - $key = $value")
       case (_, UpdateOps.UnsetAttribute) ⇒ throw InternalError("Unset an attribute is not yet implemented")
       // TODO
     }

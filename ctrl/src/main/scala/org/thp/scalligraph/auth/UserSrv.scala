@@ -17,6 +17,7 @@ object Permission {
 trait AuthContext {
   def userId: String
   def userName: String
+  def organisation: String
   def requestId: String
   def permissions: Seq[Permission]
 }

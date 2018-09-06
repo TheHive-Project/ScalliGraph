@@ -6,7 +6,12 @@ import play.api.test.PlaySpecification
 
 class ModernTest extends PlaySpecification {
 
-  case class DummyAuthContext(userId: String = "", userName: String = "", permissions: Seq[Permission] = Nil, requestId: String = "")
+  case class DummyAuthContext(
+      userId: String = "",
+      userName: String = "",
+      organisation: String = "",
+      permissions: Seq[Permission] = Nil,
+      requestId: String = "")
       extends AuthContext
 
   implicit val authContext: AuthContext = DummyAuthContext("me")
@@ -25,7 +30,7 @@ class ModernTest extends PlaySpecification {
       }
 
       "create initial values" in db.transaction { implicit graph ⇒
-        modernSchema.personSrv.steps.name.toList must contain(exactly("marko", "vadas", "franck", "marc", "josh", "peter"))
+        modernSchema.personSrv.initSteps.name.toList must contain(exactly("marko", "vadas", "franck", "marc", "josh", "peter"))
       }
     }
   }

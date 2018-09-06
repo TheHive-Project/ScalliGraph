@@ -23,11 +23,6 @@ object ScalarSteps {
     new ScalarSteps[EndDomain, EndGraph](mapping, raw)
 }
 
-//class LeafSteps[E, Labels <: HList](raw: GremlinScala[E]) extends Steps[E, E, Labels](raw)(Converter.identityConverter[E]) with ScalliSteps[E, E, LeafSteps[E, Labels]] {
-//
-//  override protected def newInstance(raw: GremlinScala[E]): LeafSteps[E, Labels] = new LeafSteps[E, Labels](raw)
-//}
-
 trait ScalliSteps[EndDomain, EndGraph, ThisStep <: Steps[EndDomain, EndGraph, _]] { _: ThisStep ⇒
   protected def newInstance(raw: GremlinScala[EndGraph]): ThisStep
 

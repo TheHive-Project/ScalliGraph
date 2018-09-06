@@ -26,13 +26,18 @@ import scala.util.control.NonFatal
 import scala.util.{Failure, Try}
 
 class ModernQueryExecutor(modernSchema: ModernSchema) extends JsonQueryExecutor {
-  def allPeople(): InitQuery[PersonSteps]        = InitQuery("allPeople")(ag ⇒ modernSchema.personSrv.steps(ag.graph))
+  def allPeople(): InitQuery[PersonSteps]        = InitQuery("allPeople")(ag ⇒ modernSchema.personSrv.initSteps(ag.graph))
   def created: Query[PersonSteps, SoftwareSteps] = Query("created")(_.created)
 }
 
 class SangriaTest extends PlaySpecification {
 
-  case class DummyAuthContext(userId: String = "", userName: String = "", permissions: Seq[Permission] = Nil, requestId: String = "")
+  case class DummyAuthContext(
+      userId: String = "",
+      userName: String = "",
+      organisation: String = "",
+      permissions: Seq[Permission] = Nil,
+      requestId: String = "")
       extends AuthContext
 
   implicit val authContext: AuthContext = DummyAuthContext("me")
@@ -67,7 +72,7 @@ class SangriaTest extends PlaySpecification {
 
   "Modern graph" should {
     "finds all persons" in db.transaction { implicit graph ⇒
-      val personSteps = modernSchema.personSrv.steps
+      val personSteps = modernSchema.personSrv.initSteps
       val r           = personSteps.toSet.map(_.name)
       r must_=== Set("marko", "vadas", "josh", "peter", "marc", "franck")
     }

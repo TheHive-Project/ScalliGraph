@@ -35,7 +35,7 @@ class PersonSteps(raw: GremlinScala[Vertex])(implicit db: Database) extends Base
     true
   }
 
-  @PrivateField override def newInstance(raw: GremlinScala[Vertex]): PersonSteps = new PersonSteps(raw)
+  override def newInstance(raw: GremlinScala[Vertex]): PersonSteps = new PersonSteps(raw)
   //def name = new Steps[String, String, Labels](raw.map(_.value[String]("name")))
 
 }
@@ -46,7 +46,7 @@ class SoftwareSteps(raw: GremlinScala[Vertex])(implicit db: Database) extends Ba
 
   def isRipple = new SoftwareSteps(raw.has(Key("name") of "ripple"))
 
-  @PrivateField override def newInstance(raw: GremlinScala[Vertex]): SoftwareSteps = new SoftwareSteps(raw)
+  override def newInstance(raw: GremlinScala[Vertex]): SoftwareSteps = new SoftwareSteps(raw)
 }
 
 class PersonOps(person: Person with Entity) {
@@ -56,21 +56,20 @@ class PersonOps(person: Person with Entity) {
 //  }
 }
 
-class PersonSrv(implicit db: Database) extends VertexSrv[Person] {
+class PersonSrv(implicit db: Database) extends VertexSrv[Person, PersonSteps] {
   override val initialValues                                       = Seq(Person("marc", 34), Person("franck", 28))
-  override def steps(implicit graph: Graph): PersonSteps           = new PersonSteps(graph.V.hasLabel(model.label))
+  override def steps(raw: GremlinScala[Vertex]): PersonSteps       = new PersonSteps(raw)
   override def get(id: String)(implicit graph: Graph): PersonSteps = new PersonSteps(graph.V().has(Key("name") of id))
-
 }
 
-class SoftwareSrv(implicit db: Database) extends VertexSrv[Software] {
-  override def steps(implicit graph: Graph): SoftwareSteps           = new SoftwareSteps(graph.V.hasLabel(model.label))
+class SoftwareSrv(implicit db: Database) extends VertexSrv[Software, SoftwareSteps] {
+  override def steps(raw: GremlinScala[Vertex]): SoftwareSteps       = new SoftwareSteps(raw)
   override def get(id: String)(implicit graph: Graph): SoftwareSteps = new SoftwareSteps(graph.V().has(Key("name") of id))
 }
 
 class ModernSchema(implicit db: Database, authContext: AuthContext) {
   val personSrv   = new PersonSrv
-  val softwareSrv = new VertexSrv[Software]
+  val softwareSrv = new SoftwareSrv
   val knowsSrv    = new EdgeSrv[Knows, Person, Person]
   val createdSrv  = new EdgeSrv[Created, Person, Software]
 

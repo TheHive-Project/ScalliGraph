@@ -6,16 +6,18 @@ import org.thp.scalligraph.controllers.UpdateOps
 import org.thp.scalligraph.models.{Database, ElementSteps, Entity, Model}
 import org.thp.scalligraph.{FPath, NotFoundError}
 
-abstract class ElementSrv[E <: Product](implicit db: Database) {
+abstract class ElementSrv[E <: Product, S <: ElementSteps[E, _, _]](implicit db: Database) {
   val model: Model.Base[E]
 
-  def steps(implicit graph: Graph): ElementSteps[E, _, _]
+  def initSteps(implicit graph: Graph): S
 
-  def get(id: String)(implicit graph: Graph): ElementSteps[E, _, _]
+  def get(id: String)(implicit graph: Graph): S
+
+  def get(e: Entity)(implicit graph: Graph): S = get(e._id)
 
   def getOrFail(id: String)(implicit graph: Graph): E with Entity = get(id).headOption.getOrElse(throw NotFoundError(s"${model.label} $id not found"))
 
-  def count(implicit graph: Graph): Long = steps.count
+  def count(implicit graph: Graph): Long = initSteps.count
 
   def update(id: String, path: String, value: Any)(implicit graph: Graph, authContext: AuthContext): Unit =
     update(id, Map(FPath(path) → UpdateOps.SetAttribute(value)))

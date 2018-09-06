@@ -1,8 +1,8 @@
 package org.thp.scalligraph.models
 
+import gremlin.scala.{GremlinScala, Vertex}
 import play.api.{Configuration, Environment}
 import play.api.libs.logback.LogbackLoggerConfigurator
-
 import org.apache.tinkerpop.gremlin.structure.T
 import org.specs2.mock.Mockito
 import org.specs2.specification.core.Fragments
@@ -27,7 +27,9 @@ class SimpleEntityTest extends PlaySpecification with Mockito {
   Fragments.foreach(DatabaseProviders.list) { dbProvider ⇒
     implicit val db: Database = dbProvider.get()
     db.createSchema(db.getModel[MyEntity])
-    val myEntitySrv: VertexSrv[MyEntity] = new VertexSrv[MyEntity]
+    val myEntitySrv: VertexSrv[MyEntity, VertexSteps[MyEntity]] = new VertexSrv[MyEntity, VertexSteps[MyEntity]] {
+      override def steps(raw: GremlinScala[Vertex]): VertexSteps[MyEntity] = new VertexSteps[MyEntity](raw)
+    }
 
     s"[${dbProvider.name}] simple entity" should {
       "create" in db.transaction { implicit graph ⇒

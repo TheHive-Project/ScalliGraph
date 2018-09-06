@@ -30,6 +30,6 @@ class EntitySteps[E <: Product] extends StaticAnnotation {
   def macroTransform(annottees: Any*): Any = macro AnnotationMacro.entitySteps
 }
 
-class PrivateField extends StaticAnnotation
+//class PrivateField extends StaticAnnotation
 
 class WithOutput[A](writes: Writes[A]) extends StaticAnnotation

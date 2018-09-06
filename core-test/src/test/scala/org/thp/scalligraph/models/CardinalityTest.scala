@@ -1,9 +1,9 @@
 package org.thp.scalligraph.models
 
+import gremlin.scala.{GremlinScala, Vertex}
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
-
 import org.specs2.mock.Mockito
 import org.specs2.specification.core.Fragments
 import org.thp.scalligraph.VertexEntity
@@ -22,7 +22,9 @@ class CardinalityTest extends PlaySpecification with Mockito {
   Fragments.foreach(DatabaseProviders.list) { dbProvider ⇒
     implicit val db: Database = dbProvider.get()
     db.createSchema(db.getModel[EntityWithSeq])
-    val entityWithSeqSrv: VertexSrv[EntityWithSeq] = new VertexSrv[EntityWithSeq]
+    val entityWithSeqSrv: VertexSrv[EntityWithSeq, VertexSteps[EntityWithSeq]] = new VertexSrv[EntityWithSeq, VertexSteps[EntityWithSeq]] {
+      override def steps(raw: GremlinScala[Vertex]): VertexSteps[EntityWithSeq] = new VertexSteps[EntityWithSeq](raw)
+    }
 
     s"[${dbProvider.name}] entity" should {
       "create with empty list and set" in db.transaction { implicit graph ⇒

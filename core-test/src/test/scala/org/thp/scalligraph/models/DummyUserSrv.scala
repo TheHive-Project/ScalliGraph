@@ -8,6 +8,7 @@ import scala.concurrent.Future
 case class DummyUserSrv(
     userId: String = "test",
     userName: String = "test user",
+    organisation: String = "default",
     permissions: Seq[Permission] = Nil,
     requestId: String = "testRequest")
     extends UserSrv { userSrv ⇒
@@ -15,6 +16,7 @@ case class DummyUserSrv(
   val authContext: AuthContext = new AuthContext {
     override def userId: String               = userSrv.userId
     override def userName: String             = userSrv.userName
+    override def organisation: String         = userSrv.organisation
     override def permissions: Seq[Permission] = userSrv.permissions
     override def requestId: String            = userSrv.requestId
   }
