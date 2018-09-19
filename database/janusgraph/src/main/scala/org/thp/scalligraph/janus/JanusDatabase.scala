@@ -47,6 +47,7 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
     try {
       val a = body(graph)
       graph.tx.commit()
+      logger.debug(s"End of transaction")
       a
     } catch {
       case e: Throwable ⇒

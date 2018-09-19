@@ -2,20 +2,19 @@ package org.thp.scalligraph.models
 
 import java.util.{List ⇒ JList, Map ⇒ JMap}
 
-import gremlin.scala.dsl.{Steps, _}
-import gremlin.scala.{Edge, Element, GremlinScala, Vertex}
+import scala.reflect.runtime.{universe ⇒ ru}
+
+import gremlin.scala.dsl._
+import gremlin.scala._
 import org.thp.scalligraph.InternalError
-import org.thp.scalligraph.query.{CompositeFilter, Filter, PredicateFilter}
 import org.thp.scalligraph.services.RichElement
 import shapeless.HNil
-
-import scala.reflect.runtime.{universe ⇒ ru}
 
 final class ScalarSteps[EndDomain, EndGraph](mapping: Mapping[_, EndDomain, EndGraph], raw: GremlinScala[EndGraph])
     extends Steps[EndDomain, EndGraph, HNil](raw)(mapping)
     with ScalliSteps[EndDomain, EndGraph, ScalarSteps[EndDomain, EndGraph]] {
 
-  override protected def newInstance(raw: GremlinScala[EndGraph]): ScalarSteps[EndDomain, EndGraph] =
+  override def newInstance(raw: GremlinScala[EndGraph]): ScalarSteps[EndDomain, EndGraph] =
     new ScalarSteps[EndDomain, EndGraph](mapping, raw)
 }
 object ScalarSteps {
@@ -23,14 +22,16 @@ object ScalarSteps {
     new ScalarSteps[EndDomain, EndGraph](mapping, raw)
 }
 
-trait ScalliSteps[EndDomain, EndGraph, ThisStep <: Steps[EndDomain, EndGraph, _]] { _: ThisStep ⇒
-  protected def newInstance(raw: GremlinScala[EndGraph]): ThisStep
+trait ScalliSteps[EndDomain, EndGraph, ThisStep] { _: ThisStep ⇒
+  def newInstance(raw: GremlinScala[EndGraph]): ThisStep
 
+  val raw: GremlinScala[EndGraph]
   def toList: List[EndDomain]
   def head: EndDomain
   def headOption: Option[EndDomain]
-  def count: Long    = raw.count().head
-  def sort: ThisStep = newInstance(raw.order())
+  def count: Long                                                  = raw.count().head
+  def sort(orderBys: OrderBy[_]*): ThisStep                        = newInstance(raw.order(orderBys: _*))
+  def where(f: GremlinScala[EndGraph] ⇒ GremlinScala[_]): ThisStep = newInstance(raw.where(f))
 }
 
 abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisStep <: ElementSteps[E, EndGraph, ThisStep]](
@@ -87,18 +88,19 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
 
 //  override def newInstance(raw: GremlinScala[EndGraph]): ElementSteps[E, EndGraph]
 
-  def filter(f: EntityFilter[EndGraph]): ThisStep = newInstance(f(raw))
+//  def filter(f: EntityFilter[EndGraph]): ThisStep = newInstance(f(raw))
 
-  val filterHook: PartialFunction[PredicateFilter[EndGraph], Filter[EndGraph]] = PartialFunction.empty
+//  val filterHook: PartialFunction[PredicateFilter[EndGraph], Filter[EndGraph]] = PartialFunction.empty
 
-  def filter(filter: Filter[EndGraph]): ThisStep = {
-    def convertFilter(f: Filter[EndGraph]): Filter[EndGraph] =
-      f match {
-        case pf: PredicateFilter[EndGraph] ⇒ filterHook.applyOrElse(pf, identity[Filter[EndGraph]])
-        case cf: CompositeFilter[EndGraph] ⇒ cf.updateFilters(cf.filters.map(convertFilter))
-      }
-    newInstance(convertFilter(filter)(raw))
-  }
+//  def filter(filter: Filter[EndGraph]): ThisStep = {
+//    def convertFilter(f: Filter[EndGraph]): Filter[EndGraph] =
+//      f match {
+//        case pf: PredicateFilter[EndGraph] ⇒ filterHook.applyOrElse(pf, identity[Filter[EndGraph]])
+//        case cf: CompositeFilter[EndGraph] ⇒ cf.updateFilters(cf.filters.map(convertFilter))
+//      }
+//    newInstance(convertFilter(filter)(raw))
+//    newInstance(filter(raw))
+//  }
 }
 
 abstract class BaseVertexSteps[E <: Product: ru.TypeTag, ThisStep <: BaseVertexSteps[E, ThisStep]](raw: GremlinScala[Vertex])(implicit db: Database)

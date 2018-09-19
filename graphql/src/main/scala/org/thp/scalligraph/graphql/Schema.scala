@@ -15,7 +15,7 @@ object Schema {
       Field("toList", ListType(subType), resolve = _.value.toList),
       Field("head", subType, resolve = _.value.head),
       Field("headOption", OptionType(subType), resolve = _.value.headOption),
-      Field("sort", stepType, resolve = _.value.sort.asInstanceOf[S]),
+//      Field("sort", stepType, resolve = _.value.sort.asInstanceOf[S]),
     )
 
   def gremlinScalaFields[S <: GremlinScala[T], T](stepType: OutputType[S], subType: OutputType[T]): List[Field[AuthGraph, S]] =

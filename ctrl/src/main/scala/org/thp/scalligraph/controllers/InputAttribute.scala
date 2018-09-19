@@ -10,7 +10,7 @@ import org.thp.scalligraph.{AttributeError, FPath, InvalidFormatAttributeError, 
 import scala.language.experimental.macros
 import scala.util.Try
 
-abstract class BaseFieldsParser[T] {
+abstract class BaseFieldsParser[+T] {
   bfp ⇒
 
   val formatName: String
@@ -26,7 +26,7 @@ abstract class BaseFieldsParser[T] {
 }
 
 object BaseFieldsParser {
-  def empty[T](value: T): FieldsParser[T] = FieldsParser[T]("empty") {
+  def good[T](value: T): FieldsParser[T] = FieldsParser[T]("empty", Nil) {
     case _ ⇒ Good(value)
   }
 }
@@ -73,62 +73,73 @@ object UpdateFieldsParser {
   def apply[T](formatName: String)(parsers: (FPath, FieldsParser[UpdateOps.Type])*): UpdateFieldsParser[T] =
     UpdateFieldsParser[T](formatName, parsers.toMap)
   def apply[T]: UpdateFieldsParser[T] =
-    macro FieldsParserMacro.getUpdateFieldsParser[T]
+    macro FieldsParserMacro.getOrBuildUpdateFieldsParser[T]
 }
 
-case class FieldsParser[T](formatName: String)(val parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]]) extends BaseFieldsParser[T] {
+class FieldsParser[+T](val formatName: String, val acceptedInput: Seq[String], val parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]])
+    extends BaseFieldsParser[T] {
 
   def apply(path: FPath, field: Field): T Or Every[AttributeError] =
     parse.lift((path, field)).getOrElse {
       if (field == FUndefined) Bad(One(MissingAttributeError(path.toString)))
       else
-        Bad(One(InvalidFormatAttributeError(path.toString, formatName, field)))
+        Bad(One(InvalidFormatAttributeError(path.toString, formatName, acceptedInput, field)))
     }
 
   def apply(field: Field): T Or Every[AttributeError] =
     apply(FPath.empty, field)
 
   def on(pathElement: String): FieldsParser[T] =
-    FieldsParser[T](formatName) {
+    new FieldsParser[T](formatName, acceptedInput.map(pathElement + "/" + _), {
       case (path, field) ⇒ apply(path, field.get(pathElement))
-    }
+    })
 
   def andThen[U, R](nextFormatName: String)(fp: FieldsParser[U])(f: (U, T) ⇒ R): FieldsParser[R] =
-    FieldsParser[R](s"$formatName&$nextFormatName") {
-      case (path, field) ⇒
-        val value1 = apply(path, field)
-        val value2 = fp(path, field)
-        withGood(value2, value1)(f)
-    }
+    new FieldsParser[R](
+      s"$formatName&$nextFormatName",
+      acceptedInput ++ fp.acceptedInput, {
+        case (path, field) ⇒
+          val value1 = apply(path, field)
+          val value2 = fp(path, field)
+          withGood(value2, value1)(f)
+      }
+    )
 
-  def orElse[U >: T](fp: FieldsParser[U]): FieldsParser[U] = FieldsParser(formatName)(parse orElse fp.parse)
+  def orElse[U >: T](fp: FieldsParser[U]): FieldsParser[U] =
+    new FieldsParser[U](formatName, acceptedInput ++ fp.acceptedInput, parse orElse fp.parse)
 
   def map[U](newFormatName: String)(f: T ⇒ U): FieldsParser[U] =
-    FieldsParser(newFormatName) {
+    new FieldsParser(newFormatName, acceptedInput, {
       case (path, fields) ⇒ apply(path, fields).map(f)
-    }
+    })
 
   def sequence: FieldsParser[Seq[T]] =
-    FieldsParser[Seq[T]](s"seq($formatName)") {
-      case (path, field) ⇒
-        field match {
-          case FSeq(subFields) ⇒
-            subFields.zipWithIndex
-              .validatedBy { case (f, i) ⇒ apply(path.toSeq(i), f) }
-          case FNull | FUndefined ⇒ Good(Nil)
-          case other ⇒
-            Bad(One(InvalidFormatAttributeError(path.toString, "object", other)))
-        }
-    }
+    new FieldsParser[Seq[T]](
+      s"seq($formatName)",
+      acceptedInput.map(i ⇒ s"[$i]"), {
+        case (path, field) ⇒
+          field match {
+            case FSeq(subFields) ⇒
+              subFields.zipWithIndex
+                .validatedBy { case (f, i) ⇒ apply(path.toSeq(i), f) }
+            case FNull | FUndefined ⇒ Good(Nil)
+            case other ⇒
+              Bad(One(InvalidFormatAttributeError(path.toString, "object", Seq(s"[$formatName]"), other)))
+          }
+      }
+    )
 
   def optional: FieldsParser[Option[T]] =
-    FieldsParser[Option[T]](s"option($formatName)") {
-      case (path, field) ⇒
-        field match {
-          case FNull | FUndefined ⇒ Good(None)
-          case _                  ⇒ apply(path, field).map(Some(_))
-        }
-    }
+    new FieldsParser[Option[T]](
+      s"option($formatName)",
+      acceptedInput.map(i ⇒ s"$i?"), {
+        case (path, field) ⇒
+          field match {
+            case FNull | FUndefined ⇒ Good(None)
+            case _                  ⇒ apply(path, field).map(Some(_))
+          }
+      }
+    )
 
   def toUpdate: FieldsParser[UpdateOps.Type] = map(formatName) {
     case value: Option[_] ⇒
@@ -138,11 +149,16 @@ case class FieldsParser[T](formatName: String)(val parse: PartialFunction[(FPath
 }
 
 object FieldsParser {
-  def good[T](value: T): FieldsParser[T] = FieldsParser[T]("good") {
-    case _ ⇒ Good(value)
-  }
-  def empty[T]: FieldsParser[T] = FieldsParser[T]("empty")(PartialFunction.empty)
-  def apply[T]: FieldsParser[T] = macro FieldsParserMacro.getFieldsParser[T]
+  def apply[T](formatName: String, acceptedInput: Seq[String])(parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]]) =
+    new FieldsParser[T](formatName, acceptedInput, parse)
+  def apply[T](formatName: String)(parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]]) =
+    new FieldsParser[T](formatName, Seq(formatName), parse)
+  def good[T](value: T): FieldsParser[T] =
+    new FieldsParser[T]("good", Nil, {
+      case _ ⇒ Good(value)
+    })
+  def empty[T]: FieldsParser[T] = new FieldsParser[T]("empty", Nil, PartialFunction.empty)
+  def apply[T]: FieldsParser[T] = macro FieldsParserMacro.getOrBuildFieldsParser[T]
 
   private def unlift[T, R](f: T ⇒ Option[R]): PartialFunction[T, R] =
     new PartialFunction[T, R] {

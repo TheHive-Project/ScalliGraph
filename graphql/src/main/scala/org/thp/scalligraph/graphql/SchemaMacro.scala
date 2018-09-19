@@ -44,6 +44,9 @@ class SchemaMacro(val c: blackbox.Context) extends OutputTypeMacro with InputTyp
       name
     }
 
+    def remove(name: TermName): Unit =
+      definitions = definitions.filterNot(_._2 == name)
+
     def getOrAdd(tpe: Type)(value: ⇒ Tree): TermName =
       definitions
         .collectFirst {
@@ -53,6 +56,22 @@ class SchemaMacro(val c: blackbox.Context) extends OutputTypeMacro with InputTyp
           val name = TermName(c.freshName())
           add(name, tpe)
           add(name, tpe, value)
+        }
+
+    def getOrOptionAdd(tpe: Type)(value: ⇒ Option[Tree]): Option[TermName] =
+      definitions
+        .collectFirst {
+          case (t, name, _) if t <:< tpe ⇒ Some(name)
+        }
+        .getOrElse {
+          val name = TermName(c.freshName())
+          add(name, tpe)
+          value match {
+            case Some(v) ⇒ Some(add(name, tpe, v))
+            case None ⇒
+              remove(name)
+              None
+          }
         }
 
     def getOrAddFilter(tpe: Type)(value: ⇒ Tree): TermName =
@@ -86,20 +105,22 @@ class SchemaMacro(val c: blackbox.Context) extends OutputTypeMacro with InputTyp
       }
     implicit val definitions: Definitions = new Definitions(executor, queries.toSeq)
 
-    def buildInitQuery(initQueryMethod: MethodSymbol): Tree /* sangria.schema.Field */ = {
+    def buildInitQuery(initQueryMethod: MethodSymbol): Option[Tree] /* sangria.schema.Field */ = {
       debug(s"Build initial query $initQueryMethod")
-      val outputType       = getTypeArgs(initQueryMethod.returnType, typeOf[InitQuery[_]]).head
-      val fieldName        = initQueryMethod.name.decodedName.toString.trim
-      val outputObjectType = getOutput(outputType)
-      val arguments        = initQueryMethod.paramLists.headOption.getOrElse(Nil).map(buildArgument)
-      val argumentValues   = arguments.map(arg ⇒ q"ctx.arg($arg)")
-      q"""
+      val outputType = getTypeArgs(initQueryMethod.returnType, typeOf[InitQuery[_]]).head
+      getOutput(outputType).map { outputObjectType ⇒
+        val fieldName = initQueryMethod.name.decodedName.toString.trim
+
+        val arguments      = initQueryMethod.paramLists.headOption.getOrElse(Nil).map(buildArgument)
+        val argumentValues = arguments.map(arg ⇒ q"ctx.arg($arg)")
+        q"""
         sangria.schema.Field(
           $fieldName,
           $outputObjectType,
           arguments = List(..$arguments),
           resolve = ctx => ${definitions.executor}.$initQueryMethod(..$argumentValues)(ctx.ctx))
       """
+      }
     }
 
     val fields = initQueries.map(buildInitQuery)

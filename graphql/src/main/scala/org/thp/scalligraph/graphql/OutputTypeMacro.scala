@@ -3,6 +3,7 @@ package org.thp.scalligraph.graphql
 import java.util.Date
 
 import gremlin.scala.GremlinScala
+import org.thp.scalligraph.Public
 import org.thp.scalligraph.models.{EntityFilter, ScalliSteps}
 import sangria.marshalling.FromInput
 import sangria.schema.OutputType
@@ -98,30 +99,33 @@ trait OutputTypeMacro {
       }
       .getOrElse(q"Nil")
 
-  def buildStepObject(tpe: Type)(implicit definitions: Definitions): Tree = {
+  def buildStepObject(tpe: Type)(implicit definitions: Definitions): Option[Tree] = {
     val st :: graphType :: labels :: Nil = getTypeArgs(tpe, typeOf[ScalliSteps[_, _, _]])
     val subType                          = if (st.typeSymbol.asType.isAbstract) tpe.typeArgs.head else st
     debug(s"step sub type of $tpe is $subType / $graphType / $labels")
-    val output        = getOutput(tpe)
-    val subOutputType = getOutput(subType)
-    val fields        = q"org.thp.scalligraph.graphql.Schema.scalliStepsFields[$tpe, $subType]($output, $subOutputType)"
-    val objectClass = subType match {
-      case RefinedType(t :: _, _) ⇒ t
-      case _                      ⇒ subType
-    }
-    val classFields = objectClass match {
-      case CaseClassType(symbols @ _*) ⇒
-        val symbolNames = symbols.map(_.name.toString.trim)
-        getFields(tpe.members.filter(m ⇒ symbolNames.contains(m.name.toString.trim)).toSeq)
-      case _ ⇒ Nil
-    }
-    val objectName  = objectClass.typeSymbol.name.decodedName.toString.trim + "Traversal"
-    val filterField = buildFilterField(subType, graphType, tpe)
-    q"""
+    for {
+      output        ← getOutput(tpe)
+      subOutputType ← getOutput(subType)
+    } yield {
+      val fields = q"org.thp.scalligraph.graphql.Schema.scalliStepsFields[$tpe, $subType]($output, $subOutputType)"
+      val objectClass = subType match { // Remove traits
+        case RefinedType(t :: _, _) ⇒ t
+        case _                      ⇒ subType
+      }
+      val classFields = objectClass match {
+        case CaseClassType(symbols @ _*) ⇒
+          val symbolNames = symbols.map(_.name.toString.trim)
+          getFields(tpe.members.filter(m ⇒ symbolNames.contains(m.name.toString.trim)).toSeq)
+        case _ ⇒ Nil
+      }
+      val objectName  = objectClass.typeSymbol.name.decodedName.toString.trim + "Traversal"
+      val filterField = buildFilterField(subType, graphType, tpe)
+      q"""
       sangria.schema.ObjectType(
         $objectName,
         () => sangria.schema.fields[org.thp.scalligraph.query.AuthGraph, $tpe](..${getQueryFields(tpe) ++ classFields}) ::: $filterField ::: $fields)
     """
+    }
   }
 
   def getFields(symbols: Seq[Symbol])(implicit definitions: Definitions): Seq[Tree] =
@@ -138,29 +142,34 @@ trait OutputTypeMacro {
         """
       }
 
-  def buildTraversalObject(tpe: Type)(implicit definitions: Definitions): Tree = {
+  def buildTraversalObject(tpe: Type)(implicit definitions: Definitions): Option[Tree] = {
     val subType = getTypeArgs(tpe, typeOf[GremlinScala[_]]).head
     println(s"traversal sub type of $tpe is $subType")
-    val subOutputType = getOutput(subType)
-    val fields        = q"org.thp.scalligraph.graphql.Schema.gremlinScalaFields[$tpe, $subType](${getOutput(tpe)}, $subOutputType)"
-    val objectClass = subType match {
-      case RefinedType(t :: _, _) ⇒ t
-      case _                      ⇒ subType
-    }
-    val objectName = objectClass.typeSymbol.name.decodedName.toString.trim + "Traversal"
-    q"""
+    getOutput(subType).map { subOutputType ⇒
+      val fields = q"org.thp.scalligraph.graphql.Schema.gremlinScalaFields[$tpe, $subType](${getOutput(tpe)}, $subOutputType)"
+      val objectClass = subType match {
+        case RefinedType(t :: _, _) ⇒ t
+        case _                      ⇒ subType
+      }
+      val objectName = objectClass.typeSymbol.name.decodedName.toString.trim + "Traversal"
+      q"""
       sangria.schema.ObjectType(
         $objectName,
         () => sangria.schema.fields[org.thp.scalligraph.query.AuthGraph, $tpe](..${getQueryFields(tpe)}) ::: $fields)
     """
+    }
   }
 
-  def buildClassObject(objectName: String, tpe: Type, symbols: Seq[Symbol])(implicit definitions: Definitions): Tree =
-    q"""
-      sangria.schema.ObjectType(
-        $objectName,
-        () => sangria.schema.fields[org.thp.scalligraph.query.AuthGraph, $tpe](..${getQueryFields(tpe) ++ getFields(symbols)}))
-    """
+  def buildClassObject(objectName: String, tpe: Type, symbols: Seq[Symbol])(implicit definitions: Definitions): Option[Tree] = {
+    val publicType = appliedType(typeOf[Public[_]].typeConstructor, tpe)
+    if (tpe <:< publicType)
+      Some(q"""
+        sangria.schema.ObjectType(
+          $objectName,
+          () => sangria.schema.fields[org.thp.scalligraph.query.AuthGraph, $tpe](..${getQueryFields(tpe) ++ getFields(symbols)}))
+      """)
+    else None
+  }
 
   def buildEnumType(tpe: Type, values: Seq[(Tree, Tree)]): Tree = {
     val enumValues = values.map { case (name, value) ⇒ q"sangria.schema.EnumValue[$tpe](name = $name, value = $value)" }
@@ -168,20 +177,37 @@ trait OutputTypeMacro {
     q"sangria.schema.EnumType(name = $tpeName, values = List(..$enumValues))"
   }
 
-  def getOutput(tpe: Type)(implicit definitions: Definitions): TermName = {
+  def convertToPublic(tpe: Type) = {}
+  def getOutput(tpe: Type)(implicit definitions: Definitions): Option[TermName] = {
     val outputType = appliedType(typeOf[OutputType[_]], tpe)
     debug(s"getOutput($tpe)")
-    definitions.getOrAdd(outputType) {
+    definitions.getOrOptionAdd(outputType) {
       tpe match {
-        case OptionType(subType)                                     ⇒ q"sangria.schema.OptionType(${getOutput(subType)})"
-        case SeqType(subType)                                        ⇒ q"sangria.schema.ListType(${getOutput(subType)})" // FIXME use Iterable instead of Seq
-        case ImplicitOutputType(value)                               ⇒ value
-        case EnumType(values @ _*)                                   ⇒ buildEnumType(tpe, values)
-        case _ if tpe <:< typeOf[Date]                               ⇒ q"org.thp.scalligraph.graphql.DateType"
-        case _ if tpe <:< typeOf[ScalliSteps[_, _, _]]               ⇒ buildStepObject(tpe)
-        case _ if tpe <:< typeOf[GremlinScala[_]]                    ⇒ buildTraversalObject(tpe)
+        /*
+          tpe is exportable if is one of these types:
+           - ScalliSteps[A] and A exportable
+           - Seq[A] and A exportable
+           - Option[A] and A exportable
+           - exist an implicit value OutputType[tpe]
+           - scalar types (Date, String, Int, Long, Float, Double
+           - Enumeration
+           - case class with trait Public[tpe]
+         */
+        case OptionType(subType)                       ⇒ getOutput(subType).map(t ⇒ q"sangria.schema.OptionType($t)")
+        case SeqType(subType)                          ⇒ getOutput(subType).map(t ⇒ q"sangria.schema.ListType($t)") // FIXME use Iterable instead of Seq
+        case ImplicitOutputType(value)                 ⇒ Some(value)
+        case EnumType(values @ _*)                     ⇒ Some(buildEnumType(tpe, values))
+        case _ if tpe <:< typeOf[Date]                 ⇒ Some(q"org.thp.scalligraph.graphql.DateType")
+        case _ if tpe <:< typeOf[ScalliSteps[_, _, _]] ⇒ buildStepObject(tpe)
+
+        /**/
+        case _ if tpe <:< typeOf[GremlinScala[_]] ⇒ buildTraversalObject(tpe)
+
+        /**/
         case RefinedType((cc @ CaseClassType(symbols @ _*)) :: _, _) ⇒ buildClassObject(cc.typeSymbol.name.decodedName.toString.trim, tpe, symbols)
         case CaseClassType(symbols @ _*)                             ⇒ buildClassObject(tpe.typeSymbol.name.decodedName.toString.trim, tpe, symbols)
+        // try to convert tpe to Public[tpe]
+//        case t ⇒ c.inferImplicitView()
 
       }
     }

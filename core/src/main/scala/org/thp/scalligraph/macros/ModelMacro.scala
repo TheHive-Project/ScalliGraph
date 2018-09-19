@@ -9,26 +9,6 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacro with IndexMacro w
 
   import c.universe._
 
-  def toEntity[E: WeakTypeTag]: Tree = {
-    val eType = weakTypeOf[E]
-    eType match {
-      case CaseClassType(symbols @ _*) ⇒
-        val params = symbols.map(p ⇒ q"__e.${TermName(p.name.toString)}")
-        q"""
-          import java.util.Date
-          import org.thp.scalligraph.models.Entity
-          new $eType(..$params) with Entity {
-            val _id = __id
-            val _model = __model
-            val _createdBy = __createdBy
-            val _createdAt = __createdAt
-            val _updatedBy = __updatedBy
-            val _updatedAt = __updatedAt
-          }
-         """
-    }
-  }
-
   /**
     * Create a model from entity type e
     */

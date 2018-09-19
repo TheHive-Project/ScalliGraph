@@ -5,22 +5,32 @@ import org.thp.scalligraph.{MacroLogger, MacroUtil}
 
 import scala.reflect.macros.blackbox
 
-/**
-  * This class build FieldsParser from CreationRecord or DTO
-  */
-class FieldsParserMacro(val c: blackbox.Context) extends MacroUtil with MacroLogger {
+class FieldsParserMacro(val c: blackbox.Context) extends MacroLogger with UpdateFieldsParserUtil {
 
   import c.universe._
 
-  def getFieldsParser[E: WeakTypeTag]: Tree = {
+  def getOrBuildFieldsParser[E: WeakTypeTag]: Tree = {
     val eType = weakTypeOf[E]
     initLogger(eType.typeSymbol)
-    _getFieldsParser(eType.typeSymbol, eType)
+    getOrBuildParser(eType.typeSymbol, eType)
       .getOrElse(c.abort(c.enclosingPosition, s"Build FieldsParser of $eType fails"))
   }
 
-  private def _getFieldsParser(symbol: Symbol, eType: Type): Option[Tree] = {
-    debug(s"getFieldsParser($symbol, $eType")
+  def getOrBuildUpdateFieldsParser[E: WeakTypeTag]: Tree = {
+    val eType = weakTypeOf[E]
+    initLogger(eType.typeSymbol)
+    getOrBuildUpdateParser(eType.typeSymbol, eType)
+  }
+
+}
+
+trait FieldsParserUtil extends MacroLogger with MacroUtil {
+  val c: blackbox.Context
+
+  import c.universe._
+
+  protected def getOrBuildParser(symbol: Symbol, eType: Type): Option[Tree] = {
+    debug(s"getOrBuildParser($symbol, $eType")
     if (eType <:< typeOf[Attachment]) {
       Some(q"org.thp.scalligraph.controllers.FieldsParser.attachment")
     } else
@@ -29,14 +39,14 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroUtil with MacroLog
         .orElse(buildParser(eType))
   }
 
-  private def getParserFromAnnotation(symbol: Symbol, eType: Type): Option[Tree] = {
+  protected def getParserFromAnnotation(symbol: Symbol, eType: Type): Option[Tree] = {
     val withParserType = appliedType(typeOf[WithParser[_]], eType)
     (symbol.annotations ::: eType.typeSymbol.annotations)
       .find(_.tree.tpe <:< withParserType)
       .map(annotation ⇒ annotation.tree.children.tail.head)
   }
 
-  private def getParserFromImplicit(eType: Type): Option[Tree] = {
+  protected def getParserFromImplicit(eType: Type): Option[Tree] = {
     val fieldsParserType =
       appliedType(typeOf[FieldsParser[_]].typeConstructor, eType)
     val fieldsParser = c.inferImplicitValue(fieldsParserType, silent = true)
@@ -45,7 +55,7 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroUtil with MacroLog
     else Some(fieldsParser)
   }
 
-  private def buildParser(eType: Type): Option[Tree] =
+  protected def buildParser(eType: Type): Option[Tree] =
     eType match {
       case CaseClassType(paramSymbols @ _*) ⇒
         trace(s"build FieldsParser case class $eType")
@@ -61,7 +71,7 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroUtil with MacroLog
               val symbolName = s.name.toString
               for {
                 builder ← maybeBuilder
-                parser  ← _getFieldsParser(s, s.typeSignature)
+                parser  ← getOrBuildParser(s, s.typeSignature)
               } yield {
                 val builderName = TermName(c.freshName())
                 q"""
@@ -89,12 +99,12 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroUtil with MacroLog
         }
       case SeqType(subType) ⇒
         trace(s"build FieldsParser sequence of $subType")
-        _getFieldsParser(subType.typeSymbol, subType).map { parser ⇒
+        getOrBuildParser(subType.typeSymbol, subType).map { parser ⇒
           q"$parser.sequence"
         }
       case OptionType(subType) ⇒
         trace(s"build FieldsParser option of $subType")
-        _getFieldsParser(subType.typeSymbol, subType).map { parser ⇒
+        getOrBuildParser(subType.typeSymbol, subType).map { parser ⇒
           q"$parser.optional"
         }
       case EnumType(values @ _*) ⇒
@@ -111,9 +121,19 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroUtil with MacroLog
       case _ ⇒
         None
     }
+}
 
-  /** ***********************************************/
-  private def getUpdateParserFromAnnotation(symbol: Symbol, eType: Type): Option[Tree] = {
+trait UpdateFieldsParserUtil extends FieldsParserUtil {
+  val c: blackbox.Context
+
+  import c.universe._
+
+  protected def getOrBuildUpdateParser(symbol: Symbol, eType: Type): Tree =
+    getUpdateParserFromAnnotation(symbol, eType)
+      .orElse(getUpdateParserFromImplicit(eType))
+      .getOrElse(buildUpdateParser(symbol, eType))
+
+  protected def getUpdateParserFromAnnotation(symbol: Symbol, eType: Type): Option[Tree] = {
     val withUpdateParserType =
       appliedType(weakTypeOf[WithUpdateParser[_]], eType)
     (symbol.annotations ::: eType.typeSymbol.annotations)
@@ -121,7 +141,7 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroUtil with MacroLog
       .map(annotation ⇒ annotation.tree.children.tail.head)
   }
 
-  private def getUpdateParserFromImplicit(eType: Type): Option[Tree] = {
+  protected def getUpdateParserFromImplicit(eType: Type): Option[Tree] = {
     val fieldsParserType =
       appliedType(typeOf[UpdateFieldsParser[_]].typeConstructor, eType)
     val fieldsParser = c.inferImplicitValue(fieldsParserType, silent = true)
@@ -129,9 +149,9 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroUtil with MacroLog
     else Some(fieldsParser)
   }
 
-  private def buildUpdateParser(symbol: Symbol, eType: Type): Tree = {
+  protected def buildUpdateParser(symbol: Symbol, eType: Type): Tree = {
     val className: String = eType.toString.split("\\.").last
-    val updateFieldsParser = _getFieldsParser(symbol, eType)
+    val updateFieldsParser = getOrBuildParser(symbol, eType)
       .map { parser ⇒
         q"""
          import org.thp.scalligraph.controllers.UpdateFieldsParser
@@ -143,8 +163,8 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroUtil with MacroLog
 
     eType match {
       case SeqType(subType) ⇒
-        val subParser = _getUpdateFieldsParser(subType.typeSymbol, subType)
-        _getFieldsParser(subType.typeSymbol, subType)
+        val subParser = getOrBuildUpdateParser(subType.typeSymbol, subType)
+        getOrBuildParser(subType.typeSymbol, subType)
           .map { parser ⇒
             q"""
            import org.thp.scalligraph.controllers.UpdateFieldsParser
@@ -156,27 +176,16 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroUtil with MacroLog
             q"$updateFieldsParser ++ $subParser.sequence ++ $seqParser"
           }
       case OptionType(subType) ⇒
-        val parser = _getUpdateFieldsParser(subType.typeSymbol, subType)
+        val parser = getOrBuildUpdateParser(subType.typeSymbol, subType)
         q"$parser ++ $updateFieldsParser"
       case CaseClassType(symbols @ _*) ⇒
         symbols.foldLeft(updateFieldsParser) {
           case (parser, s) ⇒
             val symbolName = s.name.toString
-            val subParser  = _getUpdateFieldsParser(s, s.typeSignature)
+            val subParser  = getOrBuildUpdateParser(s, s.typeSignature)
             q"$parser ++ $subParser.on($symbolName)"
         }
       case _ ⇒ updateFieldsParser
     }
   }
-
-  def getUpdateFieldsParser[E: WeakTypeTag]: Tree = {
-    val eType = weakTypeOf[E]
-    initLogger(eType.typeSymbol)
-    _getUpdateFieldsParser(eType.typeSymbol, eType)
-  }
-
-  private def _getUpdateFieldsParser(symbol: Symbol, eType: Type): Tree =
-    getUpdateParserFromAnnotation(symbol, eType)
-      .orElse(getUpdateParserFromImplicit(eType))
-      .getOrElse(buildUpdateParser(symbol, eType))
 }

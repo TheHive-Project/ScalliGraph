@@ -40,7 +40,7 @@ class ApiMethod @Inject()(
     * @return empty entry point
     */
   def apply(name: String): EntryPoint[HNil, Request] =
-    EntryPoint[HNil, Request](name, BaseFieldsParser.empty(HNil), Future.successful)
+    EntryPoint[HNil, Request](name, BaseFieldsParser.good(HNil), Future.successful)
 
   /**
     * An entry point is defined by its name, a fields parser which transform request into a record V and the type of request (

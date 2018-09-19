@@ -56,7 +56,7 @@ class UpdateFieldsParserMacroTest extends Specification with TestUtils {
       val fieldsParser = getUpdateFieldsParser[SimpleClassForFieldsParserMacroTest]
       val fields       = FObject("name" → FNumber(12)) // invalid format
 
-      fieldsParser(fields) must_=== Bad(One(InvalidFormatAttributeError("name", "string", FNumber(12))))
+      fieldsParser(fields) must_=== Bad(One(InvalidFormatAttributeError("name", "string", Seq("String"), FNumber(12))))
     }
   }
 }

@@ -15,12 +15,12 @@ case class MultiAttachClassForFieldsParserMacroTest(name: String, attachments: S
 @WithUpdateParser(CustomFieldsParsers.englishUpdateFieldsParser)
 case class LocaleInt(value: Int)
 object CustomFieldsParsers {
-  val englishIntFieldsParser: FieldsParser[LocaleInt] = FieldsParser[LocaleInt]("englishInt") {
+  val englishIntFieldsParser: FieldsParser[LocaleInt] = FieldsParser[LocaleInt]("englishInt", Seq("one", "two", "three")) {
     case (_, FString("one"))   ⇒ Good(LocaleInt(1))
     case (_, FString("two"))   ⇒ Good(LocaleInt(2))
     case (_, FString("three")) ⇒ Good(LocaleInt(3))
   }
-  val frenchIntFieldsParser: FieldsParser[LocaleInt] = FieldsParser[LocaleInt]("frenchInt") {
+  val frenchIntFieldsParser: FieldsParser[LocaleInt] = FieldsParser[LocaleInt]("frenchInt", Seq("un", "deux", "trois")) {
     case (_, FString("un"))    ⇒ Good(LocaleInt(1))
     case (_, FString("deux"))  ⇒ Good(LocaleInt(2))
     case (_, FString("trois")) ⇒ Good(LocaleInt(3))

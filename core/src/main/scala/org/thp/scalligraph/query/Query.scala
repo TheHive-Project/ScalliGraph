@@ -1,58 +1,104 @@
 package org.thp.scalligraph.query
 
-import gremlin.scala.GremlinScala
-import org.scalactic.{Bad, Good, One}
-import org.thp.scalligraph.controllers._
-import org.thp.scalligraph.models.ScalliSteps
-import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError, RichType}
-
+import scala.language.experimental.macros
 import scala.reflect.runtime.{universe ⇒ ru}
 
+import gremlin.scala.{Graph, GremlinScala}
+import org.thp.scalligraph.auth.AuthContext
+import org.thp.scalligraph.controllers._
+import org.thp.scalligraph.macros.QueryMacro
+import org.thp.scalligraph.models.ScalliSteps
+import org.thp.scalligraph.{BadRequestError, RichType}
+
 abstract class QueryExecutor[O] {
-  def outputs: PartialFunction[ru.Type, Any ⇒ O]
-  val initQueryParser: FieldsParser[InitQuery[_]]    = FieldsParser.empty
-  val queryParser: FieldsParser[Query[_, _]]         = FieldsParser.empty
-  val filterParser: FieldsParser[Filter[_]]          = FieldsParser.empty
-  val genericQueryParser: FieldsParser[GenericQuery] = FieldsParser.empty
+  val publicProperties: Seq[PublicProperty[_, _]] = Nil
 
-  def getOutputFunction[T](t: ru.Type): T ⇒ O = outputs.applyOrElse(t, (_: ru.Type) ⇒ sys.error(s"type $t is invalid for output")).asInstanceOf[T ⇒ O]
+  def execute[T](query: InitQuery[T])(implicit authGraph: AuthGraph): O = toOutput(query(authGraph))
 
-  def execute[T](query: InitQuery[T])(implicit authGraph: AuthGraph): O = {
-    val output = getOutputFunction(query.toType)
-    output(query(authGraph))
-  }
+  def toOutput(output: Any): O                    = sys.error(s"${output.getClass} is invalid for output")
+
+  val sort: QueryBuilder[InputSort, TraversalQuery[_]]     = Query.generic("sort")((param: InputSort) ⇒ param.toQuery(publicProperties))
+  val filter: QueryBuilder[InputFilter, TraversalQuery[_]] = Query.generic("filter")((param: InputFilter) ⇒ param.toQuery(publicProperties))
+  val toList: QueryBuilder[Unit, GenericQuery]             = Query.generic("toList")((_: Unit) ⇒ ToListQuery)
 }
 
-abstract class Query[FROM, +TO](val name: String, val fromType: ru.Type, val toType: ru.Type) extends (FROM ⇒ TO) {
-  thisQuery ⇒
-
-  def this(name: String)(implicit fromTag: ru.TypeTag[FROM], toTag: ru.TypeTag[TO]) = this(name, fromTag.tpe, toTag.tpe)
-
-  def compose(q: InitQuery[_]): InitQuery[TO] =
-    if (q.toType <:< fromType) new InitQuery[TO](s"${q.name}_$name", toType) {
-      override def apply(g: AuthGraph): TO = thisQuery.apply(q.apply(g).asInstanceOf[FROM])
-    } else ???
+object QueryExecutor {
+  def fieldsParser[Q <: QueryExecutor[_]](queryExecutor: Q): FieldsParser[InitQuery[Any]] = macro QueryMacro.queryBuilderParser[Q]
 }
 
-abstract class GenericQuery(val name: String) extends (Any ⇒ Any) { thisQuery ⇒
-  def checkFrom(t: ru.Type): Boolean
-  def toType(t: ru.Type): ru.Type
-  def compose(q: InitQuery[_]): InitQuery[Any] =
-    if (checkFrom(q.toType)) new InitQuery[Any](s"${q.name}_$name", toType(q.toType)) {
-      override def apply(g: AuthGraph): Any = thisQuery(q(g))
-    } else {
-      throw BadRequestError(s"Query $name can't be applied on ${q.toType}")
-    }
-}
-
-abstract class InitQuery[+TO](val name: String, val toType: ru.Type) extends (AuthGraph ⇒ TO) {
-  def this(name: String)(implicit toTag: ru.TypeTag[TO]) = this(name, toTag.tpe)
+abstract class InitQuery[+T](val name: String, val toType: ru.Type) extends (AuthGraph ⇒ T) {
+  def this(name: String)(implicit toTag: ru.TypeTag[T]) = this(name, toTag.tpe)
+  override def apply(authGraph: AuthGraph): T = apply(authGraph.graph, authGraph.auth)
+  def apply(graph: Graph, authContext: Option[AuthContext]): T
 }
 
 object InitQuery {
-  def apply[TO: ru.TypeTag](name: String)(f: AuthGraph ⇒ TO): InitQuery[TO] = new InitQuery[TO](name) {
-    override def apply(g: AuthGraph): TO = f(g)
+  def apply[T: ru.TypeTag](name: String)(builder: (Graph, Option[AuthContext]) ⇒ T): InitQuery[T] =
+    new InitQuery[T](name, ru.typeOf[T]) {
+      override def apply(graph: Graph, authContext: Option[AuthContext]): T = builder(graph, authContext)
+    }
+
+  def apply[T](name: String, toType: ru.Type)(builder: (Graph, Option[AuthContext]) ⇒ T): InitQuery[T] =
+    new InitQuery[T](name, toType) {
+      override def apply(graph: Graph, authContext: Option[AuthContext]): T = builder(graph, authContext)
+    }
+
+  def build[P, T: ru.TypeTag](name: String)(builder: (P, Graph, Option[AuthContext]) ⇒ T): InitQueryBuilder[P, T] =
+    new InitQueryBuilder[P, T](name) {
+      override def apply(p: P): InitQuery[T] = new InitQuery[T](name) {
+        override def apply(graph: Graph, authContext: Option[AuthContext]): T = builder(p, graph, authContext)
+      }
+    }
+}
+
+abstract class InitQueryBuilder[P, T](name: String) extends (P ⇒ InitQuery[T])
+
+trait QueryComposable[+T] {
+  def compose(q: InitQuery[_]): InitQuery[T]
+}
+
+abstract class QueryBuilder[P, Q <: QueryComposable[_]](name: String) extends (P ⇒ Q)
+
+abstract class Query[-F, +T](name: String, val fromType: ru.Type, val toType: ru.Type) extends QueryComposable[T] {
+  thisQuery ⇒
+
+  def this(name: String)(implicit fromTag: ru.TypeTag[F], toTag: ru.TypeTag[T]) = this(name, fromTag.tpe, toTag.tpe)
+
+  override def compose(q: InitQuery[_]): InitQuery[T] =
+    if (q.toType <:< fromType) {
+      val qf = q.asInstanceOf[InitQuery[F]]
+      InitQuery[T](s"${q.name}_$name", toType)((graph, authContext) ⇒ apply(qf(graph, authContext))(authContext))
+    } else throw BadRequestError(s"Query $name can't be applied to ${q.toType}")
+
+  def apply(f: F)(implicit authContext: Option[AuthContext]): T
+}
+
+object Query {
+  def apply[F: ru.TypeTag, T: ru.TypeTag](name: String)(fn: F ⇒ T): Query[F, T] = new Query[F, T](name) {
+    override def apply(f: F)(implicit authContext: Option[AuthContext]): T = fn(f)
   }
+
+  def build[P, F: ru.TypeTag, T: ru.TypeTag](name: String)(builder: (P, F, Option[AuthContext]) ⇒ T): QueryBuilder[P, Query[F, T]] =
+    new QueryBuilder[P, Query[F, T]](name) {
+      override def apply(p: P): Query[F, T] = new Query[F, T](name) {
+        override def apply(f: F)(implicit authContext: Option[AuthContext]): T = builder(p, f, authContext)
+      }
+    }
+
+  def generic[P, Q <: QueryComposable[_]](name: String)(builder: P ⇒ Q): QueryBuilder[P, Q] =
+    new QueryBuilder[P, Q](name) {
+      override def apply(p: P): Q = builder(p)
+    }
+}
+
+abstract class GenericQuery(val name: String) extends QueryComposable[Any] { thisQuery ⇒
+  def checkFrom(t: ru.Type): Boolean
+  def toType(t: ru.Type): ru.Type
+  override def compose(q: InitQuery[_]): InitQuery[Any] =
+    if (checkFrom(q.toType))
+      InitQuery[Any](s"${q.name}_$name", toType(q.toType))((graph, authContext) ⇒ thisQuery(q(graph, authContext))(authContext))
+    else throw BadRequestError(s"Query $name can't be applied on ${q.toType}")
+  def apply(f: Any)(implicit authContext: Option[AuthContext]): Any
 }
 
 object ToListQuery extends GenericQuery("toList") {
@@ -69,16 +115,20 @@ object ToListQuery extends GenericQuery("toList") {
     ru.appliedType(ru.typeOf[List[_]].typeConstructor, subType)
   }
 
-  override def apply(a: Any): Any = a match {
+  override def apply(a: Any)(implicit authContext: Option[AuthContext]): Any = a match {
     case s: ScalliSteps[_, _, _] ⇒ s.toList
     case s: GremlinScala[_]      ⇒ s.toList
   }
 }
 
-object FObjOne {
-  def unapply(field: Field): Option[(String, Field)] = field match {
-    case FObject(f) if f.size == 1 ⇒ Some(f.head)
-    case _                         ⇒ None
+object FNamedObj {
+  def unapply(field: Field): Option[(String, FObject)] = field match {
+    case f: FObject ⇒
+      f.get("_name") match {
+        case FString(name) ⇒ Some(name → (f - "_name"))
+        case _             ⇒ None
+      }
+    case _ ⇒ None
   }
 }
 
@@ -90,49 +140,4 @@ object FNative {
     case FAny(a)     ⇒ Some(a.mkString)
     case _           ⇒ None
   }
-}
-
-object Query {
-
-  def apply[F: ru.TypeTag, T: ru.TypeTag](name: String)(fn: F ⇒ T): Query[F, T] = new Query[F, T](name) {
-    override def apply(f: F): T = fn(f)
-  }
-
-  val defaultFilterParser: FieldsParser[Filter[_]] = FieldsParser[Filter[_]]("Filter") {
-    case (_, FObjOne("_filter", field)) ⇒ Filter.fieldsParser(field)
-    case (_, FObjOne("_sort", field))   ⇒ ???
-  }
-
-  val defaultGenericQueryParser: FieldsParser[GenericQuery] = FieldsParser[GenericQuery]("GenericQuery") {
-    case (_, FObjOne("_toList", _)) ⇒ Good(ToListQuery)
-
-  }
-  val defaultQueryParser: FieldsParser[Query[_, _]] = FieldsParser.empty[Query[_, _]]
-
-  def fieldsParser(executor: QueryExecutor[_]): FieldsParser[InitQuery[_]] =
-    fieldsParser(executor.initQueryParser, executor.queryParser, executor.filterParser, executor.genericQueryParser)
-
-  def fieldsParser(
-      initQueryParser: FieldsParser[InitQuery[_]],
-      queryParser: FieldsParser[Query[_, _]] = FieldsParser.empty,
-      filterParser: FieldsParser[Filter[_]] = FieldsParser.empty,
-      genericQueryParser: FieldsParser[GenericQuery] = FieldsParser.empty): FieldsParser[InitQuery[_]] =
-    initQueryParser
-      .orElse {
-        FieldsParser[InitQuery[_]]("Query") {
-          case (_, FSeq(head :: tail)) ⇒
-            tail.foldLeft(initQueryParser(head)) {
-              case (Good(query), field) ⇒
-                queryParser(field)
-                  .map(_.compose(query))
-                  .orElse(filterParser(field).map(_.compose(query)))
-                  .orElse(genericQueryParser(field).map(_.compose(query)))
-                  .orElse(defaultQueryParser(field).map(_.compose(query)))
-                  .orElse(defaultFilterParser(field).map(_.compose(query)))
-                  .orElse(defaultGenericQueryParser(field).map(_.compose(query)))
-              case (bad, _) ⇒ bad
-            }
-          case (_, field) ⇒ Bad(One(InvalidFormatAttributeError("query", "Query", field)))
-        }
-      }
 }
