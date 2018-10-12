@@ -40,7 +40,7 @@ sealed trait AttributeError extends Throwable {
 }
 
 case class InvalidFormatAttributeError(name: String, format: String, acceptedInput: Seq[String], field: Field) extends AttributeError {
-  override def toString = s"Invalid format for $name: $field, expected $format"
+  override def toString = s"Invalid format for $name: $field, expected $format (${acceptedInput.mkString(",")}"
   override def withName(newName: String): InvalidFormatAttributeError =
     copy(name = newName)
   override def withModel(model: String): InvalidFormatAttributeError =

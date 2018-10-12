@@ -1,9 +1,9 @@
 package org.thp.scalligraph.models
 
-import gremlin.scala.{asScalaGraph, Graph, GremlinScala, Key, Vertex}
+import gremlin.scala.{asScalaGraph, Graph, GremlinScala, Key, P, Vertex}
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.services.{EdgeSrv, VertexSrv}
+import org.thp.scalligraph.services._
 
 @VertexEntity
 case class Person(name: String, age: Int)
@@ -12,7 +12,6 @@ object Person {
   val initialValues = Seq(Person("marc", 34), Person("franck", 28))
 }
 
-@JsonOutput
 @VertexEntity
 case class Software(name: String, lang: String)
 
@@ -24,11 +23,17 @@ case class Created(weight: Double)
 
 @EntitySteps[Person]
 class PersonSteps(raw: GremlinScala[Vertex])(implicit db: Database) extends BaseVertexSteps[Person, PersonSteps](raw) {
-  def created = new SoftwareSteps(raw.out("Created"))
+  def created = new SoftwareSteps(raw.outTo[Created])
+
+  def created(predicate: P[Double]) = new SoftwareSteps(raw.outToE[Created].has(Key[Double]("weight"), predicate).inV())
 
   def connectedEdge: List[String] = raw.outE().label().toList
 
-  def knownLevels: List[Double] = raw.outE("Knows").value[Double]("weight").toList()
+  def knownLevels: List[Double] = raw.outToE[Knows].value[Double]("weight").toList()
+
+  def knows: PersonSteps = new PersonSteps(raw.outTo[Knows])
+
+  def friends(threshold: Double = 0.8): PersonSteps = new PersonSteps(raw.outToE[Knows].has(Key[Double]("weight"), P.gte(threshold)).inV())
 
   def remove(): Boolean = {
     raw.drop().iterate()
@@ -37,7 +42,6 @@ class PersonSteps(raw: GremlinScala[Vertex])(implicit db: Database) extends Base
 
   override def newInstance(raw: GremlinScala[Vertex]): PersonSteps = new PersonSteps(raw)
   //def name = new Steps[String, String, Labels](raw.map(_.value[String]("name")))
-
 }
 
 @EntitySteps[Software]
@@ -47,13 +51,6 @@ class SoftwareSteps(raw: GremlinScala[Vertex])(implicit db: Database) extends Ba
   def isRipple = new SoftwareSteps(raw.has(Key("name") of "ripple"))
 
   override def newInstance(raw: GremlinScala[Vertex]): SoftwareSteps = new SoftwareSteps(raw)
-}
-
-class PersonOps(person: Person with Entity) {
-//  def update(graph: Graph, field: String, value: String): Boolean = {
-//    ModernSchema.personModel.update(person._id, field, value)(graph)
-//    true
-//  }
 }
 
 class PersonSrv(implicit db: Database) extends VertexSrv[Person, PersonSteps] {

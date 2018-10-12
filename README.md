@@ -120,6 +120,84 @@ ScalliGraph offers DSL to build a controller:
 More details will come ...
 
 ### Query controller
-Data is requested using 
+Data is requested using a query chain. In your application, you can describe
+all possible links which must a subclass of `ParamQuery`. The object `Query`
+contains convenient method to create `ParamQuery`.
+
+You should also declare all public properties of your data. These properties
+are used to build filter queries, sort queries and GraphQL schema.
+
+Links and public properties are put in a QueryExecutor. The QueryExecutor is
+able to parse and execute a query from a HTTP request.
+
+```scala
+class ModernQueryExecutor extends QueryExecutor {
+  val personSrv   = new PersonSrv
+  val softwareSrv = new SoftwareSrv
+
+  override val publicProperties =
+    PublicPropertyListBuilder[PersonSteps, Vertex]
+      .property[String]("createdBy").derived(_ ⇒ _.value[String]("_createdBy"))
+      .property[String]("label").derived(_ ⇒ _.value[String]("name").map("Mister " + _))
+      .property[String]("name").simple
+      .property[Int]("age").simple
+      .build :::
+    PublicPropertyListBuilder[SoftwareSteps, Vertex]
+      .property[String]("createdBy").derived(_ ⇒ _.value[String]("_createdBy"))
+      .property[String]("name").simple
+      .property[String]("lang").simple
+      .property[String]("any")
+      .seq(_ ⇒
+        Seq(
+          _.value[String]("_createdBy"),
+          _.value[String]("name"),
+          _.value[String]("lang")
+      ))
+      .build
+
+  override val queries = Seq(
+    Query.init[PersonSteps]("allPeople", (graph, _) => personSrv.initSteps(graph)),
+    Query.init[SoftwareSteps]("allSoftware", (graph, _) => softwareSrv.initSteps(graph)),
+    Query.initWithParam[SeniorAgeThreshold, PersonSteps]("seniorPeople", { (seniorAgeThreshold, graph, _) ⇒
+      personSrv.initSteps(graph).where(_.has(Key[Int]("age"), P.gte(seniorAgeThreshold.age)))
+    }),
+    Query[PersonSteps, SoftwareSteps]("created", (personSteps, _) => personSteps.created),
+    Query.withParam[FriendLevel, PersonSteps, PersonSteps]("friends", (friendLevel, personSteps, _) ⇒ personSteps.friends(friendLevel.level)),
+    Query[Person with Entity, Output[OutputPerson]]("output", (person, _) ⇒ person),
+    Query[Software with Entity, Output[OutputSoftware]]("output", (software, _) ⇒ software)
+  )
+```
+
+Once described, query can be parsed from HTTP request then it can be executed
+```scala
+db.transaction { graph ⇒
+  val query: Query Or Every[AttributeError] = modernQueryExecutor.parser(Field(request))
+  val result: JsValue = modernQueryExecutor.execute(query, graph, authContext).toJson
+}
+```
+
+HTTP request body is a list of query elements:
+```json
+{
+  "query": [
+    { "_name": "allPeople" },
+    { "_name": "filter", "_and": [
+      { "_lt": { "age": 30 } },
+      { "_contains": { "name": "a" } }
+    ]},
+    { "_name": "created" },
+    { "_name": "_toList" }
+  ]
+}
+``` 
 
 ### GraphQL
+From a QueryExecutor, Scalligraph can generate the related GraphQL schema and execute the query:
+```scala
+import sangria.schema.{Schema, }
+import sangria.parser.QueryParser
+
+val query: Document                 = QueryParser.parse(inputQueryString).get
+val schema: Schema[AuthGraph, Unit] = SchemaGenerator(modernQueryExecutor)
+val result: Future[JsValue]         = Executor.execute(schema, query, AuthGraph(Some(authContext), graph))
+```

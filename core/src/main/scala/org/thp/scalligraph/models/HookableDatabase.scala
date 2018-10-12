@@ -98,5 +98,7 @@ class HookableDatabase(db: Database) extends Database {
 
   override def loadBinary(id: String)(implicit graph: Graph): InputStream = db.loadBinary(id)
 
+  override def loadBinary(initialVertex: Vertex)(implicit graph: Graph): InputStream = db.loadBinary(initialVertex)
+
   override def saveBinary(is: InputStream)(implicit graph: Graph): Vertex = db.saveBinary(is)
 }

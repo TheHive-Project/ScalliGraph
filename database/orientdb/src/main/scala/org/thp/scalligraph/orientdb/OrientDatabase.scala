@@ -60,22 +60,22 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
     val superClass = schema.getClass(superClassName)
     val clazz      = schema.createClass(model.label, superClass)
     model.fields.foreach {
-      case (field, SingleMapping(graphTypeClass, _, _, isReadonly)) ⇒
-        clazz.createProperty(field, OType.getTypeByClass(graphTypeClass)).setMandatory(strict).setNotNull(true).setReadonly(isReadonly)
-      case (field, OptionMapping(graphTypeClass, _, _, isReadonly)) ⇒
-        clazz.createProperty(field, OType.getTypeByClass(graphTypeClass)).setMandatory(false).setNotNull(false).setReadonly(isReadonly)
-      case (field, ListMapping(graphTypeClass, _, _, isReadonly)) ⇒
+      case (field, sm: SingleMapping[_, _]) ⇒
+        clazz.createProperty(field, OType.getTypeByClass(sm.graphTypeClass)).setMandatory(strict).setNotNull(true).setReadonly(sm.isReadonly)
+      case (field, om: OptionMapping[_, _]) ⇒
+        clazz.createProperty(field, OType.getTypeByClass(om.graphTypeClass)).setMandatory(false).setNotNull(false).setReadonly(om.isReadonly)
+      case (field, lm: ListMapping[_, _]) ⇒
         clazz
-          .createProperty(field, OType.EMBEDDEDLIST, OType.getTypeByClass(graphTypeClass))
+          .createProperty(field, OType.EMBEDDEDLIST, OType.getTypeByClass(lm.graphTypeClass))
           .setMandatory(false)
           .setNotNull(false)
-          .setReadonly(isReadonly)
-      case (field, SetMapping(graphTypeClass, _, _, isReadonly)) ⇒
+          .setReadonly(lm.isReadonly)
+      case (field, sm: SetMapping[_, _]) ⇒
         clazz
-          .createProperty(field, OType.EMBEDDEDSET, OType.getTypeByClass(graphTypeClass))
+          .createProperty(field, OType.EMBEDDEDSET, OType.getTypeByClass(sm.graphTypeClass))
           .setMandatory(false)
           .setNotNull(false)
-          .setReadonly(isReadonly)
+          .setReadonly(sm.isReadonly)
     }
     clazz.createProperty("_id", OType.STRING).setMandatory(strict).setNotNull(true).setReadonly(true)
     clazz.createProperty("_createdBy", OType.STRING).setMandatory(strict).setNotNull(true).setReadonly(true)

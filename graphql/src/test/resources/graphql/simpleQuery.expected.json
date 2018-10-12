@@ -1,8 +1,8 @@
 {
   "data": {
     "allPeople": {
-      "name": {
-        "sort": {
+      "sort": {
+        "name": {
           "toList": [
             "franck",
             "josh",

@@ -5,6 +5,6 @@ import play.api.libs.json.Writes
 
 import scala.language.experimental.macros
 
-object Output {
+object JsonWrites {
   def apply[T]: Writes[T] = macro JsonMacro.getJsonWrites[T]
 }

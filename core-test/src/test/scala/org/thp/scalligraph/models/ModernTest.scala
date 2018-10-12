@@ -16,7 +16,7 @@ class ModernTest extends PlaySpecification {
 
   implicit val authContext: AuthContext = DummyAuthContext("me")
 
-  Fragments.foreach(DatabaseProviders.list) { dbProvider ⇒
+  Fragments.foreach(DatabaseProviders.neo4j :: Nil) { dbProvider ⇒
     implicit val db: Database = dbProvider.get()
     val modernSchema          = new ModernSchema
     s"[${dbProvider.name}] graph" should {

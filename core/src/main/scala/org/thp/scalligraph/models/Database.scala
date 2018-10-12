@@ -20,7 +20,7 @@ import org.thp.scalligraph.{FPath, InternalError}
 abstract class Database {
   lazy val logger = Logger("org.thp.scalligraph.models.Database")
 
-  val idMapping: SingleMapping[UUID, String]          = SingleMapping[UUID, String](classOf[String], uuid ⇒ Some(uuid.toString), UUID.fromString)
+  val idMapping: SingleMapping[UUID, String]          = SingleMapping[UUID, String](uuid ⇒ Some(uuid.toString), UUID.fromString)
   val createdAtMapping: SingleMapping[Date, Date]     = UniMapping.dateMapping
   val createdByMapping: SingleMapping[String, String] = UniMapping.stringMapping
   val updatedAtMapping: OptionMapping[Date, Date]     = UniMapping.dateMapping.optional
@@ -256,7 +256,8 @@ abstract class Database {
       }
       .map { data ⇒
         val v = graph.addVertex("binary")
-        v.property("binary", data)
+        setSingleProperty(v, "binary", data, UniMapping.stringMapping)
+        setSingleProperty(v, "_id", UUID.randomUUID, idMapping)
         v
       }
     if (chunks.isEmpty) {

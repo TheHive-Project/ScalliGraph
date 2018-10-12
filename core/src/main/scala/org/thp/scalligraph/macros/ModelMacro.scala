@@ -26,7 +26,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacro with IndexMacro w
         try {
           db.getProperty(element, ${m.name}, ${m.valName})
         } catch {
-          case t: Throwable =>
+          case t: Throwable ⇒
             throw InternalError($label + " " + element.id + " doesn't comply with its schema, field `" + ${m.name} + "` is missing (" + element.value(${m.name}) + "): " + Model.printElement(element), t)
         }
         """
@@ -41,7 +41,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacro with IndexMacro w
       import org.thp.scalligraph.models.{ Database, Entity, IndexType, Mapping, Model, UniMapping, VertexModel }
       import org.thp.scalligraph.services.AttachmentSrv
 
-      new VertexModel { thisModel =>
+      new VertexModel { thisModel ⇒
         override type E = $entityType
 
         override val label: String = $label
@@ -96,7 +96,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacro with IndexMacro w
         try {
           db.getProperty(element, ${m.name}, ${m.valName})
         } catch {
-          case t: Throwable =>
+          case t: Throwable ⇒
             throw InternalError($label + " " + element.id + " doesn't comply with its schema, field `" + ${m.name} + "` is missing (" + element.value(${m.name}) + "): " + Model.printElement(element), t)
         }
         """
@@ -111,7 +111,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacro with IndexMacro w
       import org.thp.scalligraph.models.{ Database, EdgeModel, Entity, IndexType, Mapping, Model, UniMapping }
       import org.thp.scalligraph.services.AttachmentSrv
 
-      new EdgeModel[$fromType, $toType] { thisModel =>
+      new EdgeModel[$fromType, $toType] { thisModel ⇒
         override type E = $entityType
 
         override val label: String = $label

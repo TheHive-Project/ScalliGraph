@@ -78,9 +78,9 @@ class JsonMacro(val c: blackbox.Context) extends MacroUtil {
           import play.api.libs.json.{ JsArray, Writes }
           Writes[$eType]((e: $eType) ⇒ JsArray(e.map($writes.writes)))
          """)
-      //      case simpleClass =>
+      //      case simpleClass ⇒
       //        val params = simpleClass.decls.collect {
-      //          case symbol if symbol.isMethod && symbol.asMethod.isGetter =>
+      //          case symbol if symbol.isMethod && symbol.asMethod.isGetter ⇒
       //            val symbolName = symbol.name.toString
       //            val writes     = _getJsonWrites(symbol, symbol.asMethod.returnType)
       //            q"$symbolName → $writes.writes(e.${TermName(symbolName)})"

@@ -47,7 +47,7 @@ class UpdateFieldsParserMacroTest extends Specification with TestUtils {
           }
       })
       val fieldsParser = getUpdateFieldsParser[ComplexClassForFieldsParserMacroTest]
-      val fields       = FObject("subClasses[0].option" → FString("3"), "subClasses[1].option" → FString("invalid => unset attribute"))
+      val fields       = FObject("subClasses[0].option" → FString("3"), "subClasses[1].option" → FString("invalid ⇒ unset attribute"))
       val updates      = Map(FPath("subClasses[0].option") → UpdateOps.SetAttribute(3), FPath("subClasses[1].option") → UpdateOps.UnsetAttribute)
       fieldsParser(fields) must_=== Good(updates)
     }
@@ -56,7 +56,7 @@ class UpdateFieldsParserMacroTest extends Specification with TestUtils {
       val fieldsParser = getUpdateFieldsParser[SimpleClassForFieldsParserMacroTest]
       val fields       = FObject("name" → FNumber(12)) // invalid format
 
-      fieldsParser(fields) must_=== Bad(One(InvalidFormatAttributeError("name", "string", Seq("String"), FNumber(12))))
+      fieldsParser(fields) must_=== Bad(One(InvalidFormatAttributeError("name", "string", Seq("string"), FNumber(12))))
     }
   }
 }

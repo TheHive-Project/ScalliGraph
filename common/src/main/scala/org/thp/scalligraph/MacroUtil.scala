@@ -1,11 +1,29 @@
 package org.thp.scalligraph
 
+import java.util.Date
+
 import scala.reflect.macros.blackbox
 
 trait MacroUtil extends MacroLogger {
   val c: blackbox.Context
 
   import c.universe._
+
+  def typeName(tpe: Type): String = tpe match {
+    case RefinedType(cl :: _, _) ⇒ symbolName(cl.typeSymbol)
+    case cl                      ⇒ symbolName(cl.typeSymbol)
+  }
+
+  def symbolName(s: Symbol): String = s.name.decodedName.toString.trim
+
+  def isNative(tpe: Type): Boolean =
+    tpe <:< typeOf[String] ||
+      tpe <:< typeOf[Int] ||
+      tpe <:< typeOf[Long] ||
+      tpe <:< typeOf[Float] ||
+      tpe <:< typeOf[Double] ||
+      tpe <:< typeOf[Date] ||
+      tpe <:< typeOf[Boolean]
 
   object CaseClassType {
     def unapplySeq(tpe: Type): Option[Seq[Symbol]] =
@@ -63,13 +81,7 @@ trait MacroUtil extends MacroLogger {
   }
 
   def getTypeArgs(t: Type, fromType: Type): List[Type] =
-    if (t.erasure.typeSymbol == fromType.erasure.typeSymbol)
-      t.typeArgs
-    else
-      internal
-        .thisType(t.dealias.typeSymbol)
-        .baseType(fromType.typeSymbol.asClass)
-        .typeArgs
+    t.baseType(fromType.typeSymbol).typeArgs
 
   def symbolToType(symbol: Symbol): Type =
     if (symbol.isType) symbol.asType.toType
@@ -92,7 +104,7 @@ trait MacroUtil extends MacroLogger {
     unfold(List(q"org.thp.scalligraph.FPath.empty" → weakTypeOf[E].typeSymbol), init)(f)
   }
 
-  object EnumType {
+  object EnumerationType {
     def unapplySeq(tpe: Type): Option[Seq[(Tree, Tree)]] =
       extractEnum(tpe, tpe.typeSymbol)
 
@@ -128,12 +140,8 @@ trait MacroUtil extends MacroLogger {
         if ((cs.isTrait || cs.isAbstract) && cs.isSealed) {
           trace(s"searching direct sub classes for $cs")
           cs.knownDirectSubclasses.foldLeft[Option[List[Symbol]]](Some(Nil)) {
-            case (None, _) ⇒
-              trace(s" ==> error found")
-              None
-            case (Some(set), knownSubclass) ⇒
-              trace(s" ==> $knownSubclass found")
-              sealedType(knownSubclass).map(set ++ _)
+            case (None, _)                  ⇒ None
+            case (Some(set), knownSubclass) ⇒ sealedType(knownSubclass).map(set ++ _)
           }
         } else {
           trace(s"$s is a class but it is not sealed")
@@ -154,7 +162,6 @@ trait MacroUtil extends MacroLogger {
               valueName → q"$v"
             else
               q"$v.name" → q"$v"
-//            valueName -> q"$v"
           } else {
             valueName → q"${value.name.toTermName}"
           }

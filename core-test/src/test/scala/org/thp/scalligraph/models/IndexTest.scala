@@ -32,17 +32,17 @@ class IndexTest extends PlaySpecification {
       }
 
       "throw an exception in the different transactions" in {
-        db.transaction { implicit graph ⇒
-          model.create(EntityWithUniqueName("differentTransaction", 1))
-        }
-        db.transaction { implicit graph ⇒
-          model.create(EntityWithUniqueName("differentTransaction", 2))
-        } must throwA[Exception]
+        {
+          db.transaction { implicit graph ⇒
+            model.create(EntityWithUniqueName("differentTransaction", 1))
+          }
+          db.transaction { implicit graph ⇒
+            model.create(EntityWithUniqueName("differentTransaction", 2))
+          }
+        }must throwA[Exception]
       }
 
       "throw an exception in overlapped transactions" in {
-        // This test sometimes fails on JanusGraph
-        // https://github.com/JanusGraph/janusgraph/issues/1107
         def synchronizedElementCreation(name: String, waitBeforeCreate: Future[Unit], waitBeforeCommit: Future[Unit]): Future[Unit] =
           Future {
             db.transaction { implicit graph ⇒

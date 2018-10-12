@@ -81,7 +81,7 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
         val writes = TermName(c.freshName("writes"))
 
         val writesDef =
-          q"private val $writes = org.thp.scalligraph.models.Output.apply[$className]"
+          q"private val $writes = org.thp.scalligraph.models.JsonWrites.apply[$className]"
         val toJsonDef =
           q"def toJson: play.api.libs.json.JsObject = $writes.writes(this).as[play.api.libs.json.JsObject]"
         val toEntityJsonDef =
@@ -119,9 +119,7 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
               q"""
                 def ${TermName(field.name.toString)} = {
                   val $mappingName = $mapping
-                  org.thp.scalligraph.models.ScalarSteps(
-                    $mappingName,
-                    raw.properties(${field.name.decodedName.toString.trim}).map(_.value.asInstanceOf[$mappingName.GraphType]))
+                  org.thp.scalligraph.models.ScalarSteps(raw.properties(${field.name.decodedName.toString.trim}).map(_.value.asInstanceOf[$mappingName.GraphType]))
                 }
               """
             }

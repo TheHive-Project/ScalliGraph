@@ -1,17 +1,22 @@
-scalar Long
 schema {
     query: ModernQueryExecutor
 }
 
-type IntTraversal {
+type IntStep {
     toList: [Int!]!
     head: Int!
     headOption: Int
-    sort: IntTraversal!
 }
 
 type ModernQueryExecutor {
-    allPeople: PersonTraversal!
+    allSoftwareList: [Software!]!
+    allPeople: PersonStep!
+}
+
+enum Order {
+    decr
+    incr
+    shuffle
 }
 
 type Person {
@@ -19,7 +24,18 @@ type Person {
     age: Int!
 }
 
-input PersonFilter {
+type PersonStep {
+    created: SoftwareStep!
+    name: StringStep!
+    age: IntStep!
+    toList: [Person!]!
+    head: Person!
+    headOption: Person
+    filter(filter: PersonStepsFilter!): PersonStep!
+    sort(order: PersonStepsSort!): PersonStep!
+}
+
+input PersonStepsFilter {
     name: String
     name_not: String
     name_in: [String!]
@@ -44,15 +60,9 @@ input PersonFilter {
     age_gte: Int
 }
 
-type PersonTraversal {
-    created: SoftwareTraversal!
-    age: IntTraversal!
-    name: StringTraversal!
-    filter(filter: PersonFilter!): PersonTraversal!
-    toList: [Person!]!
-    head: Person!
-    headOption: Person
-    sort: PersonTraversal!
+input PersonStepsSort {
+    name: Order
+    age: Order
 }
 
 type Software {
@@ -60,7 +70,17 @@ type Software {
     lang: String!
 }
 
-input SoftwareFilter {
+type SoftwareStep {
+    name: StringStep!
+    lang: StringStep!
+    toList: [Software!]!
+    head: Software!
+    headOption: Software
+    filter(filter: SoftwareStepsFilter!): SoftwareStep!
+    sort(order: SoftwareStepsSort!): SoftwareStep!
+}
+
+input SoftwareStepsFilter {
     name: String
     name_not: String
     name_in: [String!]
@@ -91,19 +111,13 @@ input SoftwareFilter {
     lang_not_ends_with: String
 }
 
-type SoftwareTraversal {
-    lang: StringTraversal!
-    name: StringTraversal!
-    filter(filter: SoftwareFilter!): SoftwareTraversal!
-    toList: [Software!]!
-    head: Software!
-    headOption: Software
-    sort: SoftwareTraversal!
+input SoftwareStepsSort {
+    name: Order
+    lang: Order
 }
 
-type StringTraversal {
+type StringStep {
     toList: [String!]!
     head: String!
     headOption: String
-    sort: StringTraversal!
 }

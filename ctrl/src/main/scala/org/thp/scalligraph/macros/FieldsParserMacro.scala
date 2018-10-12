@@ -50,7 +50,7 @@ trait FieldsParserUtil extends MacroLogger with MacroUtil {
     val fieldsParserType =
       appliedType(typeOf[FieldsParser[_]].typeConstructor, eType)
     val fieldsParser = c.inferImplicitValue(fieldsParserType, silent = true)
-    trace(s"getParserFromImplicit($eType): search implicit of $fieldsParserType => $fieldsParser")
+    trace(s"getParserFromImplicit($eType): search implicit of $fieldsParserType ⇒ $fieldsParser")
     if (fieldsParser.tpe =:= NoType) None
     else Some(fieldsParser)
   }
@@ -80,10 +80,10 @@ trait FieldsParserUtil extends MacroLogger with MacroUtil {
 
                   val $builderName = $builder
                   $parser.apply(path / $symbolName, field.get($symbolName)).fold(
-                    param => $builderName.map(_.apply(param)),
-                    error => $builderName match {
-                      case Bad(errors: Every[_]) => Bad(errors.asInstanceOf[Every[AttributeError]] ++ error)
-                      case _ => Bad(error)
+                    param ⇒ $builderName.map(_.apply(param)),
+                    error ⇒ $builderName match {
+                      case Bad(errors: Every[_]) ⇒ Bad(errors.asInstanceOf[Every[AttributeError]] ++ error)
+                      case _ ⇒ Bad(error)
                     })
                 """
               }
@@ -94,7 +94,7 @@ trait FieldsParserUtil extends MacroLogger with MacroUtil {
           q"""
             import org.thp.scalligraph.controllers.FieldsParser
 
-            FieldsParser[$eType]($className) { case (path, field) => $builder }
+            FieldsParser[$eType]($className) { case (path, field) ⇒ $builder }
           """
         }
       case SeqType(subType) ⇒
@@ -107,16 +107,16 @@ trait FieldsParserUtil extends MacroLogger with MacroUtil {
         getOrBuildParser(subType.typeSymbol, subType).map { parser ⇒
           q"$parser.optional"
         }
-      case EnumType(values @ _*) ⇒
+      case EnumerationType(values @ _*) ⇒
         trace(s"build FieldsParser enumeration of ${values.map(_._1).mkString("[", ",", "]")}")
         val caseValues = values
           .map {
             case (name, value) ⇒ cq"$name ⇒ $value"
           } :+
           cq"""other ⇒ throw org.thp.scalligraph.InternalError(
-              "Wrong value " + other +
-              " for numeration " + ${eType.toString} +
-              ". Possible values are " + ${values.map(_._1).mkString(",")})"""
+            "Wrong value " + other +
+            " for numeration " + ${eType.toString} +
+            ". Possible values are " + ${values.map(_._1).mkString(",")})"""
         Some(q"""org.thp.scalligraph.controllers.FieldsParser.string.map("enum") { case ..$caseValues }""")
       case _ ⇒
         None
@@ -154,9 +154,9 @@ trait UpdateFieldsParserUtil extends FieldsParserUtil {
     val updateFieldsParser = getOrBuildParser(symbol, eType)
       .map { parser ⇒
         q"""
-         import org.thp.scalligraph.controllers.UpdateFieldsParser
-         import org.thp.scalligraph.FPath
-         UpdateFieldsParser[$eType]($className, Map(FPath.empty -> $parser.toUpdate))
+          import org.thp.scalligraph.controllers.UpdateFieldsParser
+          import org.thp.scalligraph.FPath
+          UpdateFieldsParser[$eType]($className, Map(FPath.empty -> $parser.toUpdate))
         """
       }
       .getOrElse(q"org.thp.scalligraph.controllers.UpdateFieldsParser.empty[$eType]")
@@ -167,10 +167,10 @@ trait UpdateFieldsParserUtil extends FieldsParserUtil {
         getOrBuildParser(subType.typeSymbol, subType)
           .map { parser ⇒
             q"""
-           import org.thp.scalligraph.controllers.UpdateFieldsParser
-           import org.thp.scalligraph.FPath
-           UpdateFieldsParser($className, Map(FPath.seq -> $parser.toUpdate))
-          """
+              import org.thp.scalligraph.controllers.UpdateFieldsParser
+              import org.thp.scalligraph.FPath
+              UpdateFieldsParser($className, Map(FPath.seq -> $parser.toUpdate))
+            """
           }
           .fold(q"$updateFieldsParser ++ $subParser.sequence") { seqParser ⇒
             q"$updateFieldsParser ++ $subParser.sequence ++ $seqParser"

@@ -202,31 +202,12 @@ object FieldsParser {
     case (_, FAny(s :: Nil)) ⇒ Try(Good(s.toFloat)).toOption
     case _                   ⇒ None
   })
-  //  implicit val fObjectFieldsParser: FieldsParser[FObject] = FieldsParser[FObject]("object") {
-  //    case (_, o: FObject) ⇒ Good(o)
-  //  }
-  //    implicit val queryFieldsParser: FieldsParser[QueryDef] = FieldsParser[QueryDef]("query") {
-  //      case (_, Some(JsonInputValue(j))) ⇒ Good(j.as[QueryDef])
-  //    }
-  //    implicit val aggFieldsParser: FieldsParser[Agg] = FieldsParser[Agg]("agg") {
-  //      case (_, Some(JsonInputValue(j))) ⇒ Good(j.as[Agg])
-  //    }
 
-  //  implicit def seqFieldsParser[T](implicit fp: FieldsParser[T]): FieldsParser[Seq[T]] = fp.sequence
-  //
-  //  implicit def optionalFieldsParser[T](implicit fp: FieldsParser[T]): FieldsParser[Option[T]] =
-  //    fp.optional
-
-  //  implicit def enumerationFieldsParser[E <: Enumeration#Value: TypeTag]: FieldsParser[E] = {
-  //    val enumModule = typeTag[E].tpe.typeSymbol.companion.asModule
-  //    val enum = cm.reflectModule(enumModule).instance.asInstanceOf[Enumeration]
-  //    FieldsParser.string.map(toString) { s ⇒
-  //      enum.values
-  //        .find(_.toString == s)
-  //        .fold[Or[E, One[InvalidFormatAttributeError]]](Bad(One(InvalidFormatAttributeError("", toString, FString(s)))))(e ⇒ Good(e.asInstanceOf[E]))
-  //    }
-  //    null.asInstanceOf[FieldsParser[E]]
-  //  }
+  implicit val double: FieldsParser[Double] = FieldsParser[Double]("float")(unlift {
+    case (_, FNumber(n))     ⇒ Some(Good(n.toDouble))
+    case (_, FAny(s :: Nil)) ⇒ Try(Good(s.toDouble)).toOption
+    case _                   ⇒ None
+  })
 }
 
 object UpdateOps {
@@ -237,7 +218,5 @@ object UpdateOps {
 
   case class SetAttribute(value: Any) extends Type
 
-  //case class SetDBAttribute(value: DatabaseAdapter.DatabaseFormat) extends DBType
   object UnsetAttribute extends Type with DBType
-
 }

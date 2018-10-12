@@ -114,16 +114,18 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends Database
       }
     }
 
-  val dateMapping: SingleMapping[Date, Long] = SingleMapping[Date, Long](classOf[Long], d ⇒ Some(d.getTime), new Date(_))
+  val dateMapping: SingleMapping[Date, Long] = SingleMapping[Date, Long](d ⇒ Some(d.getTime), new Date(_))
 
   def fixMapping[M <: Mapping[_, _, _]](mapping: M): M =
-    mapping match {
-      case m if m == UniMapping.dateMapping          ⇒ dateMapping.asInstanceOf[M]
-      case m if m == UniMapping.dateMapping.optional ⇒ dateMapping.optional.asInstanceOf[M]
-      case m if m == UniMapping.dateMapping.sequence ⇒ dateMapping.sequence.asInstanceOf[M]
-      case m if m == UniMapping.dateMapping.set      ⇒ dateMapping.set.asInstanceOf[M]
-      case m                                         ⇒ m
+    if (mapping.domainTypeClass == classOf[Date]) {
+    mapping.cardinality match {
+      case MappingCardinality.single   ⇒ dateMapping.asInstanceOf[M]
+      case MappingCardinality.option ⇒ dateMapping.optional.asInstanceOf[M]
+      case MappingCardinality.list ⇒ dateMapping.sequence.asInstanceOf[M]
+      case MappingCardinality.set      ⇒ dateMapping.set.asInstanceOf[M]
     }
+  }
+    else mapping
 
   override def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D =
     super.getSingleProperty(element, key, fixMapping(mapping))

@@ -47,16 +47,16 @@ trait MappingMacro extends MacroUtil with MacroLogger {
 
   private def buildMapping(symbol: Symbol, eType: Type): Option[Tree] =
     symbol.typeSignature match { // TODO add setType
-      case SeqType(subType) ⇒
-        val subMapping = getMapping(subType.typeSymbol, subType)
-        Some(q"$subMapping.sequence")
-      case SetType(subType) ⇒
-        val subMapping = getMapping(subType.typeSymbol, subType)
-        Some(q"$subMapping.set")
-      case OptionType(subType) ⇒
-        val subMapping = getMapping(subType.typeSymbol, subType)
-        Some(q"$subMapping.optional")
-      case EnumType(members @ _*) ⇒
+//      case SeqType(subType) ⇒
+//        val subMapping = getMapping(subType.typeSymbol, subType)
+//        Some(q"$subMapping.sequence")
+//      case SetType(subType) ⇒
+//        val subMapping = getMapping(subType.typeSymbol, subType)
+//        Some(q"$subMapping.set")
+//      case OptionType(subType) ⇒
+//        val subMapping = getMapping(subType.typeSymbol, subType)
+//        Some(q"$subMapping.optional")
+      case EnumerationType(members @ _*) ⇒
         val valueCases = members.map {
           case (name, value) ⇒ cq"$name ⇒ $value"
         } :+
@@ -64,7 +64,7 @@ trait MappingMacro extends MacroUtil with MacroLogger {
               "Wrong value " + other +
               " for numeration " + ${symbol.toString} +
               ". Possible values are " + ${members.map(_._1).mkString(",")})"""
-        Some(q"org.thp.scalligraph.models.SingleMapping[$eType, String](classOf[String], e ⇒ Some(e.toString), g => g match { case ..$valueCases })")
+        Some(q"org.thp.scalligraph.models.SingleMapping[$eType, String](e ⇒ Some(e.toString), g ⇒ g match { case ..$valueCases })")
       case _ ⇒ None
     }
 }

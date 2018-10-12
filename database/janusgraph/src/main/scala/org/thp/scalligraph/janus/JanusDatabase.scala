@@ -9,7 +9,7 @@ import play.api.Configuration
 import gremlin.scala._
 import javax.inject.Singleton
 import org.apache.tinkerpop.gremlin.structure.{Edge ⇒ _, Element ⇒ _, Graph ⇒ _, Vertex ⇒ _}
-import org.janusgraph.core.schema.{JanusGraphManagement, JanusGraphSchemaType, Mapping}
+import org.janusgraph.core.schema.{ConsistencyModifier, JanusGraphManagement, JanusGraphSchemaType, Mapping}
 import org.janusgraph.core.{Cardinality, JanusGraph, JanusGraphFactory, SchemaViolationException}
 import org.janusgraph.diskstorage.locking.PermanentLockingException
 import org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration
@@ -163,7 +163,8 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
           logger.debug(s"Creating unique index on fields $elementLabel:${propertyKeys.map(_.label()).mkString(",")}")
           propertyKeys.foreach(index.addKey)
           index.unique()
-          index.buildCompositeIndex()
+          val i = index.buildCompositeIndex()
+          mgmt.setConsistency(i, ConsistencyModifier.LOCK)
         case IndexType.standard ⇒
           logger.debug(s"Creating index on fields $elementLabel:${propertyKeys.map(_.label()).mkString(",")}")
           propertyKeys.foreach(index.addKey)

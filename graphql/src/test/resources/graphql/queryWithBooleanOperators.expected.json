@@ -3,8 +3,8 @@
     "allPeople": {
       "peopleFilteredByName": {
         "peopleFilteredByAge": {
-          "age": {
-            "sort": {
+          "sort": {
+            "age": {
               "toList": [
                 32
               ]
