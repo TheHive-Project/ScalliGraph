@@ -12,8 +12,12 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroLogger with Update
   def getOrBuildFieldsParser[E: WeakTypeTag]: Tree = {
     val eType = weakTypeOf[E]
     initLogger(eType.typeSymbol)
-    getOrBuildParser(eType.typeSymbol, eType)
-      .getOrElse(c.abort(c.enclosingPosition, s"Build FieldsParser of $eType fails"))
+    if (eType <:< typeOf[Attachment]) {
+      q"org.thp.scalligraph.controllers.FieldsParser.attachment"
+    } else
+      getParserFromAnnotation(eType.typeSymbol, eType)
+        .orElse(buildParser(eType))
+        .getOrElse(c.abort(c.enclosingPosition, s"Build FieldsParser of $eType fails"))
   }
 
   def getOrBuildUpdateFieldsParser[E: WeakTypeTag]: Tree = {
@@ -21,7 +25,6 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroLogger with Update
     initLogger(eType.typeSymbol)
     getOrBuildUpdateParser(eType.typeSymbol, eType)
   }
-
 }
 
 trait FieldsParserUtil extends MacroLogger with MacroUtil {

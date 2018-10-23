@@ -19,7 +19,7 @@ import org.thp.scalligraph.models._
 import org.thp.scalligraph.{Config, Retry}
 
 @Singleton
-class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends Database {
+class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseDatabase {
 
   def this(dbPath: String, maxRetryOnConflict: Int) = this(Neo4jGraph.open(dbPath), maxRetryOnConflict)
 
@@ -118,14 +118,13 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends Database
 
   def fixMapping[M <: Mapping[_, _, _]](mapping: M): M =
     if (mapping.domainTypeClass == classOf[Date]) {
-    mapping.cardinality match {
-      case MappingCardinality.single   ⇒ dateMapping.asInstanceOf[M]
-      case MappingCardinality.option ⇒ dateMapping.optional.asInstanceOf[M]
-      case MappingCardinality.list ⇒ dateMapping.sequence.asInstanceOf[M]
-      case MappingCardinality.set      ⇒ dateMapping.set.asInstanceOf[M]
-    }
-  }
-    else mapping
+      mapping.cardinality match {
+        case MappingCardinality.single ⇒ dateMapping.asInstanceOf[M]
+        case MappingCardinality.option ⇒ dateMapping.optional.asInstanceOf[M]
+        case MappingCardinality.list   ⇒ dateMapping.sequence.asInstanceOf[M]
+        case MappingCardinality.set    ⇒ dateMapping.set.asInstanceOf[M]
+      }
+    } else mapping
 
   override def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D =
     super.getSingleProperty(element, key, fixMapping(mapping))

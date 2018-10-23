@@ -17,7 +17,64 @@ import org.thp.scalligraph.controllers.UpdateOps
 import org.thp.scalligraph.services.{EdgeSrv, VertexSrv}
 import org.thp.scalligraph.{FPath, InternalError}
 
-abstract class Database {
+trait Database {
+  def noTransaction[A](body: Graph ⇒ A): A
+  def transaction[A](body: Graph ⇒ A): A
+
+  def version: Int
+  def setVersion(v: Int): Unit
+
+  def getModel[E <: Product: ru.TypeTag]: Model.Base[E]
+  def getVertexModel[E <: Product: ru.TypeTag]: Model.Vertex[E]
+  def getEdgeModel[E <: Product: ru.TypeTag, FROM <: Product, TO <: Product]: Model.Edge[E, FROM, TO]
+
+  def createSchemaFrom(schemaObject: Any)(implicit authContext: AuthContext): Unit
+  def createSchema(model: Model, models: Model*): Unit = createSchema(model +: models)
+  def createSchema(models: Seq[Model]): Unit
+  def createSchema(models: Seq[Model], vertexSrvs: Seq[VertexSrv[_, _]], edgeSrvs: Seq[EdgeSrv[_, _, _]])(implicit authContext: AuthContext): Unit
+
+  def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity
+  def createEdge[E <: Product, FROM <: Product, TO <: Product](
+      graph: Graph,
+      authContext: AuthContext,
+      model: Model.Edge[E, FROM, TO],
+      e: E,
+      from: FROM with Entity,
+      to: TO with Entity): E with Entity
+
+  def update(graph: Graph, authContext: AuthContext, model: Model, id: String, fields: Map[FPath, UpdateOps.Type]): Unit
+
+  def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D
+  def getOptionProperty[D, G](element: Element, key: String, mapping: OptionMapping[D, G]): Option[D]
+  def getListProperty[D, G](element: Element, key: String, mapping: ListMapping[D, G]): Seq[D]
+  def getSetProperty[D, G](element: Element, key: String, mapping: SetMapping[D, G]): Set[D]
+  def getProperty[D](element: Element, key: String, mapping: Mapping[D, _, _]): D =
+    mapping match {
+      case m: SingleMapping[_, _] ⇒ getSingleProperty(element, key, m).asInstanceOf[D]
+      case m: OptionMapping[_, _] ⇒ getOptionProperty(element, key, m).asInstanceOf[D]
+      case m: ListMapping[_, _]   ⇒ getListProperty(element, key, m).asInstanceOf[D]
+      case m: SetMapping[_, _]    ⇒ getSetProperty(element, key, m).asInstanceOf[D]
+    }
+
+  def setSingleProperty[D, G](element: Element, key: String, value: D, mapping: SingleMapping[D, _]): Unit
+  def setOptionProperty[D, G](element: Element, key: String, value: Option[D], mapping: OptionMapping[D, _]): Unit
+  def setListProperty[D, G](element: Element, key: String, values: Seq[D], mapping: ListMapping[D, _]): Unit
+  def setSetProperty[D, G](element: Element, key: String, values: Set[D], mapping: SetMapping[D, _]): Unit
+  def setProperty[D](element: Element, key: String, value: D, mapping: Mapping[D, _, _]): Unit =
+    mapping match {
+      case m: SingleMapping[d, _] ⇒ setSingleProperty(element, key, value, m)
+      case m: OptionMapping[d, _] ⇒ setOptionProperty(element, key, value.asInstanceOf[Option[d]], m)
+      case m: ListMapping[d, _]   ⇒ setListProperty(element, key, value.asInstanceOf[Seq[d]], m)
+      case m: SetMapping[d, _]    ⇒ setSetProperty(element, key, value.asInstanceOf[Set[d]], m)
+
+    }
+
+  def loadBinary(initialVertex: Vertex)(implicit graph: Graph): InputStream
+  def loadBinary(id: String)(implicit graph: Graph): InputStream
+  def saveBinary(is: InputStream)(implicit graph: Graph): Vertex
+}
+
+abstract class BaseDatabase extends Database {
   lazy val logger = Logger("org.thp.scalligraph.models.Database")
 
   val idMapping: SingleMapping[UUID, String]          = SingleMapping[UUID, String](uuid ⇒ Some(uuid.toString), UUID.fromString)
@@ -26,14 +83,11 @@ abstract class Database {
   val updatedAtMapping: OptionMapping[Date, Date]     = UniMapping.dateMapping.optional
   val updatedByMapping: OptionMapping[String, String] = UniMapping.stringMapping.optional
 
-  def noTransaction[A](body: Graph ⇒ A): A
-  def transaction[A](body: Graph ⇒ A): A
+  override def version: Int = noTransaction(_.variables.get[Int]("version").orElse(0))
 
-  def version: Int = noTransaction(_.variables.get[Int]("version").orElse(0))
+  override def setVersion(v: Int): Unit = noTransaction(_.variables.set("version", v))
 
-  def setVersion(v: Int): Unit = noTransaction(_.variables.set("version", v))
-
-  def getModel[E <: Product: ru.TypeTag]: Model.Base[E] = {
+  override def getModel[E <: Product: ru.TypeTag]: Model.Base[E] = {
     val rm = ru.runtimeMirror(getClass.getClassLoader)
     val companionMirror =
       rm.reflectModule(ru.typeOf[E].typeSymbol.companion.asModule)
@@ -43,7 +97,7 @@ abstract class Database {
     }
   }
 
-  def getVertexModel[E <: Product: ru.TypeTag]: Model.Vertex[E] = {
+  override def getVertexModel[E <: Product: ru.TypeTag]: Model.Vertex[E] = {
     val rm              = ru.runtimeMirror(getClass.getClassLoader)
     val classMirror     = rm.reflectClass(ru.typeOf[E].typeSymbol.asClass)
     val companionSymbol = classMirror.symbol.companion
@@ -54,7 +108,7 @@ abstract class Database {
     }
   }
 
-  def getEdgeModel[E <: Product: ru.TypeTag, FROM <: Product, TO <: Product]: Model.Edge[E, FROM, TO] = {
+  override def getEdgeModel[E <: Product: ru.TypeTag, FROM <: Product, TO <: Product]: Model.Edge[E, FROM, TO] = {
     val rm = ru.runtimeMirror(getClass.getClassLoader)
     val companionMirror =
       rm.reflectModule(ru.typeOf[E].typeSymbol.companion.asModule)
@@ -64,7 +118,7 @@ abstract class Database {
     }
   }
 
-  def createSchemaFrom(schemaObject: Any)(implicit authContext: AuthContext): Unit = {
+  override def createSchemaFrom(schemaObject: Any)(implicit authContext: AuthContext): Unit = {
     def extract[F: ClassTag](o: Any): Seq[F] =
       o.getClass.getMethods.collect {
         case field
@@ -80,18 +134,17 @@ abstract class Database {
     createSchema(models, vertexSrvs, edgeSrvs)
   }
 
-  def createSchema(model: Model, models: Model*): Unit = createSchema(model +: models)
+  override def createSchema(models: Seq[Model]): Unit
 
-  def createSchema(models: Seq[Model]): Unit
-
-  def createSchema(models: Seq[Model], vertexSrvs: Seq[VertexSrv[_, _]], edgeSrvs: Seq[EdgeSrv[_, _, _]])(implicit authContext: AuthContext): Unit = {
+  override def createSchema(models: Seq[Model], vertexSrvs: Seq[VertexSrv[_, _]], edgeSrvs: Seq[EdgeSrv[_, _, _]])(
+      implicit authContext: AuthContext): Unit = {
     createSchema(vertexSrvs.map(_.model) ++ edgeSrvs.map(_.model) ++ models)
     transaction { implicit graph ⇒
       vertexSrvs.foreach(_.createInitialValues())
     }
   }
 
-  def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
+  override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
     val createdVertex = model.create(v)(this, graph)
     setSingleProperty(createdVertex, "_id", UUID.randomUUID, idMapping)
     setSingleProperty(createdVertex, "_createdAt", new Date, createdAtMapping)
@@ -100,7 +153,7 @@ abstract class Database {
     model.toDomain(createdVertex)(this)
   }
 
-  def createEdge[E <: Product, FROM <: Product, TO <: Product](
+  override def createEdge[E <: Product, FROM <: Product, TO <: Product](
       graph: Graph,
       authContext: AuthContext,
       model: Model.Edge[E, FROM, TO],
@@ -121,7 +174,7 @@ abstract class Database {
     edgeMaybe.getOrElse(sys.error("vertex not found"))
   }
 
-  def update(graph: Graph, authContext: AuthContext, model: Model, id: String, fields: Map[FPath, UpdateOps.Type]): Unit = {
+  override def update(graph: Graph, authContext: AuthContext, model: Model, id: String, fields: Map[FPath, UpdateOps.Type]): Unit = {
     val element: Element = model.get(id)(this, graph)
     setOptionProperty(element, "_updatedAt", Some(new Date), updatedAtMapping)
     setOptionProperty(element, "_updatedBy", Some(authContext.userId), updatedByMapping)
@@ -136,7 +189,7 @@ abstract class Database {
     }
   }
 
-  protected def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D = {
+  override def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D = {
     val values = element.properties[G](key)
     if (values.hasNext) {
       val v = mapping.toDomain(values.next().value)
@@ -146,7 +199,7 @@ abstract class Database {
     } else throw InternalError(s"Property $key is missing on element $element" + Model.printElement(element))
   }
 
-  protected def getOptionProperty[D, G](element: Element, key: String, mapping: OptionMapping[D, G]): Option[D] = {
+  override def getOptionProperty[D, G](element: Element, key: String, mapping: OptionMapping[D, G]): Option[D] = {
     val values = element
       .properties[G](key)
     if (values.hasNext) {
@@ -157,35 +210,27 @@ abstract class Database {
     } else None
   }
 
-  protected def getListProperty[D, G](element: Element, key: String, mapping: ListMapping[D, G]): Seq[D] =
+  override def getListProperty[D, G](element: Element, key: String, mapping: ListMapping[D, G]): Seq[D] =
     element
       .properties[G](key)
       .asScala
       .map(p ⇒ mapping.toDomain(p.value()))
       .toSeq
 
-  protected def getSetProperty[D, G](element: Element, key: String, mapping: SetMapping[D, G]): Set[D] =
+  override def getSetProperty[D, G](element: Element, key: String, mapping: SetMapping[D, G]): Set[D] =
     element
       .properties[G](key)
       .asScala
       .map(p ⇒ mapping.toDomain(p.value()))
       .toSet
 
-  def getProperty[D](element: Element, key: String, mapping: Mapping[D, _, _]): D =
-    mapping match {
-      case m: SingleMapping[_, _] ⇒ getSingleProperty(element, key, m).asInstanceOf[D]
-      case m: OptionMapping[_, _] ⇒ getOptionProperty(element, key, m).asInstanceOf[D]
-      case m: ListMapping[_, _]   ⇒ getListProperty(element, key, m).asInstanceOf[D]
-      case m: SetMapping[_, _]    ⇒ getSetProperty(element, key, m).asInstanceOf[D]
-    }
-
-  protected def setSingleProperty[D, G](element: Element, key: String, value: D, mapping: SingleMapping[D, _]): Unit =
+  override def setSingleProperty[D, G](element: Element, key: String, value: D, mapping: SingleMapping[D, _]): Unit =
     mapping.toGraphOpt(value).foreach(element.property(key, _))
 
-  protected def setOptionProperty[D, G](element: Element, key: String, value: Option[D], mapping: OptionMapping[D, _]): Unit =
+  override def setOptionProperty[D, G](element: Element, key: String, value: Option[D], mapping: OptionMapping[D, _]): Unit =
     value.flatMap(mapping.toGraphOpt).foreach(element.property(key, _))
 
-  protected def setListProperty[D, G](element: Element, key: String, values: Seq[D], mapping: ListMapping[D, _]): Unit = {
+  override def setListProperty[D, G](element: Element, key: String, values: Seq[D], mapping: ListMapping[D, _]): Unit = {
     element.properties(key).asScala.foreach(_.remove)
     element match {
       case vertex: Vertex ⇒ values.flatMap(mapping.toGraphOpt).foreach(vertex.property(Cardinality.list, key, _))
@@ -193,7 +238,7 @@ abstract class Database {
     }
   }
 
-  protected def setSetProperty[D, G](element: Element, key: String, values: Set[D], mapping: SetMapping[D, _]): Unit = {
+  override def setSetProperty[D, G](element: Element, key: String, values: Set[D], mapping: SetMapping[D, _]): Unit = {
     element.properties(key).asScala.foreach(_.remove)
     element match {
       case vertex: Vertex ⇒ values.flatMap(mapping.toGraphOpt).foreach(vertex.property(Cardinality.set, key, _))
@@ -201,20 +246,11 @@ abstract class Database {
     }
   }
 
-  def setProperty[D](element: Element, key: String, value: D, mapping: Mapping[D, _, _]): Unit =
-    mapping match {
-      case m: SingleMapping[d, _] ⇒ setSingleProperty(element, key, value, m)
-      case m: OptionMapping[d, _] ⇒ setOptionProperty(element, key, value.asInstanceOf[Option[d]], m)
-      case m: ListMapping[d, _]   ⇒ setListProperty(element, key, value.asInstanceOf[Seq[d]], m)
-      case m: SetMapping[d, _]    ⇒ setSetProperty(element, key, value.asInstanceOf[Set[d]], m)
-
-    }
-
   val chunkSize: Int = 32 * 1024
 
-  def loadBinary(initialVertex: Vertex)(implicit graph: Graph): InputStream = loadBinary(initialVertex.value[String]("_id"))
+  override def loadBinary(initialVertex: Vertex)(implicit graph: Graph): InputStream = loadBinary(initialVertex.value[String]("_id"))
 
-  def loadBinary(id: String)(implicit graph: Graph): InputStream =
+  override def loadBinary(id: String)(implicit graph: Graph): InputStream =
     new InputStream {
       var vertex: GremlinScala[Vertex] = graph.V().has(Key("_id") of id)
       var buffer: Option[Array[Byte]]  = vertex.clone.value[String]("binary").map(Base64.getDecoder.decode).headOption()
@@ -235,7 +271,7 @@ abstract class Database {
         }
     }
 
-  def saveBinary(is: InputStream)(implicit graph: Graph): Vertex = {
+  override def saveBinary(is: InputStream)(implicit graph: Graph): Vertex = {
 
     def readNextChunk: String = {
       val buffer = new Array[Byte](chunkSize)

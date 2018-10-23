@@ -153,19 +153,18 @@ object InputFilter {
   def and(filters: Seq[InputFilter]): AndFilter                   = AndFilter(filters)
   def not(filter: InputFilter): NotFilter                         = NotFilter(filter)
 
-
   implicit val fieldsParser: FieldsParser[InputFilter] = FieldsParser("query") {
-    case (_, FObjOne("_and", FSeq(fields)))                 ⇒ fields.validatedBy(field ⇒ fieldsParser(field)).map(and)
-    case (_, FObjOne("_or", FSeq(fields)))                  ⇒ fields.validatedBy(field ⇒ fieldsParser(field)).map(or)
-    case (_, FObjOne("_not", field))                        ⇒ fieldsParser(field).map(not)
-    case (_, FObjOne("_any", _))                            ⇒ Good(and(Nil))
-    case (_, FObjOne("_lt", FObjOne(key, FNative(value))))  ⇒ Good(lt(key, value))
-    case (_, FObjOne("_gt", FObjOne(key, FNative(value))))  ⇒ Good(gt(key, value))
-    case (_, FObjOne("_lte", FObjOne(key, FNative(value)))) ⇒ Good(lte(key, value))
-    case (_, FObjOne("_gte", FObjOne(key, FNative(value)))) ⇒ Good(gte(key, value))
-    case (_, FObjOne("_is", FObjOne(key, FNative(value))))  ⇒ Good(is(key, value))
-    case (_, FObjOne("_contains", FObjOne(key, FString(value)))) => Good(contains(key, value))
-    case (_, FObjOne("_startsWith", FObjOne(key, FString(value)))) => Good(startsWith(key, value))
-    case (_, FObjOne("_endsWith", FObjOne(key, FString(value)))) => Good(endsWith(key, value))
+    case (_, FObjOne("_and", FSeq(fields)))                        ⇒ fields.validatedBy(field ⇒ fieldsParser(field)).map(and)
+    case (_, FObjOne("_or", FSeq(fields)))                         ⇒ fields.validatedBy(field ⇒ fieldsParser(field)).map(or)
+    case (_, FObjOne("_not", field))                               ⇒ fieldsParser(field).map(not)
+    case (_, FObjOne("_any", _))                                   ⇒ Good(and(Nil))
+    case (_, FObjOne("_lt", FObjOne(key, FNative(value))))         ⇒ Good(lt(key, value))
+    case (_, FObjOne("_gt", FObjOne(key, FNative(value))))         ⇒ Good(gt(key, value))
+    case (_, FObjOne("_lte", FObjOne(key, FNative(value))))        ⇒ Good(lte(key, value))
+    case (_, FObjOne("_gte", FObjOne(key, FNative(value))))        ⇒ Good(gte(key, value))
+    case (_, FObjOne("_is", FObjOne(key, FNative(value))))         ⇒ Good(is(key, value))
+    case (_, FObjOne("_contains", FObjOne(key, FString(value))))   ⇒ Good(contains(key, value))
+    case (_, FObjOne("_startsWith", FObjOne(key, FString(value)))) ⇒ Good(startsWith(key, value))
+    case (_, FObjOne("_endsWith", FObjOne(key, FString(value))))   ⇒ Good(endsWith(key, value))
   }
 }

@@ -101,7 +101,7 @@ class LdapAuthSrv(ldapConnection: LdapConnection, userSrv: UserSrv, implicit val
   val name                                             = "ldap"
   override val capabilities: Set[AuthCapability.Value] = Set(AuthCapability.changePassword)
 
-  override def authenticate(username: String, password: String)(implicit request: RequestHeader): Future[AuthContext] =
+  override def authenticate(username: String, password: String)(implicit request: RequestHeader, ec: ExecutionContext): Future[AuthContext] =
     ldapConnection
       .authenticate(username, password)
       .map { _ ⇒
@@ -114,7 +114,9 @@ class LdapAuthSrv(ldapConnection: LdapConnection, userSrv: UserSrv, implicit val
           Future.failed(AuthenticationError("Authentication failure"))
       }
 
-  override def changePassword(username: String, oldPassword: String, newPassword: String)(implicit authContext: AuthContext): Future[Unit] =
+  override def changePassword(username: String, oldPassword: String, newPassword: String)(
+      implicit authContext: AuthContext,
+      ec: ExecutionContext): Future[Unit] =
     ldapConnection
       .changePassword(username, oldPassword, newPassword)
       .fold(Future.failed, Future.successful)

@@ -89,15 +89,15 @@ object ADConnection {
 }
 
 @Singleton
-class ADAuthSrv(adConnection: ADConnection, userSrv: UserSrv, implicit val ec: ExecutionContext) extends AuthSrv {
+class ADAuthSrv(adConnection: ADConnection, userSrv: UserSrv) extends AuthSrv {
 
-  @Inject() def this(configuration: Configuration, userSrv: UserSrv, ec: ExecutionContext) = this(ADConnection(configuration), userSrv, ec)
+  @Inject() def this(configuration: Configuration, userSrv: UserSrv) = this(ADConnection(configuration), userSrv)
 
   private[ADAuthSrv] lazy val logger                   = Logger(getClass)
   val name: String                                     = "ad"
   override val capabilities: Set[AuthCapability.Value] = Set(AuthCapability.changePassword)
 
-  override def authenticate(username: String, password: String)(implicit request: RequestHeader): Future[AuthContext] =
+  override def authenticate(username: String, password: String)(implicit request: RequestHeader, ec: ExecutionContext): Future[AuthContext] =
     (for {
       _           ← Future.fromTry(adConnection.authenticate(username, password))
       authContext ← userSrv.getFromId(request, username)
@@ -108,7 +108,9 @@ class ADAuthSrv(adConnection: ADConnection, userSrv: UserSrv, implicit val ec: E
           Future.failed(AuthenticationError("Authentication failure"))
       }
 
-  override def changePassword(username: String, oldPassword: String, newPassword: String)(implicit authContext: AuthContext): Future[Unit] =
+  override def changePassword(username: String, oldPassword: String, newPassword: String)(
+      implicit authContext: AuthContext,
+      ec: ExecutionContext): Future[Unit] =
     Future
       .fromTry(adConnection.changePassword(username, oldPassword, newPassword))
       .recoverWith {

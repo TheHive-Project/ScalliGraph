@@ -35,7 +35,7 @@ object FriendLevel {
 }
 
 class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
-import ModernOutputs._
+  import ModernOutputs._
   val personSrv   = new PersonSrv
   val softwareSrv = new SoftwareSrv
 
@@ -72,9 +72,6 @@ import ModernOutputs._
   )
 
 //  val personToList: Query = Query[PersonSteps, Seq[Person with Entity]]("toList", (personSteps, _) => personSteps.toList)
-
-
-
 //  override def toOutput(output: Any): JsValue = output match {
 //    case person: Person with Entity     ⇒ person.toJson
 //    case software: Software with Entity ⇒ software.toJson

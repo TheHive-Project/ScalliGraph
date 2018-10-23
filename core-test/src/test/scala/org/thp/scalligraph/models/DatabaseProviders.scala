@@ -19,9 +19,7 @@ object DatabaseProviders {
 }
 
 class DatabaseProvider(val name: String, db: ⇒ Database) extends Provider[Database] {
-  private lazy val _db = new HookableDatabase(db)
+  private lazy val _db = db
 
   override def get(): Database = _db
-
-  def asHookable: Provider[HookableDatabase] = this.asInstanceOf[Provider[HookableDatabase]]
 }

@@ -49,6 +49,7 @@ lazy val core = (project in file("core"))
       gremlinScala,
       scalactic,
       scalaCompiler(scalaVersion.value),
+      playGuice,
       scalaGuice,
       specs % Test
     )

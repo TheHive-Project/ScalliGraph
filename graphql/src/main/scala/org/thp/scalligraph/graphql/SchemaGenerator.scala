@@ -111,7 +111,7 @@ object SchemaGenerator {
 
   def duplicate[A](value: A): A = value match {
     case step: ScalliSteps[_, _, _] ⇒ step.clone().asInstanceOf[A]
-    case _ ⇒ value
+    case _                          ⇒ value
   }
 
   def getScalarField(name: String, tpe: ru.Type): InputField[_] =
@@ -325,9 +325,9 @@ object SchemaGenerator {
   def getPropertyFields[B](property: PublicProperty[_, B])(
       implicit executor: QueryExecutor,
       objectCatalog: TypeCatalog[CacheFunction[Option[OutputType[_]]]]): CacheFunction[Option[Field[AuthGraph, Any]]] = {
-    val t = rm.classSymbol(property.mapping.domainTypeClass).toType // FIXME domainType or graphType ?
+    val t          = rm.classSymbol(property.mapping.domainTypeClass).toType // FIXME domainType or graphType ?
     val optionType = ru.typeOf[Option[_]].typeConstructor
-    val seqType = ru.typeOf[Seq[_]].typeConstructor
+    val seqType    = ru.typeOf[Seq[_]].typeConstructor
     val propertyType = property.mapping.cardinality match {
       case MappingCardinality.single ⇒ t
       case MappingCardinality.option ⇒ ru.appliedType(optionType, t)

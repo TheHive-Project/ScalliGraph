@@ -11,7 +11,7 @@ import scala.concurrent.Future
   * This class handles errors. It traverses all causes of exception to find known error and shows the appropriate message
   */
 class ErrorHandler extends HttpErrorHandler {
-
+  lazy val logger = Logger(getClass)
   def onClientError(request: RequestHeader, statusCode: Int, message: String): Future[Result] =
     Future.successful {
       Results.Status(statusCode)(s"A client error occurred on ${request.method} ${request.uri} : $message")
@@ -27,8 +27,6 @@ class ErrorHandler extends HttpErrorHandler {
         Some(
           Status.INTERNAL_SERVER_ERROR → Json
             .obj("type" → "UpdateError", "message" → message, "object" → attributes))
-      case InternalError(message, _) ⇒
-        Some(Status.INTERNAL_SERVER_ERROR → Json.obj("type" → "InternalError", "message" → message))
       case nfe: NumberFormatException ⇒
         Some(
           Status.BAD_REQUEST → Json
@@ -65,9 +63,16 @@ class ErrorHandler extends HttpErrorHandler {
     Result(header = ResponseHeader(status), body = writeable.toEntity(c))
 
   def onServerError(request: RequestHeader, exception: Throwable): Future[Result] = {
-    val (status, body) = toErrorResult(exception).getOrElse(
-      Status.INTERNAL_SERVER_ERROR → Json
-        .obj("type" → exception.getClass.getName, "message" → exception.getMessage))
+    val (status, body) = toErrorResult(exception)
+      .map { e ⇒
+        logger.info("Error", exception)
+        e
+      }
+      .getOrElse {
+        logger.error("Internal error", exception)
+        Status.INTERNAL_SERVER_ERROR → Json
+          .obj("type" → exception.getClass.getName, "message" → exception.getMessage)
+      }
     exception match {
       case AuthenticationError(message) ⇒
         Logger.info(s"${request.method} ${request.uri} returned $status: $message")

@@ -17,7 +17,7 @@ import org.thp.scalligraph.models._
 import org.thp.scalligraph.{Config, InternalError, Retry}
 
 @Singleton
-class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chunkSize: Int) extends Database {
+class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chunkSize: Int) extends BaseDatabase {
   val name = "janus"
 
   def this(configuration: Configuration) =

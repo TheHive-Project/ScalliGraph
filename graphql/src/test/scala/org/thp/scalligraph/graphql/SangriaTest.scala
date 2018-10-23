@@ -12,18 +12,20 @@ import play.api.libs.json.{JsObject, JsValue, Json}
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
+
 import sangria.ast.Document
 import sangria.execution.Executor
 import sangria.marshalling.playJson._
 import sangria.parser.QueryParser
 import sangria.renderer.SchemaRenderer
 import sangria.schema.{Schema ⇒ SangriaSchema}
-
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.io.Source
 import scala.util.control.NonFatal
 import scala.util.{Failure, Try}
+
+import org.thp.scalligraph.UnthreadedExecutionContext
 
 class SangriaTest extends PlaySpecification {
   case class DummyAuthContext(
@@ -45,7 +47,7 @@ class SangriaTest extends PlaySpecification {
   def executeQuery(query: Document, expected: JsValue, variables: JsValue = JsObject.empty)(
       implicit graph: Graph,
       schema: SangriaSchema[AuthGraph, Unit]): MatchResult[_] = {
-    import org.thp.scalligraph.services.Implicits.singleThreadedExecutionContext
+    implicit val ec = UnthreadedExecutionContext
 
     val futureResult = Executor.execute(schema, query, AuthGraph(Some(authContext), graph), variables = variables)
     val result       = Await.result(futureResult, 10.seconds)

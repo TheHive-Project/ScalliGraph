@@ -6,12 +6,11 @@ import java.util.Date
 import javax.inject.{Inject, Singleton}
 import javax.naming.ldap.LdapName
 import org.bouncycastle.asn1._
-import org.thp.scalligraph.auth.{AuthContext, AuthSrv, Permission, UserSrv}
+import org.thp.scalligraph.auth.{AuthContext, MultiAuthSrv, Permission, UserSrv}
 import org.thp.scalligraph.{AuthenticationError, Instance}
 import play.api.http.HeaderNames
 import play.api.mvc._
 import play.api.{Configuration, Logger}
-
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.{DurationLong, FiniteDuration}
 import scala.concurrent.{ExecutionContext, Future}
@@ -64,11 +63,16 @@ class Authenticated(
     authByInitialUser: Boolean,
     authByPki: Boolean,
     userSrv: UserSrv,
-    authSrv: AuthSrv,
+    authSrv: MultiAuthSrv,
     defaultParser: BodyParsers.Default,
     implicit val ec: ExecutionContext) {
 
-  @Inject() def this(configuration: Configuration, userSrv: UserSrv, authSrv: AuthSrv, defaultParser: BodyParsers.Default, ec: ExecutionContext) =
+  @Inject() def this(
+      configuration: Configuration,
+      userSrv: UserSrv,
+      authSrv: MultiAuthSrv,
+      defaultParser: BodyParsers.Default,
+      ec: ExecutionContext) =
     this(
       configuration.getMillis("session.inactivity").millis,
       configuration.getMillis("session.warning").millis,
@@ -137,7 +141,7 @@ class Authenticated(
         .fold(Future.failed[String](AuthenticationError("Authentication header not found")))(Future.successful)
       _ ← if (!auth.startsWith("Bearer ")) Future.failed(AuthenticationError("Only bearer authentication is supported")) else Future.successful(())
       key = auth.substring(7)
-      authContext ← authSrv.authenticate(key)(request)
+      authContext ← authSrv.authenticate(key)(request, ec)
     } yield authContext
 
   def getFromBasicAuth(request: RequestHeader): Future[AuthContext] =
@@ -149,7 +153,7 @@ class Authenticated(
       authWithoutBasic = auth.substring(6)
       decodedAuth      = new String(java.util.Base64.getDecoder.decode(authWithoutBasic), "UTF-8")
       authContext ← decodedAuth.split(":") match {
-        case Array(username, password) ⇒ authSrv.authenticate(username, password)(request)
+        case Array(username, password) ⇒ authSrv.authenticate(username, password)(request, ec)
         case _                         ⇒ Future.failed(AuthenticationError("Can't decode authentication header"))
       }
     } yield authContext

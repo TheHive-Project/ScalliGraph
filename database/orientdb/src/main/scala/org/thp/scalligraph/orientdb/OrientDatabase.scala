@@ -22,7 +22,7 @@ import org.thp.scalligraph.models.{IndexType, _}
 import org.thp.scalligraph.{InternalError, Retry}
 
 @Singleton
-class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, override val chunkSize: Int) extends Database {
+class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, override val chunkSize: Int) extends BaseDatabase {
   val attachmentVertexLabel  = "binaryData"
   val attachmentPropertyName = "binary"
 
