@@ -1,21 +1,27 @@
 package org.thp.scalligraph
 
+import scala.concurrent.Future
+
 import play.api.Logger
+import play.api.http.Status.{BAD_REQUEST, FORBIDDEN, NOT_FOUND}
 import play.api.http.{HttpErrorHandler, Status, Writeable}
 import play.api.libs.json.{JsValue, Json}
-import play.api.mvc.{RequestHeader, ResponseHeader, Result, Results}
-
-import scala.concurrent.Future
+import play.api.mvc.{RequestHeader, ResponseHeader, Result}
 
 /**
   * This class handles errors. It traverses all causes of exception to find known error and shows the appropriate message
   */
 class ErrorHandler extends HttpErrorHandler {
   lazy val logger = Logger(getClass)
-  def onClientError(request: RequestHeader, statusCode: Int, message: String): Future[Result] =
-    Future.successful {
-      Results.Status(statusCode)(s"A client error occurred on ${request.method} ${request.uri} : $message")
+  def onClientError(request: RequestHeader, statusCode: Int, message: String): Future[Result] = {
+    val tpe = statusCode match {
+      case BAD_REQUEST ⇒ "BadRequest"
+      case FORBIDDEN   ⇒ "Forbidden"
+      case NOT_FOUND   ⇒ "NotFound"
+      case _           ⇒ "Unknown"
     }
+    Future.successful(toResult(statusCode, Json.obj("type" → tpe, "message" → message)))
+  }
 
   def toErrorResult(ex: Throwable): Option[(Int, JsValue)] =
     ex match {
