@@ -1,8 +1,8 @@
 package org.thp.scalligraph
 
-import gremlin.scala.{Edge, Element, GremlinScala, Vertex}
+import gremlin.scala.{Edge, Element, Graph, GremlinScala, Vertex}
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
-import org.thp.scalligraph.models.{Database, Entity}
+import org.thp.scalligraph.models.{Database, Entity, Schema}
 
 import scala.reflect.runtime.{universe ⇒ ru}
 
@@ -11,6 +11,15 @@ package object services {
     def as[E <: Product: ru.TypeTag]: E with Entity = {
       val model = db.getModel[E]
       model.toDomain(e.asInstanceOf[model.ElementType])
+    }
+
+    def asEntity(implicit db: Database, schema: Schema, graph: Graph): Entity = {
+      val model = schema
+        .getModel(e.label())
+        .get
+      model
+        .converter(db, graph)
+        .toDomain(e.asInstanceOf[model.ElementType])
     }
   }
 

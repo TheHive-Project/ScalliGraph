@@ -17,8 +17,8 @@ class Config(config: PlayConfig) extends ApacheConfig {
   override def setProperty(key: String, value: scala.Any): Unit                                     = ???
   override def clearProperty(key: String): Unit                                                     = ???
   override def clear(): Unit                                                                        = ???
-  override def getProperty(key: String): AnyRef                                                     = config.get[String](key)
-  override def getKeys(prefix: String): JIterator[String]                                           = ???
+  override def getProperty(key: String): AnyRef                                                     = config.underlying.getAnyRef(key)
+  override def getKeys(prefix: String): JIterator[String]                                           = config.keys.filter(_.startsWith(prefix)).toIterator.asJava
   override def getKeys: JIterator[String]                                                           = config.keys.toIterator.asJava
   override def getProperties(key: String): Properties                                               = ???
   override def getBoolean(key: String): Boolean                                                     = ???

@@ -7,7 +7,7 @@ import scala.util.Try
 import play.api.Configuration
 
 import gremlin.scala._
-import javax.inject.Singleton
+import javax.inject.{Inject, Singleton}
 import org.apache.tinkerpop.gremlin.structure.{Edge ⇒ _, Element ⇒ _, Graph ⇒ _, Vertex ⇒ _}
 import org.janusgraph.core.schema.{ConsistencyModifier, JanusGraphManagement, JanusGraphSchemaType, Mapping}
 import org.janusgraph.core.{Cardinality, JanusGraph, JanusGraphFactory, SchemaViolationException}
@@ -20,7 +20,7 @@ import org.thp.scalligraph.{Config, InternalError, Retry}
 class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chunkSize: Int) extends BaseDatabase {
   val name = "janus"
 
-  def this(configuration: Configuration) =
+  @Inject() def this(configuration: Configuration) =
     this(
       JanusGraphFactory.open(new Config(configuration)),
       configuration.getOptional[Int]("db.maxRetryOnConflict").getOrElse(5),
