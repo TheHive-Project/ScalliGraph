@@ -10,7 +10,7 @@ abstract class VertexSrv[V <: Product: ru.TypeTag, S <: BaseVertexSteps[V, S]](i
 
   override val model: Model.Vertex[V] = db.getVertexModel[V]
 
-  def steps(raw: GremlinScala[Vertex]): S
+  def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): S
 
   def initSteps(implicit graph: Graph): S = steps(graph.V.hasLabel(model.label))
 
@@ -20,6 +20,8 @@ abstract class VertexSrv[V <: Product: ru.TypeTag, S <: BaseVertexSteps[V, S]](i
     db.createVertex[V](graph, authContext, model, e)
 
   val initialValues: Seq[V] = Nil
+
+  def getInitialValues: Seq[InitialValue[V]] = initialValues.map(v ⇒ InitialValue(model, v))
 
   def createInitialValues()(implicit graph: Graph, authContext: AuthContext): Unit = initialValues.foreach(create)
 }

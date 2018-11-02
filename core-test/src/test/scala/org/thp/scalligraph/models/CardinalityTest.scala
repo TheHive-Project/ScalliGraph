@@ -1,6 +1,6 @@
 package org.thp.scalligraph.models
 
-import gremlin.scala.{GremlinScala, Vertex}
+import gremlin.scala.{Graph, GremlinScala, Vertex}
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
@@ -23,7 +23,7 @@ class CardinalityTest extends PlaySpecification with Mockito {
     implicit val db: Database = dbProvider.get()
     db.createSchema(db.getModel[EntityWithSeq])
     val entityWithSeqSrv: VertexSrv[EntityWithSeq, VertexSteps[EntityWithSeq]] = new VertexSrv[EntityWithSeq, VertexSteps[EntityWithSeq]] {
-      override def steps(raw: GremlinScala[Vertex]): VertexSteps[EntityWithSeq] = new VertexSteps[EntityWithSeq](raw)
+      override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): VertexSteps[EntityWithSeq] = new VertexSteps[EntityWithSeq](raw)
     }
 
     s"[${dbProvider.name}] entity" should {

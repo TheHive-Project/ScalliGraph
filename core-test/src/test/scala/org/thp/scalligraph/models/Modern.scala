@@ -22,7 +22,7 @@ case class Knows(weight: Double)
 case class Created(weight: Double)
 
 @EntitySteps[Person]
-class PersonSteps(raw: GremlinScala[Vertex])(implicit db: Database) extends BaseVertexSteps[Person, PersonSteps](raw) {
+class PersonSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph) extends BaseVertexSteps[Person, PersonSteps](raw) {
   def created = new SoftwareSteps(raw.outTo[Created])
 
   def created(predicate: P[Double]) = new SoftwareSteps(raw.outToE[Created].has(Key[Double]("weight"), predicate).inV())
@@ -45,7 +45,7 @@ class PersonSteps(raw: GremlinScala[Vertex])(implicit db: Database) extends Base
 }
 
 @EntitySteps[Software]
-class SoftwareSteps(raw: GremlinScala[Vertex])(implicit db: Database) extends BaseVertexSteps[Software, SoftwareSteps](raw) {
+class SoftwareSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph) extends BaseVertexSteps[Software, SoftwareSteps](raw) {
   def createdBy = new PersonSteps(raw.in("Created"))
 
   def isRipple = new SoftwareSteps(raw.has(Key("name") of "ripple"))
@@ -55,12 +55,12 @@ class SoftwareSteps(raw: GremlinScala[Vertex])(implicit db: Database) extends Ba
 
 class PersonSrv(implicit db: Database) extends VertexSrv[Person, PersonSteps] {
   override val initialValues                                       = Seq(Person("marc", 34), Person("franck", 28))
-  override def steps(raw: GremlinScala[Vertex]): PersonSteps       = new PersonSteps(raw)
+  override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): PersonSteps       = new PersonSteps(raw)
   override def get(id: String)(implicit graph: Graph): PersonSteps = new PersonSteps(graph.V().has(Key("name") of id))
 }
 
 class SoftwareSrv(implicit db: Database) extends VertexSrv[Software, SoftwareSteps] {
-  override def steps(raw: GremlinScala[Vertex]): SoftwareSteps       = new SoftwareSteps(raw)
+  override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): SoftwareSteps       = new SoftwareSteps(raw)
   override def get(id: String)(implicit graph: Graph): SoftwareSteps = new SoftwareSteps(graph.V().has(Key("name") of id))
 }
 

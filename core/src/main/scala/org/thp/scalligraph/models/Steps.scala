@@ -13,7 +13,7 @@ import shapeless.HNil
 import scala.reflect.ClassTag
 import scala.reflect.runtime.{universe ⇒ ru}
 
-final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])
+final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])(implicit val graph: Graph)
     extends Steps[T, T, HNil](raw)(SingleMapping[T, T]())
     with ScalliSteps[T, T, ScalarSteps[T]] {
 
@@ -21,34 +21,35 @@ final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])
     new ScalarSteps[T](raw)
 
   override def map[A: ClassTag](f: T ⇒ A): ScalarSteps[A] = new ScalarSteps(raw.map(f))
+  this.headOption()
 }
 
 object ScalarSteps {
-  def apply[T: ClassTag](raw: GremlinScala[T]): ScalarSteps[T] =
+  def apply[T: ClassTag](raw: GremlinScala[T])(implicit graph: Graph): ScalarSteps[T] =
     new ScalarSteps[T](raw)
 }
 
 trait ScalliSteps[EndDomain, EndGraph, ThisStep <: AnyRef] { _: ThisStep ⇒
+  def graph: Graph
   override def clone(): ThisStep = newInstance(raw.clone())
   def newInstance(raw: GremlinScala[EndGraph]): ThisStep
   val raw: GremlinScala[EndGraph]
-  def toList: Seq[EndDomain]
-  def head: EndDomain
-  def headOption: Option[EndDomain]
+  def toList(): Seq[EndDomain]
+  def head(): EndDomain
+  def headOption(): Option[EndDomain]
   def count: Long                                                  = raw.count().head
   def sort(orderBys: OrderBy[_]*): ThisStep                        = newInstance(raw.order(orderBys: _*))
   def where(f: GremlinScala[EndGraph] ⇒ GremlinScala[_]): ThisStep = newInstance(raw.where(f))
   def map[NewEndDomain: ClassTag](f: EndDomain ⇒ NewEndDomain): ScalarSteps[NewEndDomain]
   def get[A](authContext: Option[AuthContext], property: PublicProperty[_, A]): ScalarSteps[A] = {
     val fn = property.fn(authContext).asInstanceOf[Seq[GremlinScala.Aux[EndGraph, HNil] ⇒ GremlinScala[A]]]
-    ScalarSteps(raw.coalesce(fn: _*))(ClassTag(property.mapping.graphTypeClass))
+    ScalarSteps(raw.coalesce(fn: _*))(ClassTag(property.mapping.graphTypeClass), graph)
   }
 }
 
 abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisStep <: ElementSteps[E, EndGraph, ThisStep]](
-    raw: GremlinScala[EndGraph])(implicit db: Database)
-    extends Steps[E with Entity, EndGraph, HNil](raw)(
-      db.getModel[E].converter(db, raw.traversal.asAdmin.getGraph.get).asInstanceOf[Converter.Aux[E with Entity, EndGraph]])
+    raw: GremlinScala[EndGraph])(implicit val db: Database, graph: Graph)
+    extends Steps[E with Entity, EndGraph, HNil](raw)(db.getModel[E].converter(db, graph).asInstanceOf[Converter.Aux[E with Entity, EndGraph]])
     with ScalliSteps[E with Entity, EndGraph, ThisStep] { _: ThisStep ⇒
 
   override def map[T: ClassTag](f: E with Entity ⇒ T): ScalarSteps[T] = {
@@ -96,20 +97,23 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
   }
 }
 
-abstract class BaseVertexSteps[E <: Product: ru.TypeTag, ThisStep <: BaseVertexSteps[E, ThisStep]](raw: GremlinScala[Vertex])(implicit db: Database)
+abstract class BaseVertexSteps[E <: Product: ru.TypeTag, ThisStep <: BaseVertexSteps[E, ThisStep]](raw: GremlinScala[Vertex])(
+    implicit db: Database,
+    val graph: Graph)
     extends ElementSteps[E, Vertex, ThisStep](raw) { _: ThisStep ⇒
 }
 
-final class VertexSteps[E <: Product: ru.TypeTag](raw: GremlinScala[Vertex])(implicit db: Database) extends BaseVertexSteps[E, VertexSteps[E]](raw) {
+final class VertexSteps[E <: Product: ru.TypeTag](raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph)
+    extends BaseVertexSteps[E, VertexSteps[E]](raw) {
   override def newInstance(raw: GremlinScala[Vertex]): VertexSteps[E] = new VertexSteps[E](raw)
 }
 
 abstract class BaseEdgeSteps[E <: Product: ru.TypeTag, FROM <: Product, TO <: Product, ThisStep <: BaseEdgeSteps[E, FROM, TO, ThisStep]](
-    raw: GremlinScala[Edge])(implicit db: Database)
+    raw: GremlinScala[Edge])(implicit db: Database, val graph: Graph)
     extends ElementSteps[E, Edge, ThisStep](raw) { _: ThisStep ⇒
 }
 
-final class EdgeSteps[E <: Product: ru.TypeTag, FROM <: Product, TO <: Product](raw: GremlinScala[Edge])(implicit db: Database)
+final class EdgeSteps[E <: Product: ru.TypeTag, FROM <: Product, TO <: Product](raw: GremlinScala[Edge])(implicit db: Database, graph: Graph)
     extends BaseEdgeSteps[E, FROM, TO, EdgeSteps[E, FROM, TO]](raw) {
   override def newInstance(raw: GremlinScala[Edge]): EdgeSteps[E, FROM, TO] = new EdgeSteps[E, FROM, TO](raw)
 }

@@ -1,6 +1,6 @@
 package org.thp.scalligraph.models
 
-import gremlin.scala.{GremlinScala, Vertex}
+import gremlin.scala.{Graph, GremlinScala, Vertex}
 import play.api.{Configuration, Environment}
 import play.api.libs.logback.LogbackLoggerConfigurator
 import org.apache.tinkerpop.gremlin.structure.T
@@ -28,7 +28,7 @@ class SimpleEntityTest extends PlaySpecification with Mockito {
     implicit val db: Database = dbProvider.get()
     db.createSchema(db.getModel[MyEntity])
     val myEntitySrv: VertexSrv[MyEntity, VertexSteps[MyEntity]] = new VertexSrv[MyEntity, VertexSteps[MyEntity]] {
-      override def steps(raw: GremlinScala[Vertex]): VertexSteps[MyEntity] = new VertexSteps[MyEntity](raw)
+      override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): VertexSteps[MyEntity] = new VertexSteps[MyEntity](raw)
     }
 
     s"[${dbProvider.name}] simple entity" should {
