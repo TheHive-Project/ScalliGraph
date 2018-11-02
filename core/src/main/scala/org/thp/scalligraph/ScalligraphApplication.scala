@@ -5,7 +5,7 @@ import com.google.inject.spi._
 import com.google.inject.util.{Modules ⇒ GuiceModules}
 import com.google.inject.{Binder, Module ⇒ GuiceModule, _}
 import javax.inject.Inject
-import net.codingwell.scalaguice.{typeLiteral, ScalaModule, ScalaMultibinder}
+import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
 import play.api.inject.guice._
 import play.api.routing.Router
 import play.api.{ApplicationLoader, Configuration, Environment}
@@ -61,7 +61,8 @@ object ScalligraphApplicationLoader {
       Seq(new ScalligraphGuiceableModule(origLoadModules(env, conf)))
   }
 }
-class ScalligraphApplicationLoader extends GuiceApplicationLoader { //(GuiceApplicationBuilder(loadModules = ScalligraphApplicationLoader.loadModules))
+
+class ScalligraphApplicationLoader extends GuiceApplicationLoader {
 
   import ScalligraphApplicationLoader._
 

@@ -5,7 +5,7 @@ import java.util.Date
 import gremlin.scala._
 import gremlin.scala.dsl.{Converter, DomainRoot}
 import org.thp.scalligraph.controllers.UpdateOps
-import org.thp.scalligraph.macros.{EntityMacro, ModelMacro}
+import org.thp.scalligraph.macros.ModelMacro
 import org.thp.scalligraph.services.AttachmentSrv
 import org.thp.scalligraph.{FPath, NotFoundError}
 
@@ -42,7 +42,6 @@ trait Entity extends DomainRoot {
   val _updatedBy: Option[String]
   val _createdAt: Date
   val _updatedAt: Option[Date]
-  def copyEntityTo[T <: Product](to: T): T with Entity = macro EntityMacro.copyEntity[T]
 }
 
 object Model {
