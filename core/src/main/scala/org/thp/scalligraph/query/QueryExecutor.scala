@@ -1,14 +1,13 @@
 package org.thp.scalligraph.query
 
-import scala.reflect.runtime.{universe ⇒ ru}
-
-import play.api.libs.json.{JsArray, JsNull, Writes}
-
 import gremlin.scala.{Element, Graph}
 import org.scalactic._
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
+import play.api.libs.json.{JsNull, Json, OWrites, Writes}
+
+import scala.reflect.runtime.{universe ⇒ ru}
 
 abstract class QueryExecutor { executor ⇒
   val version: (Int, Int)                                     = 1 → 1
@@ -35,7 +34,7 @@ abstract class QueryExecutor { executor ⇒
       case o: Output[_] ⇒ o
       case s: Seq[o] ⇒
         val subType = RichType.getTypeArgs(tpe, ru.typeOf[Seq[_]]).head
-        val writes  = Writes[Seq[o]](x ⇒ JsArray(x.map(toOutput(_, subType, authContext).toJson)))
+        val writes  = OWrites[Seq[o]](x ⇒ Json.obj("result" → x.map(toOutput(_, subType, authContext).toJson)))
         new Output[Seq[o]](s)(writes)
       case s: Option[o] ⇒
         val subType = RichType.getTypeArgs(tpe, ru.typeOf[Option[_]]).head
@@ -43,7 +42,7 @@ abstract class QueryExecutor { executor ⇒
           case None    ⇒ JsNull
           case Some(x) ⇒ toOutput(x, subType, authContext).toJson
         }
-        new Output[None.type](None)(Writes[None.type](_ ⇒ JsNull))
+        new Output[None.type](None)(OWrites[None.type](_ ⇒ Json.obj("result" → JsNull)))
       case o ⇒
         allQueries
           .find(q ⇒ q.checkFrom(tpe) && q.toType(tpe) <:< ru.typeOf[Output[_]] && q.paramType == ru.typeOf[Unit])
@@ -57,7 +56,9 @@ abstract class QueryExecutor { executor ⇒
   private def getQuery(tpe: ru.Type, field: Field): Or[Query, Every[AttributeError]] = {
     def applyQuery[P](query: ParamQuery[P], from: Field): Or[Query, Every[AttributeError]] =
       if (query.checkFrom(tpe)) {
-        query.paramParser(from).map(p ⇒ query.toQuery(p))
+        query
+          .paramParser(from)
+          .map(p ⇒ query.toQuery(p))
       } else Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name), field)))
 
     field match {

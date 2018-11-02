@@ -1,8 +1,8 @@
 package org.thp.scalligraph
 
-import play.api.libs.json.{JsValue, Json, Writes}
+import play.api.libs.json.{JsObject, OWrites}
 
-class Output[O: Writes](val toOutput: O) {
+class Output[O: OWrites](val toOutput: O) {
   type OUT = O
-  def toJson: JsValue = Json.toJson(toOutput)
+  def toJson: JsObject = implicitly[OWrites[O]].writes(toOutput)
 }

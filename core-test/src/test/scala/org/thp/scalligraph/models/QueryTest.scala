@@ -3,11 +3,11 @@ package org.thp.scalligraph.models
 import play.api.libs.json.Json
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
-import play.api.{ Configuration, Environment }
+import play.api.{Configuration, Environment}
 
 import org.scalactic.Good
 import org.specs2.specification.core.Fragments
-import org.thp.scalligraph.auth.{ AuthContext, UserSrv }
+import org.thp.scalligraph.auth.{AuthContext, UserSrv}
 import org.thp.scalligraph.controllers.Field
 import org.thp.scalligraph.query.AuthGraph
 
@@ -32,14 +32,14 @@ class QueryTest extends PlaySpecification {
             queryExecutor.execute(query)(authGraph).toJson
           }
           result must_=== Good(
-            Json.arr(
+            Json.obj("result" → Json.arr(
               Json.obj("createdBy" → "test", "label" → "Mister vadas", "name"  → "vadas", "age"  → 17),
               Json.obj("createdBy" → "test", "label" → "Mister peter", "name"  → "peter", "age"  → 25),
               Json.obj("createdBy" → "test", "label" → "Mister franck", "name" → "franck", "age" → 28),
               Json.obj("createdBy" → "test", "label" → "Mister marko", "name"  → "marko", "age"  → 29),
               Json.obj("createdBy" → "test", "label" → "Mister josh", "name"   → "josh", "age"   → 32),
               Json.obj("createdBy" → "test", "label" → "Mister marc", "name"   → "marc", "age"   → 34)
-            ))
+            )))
         }
       }
     }
