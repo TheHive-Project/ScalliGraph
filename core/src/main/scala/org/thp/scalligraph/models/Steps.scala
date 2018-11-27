@@ -2,6 +2,11 @@ package org.thp.scalligraph.models
 
 import java.util.{List ⇒ JList, Map ⇒ JMap}
 
+import scala.reflect.ClassTag
+import scala.reflect.runtime.{universe ⇒ ru}
+
+import play.api.Logger
+
 import gremlin.scala._
 import gremlin.scala.dsl._
 import org.thp.scalligraph.InternalError
@@ -10,18 +15,21 @@ import org.thp.scalligraph.query.PublicProperty
 import org.thp.scalligraph.services.RichElement
 import shapeless.HNil
 
-import scala.reflect.ClassTag
-import scala.reflect.runtime.{universe ⇒ ru}
-
 final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])(implicit val graph: Graph)
     extends Steps[T, T, HNil](raw)(SingleMapping[T, T]())
     with ScalliSteps[T, T, ScalarSteps[T]] {
+
+  lazy val logger = Logger(getClass)
 
   override def newInstance(raw: GremlinScala[T]): ScalarSteps[T] =
     new ScalarSteps[T](raw)
 
   override def map[A: ClassTag](f: T ⇒ A): ScalarSteps[A] = new ScalarSteps(raw.map(f))
-  this.headOption()
+
+  override def toList(): List[T] = {
+    logger.info(s"Execution of $raw")
+    super.toList()
+  }
 }
 
 object ScalarSteps {
@@ -42,8 +50,11 @@ trait ScalliSteps[EndDomain, EndGraph, ThisStep <: AnyRef] { _: ThisStep ⇒
   def where(f: GremlinScala[EndGraph] ⇒ GremlinScala[_]): ThisStep = newInstance(raw.where(f))
   def map[NewEndDomain: ClassTag](f: EndDomain ⇒ NewEndDomain): ScalarSteps[NewEndDomain]
   def get[A](authContext: Option[AuthContext], property: PublicProperty[_, A]): ScalarSteps[A] = {
-    val fn = property.fn(authContext).asInstanceOf[Seq[GremlinScala.Aux[EndGraph, HNil] ⇒ GremlinScala[A]]]
-    ScalarSteps(raw.coalesce(fn: _*))(ClassTag(property.mapping.graphTypeClass), graph)
+    val fn = property.get(authContext).asInstanceOf[Seq[GremlinScala[EndGraph] ⇒ GremlinScala[A]]]
+    if (fn.size == 1)
+      ScalarSteps(fn.head.apply(raw))(ClassTag(property.mapping.graphTypeClass), graph)
+    else
+      ScalarSteps(raw.coalesce(fn: _*))(ClassTag(property.mapping.graphTypeClass), graph)
   }
 }
 
@@ -51,6 +62,17 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
     raw: GremlinScala[EndGraph])(implicit val db: Database, graph: Graph)
     extends Steps[E with Entity, EndGraph, HNil](raw)(db.getModel[E].converter(db, graph).asInstanceOf[Converter.Aux[E with Entity, EndGraph]])
     with ScalliSteps[E with Entity, EndGraph, ThisStep] { _: ThisStep ⇒
+
+  lazy val logger = Logger(getClass)
+  override def toList(): List[E with Entity] = {
+    logger.info(s"Execution of $raw")
+    super.toList()
+  }
+
+  override def headOption(): Option[E with Entity] = {
+    logger.info(s"Execution of $raw")
+    super.headOption()
+  }
 
   override def map[T: ClassTag](f: E with Entity ⇒ T): ScalarSteps[T] = {
     implicit val const: Constructor.Aux[T, HNil, T, ScalarSteps[T]] =

@@ -2,30 +2,30 @@ package org.thp.scalligraph.graphql
 
 import java.io.FileNotFoundException
 
-import gremlin.scala._
-import org.specs2.matcher.MatchResult
-import org.thp.scalligraph.auth.{AuthContext, Permission}
-import org.thp.scalligraph.janus.JanusDatabase
-import org.thp.scalligraph.models.{ModernQueryExecutor, ModernSchema}
-import org.thp.scalligraph.query.AuthGraph
+import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext}
+import scala.io.Source
+import scala.util.control.NonFatal
+import scala.util.{Failure, Try}
+
 import play.api.libs.json.{JsObject, JsValue, Json}
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
 
+import gremlin.scala._
+import org.specs2.matcher.MatchResult
+import org.specs2.specification.core.{Fragment, Fragments}
+import org.thp.scalligraph.auth.{AuthContext, Permission}
+import org.thp.scalligraph.models._
+import org.thp.scalligraph.query.AuthGraph
+import org.thp.scalligraph.{AppBuilder, UnthreadedExecutionContext}
 import sangria.ast.Document
 import sangria.execution.Executor
 import sangria.marshalling.playJson._
 import sangria.parser.QueryParser
 import sangria.renderer.SchemaRenderer
 import sangria.schema.{Schema ⇒ SangriaSchema}
-import scala.concurrent.Await
-import scala.concurrent.duration._
-import scala.io.Source
-import scala.util.control.NonFatal
-import scala.util.{Failure, Try}
-
-import org.thp.scalligraph.UnthreadedExecutionContext
 
 class SangriaTest extends PlaySpecification {
   case class DummyAuthContext(
@@ -38,16 +38,11 @@ class SangriaTest extends PlaySpecification {
 
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
   implicit val authContext: AuthContext = DummyAuthContext("me")
-  implicit val db: JanusDatabase        = new JanusDatabase()
-  val modernSchema                      = new ModernSchema
-  val executor                          = new ModernQueryExecutor
-
-  implicit val schema: SangriaSchema[AuthGraph, Unit] = SchemaGenerator(executor)
 
   def executeQuery(query: Document, expected: JsValue, variables: JsValue = JsObject.empty)(
       implicit graph: Graph,
       schema: SangriaSchema[AuthGraph, Unit]): MatchResult[_] = {
-    implicit val ec = UnthreadedExecutionContext
+    implicit val ec: ExecutionContext = UnthreadedExecutionContext
 
     val futureResult = Executor.execute(schema, query, AuthGraph(Some(authContext), graph), variables = variables)
     val result       = Await.result(futureResult, 10.seconds)
@@ -67,38 +62,55 @@ class SangriaTest extends PlaySpecification {
     executeQuery(query = query, expected = expected, variables = vars)
   }
 
-  "Modern graph" should {
-    "finds all persons" in db.transaction { implicit graph ⇒
-      val personSteps = modernSchema.personSrv.initSteps
-      val r           = personSteps.toSet.map(_.name)
-      r must_=== Set("marko", "vadas", "josh", "peter", "marc", "franck")
-    }
+  Fragments.foreach(new DatabaseProviders().list) { dbProvider ⇒
+    val app: AppBuilder = AppBuilder()
+      .bindToProvider(dbProvider)
+    step(setupDatabase(app)) ^ specs(dbProvider.name, app) ^ step(teardownDatabase(app))
+  }
 
-    "have GraphQL schema" in db.transaction { implicit graph ⇒
-      val schemaStr = SchemaRenderer.renderSchema(schema)
-      println(s"new modern graphql schema is:\n$schemaStr")
+  def setupDatabase(app: AppBuilder): Unit =
+    DatabaseBuilder.build(app.instanceOf[ModernSchema])(app.instanceOf[Database], authContext)
 
-      schemaStr must_!== ""
-    }
+  def teardownDatabase(app: AppBuilder): Unit = () //app.instanceOf[Database].drop()
 
-    "execute simple query" in db.transaction { implicit graph ⇒
-      executeQueryFile("simpleQuery")
-    }
+  def specs(name: String, app: AppBuilder): Fragment = {
+    val db: Database                                    = app.instanceOf[Database]
+    val executor                                        = new ModernQueryExecutor()(db)
+    implicit val schema: SangriaSchema[AuthGraph, Unit] = SchemaGenerator(executor)
 
-    "filter entity using query object" in db.transaction { implicit graph ⇒
-      executeQueryFile("queryWithFilterObject")
-    }
+    s"[$name] Modern graph" should {
+      "finds all persons" in db.transaction { implicit graph ⇒
+        val personSteps = app.instanceOf[PersonSrv].initSteps
+        val r           = personSteps.toSet.map(_.name)
+        r must_=== Set("marko", "vadas", "josh", "peter", "marc", "franck")
+      }
 
-    "filter entity using query object with boolean operator" in db.transaction { implicit graph ⇒
-      executeQueryFile("queryWithBooleanOperators")
-    }
+      "have GraphQL schema" in db.transaction { implicit graph ⇒
+        val schemaStr = SchemaRenderer.renderSchema(schema)
+//      println(s"new modern graphql schema is:\n$schemaStr")
 
-    "return several attributes" in db.transaction { implicit graph ⇒
-      executeQueryFile("queryWithSeveralAttributes")
-    }
+        schemaStr must_!== ""
+      }
 
-    "execute complex query" in db.transaction { implicit graph ⇒
-      executeQueryFile("complexQuery")
+      "execute simple query" in db.transaction { implicit graph ⇒
+        executeQueryFile("simpleQuery")
+      }
+
+      "filter entity using query object" in db.transaction { implicit graph ⇒
+        executeQueryFile("queryWithFilterObject")
+      }
+
+      "filter entity using query object with boolean operator" in db.transaction { implicit graph ⇒
+        executeQueryFile("queryWithBooleanOperators")
+      }
+
+      "return several attributes" in db.transaction { implicit graph ⇒
+        executeQueryFile("queryWithSeveralAttributes")
+      }
+
+      "execute complex query" in db.transaction { implicit graph ⇒
+        executeQueryFile("complexQuery")
+      }
     }
   }
 }

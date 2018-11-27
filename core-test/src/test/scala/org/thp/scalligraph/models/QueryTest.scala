@@ -6,8 +6,9 @@ import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
 
 import org.scalactic.Good
-import org.specs2.specification.core.Fragments
-import org.thp.scalligraph.auth.{AuthContext, UserSrv}
+import org.specs2.specification.core.{Fragment, Fragments}
+import org.thp.scalligraph.AppBuilder
+import org.thp.scalligraph.auth.UserSrv
 import org.thp.scalligraph.controllers.Field
 import org.thp.scalligraph.query.AuthGraph
 
@@ -16,13 +17,24 @@ class QueryTest extends PlaySpecification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
   val userSrv: UserSrv = new DummyUserSrv
 
-  Fragments.foreach(DatabaseProviders.list) { dbProvider ⇒
-    implicit val db: Database             = dbProvider.get()
-    implicit val authcontext: AuthContext = userSrv.initialAuthContext
+  Fragments.foreach(new DatabaseProviders().list) { dbProvider ⇒
+    val app: AppBuilder = AppBuilder()
+      .bindToProvider(dbProvider)
+    step(setupDatabase(app)) ^ specs(dbProvider.name, app) ^ step(teardownDatabase(app))
+  }
+
+  def setupDatabase(app: AppBuilder): Unit =
+    DatabaseBuilder.build(app.instanceOf[ModernSchema])(app.instanceOf[Database], userSrv.initialAuthContext)
+
+  def teardownDatabase(app: AppBuilder): Unit = app.instanceOf[Database].drop()
+
+  def specs(name: String, app: AppBuilder): Fragment = {
+
+    implicit val db: Database = app.instanceOf[Database]
     new ModernSchema()
     val queryExecutor = new ModernQueryExecutor()
 
-    s"[${dbProvider.name}] Query executor" should {
+    s"[$name] Query executor" should {
       "execute simple query from Json" in {
         db.transaction { implicit graph ⇒
           val authGraph = AuthGraph(Some(userSrv.initialAuthContext), graph)

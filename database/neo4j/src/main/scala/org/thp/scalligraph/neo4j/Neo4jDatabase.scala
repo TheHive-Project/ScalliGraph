@@ -18,6 +18,22 @@ import org.neo4j.tinkerpop.api.impl.Neo4jGraphAPIImpl
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.{Config, Retry}
 
+object Neo4jDatabase {
+  def defaultConfiguration = Configuration(
+    Neo4jGraph.CONFIG_DIRECTORY → {
+      val dbDir      = s"db-${math.random}"
+      val targetPath = Paths.get("target")
+      val dbPath     = targetPath.resolve(dbDir)
+      Try(FileUtils.deletePathRecursively(dbPath))
+      Try(Files.createDirectory(targetPath))
+      Try(Files.createDirectory(dbPath))
+      s"target/$dbDir"
+    },
+    Neo4jGraph.CONFIG_MULTI_PROPERTIES → true,
+    Neo4jGraph.CONFIG_META_PROPERTIES  → true
+  )
+}
+
 @Singleton
 class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseDatabase {
 
@@ -25,48 +41,36 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
 
   def this(configuration: Configuration) =
     this(
-      Neo4jGraph.open(new Config(configuration)),
+      Neo4jGraph.open(new Config(Neo4jDatabase.defaultConfiguration ++ configuration)),
       configuration.getOptional[Int]("database.maxRetryOnConflict").getOrElse(5)
     )
 
-  def this() =
-    this(
-      Configuration(
-        Neo4jGraph.CONFIG_DIRECTORY → {
-          val dbDir      = s"db-${math.random}"
-          val targetPath = Paths.get("target")
-          val dbPath     = targetPath.resolve(dbDir)
-          Try(FileUtils.deletePathRecursively(dbPath))
-          Try(Files.createDirectory(targetPath))
-          Try(Files.createDirectory(dbPath))
-          s"target/$dbDir"
-        },
-        Neo4jGraph.CONFIG_MULTI_PROPERTIES → true,
-        Neo4jGraph.CONFIG_META_PROPERTIES  → true
-      ))
+  def this() = this(Configuration.empty)
 
   override def noTransaction[A](body: Graph ⇒ A): A = graph.synchronized {
     body(graph)
   }
 
   override def transaction[A](body: Graph ⇒ A): A = Retry(maxRetryOnConflict) {
-    graph.synchronized {
-      val tx = graph.tx
-      tx.open()
-      logger.debug(s"[$tx] Begin of transaction")
-      try {
-        val a = body(graph)
-        tx.commit()
-        a
-      } catch {
-        case e: Throwable ⇒
-          Try(tx.rollback())
-          throw e
-      } finally {
-        logger.debug(s"[$tx] End of transaction")
-        tx.close()
+    val tx = graph.tx
+    if (tx.isOpen) body(graph)
+    else
+      graph.synchronized {
+        logger.debug(s"[$tx] Begin of transaction")
+        tx.open()
+        try {
+          val a = body(graph)
+          tx.commit()
+          a
+        } catch {
+          case e: Throwable ⇒
+            Try(tx.rollback())
+            throw e
+        } finally {
+          logger.debug(s"[$tx] End of transaction")
+          tx.close()
+        }
       }
-    }
   }
 
   override def createSchema(models: Seq[Model]): Unit =
@@ -113,6 +117,8 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
         }
       }
     }
+
+  override def drop(): Unit = graph.getBaseGraph.shutdown() // FIXME this is not a real drop
 
   val dateMapping: SingleMapping[Date, Long] = SingleMapping[Date, Long](d ⇒ Some(d.getTime), new Date(_))
 

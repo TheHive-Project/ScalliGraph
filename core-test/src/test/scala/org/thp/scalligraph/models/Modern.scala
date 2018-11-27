@@ -1,16 +1,13 @@
 package org.thp.scalligraph.models
 
 import gremlin.scala.{asScalaGraph, Graph, GremlinScala, Key, P, Vertex}
+import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.services._
 
 @VertexEntity
 case class Person(name: String, age: Int)
-
-object Person {
-  val initialValues = Seq(Person("marc", 34), Person("franck", 28))
-}
 
 @VertexEntity
 case class Software(name: String, lang: String)
@@ -41,7 +38,6 @@ class PersonSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph
   }
 
   override def newInstance(raw: GremlinScala[Vertex]): PersonSteps = new PersonSteps(raw)
-  //def name = new Steps[String, String, Labels](raw.map(_.value[String]("name")))
 }
 
 @EntitySteps[Software]
@@ -53,36 +49,44 @@ class SoftwareSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Gra
   override def newInstance(raw: GremlinScala[Vertex]): SoftwareSteps = new SoftwareSteps(raw)
 }
 
-class PersonSrv(implicit db: Database) extends VertexSrv[Person, PersonSteps] {
-  override val initialValues                                       = Seq(Person("marc", 34), Person("franck", 28))
-  override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): PersonSteps       = new PersonSteps(raw)
-  override def get(id: String)(implicit graph: Graph): PersonSteps = new PersonSteps(graph.V().has(Key("name") of id))
+@Singleton
+class PersonSrv @Inject()(implicit db: Database) extends VertexSrv[Person, PersonSteps] {
+  override val initialValues: Seq[Person]                                           = Seq(Person("marc", 34), Person("franck", 28))
+  override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): PersonSteps = new PersonSteps(raw)
+  override def get(id: String)(implicit graph: Graph): PersonSteps                  = new PersonSteps(graph.V().has(Key("name") of id))
 }
 
-class SoftwareSrv(implicit db: Database) extends VertexSrv[Software, SoftwareSteps] {
-  override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): SoftwareSteps       = new SoftwareSteps(raw)
-  override def get(id: String)(implicit graph: Graph): SoftwareSteps = new SoftwareSteps(graph.V().has(Key("name") of id))
+@Singleton
+class SoftwareSrv @Inject()(implicit db: Database) extends VertexSrv[Software, SoftwareSteps] {
+  override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): SoftwareSteps = new SoftwareSteps(raw)
+  override def get(id: String)(implicit graph: Graph): SoftwareSteps                  = new SoftwareSteps(graph.V().has(Key("name") of id))
 }
 
-class ModernSchema(implicit db: Database, authContext: AuthContext) {
+@Singleton
+class ModernSchema @Inject()(implicit db: Database) {
   val personSrv   = new PersonSrv
   val softwareSrv = new SoftwareSrv
   val knowsSrv    = new EdgeSrv[Knows, Person, Person]
   val createdSrv  = new EdgeSrv[Created, Person, Software]
+}
 
-  db.createSchemaFrom(this)
-  db.transaction { implicit graph ⇒
-    val marko  = personSrv.create(Person("marko", 29))
-    val vadas  = personSrv.create(Person("vadas", 17))
-    val josh   = personSrv.create(Person("josh", 32))
-    val peter  = personSrv.create(Person("peter", 25))
-    val lop    = softwareSrv.create(Software("lop", "java"))
-    val ripple = softwareSrv.create(Software("ripple", "java"))
-    knowsSrv.create(Knows(0.5), marko, vadas)
-    knowsSrv.create(Knows(1), marko, josh)
-    createdSrv.create(Created(0.4), marko, lop)
-    createdSrv.create(Created(1), josh, ripple)
-    createdSrv.create(Created(0.4), josh, lop)
-    createdSrv.create(Created(0.2), peter, lop)
+object DatabaseBuilder {
+  def build(schema: ModernSchema)(implicit db: Database, authContext: AuthContext): Unit = {
+    db.createSchemaFrom(schema)
+    db.transaction { implicit graph ⇒
+      val vadas  = schema.personSrv.create(Person("vadas", 17))
+      val marko  = schema.personSrv.create(Person("marko", 29))
+      val josh   = schema.personSrv.create(Person("josh", 32))
+      val peter  = schema.personSrv.create(Person("peter", 25))
+      val lop    = schema.softwareSrv.create(Software("lop", "java"))
+      val ripple = schema.softwareSrv.create(Software("ripple", "java"))
+      schema.knowsSrv.create(Knows(0.5), marko, vadas)
+      schema.knowsSrv.create(Knows(1), marko, josh)
+      schema.createdSrv.create(Created(0.4), marko, lop)
+      schema.createdSrv.create(Created(1), josh, ripple)
+      schema.createdSrv.create(Created(0.4), josh, lop)
+      schema.createdSrv.create(Created(0.2), peter, lop)
+      ()
+    }
   }
 }

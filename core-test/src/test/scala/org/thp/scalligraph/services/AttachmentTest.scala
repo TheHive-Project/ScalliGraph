@@ -28,13 +28,13 @@ class AttachmentTest extends Specification {
     else (n1 == n2) && streamCompare(is1, is2)
   }
 
-  Fragments.foreach(DatabaseProviders.list) { dbProvider ⇒
+  Fragments.foreach(new DatabaseProviders().list) { dbProvider ⇒
     val db = dbProvider.get()
     db.createSchema(Nil)
     s"[${dbProvider.name}] attachment" should {
 
       "store binary data" in db.transaction { implicit graph ⇒
-        val filePath      = Paths.get("build.sbt")
+        val filePath      = Paths.get("../build.sbt")
         val attachmentSrv = new AttachmentSrv(Seq("SHA1", "SHA-256"), db, global, mat)
         val file          = FFile("build.sbt", filePath, "text/plain")
         val attachment    = Await.result(attachmentSrv.save(file), 10.seconds)
@@ -42,7 +42,7 @@ class AttachmentTest extends Specification {
       }
 
       "read stored data" in db.transaction { implicit graph ⇒
-        val filePath      = Paths.get("build.sbt")
+        val filePath      = Paths.get("../build.sbt")
         val attachmentSrv = new AttachmentSrv(Seq("SHA1", "SHA-256"), db, global, mat)
         val file          = FFile("build.sbt", filePath, "text/plain")
         val attachment    = Await.result(attachmentSrv.save(file), 10.seconds)

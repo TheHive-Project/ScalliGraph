@@ -46,7 +46,7 @@ class Module3 extends TestServiceModule[TestService3]
 class ScalligraphApplicationTest extends PlaySpecification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
-  "" in {
+  "create an application with overridden module" in {
     val applicationBuilder = GuiceApplicationBuilder()
       .load(
         new play.api.inject.BuiltinModule,

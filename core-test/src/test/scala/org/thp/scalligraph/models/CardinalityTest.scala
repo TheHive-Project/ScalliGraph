@@ -19,7 +19,7 @@ class CardinalityTest extends PlaySpecification with Mockito {
   implicit val authContext: AuthContext = userSrv.initialAuthContext
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
-  Fragments.foreach(DatabaseProviders.list) { dbProvider ⇒
+  Fragments.foreach(new DatabaseProviders().list) { dbProvider ⇒
     implicit val db: Database = dbProvider.get()
     db.createSchema(db.getModel[EntityWithSeq])
     val entityWithSeqSrv: VertexSrv[EntityWithSeq, VertexSteps[EntityWithSeq]] = new VertexSrv[EntityWithSeq, VertexSteps[EntityWithSeq]] {

@@ -3,7 +3,6 @@ package org.thp.scalligraph.models
 import gremlin.scala.{Graph, GremlinScala, Vertex}
 import play.api.{Configuration, Environment}
 import play.api.libs.logback.LogbackLoggerConfigurator
-import org.apache.tinkerpop.gremlin.structure.T
 import org.specs2.mock.Mockito
 import org.specs2.specification.core.Fragments
 import org.thp.scalligraph.VertexEntity
@@ -24,7 +23,7 @@ class SimpleEntityTest extends PlaySpecification with Mockito {
   implicit val authContext: AuthContext = userSrv.initialAuthContext
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
-  Fragments.foreach(DatabaseProviders.list) { dbProvider ⇒
+  Fragments.foreach(new DatabaseProviders().list) { dbProvider ⇒
     implicit val db: Database = dbProvider.get()
     db.createSchema(db.getModel[MyEntity])
     val myEntitySrv: VertexSrv[MyEntity, VertexSteps[MyEntity]] = new VertexSrv[MyEntity, VertexSteps[MyEntity]] {
@@ -35,13 +34,6 @@ class SimpleEntityTest extends PlaySpecification with Mockito {
       "create" in db.transaction { implicit graph ⇒
         val createdEntity: MyEntity with Entity = myEntitySrv.create(MyEntity("The answer", 42))
         createdEntity._id must_!== null
-      }
-
-      "fail to create if data is invalid" in db.transaction { implicit graph ⇒
-        graph
-          .addVertex(T.label, myEntitySrv.model.label, "name", "plop", "value", 1: java.lang.Integer, "_createdBy", "nobody")
-          .id
-          .toString must throwA[Exception]
       }
 
       "create and get entities" in db.transaction { implicit graph ⇒

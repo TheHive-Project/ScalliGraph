@@ -18,7 +18,7 @@ case class EntityWithUniqueName(name: String, value: Int)
 class IndexTest extends PlaySpecification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
-  Fragments.foreach(DatabaseProviders.list) { dbProvider ⇒
+  Fragments.foreach(new DatabaseProviders().list) { dbProvider ⇒
     implicit val db: Database = dbProvider.get()
     val model                 = Model.vertex[EntityWithUniqueName]
     db.createSchema(model)
@@ -39,7 +39,7 @@ class IndexTest extends PlaySpecification {
           db.transaction { implicit graph ⇒
             model.create(EntityWithUniqueName("differentTransaction", 2))
           }
-        }must throwA[Exception]
+        } must throwA[Exception]
       }
 
       "throw an exception in overlapped transactions" in {

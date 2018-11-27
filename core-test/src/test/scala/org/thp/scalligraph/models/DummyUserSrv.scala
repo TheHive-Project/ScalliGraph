@@ -8,7 +8,7 @@ import scala.concurrent.Future
 case class DummyUserSrv(
     userId: String = "test",
     userName: String = "test user",
-    organisation: String = "default",
+    organisation: String = "test_organisation",
     permissions: Seq[Permission] = Nil,
     requestId: String = "testRequest")
     extends UserSrv { userSrv ⇒

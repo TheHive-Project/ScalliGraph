@@ -6,36 +6,36 @@ import scala.util.Try
 
 import play.api.Configuration
 
+import com.typesafe.config.ConfigFactory
 import gremlin.scala._
 import javax.inject.{Inject, Singleton}
 import org.apache.tinkerpop.gremlin.structure.{Edge ⇒ _, Element ⇒ _, Graph ⇒ _, Vertex ⇒ _}
 import org.janusgraph.core.schema.{ConsistencyModifier, JanusGraphManagement, JanusGraphSchemaType, Mapping}
 import org.janusgraph.core.{Cardinality, JanusGraph, JanusGraphFactory, SchemaViolationException}
 import org.janusgraph.diskstorage.locking.PermanentLockingException
-import org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.{Config, InternalError, Retry}
 
+object JanusDatabase {
+  val defaultConfiguration = Configuration(ConfigFactory.parseString("""
+                                                                       |storage.backend: inmemory
+                                                                       |drop-on-clear: false
+                                                                       |storage.directory: target/thehive-test-2.db
+                                                                     """.stripMargin))
+}
 @Singleton
 class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chunkSize: Int) extends BaseDatabase {
   val name = "janus"
 
-  @Inject() def this(configuration: Configuration) =
+  @Inject() def this(configuration: Configuration) = {
     this(
-      JanusGraphFactory.open(new Config(configuration)),
+      JanusGraphFactory.open(new Config(JanusDatabase.defaultConfiguration ++ configuration)),
       configuration.getOptional[Int]("db.maxRetryOnConflict").getOrElse(5),
       configuration.getOptional[Int]("db.chunkSize").getOrElse(32 * 1024)
     )
+  }
 
-  def this() = this(
-    JanusGraphFactory.open(
-      GraphDatabaseConfiguration.buildGraphConfiguration
-        .set(GraphDatabaseConfiguration.STORAGE_BACKEND, "inmemory")
-        //      .set(GraphDatabaseConfiguration.IDAUTHORITY_WAIT, Duration.ZERO)
-        .set(GraphDatabaseConfiguration.DROP_ON_CLEAR, new java.lang.Boolean(false))),
-    5,
-    32 * 1024
-  )
+  def this() = this(Configuration.empty)
 
   override def noTransaction[A](body: Graph ⇒ A): A = body(graph)
 
@@ -225,4 +225,6 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
         }
       }
     }
+
+  override def drop(): Unit = JanusGraphFactory.drop(graph)
 }

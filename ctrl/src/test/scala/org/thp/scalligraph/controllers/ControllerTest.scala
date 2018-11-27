@@ -4,11 +4,12 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.Source
 import org.specs2.concurrent.ExecutionEnv
 import org.specs2.mock.Mockito
-import play.api.Application
+import play.api.{Application, Configuration, Environment}
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.libs.json.Json
 import play.api.mvc.{AnyContentAsJson, DefaultActionBuilder, Results}
 import play.api.test.{FakeRequest, Helpers, PlaySpecification}
+import play.api.libs.logback.LogbackLoggerConfigurator
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -17,6 +18,8 @@ class ControllerTest extends PlaySpecification with Mockito {
   lazy val app: Application           = new GuiceApplicationBuilder().build()
   implicit lazy val mat: Materializer = app.materializer
   implicit val ee: ExecutionEnv       = ExecutionEnv.fromGlobalExecutionContext
+
+  (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
   "controller" should {
 
