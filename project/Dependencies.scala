@@ -1,7 +1,6 @@
 import sbt._
 
 object Dependencies {
-  lazy val scalaTest                      = "org.scalatest"         %% "scalatest"               % "3.0.4"
   lazy val gremlinScala                   = "com.michaelpollmeier"  %% "gremlin-scala"           % "3.3.3.4"
   lazy val gremlinOrientdb                = "com.orientechnologies" % "orientdb-gremlin"         % "3.0.4"
   lazy val janusGraph                     = "org.janusgraph"        % "janusgraph-core"          % "0.3.1"

@@ -124,14 +124,14 @@ lazy val ctrl = (project in file("ctrl"))
       scalaGuice,
       bouncyCastle,
       shapeless,
-      specs % Test
+      playLogback % Test,
+      specs       % Test
     )
   )
 
 lazy val graphql = (project in file("graphql"))
   .dependsOn(core)
   .dependsOn(coreTest % "test->test")
-  .dependsOn(common)
   .dependsOn(janus)
   .settings(
     name := "scalligraph-graphql",
