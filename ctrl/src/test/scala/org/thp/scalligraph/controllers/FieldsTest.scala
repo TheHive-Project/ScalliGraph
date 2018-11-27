@@ -3,14 +3,13 @@ package org.thp.scalligraph.controllers
 import java.io.File
 import java.nio.file.Path
 
-import org.specs2.mock.Mockito
 import play.api.libs.Files
 import play.api.libs.Files.TemporaryFileCreator
 import play.api.mvc.MultipartFormData.FilePart
 import play.api.mvc.{AnyContentAsMultipartFormData, Headers, MultipartFormData}
 import play.api.test.{FakeRequest, NoTemporaryFileCreator, PlaySpecification}
 
-import scala.util.Random
+import org.specs2.mock.Mockito
 
 case class FakeTemporaryFile(name: String) extends Files.TemporaryFile {
   def file                                       = new File(name)
@@ -18,7 +17,7 @@ case class FakeTemporaryFile(name: String) extends Files.TemporaryFile {
   def temporaryFileCreator: TemporaryFileCreator = NoTemporaryFileCreator
 }
 object FakeTemporaryFile {
-  def apply(): Files.TemporaryFile = FakeTemporaryFile(Random.nextString(10))
+  def apply(): Files.TemporaryFile = FakeTemporaryFile("temporaryFileName")
 }
 class FieldsTest extends PlaySpecification with Mockito {
   "Field" should {
