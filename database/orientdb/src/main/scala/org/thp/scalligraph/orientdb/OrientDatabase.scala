@@ -56,6 +56,17 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
     }
   }
 
+  private def getVariablesVertex(implicit graph: Graph): Option[Vertex] = graph.traversal().V().hasLabel("variables").headOption()
+
+  override def version: Int = transaction { implicit graph ⇒
+    getVariablesVertex.fold(0)(v ⇒ getSingleProperty(v, "version", UniMapping.intMapping))
+  }
+
+  override def setVersion(v: Int): Unit = transaction { implicit graph ⇒
+    val variables = getVariablesVertex.getOrElse(graph.addVertex("variables"))
+    setSingleProperty(variables, "version", v, UniMapping.intMapping)
+  }
+
   private def createElementSchema(schema: OSchema, model: Model, superClassName: String, strict: Boolean): OClass = {
     val superClass = schema.getClass(superClassName)
     val clazz      = schema.createClass(model.label, superClass)
@@ -125,6 +136,8 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
     clazz.createProperty(attachmentPropertyName, OType.LINKLIST)
     ()
   }
+
+  override def drop(): Unit = graphFactory.drop()
 
   override def getListProperty[D, G](element: Element, key: String, mapping: ListMapping[D, G]): Seq[D] =
     element
