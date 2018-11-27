@@ -38,7 +38,7 @@ case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
     val orderBys = fieldOrder.flatMap {
       case (fieldName, order) ⇒
         getProperty(publicProperties, stepType, fieldName)
-          .fn(authContext)
+          .get(authContext)
           .map(f ⇒ orderby(f, order))
     }
     step
@@ -77,7 +77,7 @@ case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilt
       step: S,
       authContext: Option[AuthContext]): S = {
     val filter = getProperty(publicProperties, stepType, fieldName)
-      .fn(authContext)
+      .get(authContext)
       .map(f ⇒ f.andThen(_.is(predicate)))
       .asInstanceOf[Seq[GremlinScala[_] ⇒ GremlinScala[_]]]
     step

@@ -23,7 +23,7 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroLogger with Update
   def getOrBuildUpdateFieldsParser[E: WeakTypeTag]: Tree = {
     val eType = weakTypeOf[E]
     initLogger(eType.typeSymbol)
-    getOrBuildUpdateParser(eType.typeSymbol, eType)
+    ret(s"UpdateFieldParser of $eType", getOrBuildUpdateParser(eType.typeSymbol, eType))
   }
 }
 
@@ -131,10 +131,12 @@ trait UpdateFieldsParserUtil extends FieldsParserUtil {
 
   import c.universe._
 
-  protected def getOrBuildUpdateParser(symbol: Symbol, eType: Type): Tree =
+  protected def getOrBuildUpdateParser(symbol: Symbol, eType: Type): Tree = {
+    debug(s"getOrBuildUpdateParser($symbol, $eType")
     getUpdateParserFromAnnotation(symbol, eType)
       .orElse(getUpdateParserFromImplicit(eType))
       .getOrElse(buildUpdateParser(symbol, eType))
+  }
 
   protected def getUpdateParserFromAnnotation(symbol: Symbol, eType: Type): Option[Tree] = {
     val withUpdateParserType =
@@ -148,6 +150,7 @@ trait UpdateFieldsParserUtil extends FieldsParserUtil {
     val fieldsParserType =
       appliedType(typeOf[UpdateFieldsParser[_]].typeConstructor, eType)
     val fieldsParser = c.inferImplicitValue(fieldsParserType, silent = true)
+    trace(s"getParserFromImplicit($eType): search implicit of $fieldsParserType ⇒ $fieldsParser")
     if (fieldsParser.tpe =:= NoType) None
     else Some(fieldsParser)
   }
@@ -166,6 +169,7 @@ trait UpdateFieldsParserUtil extends FieldsParserUtil {
 
     eType match {
       case SeqType(subType) ⇒
+        trace(s"build UpdateFieldsParser sequence of $subType")
         val subParser = getOrBuildUpdateParser(subType.typeSymbol, subType)
         getOrBuildParser(subType.typeSymbol, subType)
           .map { parser ⇒
@@ -179,9 +183,11 @@ trait UpdateFieldsParserUtil extends FieldsParserUtil {
             q"$updateFieldsParser ++ $subParser.sequence ++ $seqParser"
           }
       case OptionType(subType) ⇒
+        trace(s"build UpdateFieldsParser option of $subType")
         val parser = getOrBuildUpdateParser(subType.typeSymbol, subType)
         q"$parser ++ $updateFieldsParser"
       case CaseClassType(symbols @ _*) ⇒
+        trace(s"build UpdateFieldsParser case class $eType")
         symbols.foldLeft(updateFieldsParser) {
           case (parser, s) ⇒
             val symbolName = s.name.toString

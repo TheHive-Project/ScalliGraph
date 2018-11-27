@@ -14,7 +14,8 @@ import gremlin.scala.{Graph, _}
 import org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.UpdateOps
-import org.thp.scalligraph.services.{EdgeSrv, VertexSrv}
+import org.thp.scalligraph.query.PublicProperty
+import org.thp.scalligraph.services.{EdgeSrv, ElementSrv, VertexSrv}
 import org.thp.scalligraph.{FPath, InternalError}
 
 trait Database {
@@ -33,6 +34,8 @@ trait Database {
   def createSchema(models: Seq[Model]): Unit
   def createSchema(models: Seq[Model], vertexSrvs: Seq[VertexSrv[_, _]], edgeSrvs: Seq[EdgeSrv[_, _, _]])(implicit authContext: AuthContext): Unit
 
+  def drop(): Unit
+
   def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity
   def createEdge[E <: Product, FROM <: Product, TO <: Product](
       graph: Graph,
@@ -43,6 +46,13 @@ trait Database {
       to: TO with Entity): E with Entity
 
   def update(graph: Graph, authContext: AuthContext, model: Model, id: String, fields: Map[FPath, UpdateOps.Type]): Unit
+  def update(
+      graph: Graph,
+      authContext: AuthContext,
+      elementSrv: ElementSrv[_, _],
+      id: String,
+      properties: Seq[PublicProperty[_, _]],
+      fields: Map[FPath, UpdateOps.Type]): Unit
 
   def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D
   def getOptionProperty[D, G](element: Element, key: String, mapping: OptionMapping[D, G]): Option[D]
@@ -83,9 +93,9 @@ abstract class BaseDatabase extends Database {
   val updatedAtMapping: OptionMapping[Date, Date]     = UniMapping.dateMapping.optional
   val updatedByMapping: OptionMapping[String, String] = UniMapping.stringMapping.optional
 
-  override def version: Int = noTransaction(_.variables.get[Int]("version").orElse(0))
+  override def version: Int = transaction(_.variables.get[Int]("version").orElse(0))
 
-  override def setVersion(v: Int): Unit = noTransaction(_.variables.set("version", v))
+  override def setVersion(v: Int): Unit = transaction(_.variables.set("version", v))
 
   override def getModel[E <: Product: ru.TypeTag]: Model.Base[E] = {
     val rm = ru.runtimeMirror(getClass.getClassLoader)
@@ -174,11 +184,10 @@ abstract class BaseDatabase extends Database {
     edgeMaybe.getOrElse(sys.error("vertex not found"))
   }
 
-  override def update(graph: Graph, authContext: AuthContext, model: Model, id: String, fields: Map[FPath, UpdateOps.Type]): Unit = {
-    val element: Element = model.get(id)(this, graph)
+  def update(element: Element, authContext: AuthContext, model: Model, fields: Map[FPath, UpdateOps.Type]) = {
     setOptionProperty(element, "_updatedAt", Some(new Date), updatedAtMapping)
     setOptionProperty(element, "_updatedBy", Some(authContext.userId), updatedByMapping)
-    logger.trace(s"Update $id by ${authContext.userId}")
+    logger.trace(s"Update ${element.id()} by ${authContext.userId}")
     fields.foreach {
       case (key, UpdateOps.SetAttribute(value)) ⇒
         val mapping = model.fields(key.toString).asInstanceOf[Mapping[Any, _, _]]
@@ -188,6 +197,31 @@ abstract class BaseDatabase extends Database {
       // TODO
     }
   }
+  override def update(graph: Graph, authContext: AuthContext, model: Model, id: String, fields: Map[FPath, UpdateOps.Type]): Unit = {
+    val element: Element = model.get(id)(this, graph)
+    update(element, authContext, model, fields)
+  }
+
+  def update(
+      graph: Graph,
+      authContext: AuthContext,
+      elementSrv: ElementSrv[_, _],
+      id: String,
+      properties: Seq[PublicProperty[_, _]],
+      fields: Map[FPath, UpdateOps.Type]): Unit =
+    fields.foreach {
+      case (key, UpdateOps.SetAttribute(value)) ⇒
+        for {
+          property            ← properties.find(_.propertyName == key.toString)
+          (elementFunc, prop) ← property.fn(Some(authContext)).headOption.asInstanceOf[Option[(GremlinScala[Any] ⇒ GremlinScala[Any], String)]]
+          e = elementSrv.get(id)(graph).asInstanceOf[ElementSteps[_, _, _]].raw.asInstanceOf[GremlinScala[Any]]
+          element ← elementFunc(e).traversal.limit(1).toList.asScala.headOption.asInstanceOf[Option[Element]]
+          _ = setOptionProperty(element, "_updatedAt", Some(new Date), updatedAtMapping)
+          _ = setOptionProperty(element, "_updatedBy", Some(authContext.userId), updatedByMapping)
+          _ = logger.trace(s"Update ${element.id()} by ${authContext.userId}: $key = $value")
+        } setProperty(element, prop, value, property.mapping.asInstanceOf[Mapping[Any, _, _]])
+      case _ ⇒ ???
+    }
 
   override def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D = {
     val values = element.properties[G](key)

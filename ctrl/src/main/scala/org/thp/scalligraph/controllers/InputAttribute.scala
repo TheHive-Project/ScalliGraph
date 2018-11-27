@@ -76,7 +76,7 @@ object UpdateFieldsParser {
     macro FieldsParserMacro.getOrBuildUpdateFieldsParser[T]
 }
 
-class FieldsParser[+T](val formatName: String, val acceptedInput: Seq[String], val parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]])
+class FieldsParser[T](val formatName: String, val acceptedInput: Seq[String], val parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]])
     extends BaseFieldsParser[T] {
 
   def apply(path: FPath, field: Field): T Or Every[AttributeError] =
@@ -211,12 +211,8 @@ object FieldsParser {
 }
 
 object UpdateOps {
-
   sealed trait Type
-
   sealed trait DBType
-
   case class SetAttribute(value: Any) extends Type
-
-  object UnsetAttribute extends Type with DBType
+  object UnsetAttribute               extends Type with DBType
 }

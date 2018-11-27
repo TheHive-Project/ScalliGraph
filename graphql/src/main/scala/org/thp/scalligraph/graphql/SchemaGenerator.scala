@@ -41,7 +41,7 @@ object SchemaGenerator {
       val f = filter(value)
       new EntityFilter {
         override def apply[G](authContext: Option[AuthContext])(raw: GremlinScala[G]): GremlinScala[G] = {
-          val x = property.fn(authContext).map(_.andThen(f)).asInstanceOf[Seq[GremlinScala[G] ⇒ GremlinScala[_]]]
+          val x = property.get(authContext).map(_.andThen(f)).asInstanceOf[Seq[GremlinScala[G] ⇒ GremlinScala[_]]]
           raw.or(x: _*)
         }
       }

@@ -39,34 +39,33 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
   val personSrv   = new PersonSrv
   val softwareSrv = new SoftwareSrv
 
-  override val publicProperties: List[PublicProperty[_ <: Element, _]] = PublicPropertyListBuilder[PersonSteps, Vertex]
-    .property[String]("createdBy")
-    .derived(_ ⇒ _.value[String]("_createdBy"))
-    .property[String]("label")
-    .derived(_ ⇒ _.value[String]("name").map("Mister " + _))
-    .property[String]("name")
-    .simple
-    .property[Int]("age")
-    .simple
-    .build :::
+  override val publicProperties: List[PublicProperty[_ <: Element, _]] = {
+    val labelMapping = SingleMapping[String, String](
+      toGraphOptFn = {
+        case d if d startsWith "Mister " ⇒ Some(d.drop(7))
+        case d                           ⇒ Some(d)
+      },
+      toDomainFn = (g: String) ⇒ "Mister " + g
+    )
+    // format: off
+    PublicPropertyListBuilder[PersonSteps, Vertex]
+      .property[String]("createdBy").rename("_createdBy")
+      .property[String]("label")(labelMapping).rename("name")
+      .property[String]("name").simple
+      .property[Int]("age").simple
+      .build :::
     PublicPropertyListBuilder[SoftwareSteps, Vertex]
-    .property[String]("createdBy")
-    .derived(_ ⇒ _.value[String]("_createdBy"))
-    .property[String]("name")
-    .simple
-    .property[String]("lang")
-    .simple
-    .property[String]("any")
-    .seq(
-      _ ⇒
-        Seq(
-          _.value[String]("_createdBy"),
-          _.value[String]("name"),
-          _.value[String]("lang")
-      ))
-    .build
+      .property[String]("createdBy").rename("_createdBy")
+      .property[String]("name").simple
+      .property[String]("lang").simple
+      .property[String]("any").seq(
+        _.simple("_createdBy")
+         .simple("name")
+         .simple("lang"))
+      .build
+  }
 
-  override val queries = Seq(
+  override val queries: Seq[ParamQuery[_]] = Seq(
     Query.init[PersonSteps]("allPeople", (graph, _) ⇒ personSrv.initSteps(graph)),
     Query.init[SoftwareSteps]("allSoftware", (graph, _) ⇒ softwareSrv.initSteps(graph)),
     Query.initWithParam[SeniorAgeThreshold, PersonSteps]("seniorPeople", { (seniorAgeThreshold, graph, _) ⇒
@@ -77,11 +76,4 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
     Query[Person with Entity, Output[OutputPerson]]("output", (person, _) ⇒ person),
     Query[Software with Entity, Output[OutputSoftware]]("output", (software, _) ⇒ software)
   )
-
-//  val personToList: Query = Query[PersonSteps, Seq[Person with Entity]]("toList", (personSteps, _) => personSteps.toList)
-//  override def toOutput(output: Any): JsValue = output match {
-//    case person: Person with Entity     ⇒ person.toJson
-//    case software: Software with Entity ⇒ software.toJson
-//    case other                          ⇒ super.toOutput(other)
-//  }
 }

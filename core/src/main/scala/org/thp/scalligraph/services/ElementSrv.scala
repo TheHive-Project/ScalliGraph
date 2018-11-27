@@ -4,6 +4,7 @@ import gremlin.scala.Graph
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.UpdateOps
 import org.thp.scalligraph.models.{Database, ElementSteps, Entity, Model}
+import org.thp.scalligraph.query.PublicProperty
 import org.thp.scalligraph.{FPath, NotFoundError}
 
 abstract class ElementSrv[E <: Product, S <: ElementSteps[E, _, _]](implicit db: Database) {
@@ -24,4 +25,9 @@ abstract class ElementSrv[E <: Product, S <: ElementSteps[E, _, _]](implicit db:
 
   def update(id: String, fields: Map[FPath, UpdateOps.Type])(implicit graph: Graph, authContext: AuthContext): Unit =
     db.update(graph, authContext, model, id, fields)
+
+  def update(id: String, properties: Seq[PublicProperty[_, _]], fields: Map[FPath, UpdateOps.Type])(
+      implicit graph: Graph,
+      authContext: AuthContext): Unit =
+    db.update(graph, authContext, this, id, properties, fields)
 }
