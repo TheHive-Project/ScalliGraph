@@ -47,7 +47,7 @@ class ControllerTest extends PlaySpecification with Mockito {
       val apiMethod     = new ApiMethod(mock[Authenticated], actionBuilder, ee.ec, mat)
 
       val action = apiMethod("find entity")
-        .chunked { implicit requereadst ⇒
+        .chunked { implicit request ⇒
           Source(0 to 3)
             .mapMaterializedValue(_ ⇒ 10)
         }
