@@ -41,8 +41,7 @@ object Query {
     override def apply(param: Unit, from: Any, authContext: Option[AuthContext]): Any = f(from.asInstanceOf[Graph], authContext)
   }
 
-  def initWithParam[P: ru.TypeTag, T: ru.TypeTag](queryName: String, f: (P, Graph, Option[AuthContext]) ⇒ T)(
-      implicit parser: FieldsParser[P]): ParamQuery[P] =
+  def initWithParam[P: ru.TypeTag, T: ru.TypeTag](queryName: String, parser: FieldsParser[P], f: (P, Graph, Option[AuthContext]) ⇒ T): ParamQuery[P] =
     new ParamQuery[P] {
       override val paramParser: FieldsParser[P]                                      = parser
       override val name: String                                                      = queryName
@@ -58,8 +57,10 @@ object Query {
     override def apply(param: Unit, from: Any, authContext: Option[AuthContext]): Any = f(from.asInstanceOf[F], authContext)
   }
 
-  def withParam[P: ru.TypeTag, F: ru.TypeTag, T: ru.TypeTag](queryName: String, f: (P, F, Option[AuthContext]) ⇒ T)(
-      implicit parser: FieldsParser[P]): ParamQuery[P] = new ParamQuery[P] {
+  def withParam[P: ru.TypeTag, F: ru.TypeTag, T: ru.TypeTag](
+      queryName: String,
+      parser: FieldsParser[P],
+      f: (P, F, Option[AuthContext]) ⇒ T): ParamQuery[P] = new ParamQuery[P] {
     override val paramParser: FieldsParser[P]                                      = parser
     override val name: String                                                      = queryName
     override def checkFrom(t: ru.Type): Boolean                                    = t <:< ru.typeOf[F]
@@ -110,7 +111,7 @@ object ToListQuery extends Query {
   }
 
   override def apply(param: Unit, from: Any, authContext: Option[AuthContext]): Any = from match {
-    case f: ScalliSteps[_, _, _] ⇒ f.toList
+    case f: ScalliSteps[_, _, _] ⇒ f.toList()
     case f: GremlinScala[_]      ⇒ f.toList
   }
 }

@@ -16,6 +16,7 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroLogger with Update
       q"org.thp.scalligraph.controllers.FieldsParser.attachment"
     } else
       getParserFromAnnotation(eType.typeSymbol, eType)
+        .orElse(getParserFromImplicit(eType))
         .orElse(buildParser(eType))
         .getOrElse(c.abort(c.enclosingPosition, s"Build FieldsParser of $eType fails"))
   }

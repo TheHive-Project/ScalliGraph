@@ -26,13 +26,7 @@ object ModernOutputs {
 }
 
 case class SeniorAgeThreshold(age: Int)
-object SeniorAgeThreshold {
-  implicit val parser: FieldsParser[SeniorAgeThreshold] = FieldsParser[SeniorAgeThreshold]
-}
 case class FriendLevel(level: Double)
-object FriendLevel {
-  implicit val reads: FieldsParser[FriendLevel] = FieldsParser[FriendLevel]
-}
 
 class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
   import ModernOutputs._
@@ -68,11 +62,11 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
   override val queries: Seq[ParamQuery[_]] = Seq(
     Query.init[PersonSteps]("allPeople", (graph, _) ⇒ personSrv.initSteps(graph)),
     Query.init[SoftwareSteps]("allSoftware", (graph, _) ⇒ softwareSrv.initSteps(graph)),
-    Query.initWithParam[SeniorAgeThreshold, PersonSteps]("seniorPeople", { (seniorAgeThreshold, graph, _) ⇒
+    Query.initWithParam[SeniorAgeThreshold, PersonSteps]("seniorPeople", FieldsParser[SeniorAgeThreshold], { (seniorAgeThreshold, graph, _) ⇒
       personSrv.initSteps(graph).where(_.has(Key[Int]("age"), P.gte(seniorAgeThreshold.age)))
     }),
     Query[PersonSteps, SoftwareSteps]("created", (personSteps, _) ⇒ personSteps.created),
-    Query.withParam[FriendLevel, PersonSteps, PersonSteps]("friends", (friendLevel, personSteps, _) ⇒ personSteps.friends(friendLevel.level)),
+    Query.withParam[FriendLevel, PersonSteps, PersonSteps]("friends", FieldsParser[FriendLevel], (friendLevel, personSteps, _) ⇒ personSteps.friends(friendLevel.level)),
     Query[Person with Entity, Output[OutputPerson]]("output", (person, _) ⇒ person),
     Query[Software with Entity, Output[OutputSoftware]]("output", (software, _) ⇒ software)
   )
