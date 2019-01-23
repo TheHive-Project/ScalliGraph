@@ -10,6 +10,7 @@ lazy val scalligraph = (project in file("."))
         organization := "org.thp",
         scalaVersion := "2.12.8",
         resolvers += Resolver.mavenLocal,
+        resolvers += "Oracle Released Java Packages" at "http://download.oracle.com/maven",
         scalacOptions ++= Seq(
           "-encoding",
           "UTF-8",
