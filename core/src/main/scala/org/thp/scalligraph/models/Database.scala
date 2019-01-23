@@ -18,6 +18,8 @@ import org.thp.scalligraph.query.PublicProperty
 import org.thp.scalligraph.services.{EdgeSrv, ElementSrv, VertexSrv}
 import org.thp.scalligraph.{FPath, InternalError}
 
+class DatabaseException(message: String = "Violation of database schema", cause: Exception) extends Exception(message, cause)
+
 trait Database {
   def noTransaction[A](body: Graph ⇒ A): A
   def transaction[A](body: Graph ⇒ A): A
