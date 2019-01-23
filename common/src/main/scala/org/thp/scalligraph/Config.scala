@@ -4,13 +4,14 @@ import java.lang.{Boolean ⇒ JBoolean, Byte ⇒ JByte, Double ⇒ JDouble, Floa
 import java.math.BigInteger
 import java.util.{Properties, Iterator ⇒ JIterator, List ⇒ JList}
 
-import org.apache.commons.configuration.{Configuration ⇒ ApacheConfig}
-import play.api.{Configuration ⇒ PlayConfig}
-
 import scala.collection.JavaConverters._
 
+import play.api.{Configuration ⇒ PlayConfig}
+
+import org.apache.commons.configuration.{Configuration ⇒ ApacheConfig}
+
 class Config(config: PlayConfig) extends ApacheConfig {
-  override def subset(prefix: String): ApacheConfig                                                 = ???
+  override def subset(prefix: String): ApacheConfig                                                 = new Config(config.getOptional[PlayConfig](prefix).getOrElse(PlayConfig.empty))
   override def isEmpty: Boolean                                                                     = ???
   override def containsKey(key: String): Boolean                                                    = config.keys.contains(key)
   override def addProperty(key: String, value: scala.Any): Unit                                     = ???
@@ -49,6 +50,10 @@ class Config(config: PlayConfig) extends ApacheConfig {
   override def getString(key: String): String                                                       = config.get[String](key)
   override def getString(key: String, defaultValue: String): String                                 = config.getOptional[String](key).getOrElse(defaultValue)
   override def getStringArray(key: String): Array[String]                                           = config.get[Seq[String]](key).toArray
-  override def getList(key: String): JList[AnyRef]                                                  = ???
-  override def getList(key: String, defaultValue: JList[_]): JList[AnyRef]                          = ???
+  override def getList(key: String): JList[AnyRef] =
+    config.underlying.getAnyRef(key) match {
+      case l: JList[AnyRef] ⇒ l
+      case v                ⇒ Seq(v).asJava
+    }
+  override def getList(key: String, defaultValue: JList[_]): JList[AnyRef] = ???
 }

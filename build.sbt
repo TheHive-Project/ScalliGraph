@@ -8,7 +8,7 @@ lazy val scalligraph = (project in file("."))
     inThisBuild(
       List(
         organization := "org.thp",
-        scalaVersion := "2.12.6",
+        scalaVersion := "2.12.8",
         resolvers += Resolver.mavenLocal,
         scalacOptions ++= Seq(
           "-encoding",
@@ -60,6 +60,7 @@ lazy val coreTest = (project in file("core-test"))
   .dependsOn(janus)
   .dependsOn(orientdb)
   .dependsOn(neo4j)
+  .dependsOn(arangodb)
   .settings(
     name := "scalligraph-core-test",
     libraryDependencies ++= Seq(
@@ -74,6 +75,7 @@ lazy val janus = (project in file("database/janusgraph"))
     name := "scalligraph-janus",
     libraryDependencies ++= Seq(
       janusGraph,
+      janusGraphBerkeleyDB,
       specs % Test
     )
   )
@@ -97,6 +99,16 @@ lazy val neo4j = (project in file("database/neo4j"))
       gremlinScala,
       neo4jGremlin,
       neo4jTinkerpop,
+      specs % Test
+    )
+  )
+
+lazy val arangodb = (project in file("database/arangodb"))
+  .dependsOn(core)
+  .settings(
+    name := "scalligraph-arangodb",
+    libraryDependencies ++= Seq(
+      arangodbTinkerpop,
       specs % Test
     )
   )
