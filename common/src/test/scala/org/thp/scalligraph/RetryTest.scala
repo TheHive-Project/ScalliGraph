@@ -28,7 +28,7 @@ class RetryTest extends PlaySpecification {
       Retry(4, classOf[ArithmeticException]) {
         count += 1
         12 / (count - count)
-      } should throwA[ArithmeticException]
+      } must beFailedTry
       count must_=== 5
     }
   }

@@ -5,14 +5,12 @@ import java.util.Date
 
 import scala.reflect.ClassTag
 import scala.util.Try
-
 import play.api.Configuration
-
 import gremlin.scala._
 import javax.inject.Singleton
 import org.apache.tinkerpop.gremlin.neo4j.structure.Neo4jGraph
 import org.apache.tinkerpop.gremlin.structure.Graph
-import org.neo4j.graphdb.Label
+import org.neo4j.graphdb.{ConstraintViolationException, Label}
 import org.neo4j.io.fs.FileUtils
 import org.neo4j.tinkerpop.api.impl.Neo4jGraphAPIImpl
 import org.thp.scalligraph.models._
@@ -51,27 +49,31 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
     body(graph)
   }
 
-  override def transaction[A](body: Graph ⇒ A): A = Retry(maxRetryOnConflict) {
-    val tx = graph.tx
-    if (tx.isOpen) body(graph)
-    else
-      graph.synchronized {
-        logger.debug(s"[$tx] Begin of transaction")
-        tx.open()
-        try {
-          val a = body(graph)
-          tx.commit()
-          a
-        } catch {
-          case e: Throwable ⇒
-            Try(tx.rollback())
-            throw e
-        } finally {
-          logger.debug(s"[$tx] End of transaction")
-          tx.close()
+  override def transaction[A](body: Graph ⇒ A): A =
+    Retry(maxRetryOnConflict, classOf[ConstraintViolationException]) {
+      val tx = graph.tx
+      if (tx.isOpen) body(graph)
+      else
+        graph.synchronized {
+          logger.debug(s"[$tx] Begin of transaction")
+          tx.open()
+          try {
+            val a = body(graph)
+            tx.commit()
+            a
+          } catch {
+            case e: Throwable ⇒
+              Try(tx.rollback())
+              throw e
+          } finally {
+            logger.debug(s"[$tx] End of transaction")
+            tx.close()
+          }
         }
-      }
-  }
+    }.fold[A]({
+      case t: ConstraintViolationException ⇒ throw new DatabaseException(cause = t)
+      case t                               ⇒ throw t
+    }, a ⇒ a)
 
   override def createSchema(models: Seq[Model]): Unit =
     // Cypher can't be used here to create schema as it is not compatible with scala 2.12
@@ -104,6 +106,7 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
                 .constraintFor(Label.label(model.label))
                 .assertPropertyIsUnique(property)
                 .create()
+            // NodeKey constraint should be used but it is not accessible using java API
             // graph.cypher(s"CREATE CONSTRAINT ON (${model.label}:${properties.head}) ASSERT ${model.label}.${properties.head} IS UNIQUE")
             case IndexType.fulltext ⇒
               logger.error(s"Neo4j doesn't support fulltext index, fallback to standard index")

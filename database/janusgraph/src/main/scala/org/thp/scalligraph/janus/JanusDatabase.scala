@@ -18,10 +18,9 @@ import org.thp.scalligraph.{Config, InternalError, Retry}
 
 object JanusDatabase {
   val defaultConfiguration = Configuration(ConfigFactory.parseString("""
-                                                                       |storage.backend: inmemory
-                                                                       |drop-on-clear: false
-                                                                       |storage.directory: target/thehive-test-2.db
-                                                                     """.stripMargin))
+    |storage.backend: inmemory
+    |storage.directory: target/thehive-test-2.db
+   """.stripMargin))
 }
 @Singleton
 class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chunkSize: Int) extends BaseDatabase {
@@ -39,23 +38,28 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
 
   override def noTransaction[A](body: Graph ⇒ A): A = body(graph)
 
-  override def transaction[A](body: Graph ⇒ A): A = Retry(maxRetryOnConflict, classOf[PermanentLockingException], classOf[SchemaViolationException]) {
-    logger.debug(s"Begin of transaction")
-    //    val tx = graph.tx()
-    //    tx.open() /*.createThreadedTx[JanusGraphTransaction]()*/
-    // Transaction is automatically open at the first operation.
-    try {
-      val a = body(graph)
-      graph.tx.commit()
-      logger.debug(s"End of transaction")
-      a
-    } catch {
-      case e: Throwable ⇒
-        logger.error(s"Exception raised, rollback (${e.getMessage})")
-        Try(graph.tx.rollback())
-        throw e
-    }
-  }
+  override def transaction[A](body: Graph ⇒ A): A =
+    Retry(maxRetryOnConflict, classOf[PermanentLockingException], classOf[SchemaViolationException]) {
+      logger.debug(s"Begin of transaction")
+      //    val tx = graph.tx()
+      //    tx.open() /*.createThreadedTx[JanusGraphTransaction]()*/
+      // Transaction is automatically open at the first operation.
+      try {
+        val a = body(graph)
+        graph.tx.commit()
+        logger.debug(s"End of transaction")
+        a
+      } catch {
+        case e: Throwable ⇒
+          logger.error(s"Exception raised, rollback (${e.getMessage})")
+          Try(graph.tx.rollback())
+          throw e
+      }
+    }.fold[A]({
+      case t: PermanentLockingException ⇒ throw new DatabaseException(cause = t)
+      case t: SchemaViolationException  ⇒ throw new DatabaseException(cause = t)
+      case t                            ⇒ throw t
+    }, a ⇒ a)
 
   def convertToJava(c: Class[_]): Class[_] =
     if (classOf[Int].isAssignableFrom(c)) classOf[java.lang.Integer]
@@ -224,7 +228,7 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
           mgmt.commit()
         }
       }
-    }
+    }.get
 
   override def drop(): Unit = JanusGraphFactory.drop(graph)
 }

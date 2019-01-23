@@ -5,15 +5,14 @@ import java.util.{List ⇒ JList, Set ⇒ JSet}
 
 import scala.collection.JavaConverters._
 import scala.util.Try
-
 import play.api.Configuration
-
 import com.orientechnologies.orient.core.db.record.OIdentifiable
 import com.orientechnologies.orient.core.exception.OConcurrentModificationException
 import com.orientechnologies.orient.core.intent.OIntentMassiveInsert
 import com.orientechnologies.orient.core.metadata.schema.OClass.INDEX_TYPE
 import com.orientechnologies.orient.core.metadata.schema.{OClass, OSchema, OType}
 import com.orientechnologies.orient.core.record.impl.ORecordBytes
+import com.orientechnologies.orient.core.storage.ORecordDuplicatedException
 import gremlin.scala.{Element, Vertex, _}
 import javax.inject.Singleton
 import org.apache.tinkerpop.gremlin.orientdb.{OrientGraph, OrientGraphFactory}
@@ -39,22 +38,30 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
 
   override def noTransaction[A](body: Graph ⇒ A): A = body(graphFactory.getNoTx)
 
-  override def transaction[A](body: Graph ⇒ A): A = Retry(maxRetryOnConflict, classOf[OConcurrentModificationException]) {
-    val tx = graphFactory.getTx
-    logger.debug(s"[$tx] Begin of transaction")
-    try {
-      val a = body(tx)
-      tx.commit()
-      a
-    } catch {
-      case e: Throwable ⇒
-        Try(tx.rollback())
-        throw e
-    } finally {
-      logger.debug(s"[$tx] End of transaction")
-      tx.close()
-    }
-  }
+  override def transaction[A](body: Graph ⇒ A): A =
+    Retry(maxRetryOnConflict, classOf[OConcurrentModificationException], classOf[ORecordDuplicatedException]) {
+      val tx = graphFactory.getTx
+      logger.debug(s"[$tx] Begin of transaction")
+      try {
+        val a = body(tx)
+        tx.commit()
+        a
+      } catch {
+        case e: Throwable ⇒
+          Try(tx.rollback())
+          throw e
+      } finally {
+        logger.debug(s"[$tx] End of transaction")
+        tx.close()
+      }
+    }.fold[A](
+      {
+        case t: OConcurrentModificationException ⇒ throw new DatabaseException(cause = t)
+        case t: ORecordDuplicatedException       ⇒ throw new DatabaseException(cause = t)
+        case t                                   ⇒ throw t
+      },
+      a ⇒ a
+    )
 
   private def getVariablesVertex(implicit graph: Graph): Option[Vertex] = graph.traversal().V().hasLabel("variables").headOption()
 
