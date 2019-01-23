@@ -16,7 +16,8 @@ abstract class ElementSrv[E <: Product, S <: ElementSteps[E, _, _]](implicit db:
 
   def get(e: Entity)(implicit graph: Graph): S = get(e._id)
 
-  def getOrFail(id: String)(implicit graph: Graph): E with Entity = get(id).headOption.getOrElse(throw NotFoundError(s"${model.label} $id not found"))
+  def getOrFail(id: String)(implicit graph: Graph): E with Entity =
+    get(id).headOption().getOrElse(throw NotFoundError(s"${model.label} $id not found"))
 
   def count(implicit graph: Graph): Long = initSteps.count
 

@@ -4,12 +4,10 @@ import java.util.{List ⇒ JList, Map ⇒ JMap}
 
 import scala.reflect.ClassTag
 import scala.reflect.runtime.{universe ⇒ ru}
-
 import play.api.Logger
-
 import gremlin.scala._
 import gremlin.scala.dsl._
-import org.thp.scalligraph.InternalError
+import org.thp.scalligraph.{InternalError, NotFoundError}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.query.PublicProperty
 import org.thp.scalligraph.services.RichElement
@@ -30,6 +28,16 @@ final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])(implicit val graph: G
     logger.info(s"Execution of $raw")
     super.toList()
   }
+
+  override def head(): T = {
+    logger.info(s"Execution of $raw")
+    super.head()
+  }
+
+  override def getOrFail(): T = headOption().getOrElse {
+    val typeName = implicitly[ClassTag[T]].runtimeClass.getSimpleName
+    throw NotFoundError(s"$typeName not found")
+  }
 }
 
 object ScalarSteps {
@@ -45,7 +53,9 @@ trait ScalliSteps[EndDomain, EndGraph, ThisStep <: AnyRef] { _: ThisStep ⇒
   def toList(): Seq[EndDomain]
   def head(): EndDomain
   def headOption(): Option[EndDomain]
-  def count: Long                                                  = raw.count().head
+
+  def getOrFail(): EndDomain
+  def count(): Long
   def sort(orderBys: OrderBy[_]*): ThisStep                        = newInstance(raw.order(orderBys: _*))
   def where(f: GremlinScala[EndGraph] ⇒ GremlinScala[_]): ThisStep = newInstance(raw.where(f))
   def map[NewEndDomain: ClassTag](f: EndDomain ⇒ NewEndDomain): ScalarSteps[NewEndDomain]
@@ -73,6 +83,8 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
     logger.info(s"Execution of $raw")
     super.headOption()
   }
+
+  override def getOrFail(): E with Entity = headOption().getOrElse(throw NotFoundError(s"${ru.typeOf[E]} not found"))
 
   override def map[T: ClassTag](f: E with Entity ⇒ T): ScalarSteps[T] = {
     implicit val const: Constructor.Aux[T, HNil, T, ScalarSteps[T]] =
