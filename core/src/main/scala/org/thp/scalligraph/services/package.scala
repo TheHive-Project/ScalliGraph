@@ -16,7 +16,7 @@ package object services {
     def asEntity(implicit db: Database, schema: Schema, graph: Graph): Entity = {
       val model = schema
         .getModel(e.label())
-        .get
+        .getOrElse(throw InternalError(s"No model found in ${schema.getClass.getSimpleName} for element $e with label ${e.label}"))
       model
         .converter(db, graph)
         .toDomain(e.asInstanceOf[model.ElementType])
