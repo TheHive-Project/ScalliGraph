@@ -1,20 +1,17 @@
 package org.thp.scalligraph.arangodb
-import scala.collection.JavaConverters._
 import scala.util.Random
 
 import play.api.Configuration
 
-import com.arangodb.tinkerpop.gremlin.client.ArangoDBGraphClient
 import com.arangodb.tinkerpop.gremlin.structure.ArangoDBGraph
 import com.typesafe.config.ConfigFactory
 import gremlin.scala.Graph
-import javax.inject.Singleton
-import org.apache.commons.configuration.ConfigurationConverter
+import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.Config
-import org.thp.scalligraph.models.{ BaseDatabase, EdgeModel, Model, VertexModel }
+import org.thp.scalligraph.models._
 
 object ArangoDatabase {
-  def randomName = new String(Array.fill(10)(('A'+Random.nextInt(26)).toChar))
+  def randomName = new String(Array.fill(10)(('A' + Random.nextInt(26)).toChar))
   val defaultConfiguration = Configuration(ConfigFactory.parseString(s"""
      |gremlin.arangodb.conf.graph.db: scalligraph
      |gremlin.arangodb.conf.graph.name: $randomName
@@ -33,27 +30,16 @@ object ArangoDatabase {
      |#gremlin.arangodb.conf.graph.loadBalancingStrategy:
      |#gremlin.arangodb.conf.graph.protocol:
    """.stripMargin))
-}
 
-@Singleton
-class ArangoDatabase(configuration: Configuration) extends BaseDatabase {
-  import ArangoDatabase._
-
-  val graphName: String = configuration.getOptional[String]("gremlin.arangodb.conf.graph.name").getOrElse(defaultConfiguration.get[String]("gremlin.arangodb.conf.graph.name"))
-  val arangoConfig      = new Config(defaultConfiguration ++ configuration)
-  private var graph     = new ArangoDBGraph(arangoConfig)
-
-  override def createSchema(models: Seq[Model]): Unit = {
- try {
-    drop()
-    val vertexNames = models.collect {
+  def getGraph(configuration: Configuration, schema: Schema): ArangoDBGraph = {
+    val vertexNames = schema.modelList.collect {
       case vm: VertexModel ⇒ vm.label
     }
-    val edgeNames = models.collect {
+    val edgeNames = schema.modelList.collect {
       case em: EdgeModel[_, _] ⇒ em.label
     }
     val relations = for {
-      em        ← models.collect { case em: EdgeModel[_, _] ⇒ em }
+      em        ← schema.modelList.collect { case em: EdgeModel[_, _] ⇒ em }
       fromLabel ← if (em.fromLabel.isEmpty) vertexNames else Seq(em.fromLabel)
       toLabel   ← if (em.toLabel.isEmpty) vertexNames else Seq(em.toLabel)
       edgeLabelPrefix = if (em.fromLabel.isEmpty) s"$fromLabel-" else ""
@@ -65,21 +51,39 @@ class ArangoDatabase(configuration: Configuration) extends BaseDatabase {
         "gremlin.arangodb.conf.graph.vertex"   → vertexNames,
         "gremlin.arangodb.conf.graph.edge"     → edgeNames,
         "gremlin.arangodb.conf.graph.relation" → relations))
-    logger.error(s"Create new graph with config: $schemaConfig")
-    graph = new ArangoDBGraph(new Config(defaultConfiguration ++ configuration ++ schemaConfig))
-    logger.debug(
-      s"graph contains:\n - vertices: ${graph.vertexCollections().asScala.mkString}\n - edges: ${graph.edgeCollections().asScala.mkString}")
- } catch {
-   case t: Throwable => logger.error("***ERROR***", t)
-   throw t
- }
+    new ArangoDBGraph(new Config(defaultConfiguration ++ configuration ++ schemaConfig))
   }
+}
+
+@Singleton
+class ArangoDatabase @Inject() (configuration: Configuration) extends BaseDatabase {
+  private var graph = new ArangoDBGraph(new Config(ArangoDatabase.defaultConfiguration ++ configuration))
+
+  override def createSchema(models: Seq[Model]): Unit = {
+    val vertexNames = models.collect {
+      case vm: VertexModel ⇒ vm.label
+    }
+    val edgeNames = models.collect {
+      case em: EdgeModel[_, _] ⇒ em.label
+    }
+    val relations = for {
+      em        ← models.collect { case em: EdgeModel[_, _] ⇒ em }
+      fromLabel = if (em.fromLabel.isEmpty) vertexNames.mkString(",") else em.fromLabel
+      toLabel   = if (em.toLabel.isEmpty) vertexNames.mkString(",") else em.toLabel
+    } yield s"${em.label}:$fromLabel->$toLabel"
+
+    val schemaConfig = Configuration.from(
+      Map(
+        "gremlin.arangodb.conf.graph.vertex"   → vertexNames,
+        "gremlin.arangodb.conf.graph.edge"     → edgeNames,
+        "gremlin.arangodb.conf.graph.relation" → relations))
+    graph = new ArangoDBGraph(new Config(ArangoDatabase.defaultConfiguration ++ configuration ++ schemaConfig))
+  }
+
   override def noTransaction[A](body: Graph ⇒ A): A = body(graph)
   override def transaction[A](body: Graph ⇒ A): A   = noTransaction(body)
   override def drop(): Unit                         = {
-    val properties = ConfigurationConverter.getProperties(arangoConfig.subset("gremlin.arangodb.conf"))
-    val client     = new ArangoDBGraphClient(properties, "scalligraph", 30000)
-    logger.info(s"Delete graph $graphName")
-    client.deleteGraph(graphName)
+    graph.getClient.deleteGraph(graph.name())
+    ()
   }
 }
