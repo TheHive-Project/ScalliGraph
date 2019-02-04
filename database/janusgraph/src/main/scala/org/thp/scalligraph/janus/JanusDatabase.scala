@@ -11,7 +11,7 @@ import gremlin.scala._
 import javax.inject.{Inject, Singleton}
 import org.apache.tinkerpop.gremlin.structure.{Edge ⇒ _, Element ⇒ _, Graph ⇒ _, Vertex ⇒ _}
 import org.janusgraph.core.schema.{ConsistencyModifier, JanusGraphManagement, JanusGraphSchemaType, Mapping}
-import org.janusgraph.core.{Cardinality, JanusGraph, JanusGraphFactory, SchemaViolationException}
+import org.janusgraph.core._
 import org.janusgraph.diskstorage.locking.PermanentLockingException
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.{Config, InternalError, Retry}
@@ -44,15 +44,16 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
       //    val tx = graph.tx()
       //    tx.open() /*.createThreadedTx[JanusGraphTransaction]()*/
       // Transaction is automatically open at the first operation.
+      val tx = graph.tx.createThreadedTx[JanusGraphTransaction]()
       try {
-        val a = body(graph)
-        graph.tx.commit()
+        val a = body(tx)
+        tx.commit()
         logger.debug(s"End of transaction")
         a
       } catch {
         case e: Throwable ⇒
           logger.error(s"Exception raised, rollback (${e.getMessage})")
-          Try(graph.tx.rollback())
+          Try(tx.rollback())
           throw e
       }
     }.fold[A]({
@@ -189,7 +190,7 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
         val alreadyExists = models
           .map(_.label)
           .flatMap(l ⇒ Option(mgmt.getVertexLabel(l)).orElse(Option(mgmt.getEdgeLabel(l))))
-          .map(_.label)
+          .map(_.toString)
         if (alreadyExists.nonEmpty) {
           logger.info(s"Models already exists. Skipping schema creation (existing labels: ${alreadyExists.mkString(",")})")
           mgmt.rollback()

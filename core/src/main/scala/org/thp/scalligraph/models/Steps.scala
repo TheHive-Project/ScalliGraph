@@ -25,12 +25,12 @@ final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])(implicit val graph: G
   override def map[A: ClassTag](f: T ⇒ A): ScalarSteps[A] = new ScalarSteps(raw.map(f))
 
   override def toList(): List[T] = {
-    logger.info(s"Execution of $raw")
+    logger.debug(s"Execution of $raw")
     super.toList()
   }
 
   override def head(): T = {
-    logger.info(s"Execution of $raw")
+    logger.debug(s"Execution of $raw")
     super.head()
   }
 
@@ -75,12 +75,12 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
 
   lazy val logger = Logger(getClass)
   override def toList(): List[E with Entity] = {
-    logger.info(s"Execution of $raw")
+    logger.debug(s"Execution of $raw")
     super.toList()
   }
 
   override def headOption(): Option[E with Entity] = {
-    logger.info(s"Execution of $raw")
+    logger.debug(s"Execution of $raw")
     super.headOption()
   }
 

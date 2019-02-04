@@ -44,8 +44,6 @@ object MultiAuthSrv {
 
 @Singleton
 class MultiAuthSrv @Inject()(val authProviders: immutable.Set[AuthSrv] /*, implicit val ec: ExecutionContext*/ ) extends AuthSrv {
-//import scala.collection.JavaConverters._
-//  val authProviders = _authProviders.asScala.toSet
   val name                             = "multi"
   override val capabilities: Set[Type] = authProviders.flatMap(_.capabilities)
 

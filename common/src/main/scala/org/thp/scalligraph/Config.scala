@@ -52,8 +52,8 @@ class Config(config: PlayConfig) extends ApacheConfig {
   override def getStringArray(key: String): Array[String]                                           = config.get[Seq[String]](key).toArray
   override def getList(key: String): JList[AnyRef] =
     config.underlying.getAnyRef(key) match {
-      case l: JList[AnyRef] ⇒ l
-      case v                ⇒ Seq(v).asJava
+      case l: JList[_] ⇒ l.asInstanceOf[JList[AnyRef]]
+      case v           ⇒ Seq(v).asJava
     }
   override def getList(key: String, defaultValue: JList[_]): JList[AnyRef] = ???
 }

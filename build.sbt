@@ -9,8 +9,11 @@ lazy val scalligraph = (project in file("."))
       List(
         organization := "org.thp",
         scalaVersion := "2.12.8",
-        resolvers += Resolver.mavenLocal,
-        resolvers += "Oracle Released Java Packages" at "http://download.oracle.com/maven",
+        resolvers ++= Seq(
+          Resolver.mavenLocal,
+          "Oracle Released Java Packages" at "http://download.oracle.com/maven",
+          "TheHive project repository" at "https://dl.bintray.com/thehive-project/maven/"
+        ),
         scalacOptions ++= Seq(
           "-encoding",
           "UTF-8",
@@ -73,7 +76,7 @@ lazy val coreTest = (project in file("core-test"))
 lazy val janus = (project in file("database/janusgraph"))
   .dependsOn(core)
   .settings(
-    name := "scalligraph-janus",
+    name := "scalligraph-janusgraph",
     libraryDependencies ++= Seq(
       janusGraph,
       janusGraphBerkeleyDB,

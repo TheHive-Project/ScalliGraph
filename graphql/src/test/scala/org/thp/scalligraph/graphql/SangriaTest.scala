@@ -85,7 +85,7 @@ class SangriaTest extends PlaySpecification {
         r must_=== Set("marko", "vadas", "josh", "peter", "marc", "franck")
       }
 
-      "have GraphQL schema" in db.transaction { implicit graph ⇒
+      "have GraphQL schema" in db.transaction { _ ⇒
         val schemaStr = SchemaRenderer.renderSchema(schema)
 //      println(s"new modern graphql schema is:\n$schemaStr")
 
