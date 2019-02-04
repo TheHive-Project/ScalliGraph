@@ -8,8 +8,8 @@ case class SimpleClassForFieldsParserMacroTest(name: String, value: Int)
 case class SubClassForFieldsParserMacroTest(name: String, option: Option[Int])
 case class ComplexClassForFieldsParserMacroTest(name: String, value: Int, subClasses: Seq[SubClassForFieldsParserMacroTest])
 
-case class SubMultiAttachClassForFieldsParserMacroTest(name: String, mainAttach: Attachment, otherAttach: Seq[Attachment])
-case class MultiAttachClassForFieldsParserMacroTest(name: String, attachments: Seq[SubMultiAttachClassForFieldsParserMacroTest])
+//case class SubMultiAttachClassForFieldsParserMacroTest(name: String, mainAttach: Attachment, otherAttach: Seq[Attachment])
+//case class MultiAttachClassForFieldsParserMacroTest(name: String, attachments: Seq[SubMultiAttachClassForFieldsParserMacroTest])
 
 @WithParser(CustomFieldsParsers.englishIntFieldsParser)
 @WithUpdateParser(CustomFieldsParsers.englishUpdateFieldsParser)

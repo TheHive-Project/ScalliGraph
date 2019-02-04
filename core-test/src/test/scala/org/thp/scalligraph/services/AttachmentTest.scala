@@ -2,23 +2,16 @@ package org.thp.scalligraph.services
 
 import java.nio.file.{Files, Paths}
 
-import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
-import org.specs2.mutable.Specification
-import org.specs2.specification.core.Fragments
-import org.thp.scalligraph.controllers.FFile
-import org.thp.scalligraph.models.DatabaseProviders
+import scala.tools.nsc.interpreter.InputStream
+
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.{Configuration, Environment}
 
-import scala.concurrent.Await
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration.DurationInt
-import scala.tools.nsc.interpreter.InputStream
+import org.specs2.mutable.Specification
+import org.specs2.specification.core.Fragments
+import org.thp.scalligraph.models.DatabaseProviders
 
 class AttachmentTest extends Specification {
-  private val sys = ActorSystem("AttachmentTest")
-  private val mat = ActorMaterializer()(sys)
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
   def streamCompare(is1: InputStream, is2: InputStream): Boolean = {
@@ -33,21 +26,14 @@ class AttachmentTest extends Specification {
     db.createSchema(Nil)
     s"[${dbProvider.name}] attachment" should {
 
-      "store binary data" in db.transaction { implicit graph ⇒
-        val filePath      = Paths.get("../build.sbt")
-        val attachmentSrv = new AttachmentSrv(Seq("SHA1", "SHA-256"), db, global, mat)
-        val file          = FFile("build.sbt", filePath, "text/plain")
-        val attachment    = Await.result(attachmentSrv.save(file), 10.seconds)
-        attachment.contentType must_=== "text/plain"
-      }
+      "save and read stored data" in db.transaction { implicit graph ⇒
+        val filePath = Paths.get("../build.sbt")
+        val is       = Files.newInputStream(filePath)
+        db.saveBinary("build.sbt-custom-id", is)
+        is.close()
 
-      "read stored data" in db.transaction { implicit graph ⇒
-        val filePath      = Paths.get("../build.sbt")
-        val attachmentSrv = new AttachmentSrv(Seq("SHA1", "SHA-256"), db, global, mat)
-        val file          = FFile("build.sbt", filePath, "text/plain")
-        val attachment    = Await.result(attachmentSrv.save(file), 10.seconds)
-        val is1           = attachmentSrv.stream(attachment)
-        val is2           = Files.newInputStream(filePath)
+        val is1 = db.loadBinary("build.sbt-custom-id")
+        val is2 = Files.newInputStream(filePath)
         try {
           streamCompare(is1, is2) must beTrue
         } finally {

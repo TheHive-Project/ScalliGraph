@@ -3,10 +3,9 @@ package org.thp.scalligraph.models
 import java.util.Date
 
 import scala.reflect.{classTag, ClassTag}
-
 import play.api.libs.json.{JsObject, Json}
-
 import gremlin.scala.dsl.Converter
+import org.thp.scalligraph.Hash
 
 object MappingCardinality extends Enumeration {
   val option, single, list, set = Value
@@ -24,13 +23,17 @@ trait UniMapping[D] {
 object UniMapping {
   implicit val jsonMapping: SingleMapping[JsObject, String] =
     SingleMapping[JsObject, String](toGraphOptFn = j ⇒ Some(j.toString), toDomainFn = s ⇒ Json.parse(s).as[JsObject])
-  implicit val stringMapping: SingleMapping[String, String]                                       = SingleMapping[String, String]()
-  implicit val longMapping: SingleMapping[Long, Long]                                             = SingleMapping[Long, Long]()
-  implicit val intMapping: SingleMapping[Int, Int]                                                = SingleMapping[Int, Int]()
-  implicit val dateMapping: SingleMapping[Date, Date]                                             = SingleMapping[Date, Date]()
-  implicit val booleanMapping: SingleMapping[Boolean, Boolean]                                    = SingleMapping[Boolean, Boolean]()
-  implicit val doubleMapping: SingleMapping[Double, Double]                                       = SingleMapping[Double, Double]()
-  implicit val floatMapping: SingleMapping[Float, Float]                                          = SingleMapping[Float, Float]()
+  implicit val stringMapping: SingleMapping[String, String]    = SingleMapping[String, String]()
+  implicit val longMapping: SingleMapping[Long, Long]          = SingleMapping[Long, Long]()
+  implicit val intMapping: SingleMapping[Int, Int]             = SingleMapping[Int, Int]()
+  implicit val dateMapping: SingleMapping[Date, Date]          = SingleMapping[Date, Date]()
+  implicit val booleanMapping: SingleMapping[Boolean, Boolean] = SingleMapping[Boolean, Boolean]()
+  implicit val doubleMapping: SingleMapping[Double, Double]    = SingleMapping[Double, Double]()
+  implicit val floatMapping: SingleMapping[Float, Float]       = SingleMapping[Float, Float]()
+  implicit val hashMapping: SingleMapping[Hash, String] = SingleMapping[Hash, String](
+    toGraphOptFn = h ⇒ Some(h.toString),
+    toDomainFn = Hash(_)
+  )
   implicit def optionMapping[D, G](implicit subMapping: SingleMapping[D, G]): OptionMapping[D, G] = subMapping.optional
   implicit def seqMapping[D, G](implicit subMapping: SingleMapping[D, G]): ListMapping[D, G]      = subMapping.sequence
   implicit def setMapping[D, G](implicit subMapping: SingleMapping[D, G]): SetMapping[D, G]       = subMapping.set

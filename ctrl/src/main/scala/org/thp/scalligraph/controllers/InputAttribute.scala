@@ -167,8 +167,8 @@ object FieldsParser {
       override def lift: T ⇒ Option[R] = f
     }
 
-  def attachment: FieldsParser[Attachment] =
-    FieldsParser[Attachment]("attachment") {
+  def file: FieldsParser[FFile] =
+    FieldsParser[FFile]("file") {
       case (_, f: FFile) ⇒ Good(f)
     }
   implicit val string: FieldsParser[String] = FieldsParser[String]("string") {

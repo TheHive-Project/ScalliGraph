@@ -75,14 +75,6 @@ object Field {
   implicit val fieldWrites: Writes[Field] = Writes[Field](field ⇒ JsString(field.toString))
 }
 
-trait Attachment extends Field {
-  def toJson: JsObject
-}
-//object Attachment {
-//  val attachmentWrites: OWrites[Attachment] = OWrites[Attachment](_.toJson)
-//  val hashAlgorithms = Seq("SHA-256", "SHA-1", "MD5")
-//}
-
 case class FString(value: String)   extends Field
 case class FNumber(value: Long)     extends Field
 case class FBoolean(value: Boolean) extends Field
@@ -105,15 +97,10 @@ object FSeq {
   def apply(value1: Field, values: Field*): FSeq = new FSeq(value1 :: values.toList)
   def apply()                                    = new FSeq(Nil)
 }
-case object FNull                   extends Field
-case object FUndefined              extends Field
-case class FAny(value: Seq[String]) extends Field
-case class FFile(filename: String, filepath: Path, contentType: String) extends Field with Attachment {
-  override def toJson: JsObject = Json.obj(
-    "filename"    → filename,
-    "contentType" → contentType
-  )
-}
+case object FNull                                                       extends Field
+case object FUndefined                                                  extends Field
+case class FAny(value: Seq[String])                                     extends Field
+case class FFile(filename: String, filepath: Path, contentType: String) extends Field
 
 object FObject {
   def empty                                   = new FObject(Map.empty)

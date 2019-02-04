@@ -1,26 +1,30 @@
 package org.thp.scalligraph.models
 
 import java.io.InputStream
-import java.lang.reflect.Modifier
 import java.util.{Base64, Date, UUID}
 
-import scala.collection.JavaConverters._
-import scala.reflect.runtime.{universe ⇒ ru}
-import scala.reflect.{classTag, ClassTag}
-
-import play.api.Logger
-
-import gremlin.scala.{Graph, _}
+import gremlin.scala._
 import org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.UpdateOps
 import org.thp.scalligraph.query.PublicProperty
-import org.thp.scalligraph.services.{EdgeSrv, ElementSrv, VertexSrv}
+import org.thp.scalligraph.services.ElementSrv
 import org.thp.scalligraph.{FPath, InternalError}
+import play.api.Logger
+
+import scala.collection.JavaConverters._
+import scala.reflect.runtime.{universe ⇒ ru}
 
 class DatabaseException(message: String = "Violation of database schema", cause: Exception) extends Exception(message, cause)
 
 trait Database {
+  val idMapping: SingleMapping[UUID, String]
+  val createdAtMapping: SingleMapping[Date, Date]
+  val createdByMapping: SingleMapping[String, String]
+  val updatedAtMapping: OptionMapping[Date, Date]
+  val updatedByMapping: OptionMapping[String, String]
+  val binaryMapping: SingleMapping[Array[Byte], String]
+
   def noTransaction[A](body: Graph ⇒ A): A
   def transaction[A](body: Graph ⇒ A): A
 
@@ -31,10 +35,10 @@ trait Database {
   def getVertexModel[E <: Product: ru.TypeTag]: Model.Vertex[E]
   def getEdgeModel[E <: Product: ru.TypeTag, FROM <: Product, TO <: Product]: Model.Edge[E, FROM, TO]
 
-  def createSchemaFrom(schemaObject: Any)(implicit authContext: AuthContext): Unit
+  def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Unit
   def createSchema(model: Model, models: Model*): Unit = createSchema(model +: models)
   def createSchema(models: Seq[Model]): Unit
-  def createSchema(models: Seq[Model], vertexSrvs: Seq[VertexSrv[_, _]], edgeSrvs: Seq[EdgeSrv[_, _, _]])(implicit authContext: AuthContext): Unit
+//  def createSchema(models: Seq[Model], vertexSrvs: Seq[VertexSrv[_, _]], edgeSrvs: Seq[EdgeSrv[_, _, _]])(implicit authContext: AuthContext): Unit
 
   def drop(): Unit
 
@@ -81,9 +85,10 @@ trait Database {
 
     }
 
+  val extraModels: Seq[Model]
   def loadBinary(initialVertex: Vertex)(implicit graph: Graph): InputStream
   def loadBinary(id: String)(implicit graph: Graph): InputStream
-  def saveBinary(is: InputStream)(implicit graph: Graph): Vertex
+  def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex
 }
 
 abstract class BaseDatabase extends Database {
@@ -94,6 +99,8 @@ abstract class BaseDatabase extends Database {
   val createdByMapping: SingleMapping[String, String] = UniMapping.stringMapping
   val updatedAtMapping: OptionMapping[Date, Date]     = UniMapping.dateMapping.optional
   val updatedByMapping: OptionMapping[String, String] = UniMapping.stringMapping.optional
+  val binaryMapping: SingleMapping[Array[Byte], String] =
+    SingleMapping[Array[Byte], String](data ⇒ Some(Base64.getEncoder.encodeToString(data)), Base64.getDecoder.decode)
 
   override def version: Int = transaction(_.variables.get[Int]("version").orElse(0))
 
@@ -130,31 +137,12 @@ abstract class BaseDatabase extends Database {
     }
   }
 
-  override def createSchemaFrom(schemaObject: Any)(implicit authContext: AuthContext): Unit = {
-    def extract[F: ClassTag](o: Any): Seq[F] =
-      o.getClass.getMethods.collect {
-        case field
-            if !Modifier.isPrivate(field.getModifiers) &&
-              field.getParameterCount == 0 &&
-              classTag[F].runtimeClass.isAssignableFrom(field.getReturnType) ⇒
-          field.invoke(o).asInstanceOf[F]
-      }.toSeq
-
-    val models     = extract[Model](schemaObject)
-    val vertexSrvs = extract[VertexSrv[_, _]](schemaObject)
-    val edgeSrvs   = extract[EdgeSrv[_, _, _]](schemaObject) ++ vertexSrvs.flatMap(extract[EdgeSrv[_, _, _]])
-    createSchema(models, vertexSrvs, edgeSrvs)
+  override def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Unit = {
+    createSchema(schemaObject.modelList ++ extraModels)
+    transaction(graph ⇒ schemaObject.initialValues.foreach(_.create()(this, graph, authContext)))
   }
 
   override def createSchema(models: Seq[Model]): Unit
-
-  override def createSchema(models: Seq[Model], vertexSrvs: Seq[VertexSrv[_, _]], edgeSrvs: Seq[EdgeSrv[_, _, _]])(
-      implicit authContext: AuthContext): Unit = {
-    createSchema(vertexSrvs.map(_.model) ++ edgeSrvs.map(_.model) ++ models)
-    transaction { implicit graph ⇒
-      vertexSrvs.foreach(_.createInitialValues())
-    }
-  }
 
   override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
     val createdVertex = model.create(v)(this, graph)
@@ -183,10 +171,14 @@ abstract class BaseDatabase extends Database {
       logger.trace(s"Create edge ${model.label} from $f to $t: ${Model.printElement(createdEdge)}")
       model.toDomain(createdEdge)(this)
     }
-    edgeMaybe.getOrElse(sys.error("vertex not found"))
+    edgeMaybe.getOrElse {
+      val error = graph.V().has(Key("_id") of from._id).headOption().map(_ ⇒ "").getOrElse(s"${from._model.label}:${from._id} not found ") +
+        graph.V().has(Key("_id") of to._id).headOption().map(_ ⇒ "").getOrElse(s"${to._model.label}:${to._id} not found")
+      sys.error(s"Fail to create edge between ${from._model.label}:${from._id} and ${to._model.label}:${to._id}, $error")
+    }
   }
 
-  def update(element: Element, authContext: AuthContext, model: Model, fields: Map[FPath, UpdateOps.Type]) = {
+  def update(element: Element, authContext: AuthContext, model: Model, fields: Map[FPath, UpdateOps.Type]): Unit = {
     setOptionProperty(element, "_updatedAt", Some(new Date), updatedAtMapping)
     setOptionProperty(element, "_updatedBy", Some(authContext.userId), updatedByMapping)
     logger.trace(s"Update ${element.id()} by ${authContext.userId}")
@@ -284,6 +276,54 @@ abstract class BaseDatabase extends Database {
 
   val chunkSize: Int = 32 * 1024
 
+  val binaryLinkModel: EdgeModel[Binary, Binary] = new EdgeModel[Binary, Binary] {
+    override val fromLabel: String                                                                       = "binary"
+    override val toLabel: String                                                                         = "binary"
+    override def create(e: Product, from: Vertex, to: Vertex)(implicit db: Database, graph: Graph): Edge = from.addEdge(label, to)
+    override type E = Product
+    override val label: String                                = "nextChunk"
+    override val indexes: Seq[(IndexType.Value, Seq[String])] = Nil
+    override val fields: Map[String, Mapping[_, _, _]]        = Map.empty
+    override def toDomain(element: Edge)(implicit db: Database): Product with Entity = new Product with Entity {
+      override val _id: String                  = element.id().toString
+      override val _model: Model                = binaryLinkModel
+      override val _createdBy: String           = "system"
+      override val _updatedBy: Option[String]   = None
+      override val _createdAt: Date             = new Date
+      override val _updatedAt: Option[Date]     = None
+      override def productElement(n: Int): Any  = ()
+      override def productArity: Int            = 0
+      override def canEqual(that: Any): Boolean = false
+    }
+  }
+
+  val binaryModel: Model.Vertex[Binary] = new VertexModel {
+    override def create(binary: Binary)(implicit db: Database, graph: Graph): Vertex = {
+      val v    = graph.addVertex("binary")
+      val data = Base64.getEncoder.encodeToString(binary.data)
+      setSingleProperty(v, "binary", data, UniMapping.stringMapping)
+      setSingleProperty(v, "_id", UUID.randomUUID, idMapping)
+      v
+    }
+    override type E = Binary
+    override val label: String                                = "binary"
+    override val indexes: Seq[(IndexType.Value, Seq[String])] = Nil
+    override val fields: Map[String, Mapping[_, _, _]]        = Map("binary" → UniMapping.stringMapping)
+    override def toDomain(element: Vertex)(implicit db: Database): Binary with Entity = {
+      val base64Data = getSingleProperty[String, String](element, "binary", UniMapping.stringMapping)
+      val data       = Base64.getDecoder.decode(base64Data)
+      new Binary(data) with Entity {
+        override val _id: String                = element.id().toString
+        override val _model: Model              = binaryModel
+        override val _createdBy: String         = "system"
+        override val _updatedBy: Option[String] = None
+        override val _createdAt: Date           = new Date
+        override val _updatedAt: Option[Date]   = None
+      }
+    }
+  }
+  override val extraModels: Seq[Model] = Seq(binaryModel, binaryLinkModel)
+
   override def loadBinary(initialVertex: Vertex)(implicit graph: Graph): InputStream = loadBinary(initialVertex.value[String]("_id"))
 
   override def loadBinary(id: String)(implicit graph: Graph): InputStream =
@@ -307,7 +347,7 @@ abstract class BaseDatabase extends Database {
         }
     }
 
-  override def saveBinary(is: InputStream)(implicit graph: Graph): Vertex = {
+  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex = {
 
     def readNextChunk: String = {
       val buffer = new Array[Byte](chunkSize)
@@ -321,11 +361,9 @@ abstract class BaseDatabase extends Database {
         ""
     }
 
-    val chunks = Iterator
+    val chunks: Iterator[Vertex] = Iterator
       .continually(readNextChunk)
-      .takeWhile { x ⇒
-        x.nonEmpty
-      }
+      .takeWhile(_.nonEmpty)
       .map { data ⇒
         val v = graph.addVertex("binary")
         setSingleProperty(v, "binary", data, UniMapping.stringMapping)
@@ -335,7 +373,8 @@ abstract class BaseDatabase extends Database {
     if (chunks.isEmpty) {
       logger.debug("Saving empty file")
       val v = graph.addVertex("binary")
-      v.property("binary", "")
+      setSingleProperty(v, "binary", "", UniMapping.stringMapping)
+      setSingleProperty(v, "_id", UUID.randomUUID, idMapping)
       v
     } else {
       val firstVertex = chunks.next
@@ -348,3 +387,4 @@ abstract class BaseDatabase extends Database {
     }
   }
 }
+case class Binary(data: Array[Byte])

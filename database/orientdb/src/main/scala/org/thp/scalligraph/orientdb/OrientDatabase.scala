@@ -197,7 +197,7 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
         }
     }
 
-  override def saveBinary(is: InputStream)(implicit graph: Graph): Vertex = {
+  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex = {
     val db = graph.asInstanceOf[OrientGraph].database()
 
     db.declareIntent(new OIntentMassiveInsert)
@@ -213,6 +213,7 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
       .to[Seq]
     db.declareIntent(null)
     val v = graph.addVertex(attachmentVertexLabel)
+    v.property("_id", id)
     v.property(attachmentPropertyName, chunkIds.asJava)
     v
   }

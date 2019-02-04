@@ -5,7 +5,7 @@ import org.thp.scalligraph.models.Model
 
 import scala.reflect.macros.blackbox
 
-class ModelMacro(val c: blackbox.Context) extends MappingMacro with IndexMacro with AttachmentMacro with MacroLogger {
+class ModelMacro(val c: blackbox.Context) extends MappingMacro with IndexMacro with MacroLogger {
 
   import c.universe._
 
@@ -39,7 +39,6 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacro with IndexMacro w
       import org.thp.scalligraph.{ FPath, InternalError }
       import org.thp.scalligraph.controllers.UpdateOps
       import org.thp.scalligraph.models.{ Database, Entity, IndexType, Mapping, Model, UniMapping, VertexModel }
-      import org.thp.scalligraph.services.AttachmentSrv
 
       new VertexModel { thisModel ⇒
         override type E = $entityType
@@ -64,14 +63,6 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacro with IndexMacro w
           val _createdBy = db.getProperty(element, "_createdBy", UniMapping.stringMapping)
           val _updatedAt = db.getProperty(element, "_updatedAt", UniMapping.dateMapping.optional)
           val _updatedBy = db.getProperty(element, "_updatedBy", UniMapping.stringMapping.optional)
-        }
-
-        override def saveAttachment(attachmentSrv: AttachmentSrv, e: E)(implicit ec: ExecutionContext): Future[E] = {
-          ${mkAttachmentSaver[E]}(attachmentSrv)(e)
-        }
-
-        override def saveUpdateAttachment(attachmentSrv: AttachmentSrv, updates: Map[FPath, UpdateOps.Type])(implicit ec: ExecutionContext): Future[Map[FPath, UpdateOps.Type]] = {
-          ${mkUpdateAttachmentSaver[E]}(attachmentSrv)(updates)
         }
       }
       """)
@@ -109,7 +100,6 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacro with IndexMacro w
       import org.thp.scalligraph.{ FPath, InternalError }
       import org.thp.scalligraph.controllers.UpdateOps
       import org.thp.scalligraph.models.{ Database, EdgeModel, Entity, IndexType, Mapping, Model, UniMapping }
-      import org.thp.scalligraph.services.AttachmentSrv
 
       new EdgeModel[$fromType, $toType] { thisModel ⇒
         override type E = $entityType
@@ -138,14 +128,6 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacro with IndexMacro w
           val _updatedAt = db.getProperty(element, "_updatedAt", UniMapping.dateMapping.optional)
           val _updatedBy = db.getProperty(element, "_updatedBy", UniMapping.stringMapping.optional)
 
-        }
-
-        override def saveAttachment(attachmentSrv: AttachmentSrv, e: E)(implicit ec: ExecutionContext): Future[E] = {
-          ${mkAttachmentSaver[E]}(attachmentSrv)(e)
-        }
-
-        override def saveUpdateAttachment(attachmentSrv: AttachmentSrv, updates: Map[FPath, UpdateOps.Type])(implicit ec: ExecutionContext): Future[Map[FPath, UpdateOps.Type]] = {
-          ${mkUpdateAttachmentSaver[E]}(attachmentSrv)(updates)
         }
       }
       """)

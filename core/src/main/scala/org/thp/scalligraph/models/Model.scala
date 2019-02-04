@@ -2,17 +2,14 @@ package org.thp.scalligraph.models
 
 import java.util.Date
 
-import gremlin.scala._
-import gremlin.scala.dsl.{Converter, DomainRoot}
-import org.thp.scalligraph.controllers.UpdateOps
-import org.thp.scalligraph.macros.ModelMacro
-import org.thp.scalligraph.services.AttachmentSrv
-import org.thp.scalligraph.{FPath, NotFoundError}
-
 import scala.annotation.StaticAnnotation
 import scala.collection.JavaConverters._
-import scala.concurrent.{ExecutionContext, Future}
 import scala.language.experimental.macros
+
+import gremlin.scala._
+import gremlin.scala.dsl.{Converter, DomainRoot}
+import org.thp.scalligraph.NotFoundError
+import org.thp.scalligraph.macros.ModelMacro
 
 class Readonly extends StaticAnnotation
 
@@ -85,13 +82,6 @@ abstract class Model {
   def toDomain(element: ElementType)(implicit db: Database): EEntity
 
   def converter(db: Database, graph: Graph): Converter.Aux[EEntity, ElementType]
-
-  /** Save all attachments (FFile) contained by an entity and transform them into FAttachment */
-  def saveAttachment(attachmentSrv: AttachmentSrv, e: E)(implicit ec: ExecutionContext): Future[E]
-
-  /** Save attachments from an update document. Replace all FFile by FAttachment */
-  def saveUpdateAttachment(attachmentSrv: AttachmentSrv, updates: Map[FPath, UpdateOps.Type])(
-      implicit ec: ExecutionContext): Future[Map[FPath, UpdateOps.Type]]
 }
 
 abstract class VertexModel extends Model { thisModel ⇒

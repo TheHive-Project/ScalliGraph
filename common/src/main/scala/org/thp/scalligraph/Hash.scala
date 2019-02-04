@@ -1,32 +1,39 @@
 package org.thp.scalligraph
 
+import java.io.InputStream
 import java.nio.charset.Charset
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 import java.security.MessageDigest
+
+import scala.concurrent.{ExecutionContext, Future}
+
+import play.api.libs.json.{Format, JsString, Reads, Writes}
 
 import akka.stream.Materializer
 import akka.stream.scaladsl.{FileIO, Source}
 import akka.util.ByteString
-import play.api.libs.json.{Format, JsString, Reads, Writes}
-
-import scala.concurrent.{ExecutionContext, Future}
 
 // TODO use play.api.libs.Codecs
 
 case class Hasher(algorithms: String*) {
 
-  def fromPath(path: Path)(implicit mat: Materializer, ec: ExecutionContext): Future[Seq[Hash]] =
-    fromSource(FileIO.fromPath(path))
+  val bufferSize = 4096
+  def fromPath(path: Path): Seq[Hash] =
+    fromInputStream(Files.newInputStream(path))
 
-  def fromSource(source: Source[ByteString, Any])(implicit mat: Materializer, ec: ExecutionContext): Future[Seq[Hash]] = {
+  def fromInputStream(is: InputStream): Seq[Hash] = {
     val mds = algorithms.map(algo ⇒ MessageDigest.getInstance(algo))
-    source
-      .runForeach { bs ⇒
-        mds.foreach(md ⇒ md.update(bs.toByteBuffer))
-      }
-      .map { _ ⇒
-        mds.map(md ⇒ Hash(md.digest()))
-      }
+    def readNextBuffer = {
+      val buffer = Array.ofDim[Byte](bufferSize)
+      val len    = is.read(buffer)
+      if (len == bufferSize) buffer else buffer.take(len)
+    }
+
+    Iterator
+      .continually(readNextBuffer)
+      .takeWhile(_.nonEmpty)
+      .foreach(buffer ⇒ mds.foreach(md ⇒ md.update(buffer)))
+    mds.map(md ⇒ Hash(md.digest()))
   }
 
   def fromString(data: String): Seq[Hash] = {

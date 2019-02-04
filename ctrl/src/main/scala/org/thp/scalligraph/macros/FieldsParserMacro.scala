@@ -1,8 +1,7 @@
 package org.thp.scalligraph.macros
 
-import org.thp.scalligraph.controllers.{Attachment, FieldsParser, UpdateFieldsParser, WithParser, WithUpdateParser}
+import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.{MacroLogger, MacroUtil}
-
 import scala.reflect.macros.blackbox
 
 class FieldsParserMacro(val c: blackbox.Context) extends MacroLogger with UpdateFieldsParserUtil {
@@ -12,8 +11,8 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroLogger with Update
   def getOrBuildFieldsParser[E: WeakTypeTag]: Tree = {
     val eType = weakTypeOf[E]
     initLogger(eType.typeSymbol)
-    if (eType <:< typeOf[Attachment]) {
-      q"org.thp.scalligraph.controllers.FieldsParser.attachment"
+    if (eType <:< typeOf[FFile]) {
+      q"org.thp.scalligraph.controllers.FieldsParser.file"
     } else
       getParserFromAnnotation(eType.typeSymbol, eType)
         .orElse(getParserFromImplicit(eType))
@@ -35,8 +34,8 @@ trait FieldsParserUtil extends MacroLogger with MacroUtil {
 
   protected def getOrBuildParser(symbol: Symbol, eType: Type): Option[Tree] = {
     debug(s"getOrBuildParser($symbol, $eType")
-    if (eType <:< typeOf[Attachment]) {
-      Some(q"org.thp.scalligraph.controllers.FieldsParser.attachment")
+    if (eType <:< typeOf[FFile]) {
+      Some(q"org.thp.scalligraph.controllers.FieldsParser.file")
     } else
       getParserFromAnnotation(symbol, eType)
         .orElse(getParserFromImplicit(eType))
