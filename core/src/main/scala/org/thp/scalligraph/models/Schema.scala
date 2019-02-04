@@ -1,10 +1,14 @@
 package org.thp.scalligraph.models
 
+import gremlin.scala.Graph
 import javax.inject.{Inject, Named, Singleton}
-import org.thp.scalligraph.auth.UserSrv
+import org.thp.scalligraph.auth.{AuthContext, UserSrv}
 import play.api.Logger
 
-case class InitialValue[V <: Product](model: Model.Vertex[V], value: V)
+case class InitialValue[V <: Product](model: Model.Vertex[V], value: V) {
+  def create()(implicit db: Database, graph: Graph, authContext: AuthContext): V with Entity =
+    db.createVertex[V](graph, authContext, model, value)
+}
 
 trait Schema {
   def modelList: Seq[Model]
