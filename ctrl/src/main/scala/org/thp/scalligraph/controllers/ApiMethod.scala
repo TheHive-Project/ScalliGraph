@@ -4,16 +4,16 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import javax.inject.{Inject, Singleton}
 import org.scalactic.{Bad, Good}
-import org.thp.scalligraph.AttributeCheckingError
+import org.thp.scalligraph.{AttributeCheckingError, AuthorizationError}
 import org.thp.scalligraph.auth.Permission
 import org.thp.scalligraph.record.Record
 import play.api.Logger
 import play.api.libs.json.{Json, Writes}
 import play.api.mvc.Results.BadRequest
 import play.api.mvc._
+
 import shapeless.labelled.FieldType
 import shapeless.{::, labelled, HList, HNil, Witness}
-
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.higherKinds
 
@@ -84,7 +84,7 @@ class ApiMethod @Inject()(
             if ((requiredPermissions.toSet -- authContext.permissions).isEmpty)
               new AuthenticatedRequest[AnyContent](authContext, request)
             else
-              sys.error("plop")
+              throw AuthorizationError("You are not authorized")
           }
         }
       )
