@@ -1,7 +1,7 @@
 import Dependencies._
 
 lazy val scalligraph = (project in file("."))
-  .dependsOn(core, common, ctrl, graphql, janus, orientdb, neo4j, coreTest)
+  .dependsOn(core, common, ctrl, graphql, janus, orientdb/*, neo4j, coreTest*/)
   .dependsOn(coreTest % "test -> test")
   .aggregate(core, common, ctrl, graphql, janus, orientdb, neo4j, coreTest)
   .settings(
@@ -80,6 +80,11 @@ lazy val janus = (project in file("database/janusgraph"))
     libraryDependencies ++= Seq(
       janusGraph,
       janusGraphBerkeleyDB,
+      janusGraphHBase,
+      hbaseClient,
+//      hbaseCommon,
+//      hadoopCommon,
+//      gremlinServer,
       specs % Test
     )
   )

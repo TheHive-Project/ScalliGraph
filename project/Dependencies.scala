@@ -1,10 +1,12 @@
 import sbt._
 
 object Dependencies {
-  lazy val gremlinScala                   = "com.michaelpollmeier"     %% "gremlin-scala"              % "3.3.4.14"
+  lazy val gremlinScala                   = "com.michaelpollmeier"     %% "gremlin-scala"              % "3.4.0.1-SNAPSHOT"
   lazy val gremlinOrientdb                = "com.orientechnologies"    % "orientdb-gremlin"            % "3.1.0-M2"
   lazy val janusGraph                     = "org.janusgraph"           % "janusgraph-core"             % "0.3.1"
   lazy val janusGraphBerkeleyDB           = "org.janusgraph"           % "janusgraph-berkeleyje"       % "0.3.1"
+  lazy val janusGraphHBase                = "org.janusgraph"           % "janusgraph-hbase"            % "0.3.1"
+  lazy val hbaseClient                    = "org.apache.hbase"         % "hbase-shaded-client"         % "1.4.9" exclude ("org.slf4j", "slf4j-log4j12")
   lazy val scalactic                      = "org.scalactic"            %% "scalactic"                  % "3.0.5"
   lazy val specs                          = "com.typesafe.play"        %% "play-specs2"                % play.core.PlayVersion.current
   lazy val scalaGuice                     = "net.codingwell"           %% "scala-guice"                % "4.2.2"
