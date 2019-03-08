@@ -1,19 +1,21 @@
 package org.thp.scalligraph.models
 
-import java.util.{List ⇒ JList, Map ⇒ JMap}
+import java.util.{UUID, Collection ⇒ JCollection, List ⇒ JList, Map ⇒ JMap}
 
 import scala.reflect.ClassTag
 import scala.reflect.runtime.{universe ⇒ ru}
+
 import play.api.Logger
+
 import gremlin.scala._
 import gremlin.scala.dsl._
-import org.thp.scalligraph.{InternalError, NotFoundError}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.query.PublicProperty
 import org.thp.scalligraph.services.RichElement
-import shapeless.HNil
+import org.thp.scalligraph.{InternalError, NotFoundError}
+import shapeless._
 
-final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])(implicit val graph: Graph)
+final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])
     extends Steps[T, T, HNil](raw)(SingleMapping[T, T]())
     with ScalliSteps[T, T, ScalarSteps[T]] {
 
@@ -29,6 +31,8 @@ final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])(implicit val graph: G
     super.toList()
   }
 
+  override def range(from: Long, to: Long): ScalarSteps[T] = new ScalarSteps(raw.range(from, to))
+
   override def head(): T = {
     logger.debug(s"Execution of $raw")
     super.head()
@@ -41,16 +45,16 @@ final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])(implicit val graph: G
 }
 
 object ScalarSteps {
-  def apply[T: ClassTag](raw: GremlinScala[T])(implicit graph: Graph): ScalarSteps[T] =
+  def apply[T: ClassTag](raw: GremlinScala[T]): ScalarSteps[T] =
     new ScalarSteps[T](raw)
 }
 
 trait ScalliSteps[EndDomain, EndGraph, ThisStep <: AnyRef] { _: ThisStep ⇒
-  def graph: Graph
   override def clone(): ThisStep = newInstance(raw.clone())
   def newInstance(raw: GremlinScala[EndGraph]): ThisStep
   val raw: GremlinScala[EndGraph]
   def toList(): Seq[EndDomain]
+  def range(from: Long, to: Long): ThisStep
   def head(): EndDomain
   def headOption(): Option[EndDomain]
 
@@ -59,12 +63,24 @@ trait ScalliSteps[EndDomain, EndGraph, ThisStep <: AnyRef] { _: ThisStep ⇒
   def sort(orderBys: OrderBy[_]*): ThisStep                        = newInstance(raw.order(orderBys: _*))
   def where(f: GremlinScala[EndGraph] ⇒ GremlinScala[_]): ThisStep = newInstance(raw.where(f))
   def map[NewEndDomain: ClassTag](f: EndDomain ⇒ NewEndDomain): ScalarSteps[NewEndDomain]
-  def get[A](authContext: Option[AuthContext], property: PublicProperty[_, A]): ScalarSteps[A] = {
+  def get[A](authContext: Option[AuthContext], property: PublicProperty[_, _, A]): ScalarSteps[A] = {
     val fn = property.get(authContext).asInstanceOf[Seq[GremlinScala[EndGraph] ⇒ GremlinScala[A]]]
     if (fn.size == 1)
-      ScalarSteps(fn.head.apply(raw))(ClassTag(property.mapping.graphTypeClass), graph)
+      ScalarSteps(fn.head.apply(raw))(ClassTag(property.mapping.graphTypeClass))
     else
-      ScalarSteps(raw.coalesce(fn: _*))(ClassTag(property.mapping.graphTypeClass), graph)
+      ScalarSteps(raw.coalesce(fn: _*))(ClassTag(property.mapping.graphTypeClass))
+  }
+  def groupBy[K, V](k: By[K], v: By[V]): ScalarSteps[JMap[K, JCollection[V]]] =
+    new ScalarSteps(raw.group(k, v))
+  def groupBy[K](k: GremlinScala[K]): ScalarSteps[JMap[K, JCollection[EndGraph]]] =
+    new ScalarSteps(raw.group(By(k)))
+  def fold: ScalarSteps[JList[EndGraph]]                                                           = new ScalarSteps(raw.fold)
+  def unfold[A: ClassTag]                                                                          = new ScalarSteps(raw.unfold[A]())
+  def project[T <: Product: ClassTag](builder: ProjectionBuilder[Nil.type] ⇒ ProjectionBuilder[T]) = new ScalarSteps(raw.project(builder))
+  def project[A](bys: By[_ <: A]*): ScalarSteps[JCollection[A]] = {
+    val labels    = bys.map(_ ⇒ UUID.randomUUID().toString)
+    val traversal = bys.foldLeft(raw.project[A](labels.head, labels.tail: _*))((t, b) ⇒ GremlinScala(b.apply(t.traversal)))
+    ScalarSteps(traversal.selectValues)
   }
 }
 
@@ -74,10 +90,6 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
     with ScalliSteps[E with Entity, EndGraph, ThisStep] { _: ThisStep ⇒
 
   lazy val logger = Logger(getClass)
-  override def toList(): List[E with Entity] = {
-    logger.debug(s"Execution of $raw")
-    super.toList()
-  }
 
   override def headOption(): Option[E with Entity] = {
     logger.debug(s"Execution of $raw")
@@ -98,6 +110,8 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
   }
 
 //  def filter(f: EntityFilter): ThisStep = newInstance(f(raw))
+
+  def range(from: Long, to: Long): ThisStep = newInstance(raw.range(from, to))
 
   def order(orderBys: List[OrderBy[_]]): ThisStep = newInstance(raw.order(orderBys: _*))
 

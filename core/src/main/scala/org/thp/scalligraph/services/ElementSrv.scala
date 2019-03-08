@@ -27,7 +27,7 @@ abstract class ElementSrv[E <: Product, S <: ElementSteps[E, _, _]](implicit db:
   def update(id: String, fields: Map[FPath, UpdateOps.Type])(implicit graph: Graph, authContext: AuthContext): Unit =
     db.update(graph, authContext, model, id, fields)
 
-  def update(id: String, properties: Seq[PublicProperty[_, _]], fields: Map[FPath, UpdateOps.Type])(
+  def update(id: String, properties: Seq[PublicProperty[_, _, _]], fields: Map[FPath, UpdateOps.Type])(
       implicit graph: Graph,
       authContext: AuthContext): Unit =
     db.update(graph, authContext, this, id, properties, fields)

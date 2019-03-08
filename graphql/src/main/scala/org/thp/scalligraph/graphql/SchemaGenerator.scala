@@ -29,7 +29,7 @@ object SchemaGenerator {
   val outputType: ru.Type = ru.typeOf[Output[_]]
 
   case class FieldFilter[V](
-      property: PublicProperty[Element, _],
+      property: PublicProperty[Element, _, _],
       fieldSuffix: String,
       inputType: InputType[V],
       filter: V ⇒ GremlinScala[_] ⇒ GremlinScala[_]) {
@@ -48,7 +48,7 @@ object SchemaGenerator {
     }
   }
 
-  def stringFilters(p: PublicProperty[Element, _]) =
+  def stringFilters(p: PublicProperty[Element, _, _]) =
     List(
       FieldFilter[String](p, "", StringType, value ⇒ _.is(P.eq[String](value))),
       FieldFilter[String](p, "_not", StringType, value ⇒ _.is(P.neq(value))),
@@ -65,7 +65,7 @@ object SchemaGenerator {
       FieldFilter[String](p, "_no_ends_with", StringType, value ⇒ _.is(InputFilter.stringEndsWith(value).negate))
     )
 
-  def intFilters(p: PublicProperty[Element, _]) =
+  def intFilters(p: PublicProperty[Element, _, _]) =
     List(
       FieldFilter[Int](p, "", IntType, value ⇒ _.is(P.eq[Int](value))),
       FieldFilter[Int](p, s"_not", IntType, value ⇒ _.is(P.neq(value))),
@@ -260,8 +260,8 @@ object SchemaGenerator {
     val fieldFilters: List[FieldFilter[_]] = executor.publicProperties
       .filter(_.stepType =:= tpe)
       .flatMap {
-        case prop if prop.mapping.domainTypeClass == classOf[String] ⇒ stringFilters(prop.asInstanceOf[PublicProperty[Element, _]])
-        case prop if prop.mapping.domainTypeClass == classOf[Int]    ⇒ intFilters(prop.asInstanceOf[PublicProperty[Element, _]])
+        case prop if prop.mapping.domainTypeClass == classOf[String] ⇒ stringFilters(prop.asInstanceOf[PublicProperty[Element, _, _]])
+        case prop if prop.mapping.domainTypeClass == classOf[Int]    ⇒ intFilters(prop.asInstanceOf[PublicProperty[Element, _, _]])
         case _                                                       ⇒ Nil
       }
     if (fieldFilters.isEmpty) None
@@ -322,7 +322,7 @@ object SchemaGenerator {
           }
       }
 
-  def getPropertyFields[B](property: PublicProperty[_, B])(
+  def getPropertyFields[B](property: PublicProperty[_, _, B])(
       implicit executor: QueryExecutor,
       objectCatalog: TypeCatalog[CacheFunction[Option[OutputType[_]]]]): CacheFunction[Option[Field[AuthGraph, Any]]] = {
     val t          = rm.classSymbol(property.mapping.domainTypeClass).toType // FIXME domainType or graphType ?

@@ -2,13 +2,15 @@ package org.thp.scalligraph.controllers
 
 import java.util.Date
 
+import scala.language.experimental.macros
+import scala.util.Try
+
+import play.api.libs.json.JsValue
+
 import org.scalactic.Accumulation._
 import org.scalactic._
 import org.thp.scalligraph.macros.FieldsParserMacro
-import org.thp.scalligraph.{AttributeError, FPath, InvalidFormatAttributeError, MissingAttributeError, UnknownAttributeError}
-
-import scala.language.experimental.macros
-import scala.util.Try
+import org.thp.scalligraph._
 
 abstract class BaseFieldsParser[+T] {
   bfp ⇒
@@ -91,7 +93,7 @@ class FieldsParser[T](val formatName: String, val acceptedInput: Seq[String], va
 
   def on(pathElement: String): FieldsParser[T] =
     new FieldsParser[T](formatName, acceptedInput.map(pathElement + "/" + _), {
-      case (path, field) ⇒ apply(path, field.get(pathElement))
+      case (path, field) ⇒ apply(path / pathElement, field.get(pathElement))
     })
 
   def andThen[U, R](nextFormatName: String)(fp: FieldsParser[U])(f: (U, T) ⇒ R): FieldsParser[R] =
@@ -111,6 +113,11 @@ class FieldsParser[T](val formatName: String, val acceptedInput: Seq[String], va
   def map[U](newFormatName: String)(f: T ⇒ U): FieldsParser[U] =
     new FieldsParser(newFormatName, acceptedInput, {
       case (path, fields) ⇒ apply(path, fields).map(f)
+    })
+
+  def flatMap[U](newFormatName: String)(fp: FieldsParser[U])(implicit ev: T <:< Field): FieldsParser[U] =
+    new FieldsParser(newFormatName, acceptedInput, {
+      case (path, fields) ⇒ apply(path, fields).flatMap(f ⇒ fp(ev(f)))
     })
 
   def sequence: FieldsParser[Seq[T]] =
@@ -173,41 +180,42 @@ object FieldsParser {
     }
   implicit val string: FieldsParser[String] = FieldsParser[String]("string") {
     case (_, FString(value)) ⇒ Good(value)
-    case (_, FAny(s :: Nil)) ⇒ Good(s)
+    case (_, FAny(Seq(s)))   ⇒ Good(s)
   }
   implicit val int: FieldsParser[Int] = FieldsParser[Int]("int")(unlift {
-    case (_, FNumber(n))     ⇒ Some(Good(n.toInt))
-    case (_, FAny(s :: Nil)) ⇒ Try(Good(s.toInt)).toOption
-    case _                   ⇒ None
+    case (_, FNumber(n))   ⇒ Some(Good(n.toInt))
+    case (_, FAny(Seq(s))) ⇒ Try(Good(s.toInt)).toOption
+    case _                 ⇒ None
   })
   implicit val long: FieldsParser[Long] = FieldsParser[Long]("long")(unlift {
-    case (_, FNumber(n))     ⇒ Some(Good(n.toLong))
-    case (_, FAny(s :: Nil)) ⇒ Try(Good(s.toLong)).toOption
-    case _                   ⇒ None
+    case (_, FNumber(n))   ⇒ Some(Good(n.toLong))
+    case (_, FAny(Seq(s))) ⇒ Try(Good(s.toLong)).toOption
+    case _                 ⇒ None
   })
   implicit val boolean: FieldsParser[Boolean] =
     FieldsParser[Boolean]("boolean")(unlift {
-      case (_, FBoolean(b))    ⇒ Some(Good(b))
-      case (_, FAny(s :: Nil)) ⇒ Try(Good(s.toBoolean)).toOption
-      case _                   ⇒ None
+      case (_, FBoolean(b))  ⇒ Some(Good(b))
+      case (_, FAny(Seq(s))) ⇒ Try(Good(s.toBoolean)).toOption
+      case _                 ⇒ None
     })
   implicit val date: FieldsParser[Date] = FieldsParser[Date]("date")(unlift {
-    case (_, FNumber(n))     ⇒ Some(Good(new Date(n)))
-    case (_, FAny(s :: Nil)) ⇒ Try(Good(new Date(s.toLong))).toOption
-    case _                   ⇒ None
+    case (_, FNumber(n))   ⇒ Some(Good(new Date(n)))
+    case (_, FAny(Seq(s))) ⇒ Try(Good(new Date(s.toLong))).toOption
+    case _                 ⇒ None
   })
-
   implicit val float: FieldsParser[Float] = FieldsParser[Float]("float")(unlift {
-    case (_, FNumber(n))     ⇒ Some(Good(n.toFloat))
-    case (_, FAny(s :: Nil)) ⇒ Try(Good(s.toFloat)).toOption
-    case _                   ⇒ None
+    case (_, FNumber(n))   ⇒ Some(Good(n.toFloat))
+    case (_, FAny(Seq(s))) ⇒ Try(Good(s.toFloat)).toOption
+    case _                 ⇒ None
   })
-
   implicit val double: FieldsParser[Double] = FieldsParser[Double]("float")(unlift {
-    case (_, FNumber(n))     ⇒ Some(Good(n.toDouble))
-    case (_, FAny(s :: Nil)) ⇒ Try(Good(s.toDouble)).toOption
-    case _                   ⇒ None
+    case (_, FNumber(n))   ⇒ Some(Good(n.toDouble))
+    case (_, FAny(Seq(s))) ⇒ Try(Good(s.toDouble)).toOption
+    case _                 ⇒ None
   })
+  implicit val json: FieldsParser[JsValue] = FieldsParser[JsValue]("json") {
+    case (_, _field) ⇒ Good(_field.toJson)
+  }
 }
 
 object UpdateOps {

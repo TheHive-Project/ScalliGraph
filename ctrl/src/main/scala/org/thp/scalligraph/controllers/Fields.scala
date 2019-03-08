@@ -6,13 +6,15 @@ import org.thp.scalligraph.{FPath, FPathElem, FPathElemInSeq, FPathEmpty, FPathS
 import play.api.Logger
 import play.api.libs.json._
 import play.api.mvc._
-
 import scala.collection.immutable
+
+import org.scalactic.Good
 
 sealed trait Field {
   def get(pathElement: String): Field = FUndefined
   def set(path: FPath, field: Field): Field =
     if (path.isEmpty) field else sys.error(s"$this.set($path, $field)")
+  def toJson: JsValue
 }
 
 object Field {
@@ -73,43 +75,76 @@ object Field {
   }
 
   implicit val fieldWrites: Writes[Field] = Writes[Field](field ⇒ JsString(field.toString))
+  implicit val parser: FieldsParser[Field] = FieldsParser[Field]("Field") {
+    case (_, field) ⇒ Good(field)
+  }
 }
 
-case class FString(value: String)   extends Field
-case class FNumber(value: Long)     extends Field
-case class FBoolean(value: Boolean) extends Field
+case class FString(value: String) extends Field {
+  override def toJson: JsValue = JsString(value)
+}
+object FString {
+  implicit val parser: FieldsParser[FString] = FieldsParser[FString]("FString") {
+    case (_, field: FString) ⇒ Good(field)
+  }
+}
+
+case class FNumber(value: Long) extends Field {
+  override def toJson: JsValue = JsNumber(value)
+}
+object FNumber {
+  implicit val parser: FieldsParser[FNumber] = FieldsParser[FNumber]("FNumber") {
+    case (_, field: FNumber) ⇒ Good(field)
+  }
+}
+
+case class FBoolean(value: Boolean) extends Field {
+  override def toJson: JsValue = JsBoolean(value)
+}
+
 case class FSeq(values: List[Field]) extends Field {
   override def set(path: FPath, field: Field): Field = path match {
     case FPathSeq(_, FPathEmpty) ⇒ FSeq(values :+ field)
     case FPathElemInSeq(_, index, tail) ⇒
-      FSeq(
-        values
-          .patch(
-            index,
-            Seq(
-              values
-                .applyOrElse(index, (_: Int) ⇒ FUndefined)
-                .set(tail, field)),
-            1))
+      FSeq(values.patch(index, Seq(values.applyOrElse(index, (_: Int) ⇒ FUndefined).set(tail, field)), 1))
   }
+
+  override def toJson: JsValue = JsArray(values.map(_.toJson))
 }
+
 object FSeq {
   def apply(value1: Field, values: Field*): FSeq = new FSeq(value1 :: values.toList)
   def apply()                                    = new FSeq(Nil)
+  implicit val parser: FieldsParser[FSeq] = FieldsParser[FSeq]("FSeq") {
+    case (_, field: FSeq) ⇒ Good(field)
+  }
 }
-case object FNull                                                       extends Field
-case object FUndefined                                                  extends Field
-case class FAny(value: Seq[String])                                     extends Field
-case class FFile(filename: String, filepath: Path, contentType: String) extends Field
+case object FNull extends Field {
+  override def toJson: JsValue = JsNull
+}
+
+case object FUndefined extends Field {
+  override def toJson: JsValue = JsNull
+}
+
+case class FAny(value: Seq[String]) extends Field {
+  override def toJson: JsValue = JsArray(value.map(JsString.apply))
+}
+
+case class FFile(filename: String, filepath: Path, contentType: String) extends Field {
+  override def toJson: JsValue = Json.obj("filename" → filename, "filepath" → filepath.toString, "contentType" → contentType)
+}
 
 object FObject {
   def empty                                   = new FObject(Map.empty)
   def apply(elems: (String, Field)*): FObject = new FObject(Map(elems: _*))
   def apply(map: Map[String, Field]): FObject = new FObject(map)
-  def apply(o: JsObject): FObject =
-    new FObject(o.value.mapValues(Field.apply).toMap)
+  def apply(o: JsObject): FObject             = new FObject(o.value.mapValues(Field.apply).toMap)
+  implicit val parser: FieldsParser[FObject] = FieldsParser[FObject]("FObject") {
+    case (_, field: FObject) ⇒ Good(field)
+  }
 }
-case class FObject(fields: immutable.Map[String, Field]) extends Field { // Map[String, Field] with immutable.MapLike[String, Field, FObject] with
+case class FObject(fields: immutable.Map[String, Field]) extends Field {
   def empty: FObject = FObject.empty
 
   def iterator: Iterator[(String, Field)] = fields.iterator
@@ -152,4 +187,6 @@ case class FObject(fields: immutable.Map[String, Field]) extends Field { // Map[
     case FString(s)     ⇒ s
     case FAny(s :: Nil) ⇒ s
   }
+
+  override def toJson: JsValue = JsObject(fields.mapValues(_.toJson))
 }

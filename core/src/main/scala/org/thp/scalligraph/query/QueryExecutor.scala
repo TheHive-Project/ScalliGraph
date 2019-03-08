@@ -10,13 +10,14 @@ import play.api.libs.json.{JsNull, Json, OWrites, Writes}
 import scala.reflect.runtime.{universe ⇒ ru}
 
 abstract class QueryExecutor { executor ⇒
-  val version: (Int, Int)                                     = 1 → 1
-  val publicProperties: List[PublicProperty[_ <: Element, _]] = Nil
-  val queries: Seq[ParamQuery[_]]                             = Nil
+  val version: (Int, Int)                                        = 1 → 1
+  val publicProperties: List[PublicProperty[_ <: Element, _, _]] = Nil
+  val queries: Seq[ParamQuery[_]]                                = Nil
 
-  final lazy val allQueries = queries :+ sortQuery :+ filterQuery :+ ToListQuery
+  final lazy val allQueries = queries :+ sortQuery :+ filterQuery :+ aggregationQuery :+ ToListQuery
   lazy val sortQuery        = new SortQuery(publicProperties)
   lazy val filterQuery      = new FilterQuery(publicProperties)
+  lazy val aggregationQuery = new AggregationQuery(publicProperties)
 
   def versionCheck(v: Int): Boolean = version._1 <= v && v <= version._2
 
@@ -35,14 +36,14 @@ abstract class QueryExecutor { executor ⇒
       case s: Seq[o] ⇒
         val subType = RichType.getTypeArgs(tpe, ru.typeOf[Seq[_]]).head
         val writes  = OWrites[Seq[o]](x ⇒ Json.obj("result" → x.map(toOutput(_, subType, authContext).toJson)))
-        new Output[Seq[o]](s)(writes)
+        Output.apply[Seq[o]](s)(writes)
       case s: Option[o] ⇒
         val subType = RichType.getTypeArgs(tpe, ru.typeOf[Option[_]]).head
         val writes = Writes[Option[o]] {
           case None    ⇒ JsNull
           case Some(x) ⇒ toOutput(x, subType, authContext).toJson
         }
-        new Output[None.type](None)(OWrites[None.type](_ ⇒ Json.obj("result" → JsNull)))
+        Output[None.type](None)(OWrites[None.type](_ ⇒ Json.obj("result" → JsNull))) // FIXME ??
       case o ⇒
         allQueries
           .find(q ⇒ q.checkFrom(tpe) && q.toType(tpe) <:< ru.typeOf[Output[_]] && q.paramType == ru.typeOf[Unit])
@@ -92,8 +93,8 @@ abstract class QueryExecutor { executor ⇒
 
   def ++(other: QueryExecutor): QueryExecutor = new QueryExecutor {
     override val version: (Int, Int) = math.max(executor.version._1, other.version._1) → math.min(executor.version._2, other.version._2)
-    override val publicProperties: List[PublicProperty[_ <: Element, _]] =
-      (executor.publicProperties :: other.publicProperties).asInstanceOf[List[PublicProperty[_ <: Element, _]]]
+    override val publicProperties: List[PublicProperty[_ <: Element, _, _]] =
+      (executor.publicProperties :: other.publicProperties).asInstanceOf[List[PublicProperty[_ <: Element, _, _]]]
     override val queries: Seq[ParamQuery[_]] = executor.queries ++ other.queries
   }
 }

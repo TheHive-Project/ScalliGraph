@@ -4,8 +4,7 @@ import gremlin.scala.{Element, Key, P, Vertex}
 import org.thp.scalligraph.controllers.FieldsParser
 import org.thp.scalligraph.query._
 import org.thp.scalligraph.Output
-import play.api.libs.json.{Json, OWrites}
-
+import play.api.libs.json.{Json, OWrites, Writes}
 import scala.language.implicitConversions
 
 case class OutputPerson(createdBy: String, label: String, name: String, age: Int)
@@ -20,9 +19,9 @@ object OutputSoftware {
 
 object ModernOutputs {
   implicit def toOutputPerson(person: Person with Entity): Output[OutputPerson] =
-    new Output(new OutputPerson(person._createdBy, s"Mister ${person.name}", person.name, person.age))
+    Output(new OutputPerson(person._createdBy, s"Mister ${person.name}", person.name, person.age))
   implicit def toOutputSoftware(software: Software with Entity): Output[OutputSoftware] =
-    new Output(new OutputSoftware(software._createdBy, software.name, software.lang))
+    Output(new OutputSoftware(software._createdBy, software.name, software.lang))
 }
 
 case class SeniorAgeThreshold(age: Int)
@@ -33,7 +32,7 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
   val personSrv   = new PersonSrv
   val softwareSrv = new SoftwareSrv
 
-  override val publicProperties: List[PublicProperty[_ <: Element, _]] = {
+  override val publicProperties: List[PublicProperty[_ <: Element, _, _]] = {
     val labelMapping = SingleMapping[String, String](
       toGraphOptFn = {
         case d if d startsWith "Mister " ⇒ Some(d.drop(7))
@@ -44,7 +43,7 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
     // format: off
     PublicPropertyListBuilder[PersonSteps, Vertex]
       .property[String]("createdBy").rename("_createdBy")
-      .property[String]("label")(labelMapping).rename("name")
+      .property[String]("label")(implicitly[Writes[String]], labelMapping).rename("name")
       .property[String]("name").simple
       .property[Int]("age").simple
       .build :::

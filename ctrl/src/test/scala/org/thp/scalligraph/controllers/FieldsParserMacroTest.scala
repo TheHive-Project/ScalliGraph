@@ -98,6 +98,20 @@ class FieldsParserMacroTest extends Specification with TestUtils {
       fieldsParser(fields) must_=== Good("stringValue")
     }
 
+    "parse an optional value from undefined field" in {
+      val fieldsParser = FieldsParser.string.optional
+      val fields       = FUndefined
+
+      fieldsParser(fields) must_=== Good(None)
+    }
+
+    "parse an optional value from object" in {
+      val fieldsParser = FieldsParser.string.optional.on("nonExistent")
+      val fields       = FObject("name" → FString("toom"))
+
+      fieldsParser(fields) must_=== Good(None)
+    }
+
     "parse a sequence of string" in {
       val fieldsParser = FieldsParser.string.sequence
       val fields       = FSeq(FString("value1"), FString("value2"), FString("value3"))

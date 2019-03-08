@@ -2,69 +2,19 @@ package org.thp.scalligraph.query
 
 import scala.reflect.runtime.{universe ⇒ ru}
 
-import gremlin.scala.{__, Element, GremlinScala, OrderBy, P}
-import org.apache.tinkerpop.gremlin.process.traversal.Order
-import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
+import play.api.Logger
+
+import gremlin.scala.{Element, GremlinScala, P}
 import org.scalactic.Accumulation._
 import org.scalactic.{Bad, Good, One}
+import org.thp.scalligraph.InvalidFormatAttributeError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.ScalliSteps
-import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError}
-
-trait InputQuery {
-  def apply[S <: ScalliSteps[_, _, _]](
-      publicProperties: List[PublicProperty[_ <: Element, _]],
-      stepType: ru.Type,
-      step: S,
-      authContext: Option[AuthContext]): S
-
-  def getProperty(properties: Seq[PublicProperty[_, _]], stepType: ru.Type, fieldName: String): PublicProperty[_, _] =
-    properties
-      .find(p ⇒ stepType =:= stepType && p.propertyName == fieldName)
-      .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))
-}
-
-case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
-  def orderby[A, F, T](f: GremlinScala[F] ⇒ GremlinScala[T], order: Order): OrderBy[A] = new OrderBy[A] {
-    override def apply[End](traversal: GraphTraversal[_, End]): GraphTraversal[_, End] =
-      traversal.by(f(__[F]).traversal, order)
-  }
-  override def apply[S <: ScalliSteps[_, _, _]](
-      publicProperties: List[PublicProperty[_ <: Element, _]],
-      stepType: ru.Type,
-      step: S,
-      authContext: Option[AuthContext]): S = {
-    val orderBys = fieldOrder.flatMap {
-      case (fieldName, order) ⇒
-        getProperty(publicProperties, stepType, fieldName)
-          .get(authContext)
-          .map(f ⇒ orderby(f, order))
-    }
-    step
-      .asInstanceOf[ScalliSteps[_, _, S]]
-      .sort(orderBys: _*)
-  }
-}
-
-object InputSort {
-  implicit val fieldsParser: FieldsParser[InputSort] = FieldsParser("sort") {
-    case (_, FSeq(fields)) ⇒
-      fields
-        .validatedBy(fieldsParser.apply)
-        .map(x ⇒ new InputSort(x.flatMap(_.fieldOrder): _*))
-    case (_, FObjOne(name, FString(order))) ⇒
-      try Good(new InputSort(name → Order.valueOf(order)))
-      catch {
-        case _: IllegalArgumentException ⇒
-          Bad(One(InvalidFormatAttributeError("order", "order", Seq("field: 'incr", "field: 'decr", "field: 'shuffle"), FString(order))))
-      }
-  }
-}
 
 trait InputFilter extends InputQuery {
   def apply[S <: ScalliSteps[_, _, _]](
-      publicProperties: List[PublicProperty[_ <: Element, _]],
+      publicProperties: List[PublicProperty[_ <: Element, _, _]],
       stepType: ru.Type,
       step: S,
       authContext: Option[AuthContext]): S
@@ -72,7 +22,7 @@ trait InputFilter extends InputQuery {
 
 case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilter {
   override def apply[S <: ScalliSteps[_, _, _]](
-      publicProperties: List[PublicProperty[_ <: Element, _]],
+      publicProperties: List[PublicProperty[_ <: Element, _, _]],
       stepType: ru.Type,
       step: S,
       authContext: Option[AuthContext]): S = {
@@ -88,39 +38,44 @@ case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilt
 
 case class OrFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
   override def apply[S <: ScalliSteps[_, _, _]](
-      publicProperties: List[PublicProperty[_ <: Element, _]],
+      publicProperties: List[PublicProperty[_ <: Element, _, _]],
       stepType: ru.Type,
       step: S,
       authContext: Option[AuthContext]): S =
     step match {
       case s: ScalliSteps[_, gt, S] ⇒
-        val filters = inputFilters.map { ff ⇒ (g: GremlinScala[gt]) ⇒
-          ff[S](publicProperties, stepType, s.newInstance(g), authContext).raw
+        inputFilters.map { ff ⇒ (g: GremlinScala[gt]) ⇒
+          ff[S](publicProperties, stepType, s.newInstance(g), authContext).raw //.asInstanceOf[S]
+        } match {
+          case Seq()       ⇒ s.where(_.is(null)) // TODO need checks
+          case Seq(f)      ⇒ s.where(f)
+          case Seq(f @ _*) ⇒ s.asInstanceOf[ScalliSteps[_, gt, S]].where(_.or(f: _*))
         }
-        s.asInstanceOf[ScalliSteps[_, gt, S]]
-          .where(_.or(filters: _*))
     }
 }
 
 case class AndFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
   override def apply[S <: ScalliSteps[_, _, _]](
-      publicProperties: List[PublicProperty[_ <: Element, _]],
+      publicProperties: List[PublicProperty[_ <: Element, _, _]],
       stepType: ru.Type,
       step: S,
       authContext: Option[AuthContext]): S =
     step match {
       case s: ScalliSteps[_, gt, S] ⇒
-        val filters = inputFilters.map { ff ⇒ (g: GremlinScala[gt]) ⇒
+        inputFilters.map { ff ⇒ (g: GremlinScala[gt]) ⇒
           ff[S](publicProperties, stepType, s.newInstance(g), authContext).raw
+        } match {
+          case Seq()       ⇒ step
+          case Seq(f)      ⇒ s.where(f)
+          case Seq(f @ _*) ⇒ s.asInstanceOf[ScalliSteps[_, gt, S]].where(_.and(f: _*))
+
         }
-        s.asInstanceOf[ScalliSteps[_, gt, S]]
-          .where(_.and(filters: _*))
     }
 }
 
 case class NotFilter(inputFilter: InputFilter) extends InputFilter {
   override def apply[S <: ScalliSteps[_, _, _]](
-      publicProperties: List[PublicProperty[_ <: Element, _]],
+      publicProperties: List[PublicProperty[_ <: Element, _, _]],
       stepType: ru.Type,
       step: S,
       authContext: Option[AuthContext]): S =
@@ -132,7 +87,17 @@ case class NotFilter(inputFilter: InputFilter) extends InputFilter {
     }
 }
 
+object YesFilter extends InputFilter {
+  override def apply[S <: ScalliSteps[_, _, _]](
+      publicProperties: List[PublicProperty[_ <: Element, _, _]],
+      stepType: ru.Type,
+      step: S,
+      authContext: Option[AuthContext]): S = step
+}
+
 object InputFilter {
+  lazy val logger = Logger(getClass)
+
   def stringContains(value: String): P[String]   = P.fromPredicate[String]((v, r) ⇒ v contains r, value)
   def stringStartsWith(value: String): P[String] = P.fromPredicate[String]((v, r) ⇒ v startsWith r, value)
   def stringEndsWith(value: String): P[String]   = P.fromPredicate[String]((v, r) ⇒ v endsWith r, value)
@@ -152,12 +117,14 @@ object InputFilter {
   def or(filters: Seq[InputFilter]): OrFilter                     = OrFilter(filters)
   def and(filters: Seq[InputFilter]): AndFilter                   = AndFilter(filters)
   def not(filter: InputFilter): NotFilter                         = NotFilter(filter)
+  def yes: YesFilter.type                                         = YesFilter
+//  def in(field: String, values: Seq[Any]) = OrFilter(values.map(v ⇒ PredicateFilter(field, P.is(v))))
 
   implicit val fieldsParser: FieldsParser[InputFilter] = FieldsParser("query") {
-    case (_, FObjOne("_and", FSeq(fields)))                        ⇒ fields.validatedBy(field ⇒ fieldsParser(field)).map(and)
-    case (_, FObjOne("_or", FSeq(fields)))                         ⇒ fields.validatedBy(field ⇒ fieldsParser(field)).map(or)
-    case (_, FObjOne("_not", field))                               ⇒ fieldsParser(field).map(not)
-    case (_, FObjOne("_any", _))                                   ⇒ Good(and(Nil))
+    case (path, FObjOne("_and", FSeq(fields)))                     ⇒ fields.validatedBy(field ⇒ fieldsParser((path / "_and").toSeq, field)).map(and)
+    case (path, FObjOne("_or", FSeq(fields)))                      ⇒ fields.validatedBy(field ⇒ fieldsParser((path / "_or").toSeq, field)).map(or)
+    case (path, FObjOne("_not", field))                            ⇒ fieldsParser(path / "_not", field).map(not)
+    case (_, FObjOne("_any", _))                                   ⇒ Good(yes)
     case (_, FObjOne("_lt", FObjOne(key, FNative(value))))         ⇒ Good(lt(key, value))
     case (_, FObjOne("_gt", FObjOne(key, FNative(value))))         ⇒ Good(gt(key, value))
     case (_, FObjOne("_lte", FObjOne(key, FNative(value))))        ⇒ Good(lte(key, value))
@@ -166,5 +133,21 @@ object InputFilter {
     case (_, FObjOne("_contains", FObjOne(key, FString(value))))   ⇒ Good(contains(key, value))
     case (_, FObjOne("_startsWith", FObjOne(key, FString(value)))) ⇒ Good(startsWith(key, value))
     case (_, FObjOne("_endsWith", FObjOne(key, FString(value))))   ⇒ Good(endsWith(key, value))
+    case (_, FObjOne("_string", _)) ⇒
+      logger.warn("string filter is not supported, it is ignored")
+      Good(yes)
+    case (_, FObjOne("_in", o: FObject)) ⇒
+      val field = FString.parser(o.get("_field")).map(_.value)
+      val values = FSeq.parser(o.get("_values")).flatMap { s ⇒
+        s.values.validatedBy {
+          case FNative(value) ⇒ Good(value)
+          case other          ⇒ Bad(One(InvalidFormatAttributeError("_in._values", "native value", Seq("string", "number", "boolean"), other)))
+        }
+      }
+      withGood(field, values)(in(_, _: _*))
+    case (_, FObjOne(key, FNative(value))) ⇒
+      logger.warn(s"""Use of filter {"$key": "$value"} is deprecated. Please use {"_is":{"$key":"$value"}}""")
+      Good(is(key, value))
+    case (_, FObject(kv)) if kv.isEmpty ⇒ Good(yes)
   }
 }
