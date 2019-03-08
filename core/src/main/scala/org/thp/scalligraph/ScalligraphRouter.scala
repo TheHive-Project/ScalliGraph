@@ -1,4 +1,5 @@
 package org.thp.scalligraph
+
 import com.google.inject.Provider
 import javax.inject.Inject
 import org.thp.scalligraph.controllers.ApiMethod
@@ -9,7 +10,6 @@ import play.api.mvc.Results
 import play.api.routing.Router.Routes
 import play.api.routing.{Router, SimpleRouter}
 import play.api.routing.sird._
-
 import scala.collection.immutable
 
 class ScalligraphRouter @Inject()(

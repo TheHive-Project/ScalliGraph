@@ -1,26 +1,34 @@
 package org.thp.scalligraph
 
 import scala.reflect.ClassTag
-
-import play.api.Application
+import play.api.{Application, Configuration}
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.libs.concurrent.Akka
-
 import akka.actor.{Actor, ActorRef, Props}
 import com.google.inject.name.Names
 import com.google.inject.util.Providers
+import com.typesafe.config.ConfigFactory
 import javax.inject.Provider
 import net.codingwell.scalaguice.ScalaModule
 
 class AppBuilder extends ScalaModule {
 
-  private var initialized             = false
-  private var init: Function[Unit, _] = identity[Unit]
+  private var initialized                  = false
+  private var init: Function[Unit, _]      = identity[Unit]
+  private var configuration: Configuration = Configuration.empty
 
   override def configure(): Unit = {
     init(())
     ()
   }
+
+  def addConfiguration(config: Configuration): AppBuilder = {
+    configuration = configuration ++ config
+    this
+  }
+
+  def addConfiguration(config: String): AppBuilder =
+    addConfiguration(Configuration(ConfigFactory.parseString(config)))
 
   def bind[T: Manifest, TImpl <: T: Manifest]: AppBuilder = {
     if (initialized) throw InternalError("Bind is not permitted after app use")
@@ -59,7 +67,7 @@ class AppBuilder extends ScalaModule {
 
   lazy val app: Application = {
     initialized = true
-    GuiceApplicationBuilder(modules = Seq(this)).build()
+    GuiceApplicationBuilder(modules = Seq(this), configuration = configuration).build()
   }
 
   def instanceOf[T: ClassTag]: T = app.injector.instanceOf[T]

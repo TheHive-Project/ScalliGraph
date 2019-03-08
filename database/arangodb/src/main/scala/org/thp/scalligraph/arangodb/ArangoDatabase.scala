@@ -6,7 +6,7 @@ import play.api.Configuration
 import com.arangodb.tinkerpop.gremlin.structure.ArangoDBGraph
 import com.typesafe.config.ConfigFactory
 import gremlin.scala.Graph
-import javax.inject.{Inject, Singleton}
+import javax.inject.{ Inject, Singleton }
 import org.thp.scalligraph.Config
 import org.thp.scalligraph.models._
 

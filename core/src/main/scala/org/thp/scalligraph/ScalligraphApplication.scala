@@ -8,8 +8,7 @@ import javax.inject.Inject
 import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
 import play.api.inject.guice._
 import play.api.routing.Router
-import play.api.{ApplicationLoader, Configuration, Environment}
-
+import play.api.{ApplicationLoader, Configuration, Environment, Logger}
 import scala.collection.JavaConverters._
 
 class ScalligraphGuiceableModule(modules: Seq[GuiceableModule]) extends GuiceableModule {
@@ -58,13 +57,16 @@ class ScalligraphGuiceableModule(modules: Seq[GuiceableModule]) extends Guiceabl
 object ScalligraphApplicationLoader {
   def loadModules(origLoadModules: (Environment, Configuration) ⇒ Seq[GuiceableModule]): (Environment, Configuration) ⇒ Seq[GuiceableModule] = {
     (env, conf) ⇒
-      Seq(new ScalligraphGuiceableModule(origLoadModules(env, conf)))
+      Seq(new ScalligraphGuiceableModule(origLoadModules(env, conf) :+ GuiceableModule.guiceable(new ScalligraphModule)))
   }
 }
 
 class ScalligraphApplicationLoader extends GuiceApplicationLoader {
 
   import ScalligraphApplicationLoader._
+
+  lazy val logger = Logger("ScalligraphApplication")
+  logger.info("Loading application ...")
 
   override protected def builder(context: ApplicationLoader.Context): GuiceApplicationBuilder = {
     val builder = initialBuilder
@@ -78,6 +80,7 @@ class ScalligraphApplicationLoader extends GuiceApplicationLoader {
 
 class ScalligraphModule extends ScalaModule {
   override def configure(): Unit = {
+    Logger(getClass).info("Loading scalligraph module")
     bind[Router].toProvider[ScalligraphRouter]
     ()
   }

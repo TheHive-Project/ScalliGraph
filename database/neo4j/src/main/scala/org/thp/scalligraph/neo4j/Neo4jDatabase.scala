@@ -5,7 +5,9 @@ import java.util.Date
 
 import scala.reflect.ClassTag
 import scala.util.Try
+
 import play.api.Configuration
+
 import gremlin.scala._
 import javax.inject.Singleton
 import org.apache.tinkerpop.gremlin.neo4j.structure.Neo4jGraph
@@ -40,7 +42,7 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
   def this(configuration: Configuration) =
     this(
       Neo4jGraph.open(new Config(Neo4jDatabase.defaultConfiguration ++ configuration)),
-      configuration.getOptional[Int]("database.maxRetryOnConflict").getOrElse(5)
+      configuration.get[Int]("database.maxRetryOnConflict")
     )
 
   def this() = this(Configuration.empty)

@@ -77,10 +77,10 @@ object DatabaseBuilder {
   def build(schema: ModernSchema)(implicit db: Database, authContext: AuthContext): Unit = {
     db.createSchemaFrom(schema)
     db.transaction { implicit graph ⇒
-      val vadas  = schema.personSrv.create(Person("vadas", 17))
+      val vadas  = schema.personSrv.create(Person("vadas", 27))
       val marko  = schema.personSrv.create(Person("marko", 29))
       val josh   = schema.personSrv.create(Person("josh", 32))
-      val peter  = schema.personSrv.create(Person("peter", 25))
+      val peter  = schema.personSrv.create(Person("peter", 35))
       val lop    = schema.softwareSrv.create(Software("lop", "java"))
       val ripple = schema.softwareSrv.create(Software("ripple", "java"))
       schema.knowsSrv.create(Knows(0.5), marko, vadas)
