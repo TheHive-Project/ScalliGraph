@@ -16,6 +16,9 @@ import shapeless.labelled.FieldType
 import shapeless.{::, labelled, HList, HNil, Witness}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.higherKinds
+import scala.util.{Failure, Success}
+
+import org.slf4j.MDC
 
 /**
   * API entry point. This class create a controller action which parse request and check authentication
@@ -77,15 +80,16 @@ class ApiMethod @Inject()(
       EntryPoint[V, AuthenticatedRequest](
         name,
         fieldsParser,
-        request ⇒ {
-          authenticated.getContext(request).map { authContext ⇒
-            logger.trace(s"check user permissions of ${authContext.userName} with permissions (${authContext.permissions
-              .mkString(",")}), required: ${requiredPermissions.mkString(",")}")
-            if ((requiredPermissions.toSet -- authContext.permissions).isEmpty)
-              new AuthenticatedRequest[AnyContent](authContext, request)
-            else
-              throw AuthorizationError("You are not authorized")
-          }
+        request ⇒
+          Future.fromTry {
+            authenticated.getContext(request).flatMap { authContext ⇒
+              logger.trace(s"check user permissions of ${authContext.userName} with permissions (${authContext.permissions
+                .mkString(",")}), required: ${requiredPermissions.mkString(",")}")
+              if ((requiredPermissions.toSet -- authContext.permissions).isEmpty)
+                Success(new AuthenticatedRequest[AnyContent](authContext, request))
+              else
+                Failure(AuthorizationError("You are not authorized"))
+            }
         }
       )
 
@@ -114,6 +118,7 @@ class ApiMethod @Inject()(
       }
 
       actionBuilder.async { request: Request[AnyContent] ⇒
+        MDC.put("request", f"${request.id}%08x")
         fieldsParser(Field(request)) match {
           case Good(values) ⇒
             req(request).map { r ⇒
@@ -127,6 +132,7 @@ class ApiMethod @Inject()(
 
     def iterator[T: Writes](block: R[Record[V]] ⇒ Iterator[T]): Action[AnyContent] =
       actionBuilder.async { request: Request[AnyContent] ⇒
+        MDC.put("request", f"${request.id}%08x")
         fieldsParser(Field(request)) match {
           case Good(values) ⇒
             req(request).map { r ⇒
@@ -146,6 +152,7 @@ class ApiMethod @Inject()(
 
     def iteratorWithTotal[T: Writes](block: R[Record[V]] ⇒ (Int, Iterator[T])): Action[AnyContent] =
       actionBuilder.async { request: Request[AnyContent] ⇒
+        MDC.put("request", f"${request.id}%08x")
         fieldsParser(Field(request)) match {
           case Good(values) ⇒
             req(request)
@@ -176,6 +183,7 @@ class ApiMethod @Inject()(
       */
     def async(block: R[Record[V]] ⇒ Future[Result]): Action[AnyContent] =
       actionBuilder.async { request: Request[AnyContent] ⇒
+        MDC.put("request", f"${request.id}%08x") // FIXME Future uses other thread
         fieldsParser(Field(request)) match {
           case Good(values) ⇒
             req(request).flatMap { r ⇒

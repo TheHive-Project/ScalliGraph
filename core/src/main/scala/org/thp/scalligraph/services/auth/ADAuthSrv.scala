@@ -3,16 +3,16 @@ package org.thp.scalligraph.services.auth
 import java.net.ConnectException
 import java.util
 
+import scala.util.{Failure, Success, Try}
+
+import play.api.mvc.RequestHeader
+import play.api.{Configuration, Logger}
+
 import javax.inject.{Inject, Singleton}
 import javax.naming.Context
 import javax.naming.directory._
 import org.thp.scalligraph.auth._
 import org.thp.scalligraph.{AuthenticationError, AuthorizationError}
-import play.api.mvc.RequestHeader
-import play.api.{Configuration, Logger}
-
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success, Try}
 
 case class ADConnection(domainFQDN: String, domainName: String, serverNames: Seq[String], useSSL: Boolean) {
 
@@ -83,7 +83,7 @@ object ADConnection {
       domainFQDN ← configuration.getOptional[String]("auth.ad.domainFQDN")
       domainName ← configuration.getOptional[String]("auth.ad.domainName")
       serverNames = configuration.getOptional[Seq[String]]("auth.ad.serverNames").getOrElse(Seq(domainFQDN))
-      useSSL      = configuration.getOptional[Boolean]("auth.ad.useSSL").getOrElse(false)
+      useSSL      = configuration.get[Boolean]("auth.ad.useSSL")
     } yield ADConnection(domainFQDN, domainName, serverNames, useSSL))
       .getOrElse(ADConnection("", "", Nil, useSSL = false))
 }
@@ -97,25 +97,23 @@ class ADAuthSrv(adConnection: ADConnection, userSrv: UserSrv) extends AuthSrv {
   val name: String                                     = "ad"
   override val capabilities: Set[AuthCapability.Value] = Set(AuthCapability.changePassword)
 
-  override def authenticate(username: String, password: String)(implicit request: RequestHeader, ec: ExecutionContext): Future[AuthContext] =
+  override def authenticate(username: String, password: String)(implicit request: RequestHeader): Try[AuthContext] =
     (for {
-      _           ← Future.fromTry(adConnection.authenticate(username, password))
+      _           ← adConnection.authenticate(username, password)
       authContext ← userSrv.getFromId(request, username)
     } yield authContext)
       .recoverWith {
         case t ⇒
           logger.error("AD authentication failure", t)
-          Future.failed(AuthenticationError("Authentication failure"))
+          Failure(AuthenticationError("Authentication failure"))
       }
 
-  override def changePassword(username: String, oldPassword: String, newPassword: String)(
-      implicit authContext: AuthContext,
-      ec: ExecutionContext): Future[Unit] =
-    Future
-      .fromTry(adConnection.changePassword(username, oldPassword, newPassword))
+  override def changePassword(username: String, oldPassword: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] =
+    adConnection
+      .changePassword(username, oldPassword, newPassword)
       .recoverWith {
         case t ⇒
           logger.error("AD change password failure", t)
-          Future.failed(AuthorizationError("Change password failure"))
+          Failure(AuthorizationError("Change password failure"))
       }
 }

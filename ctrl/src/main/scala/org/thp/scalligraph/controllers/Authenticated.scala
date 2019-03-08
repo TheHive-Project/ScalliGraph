@@ -1,20 +1,20 @@
 package org.thp.scalligraph.controllers
 
 import java.io.ByteArrayInputStream
-import java.util.Date
+
+import scala.collection.JavaConverters._
+import scala.concurrent.duration.{DurationLong, FiniteDuration}
+import scala.util.{Failure, Success, Try}
+
+import play.api.http.HeaderNames
+import play.api.mvc._
+import play.api.{Configuration, Logger}
 
 import javax.inject.{Inject, Singleton}
 import javax.naming.ldap.LdapName
 import org.bouncycastle.asn1._
-import org.thp.scalligraph.auth.{AuthContext, MultiAuthSrv, Permission, UserSrv}
+import org.thp.scalligraph.auth._
 import org.thp.scalligraph.{AuthenticationError, Instance}
-import play.api.http.HeaderNames
-import play.api.mvc._
-import play.api.{Configuration, Logger}
-import scala.collection.JavaConverters._
-import scala.concurrent.duration.{DurationLong, FiniteDuration}
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Try
 
 /**
   * A request with authentication information
@@ -63,35 +63,28 @@ class Authenticated(
     authByInitialUser: Boolean,
     authByPki: Boolean,
     userSrv: UserSrv,
-    authSrv: MultiAuthSrv,
-    defaultParser: BodyParsers.Default,
-    implicit val ec: ExecutionContext) {
+    authSrv: AuthSrv,
+    defaultParser: BodyParsers.Default) {
 
-  @Inject() def this(
-      configuration: Configuration,
-      userSrv: UserSrv,
-      authSrv: MultiAuthSrv,
-      defaultParser: BodyParsers.Default,
-      ec: ExecutionContext) =
+  @Inject() def this(configuration: Configuration, userSrv: UserSrv, authSrv: AuthSrv, defaultParser: BodyParsers.Default) =
     this(
       configuration.getMillis("session.inactivity").millis,
       configuration.getMillis("session.warning").millis,
-      configuration.getOptional[String]("session.username").getOrElse("username"),
+      configuration.get[String]("session.username"),
       configuration.getOptional[String]("auth.pki.certificateField"),
-      configuration.getOptional[Boolean]("auth.method.session").getOrElse(true),
-      configuration.getOptional[Boolean]("auth.method.key").getOrElse(true),
-      configuration.getOptional[Boolean]("auth.method.basic").getOrElse(true),
-      configuration.getOptional[Boolean]("auth.method.init").getOrElse(true),
-      configuration.getOptional[Boolean]("auth.method.pki").getOrElse(true),
+      configuration.get[Boolean]("auth.method.session"),
+      configuration.get[Boolean]("auth.method.key"),
+      configuration.get[Boolean]("auth.method.basic"),
+      configuration.get[Boolean]("auth.method.init"),
+      configuration.get[Boolean]("auth.method.pki"),
       userSrv,
       authSrv,
-      defaultParser,
-      ec
+      defaultParser
     )
 
   lazy val logger = Logger(getClass)
 
-  private def now = (new Date).getTime
+  private def now = System.currentTimeMillis()
 
   /**
     * Insert or update session cookie containing user name and session expiration timestamp
@@ -103,16 +96,13 @@ class Authenticated(
   /**
     * Retrieve authentication information form cookie
     */
-  def getFromSession(request: RequestHeader): Future[AuthContext] = {
-    val userId = for {
-      userId ← request.session.get(sessionUsername).toRight(AuthenticationError("User session not found"))
-      _ = if (expirationStatus(request) != ExpirationStatus.Error) Right(()) else Left(AuthenticationError("User session has expired"))
-    } yield userId
-    userId match {
-      case Right(uid)      ⇒ userSrv.getFromId(request, uid)
-      case Left(authError) ⇒ Future.failed[AuthContext](authError)
-    }
-  }
+  def getFromSession(request: RequestHeader): Try[AuthContext] =
+    request.session
+      .get(sessionUsername)
+      .fold[Try[AuthContext]](Failure(AuthenticationError("User session not found"))) {
+        case uid if expirationStatus(request) != ExpirationStatus.Error ⇒ userSrv.getFromId(request, uid)
+        case _                                                          ⇒ Failure(AuthenticationError("User session has expired"))
+      }
 
   def expirationStatus(request: RequestHeader): ExpirationStatus.Type =
     request.session
@@ -134,27 +124,27 @@ class Authenticated(
   /**
     * Retrieve authentication information from API key
     */
-  def getFromApiKey(request: RequestHeader): Future[AuthContext] =
+  def getFromApiKey(request: RequestHeader): Try[AuthContext] =
     for {
       auth ← request.headers
         .get(HeaderNames.AUTHORIZATION)
-        .fold(Future.failed[String](AuthenticationError("Authentication header not found")))(Future.successful)
-      _ ← if (!auth.startsWith("Bearer ")) Future.failed(AuthenticationError("Only bearer authentication is supported")) else Future.successful(())
+        .fold[Try[String]](Failure(AuthenticationError("Authentication header not found")))(Success.apply)
+      _ ← if (!auth.startsWith("Bearer ")) Failure(AuthenticationError("Only bearer authentication is supported")) else Success(())
       key = auth.substring(7)
-      authContext ← authSrv.authenticate(key)(request, ec)
+      authContext ← authSrv.authenticate(key)(request)
     } yield authContext
 
-  def getFromBasicAuth(request: RequestHeader): Future[AuthContext] =
+  def getFromBasicAuth(request: RequestHeader): Try[AuthContext] =
     for {
       auth ← request.headers
         .get(HeaderNames.AUTHORIZATION)
-        .fold(Future.failed[String](AuthenticationError("Authentication header not found")))(Future.successful)
-      _ ← if (!auth.startsWith("Basic ")) Future.failed(AuthenticationError("Only basic authentication is supported")) else Future.successful(())
+        .fold[Try[String]](Failure(AuthenticationError("Authentication header not found")))(Success.apply)
+      _ ← if (!auth.startsWith("Basic ")) Failure(AuthenticationError("Only basic authentication is supported")) else Success(())
       authWithoutBasic = auth.substring(6)
       decodedAuth      = new String(java.util.Base64.getDecoder.decode(authWithoutBasic), "UTF-8")
       authContext ← decodedAuth.split(":") match {
-        case Array(username, password) ⇒ authSrv.authenticate(username, password)(request, ec)
-        case _                         ⇒ Future.failed(AuthenticationError("Can't decode authentication header"))
+        case Array(username, password) ⇒ authSrv.authenticate(username, password)(request)
+        case _                         ⇒ Failure(AuthenticationError("Can't decode authentication header"))
       }
     } yield authContext
 
@@ -197,9 +187,9 @@ class Authenticated(
     }
   }
 
-  def getFromClientCertificate(request: RequestHeader): Future[AuthContext] =
+  def getFromClientCertificate(request: RequestHeader): Try[AuthContext] =
     certificateField
-      .fold[Future[AuthContext]](Future.failed(AuthenticationError("Certificate authentication is not configured"))) { cf ⇒
+      .fold[Try[AuthContext]](Failure(AuthenticationError("Certificate authentication is not configured"))) { cf ⇒
         request.clientCertificateChain
           .flatMap(_.headOption)
           .flatMap { cert ⇒
@@ -218,22 +208,22 @@ class Authenticated(
                 } yield fieldValue
               }
           }
-          .getOrElse(Future.failed(AuthenticationError("Certificate doesn't contain user information")))
+          .getOrElse(Failure(AuthenticationError("Certificate doesn't contain user information")))
       }
 
-  val authenticationMethods: Seq[(String, RequestHeader ⇒ Future[AuthContext])] =
+  val authenticationMethods: Seq[(String, RequestHeader ⇒ Try[AuthContext])] =
     (if (authBySessionCookie) Seq("session" → getFromSession _) else Nil) ++
       (if (authByPki) Seq("pki"             → getFromClientCertificate _) else Nil) ++
       (if (authByKey) Seq("key"             → getFromApiKey _) else Nil) ++
       (if (authByBasicAuth) Seq("basic"     → getFromBasicAuth _) else Nil) ++
       (if (authByInitialUser) Seq("init"    → userSrv.getInitialUser _) else Nil)
 
-  def getContext(request: RequestHeader): Future[AuthContext] =
+  def getContext(request: RequestHeader): Try[AuthContext] =
     authenticationMethods
-      .foldLeft[Future[Either[Seq[(String, Throwable)], AuthContext]]](Future.successful(Left(Nil))) {
+      .foldLeft[Try[Either[Seq[(String, Throwable)], AuthContext]]](Success(Left(Nil))) {
         case (acc, (authMethodName, authMethod)) ⇒
           acc.flatMap {
-            case authContext if authContext.isRight ⇒ Future.successful(authContext)
+            case authContext if authContext.isRight ⇒ Success(authContext)
             case Left(errors) ⇒
               authMethod(request)
                 .map(authContext ⇒ Right(authContext))
@@ -241,12 +231,12 @@ class Authenticated(
           }
       }
       .flatMap {
-        case Right(authContext) ⇒ Future.successful(authContext)
+        case Right(authContext) ⇒ Success(authContext)
         case Left(errors) ⇒
           val errorDetails = errors
             .map { case (authMethodName, error) ⇒ s"\t$authMethodName: ${error.getClass.getSimpleName} ${error.getMessage}" }
             .mkString("\n")
           logger.error(s"Authentication failure:\n$errorDetails")
-          Future.failed(AuthenticationError("Authentication failure"))
+          Failure(AuthenticationError("Authentication failure"))
       }
 }

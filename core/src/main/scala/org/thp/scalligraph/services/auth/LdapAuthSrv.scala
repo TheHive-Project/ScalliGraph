@@ -3,16 +3,17 @@ package org.thp.scalligraph.services.auth
 import java.net.ConnectException
 import java.util
 
+import scala.concurrent.ExecutionContext
+import scala.util.{Failure, Success, Try}
+
+import play.api.mvc.RequestHeader
+import play.api.{Configuration, Logger}
+
 import javax.inject.{Inject, Singleton}
 import javax.naming.Context
 import javax.naming.directory._
 import org.thp.scalligraph.auth.{AuthCapability, AuthContext, AuthSrv, UserSrv}
 import org.thp.scalligraph.{AuthenticationError, AuthorizationError}
-import play.api.mvc.RequestHeader
-import play.api.{Configuration, Logger}
-
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success, Try}
 
 case class LdapConnection(serverNames: Seq[String], useSSL: Boolean, bindDN: String, bindPW: String, baseDN: String, filter: String) {
 
@@ -85,7 +86,7 @@ object LdapConnection {
       filter ← configuration.getOptional[String]("auth.ldap.filter")
       serverNames = configuration.getOptional[String]("auth.ldap.serverName").fold[Seq[String]](Nil)(s ⇒ Seq(s)) ++
         configuration.getOptional[Seq[String]]("auth.ldap.serverNames").getOrElse(Nil)
-      useSSL = configuration.getOptional[Boolean]("auth.ldap.useSSL").getOrElse(false)
+      useSSL = configuration.get[Boolean]("auth.ldap.useSSL")
 
     } yield LdapConnection(serverNames, useSSL, bindDN, bindPW, baseDN, filter))
       .getOrElse(LdapConnection(Nil, useSSL = false, "", "", "", ""))
@@ -101,28 +102,22 @@ class LdapAuthSrv(ldapConnection: LdapConnection, userSrv: UserSrv, implicit val
   val name                                             = "ldap"
   override val capabilities: Set[AuthCapability.Value] = Set(AuthCapability.changePassword)
 
-  override def authenticate(username: String, password: String)(implicit request: RequestHeader, ec: ExecutionContext): Future[AuthContext] =
+  override def authenticate(username: String, password: String)(implicit request: RequestHeader): Try[AuthContext] =
     ldapConnection
       .authenticate(username, password)
-      .map { _ ⇒
-        userSrv.getFromId(request, username)
-      }
-      .fold[Future[AuthContext]](Future.failed, identity)
+      .flatMap(_ ⇒ userSrv.getFromId(request, username))
       .recoverWith {
         case t ⇒
           logger.error("LDAP authentication failure", t)
-          Future.failed(AuthenticationError("Authentication failure"))
+          Failure(AuthenticationError("Authentication failure"))
       }
 
-  override def changePassword(username: String, oldPassword: String, newPassword: String)(
-      implicit authContext: AuthContext,
-      ec: ExecutionContext): Future[Unit] =
+  override def changePassword(username: String, oldPassword: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] =
     ldapConnection
       .changePassword(username, oldPassword, newPassword)
-      .fold(Future.failed, Future.successful)
       .recoverWith {
         case t ⇒
           logger.error("LDAP change password failure", t)
-          Future.failed(AuthorizationError("Change password failure"))
+          Failure(AuthorizationError("Change password failure"))
       }
 }

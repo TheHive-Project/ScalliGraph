@@ -1,6 +1,6 @@
 package org.thp.scalligraph.auth
 
-import scala.concurrent.Future
+import scala.util.Try
 
 import play.api.libs.json.{JsString, Writes}
 import play.api.mvc.RequestHeader
@@ -21,11 +21,11 @@ trait AuthContext {
 }
 
 trait UserSrv {
-  def getFromId(request: RequestHeader, userId: String): Future[AuthContext]
-  def getFromUser(request: RequestHeader, user: User): Future[AuthContext]
-  def getInitialUser(request: RequestHeader): Future[AuthContext]
+  def getFromId(request: RequestHeader, userId: String): Try[AuthContext]
+  def getFromUser(request: RequestHeader, user: User): Try[AuthContext]
+  def getInitialUser(request: RequestHeader): Try[AuthContext]
   val initialAuthContext: AuthContext
-  def getUser(userId: String): Future[User]
+  def getUser(userId: String): Try[User]
 }
 
 trait User {
