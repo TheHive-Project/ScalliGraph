@@ -12,7 +12,7 @@ abstract class VertexSrv[V <: Product: ru.TypeTag, S <: BaseVertexSteps[V, S]](i
 
   def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): S
 
-  def initSteps(implicit graph: Graph): S = steps(graph.V.hasLabel(model.label))
+  def initSteps(implicit graph: Graph): S = steps(db.vertexStep(graph, model))
 
   override def get(id: String)(implicit graph: Graph): S = steps(graph.V().has(Key("_id") of id))
 

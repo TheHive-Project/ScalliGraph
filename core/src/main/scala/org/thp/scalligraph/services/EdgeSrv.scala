@@ -12,7 +12,7 @@ class EdgeSrv[E <: Product: ru.TypeTag, FROM <: Product: ru.TypeTag, TO <: Produ
 
   def steps(raw: GremlinScala[Edge])(implicit graph: Graph) = new EdgeSteps[E, FROM, TO](raw)
 
-  def initSteps(implicit graph: Graph): EdgeSteps[E, FROM, TO] = steps(graph.E.hasLabel(model.label))
+  def initSteps(implicit graph: Graph): EdgeSteps[E, FROM, TO] = steps(db.edgeStep(graph, model))
 
   override def get(id: String)(implicit graph: Graph): EdgeSteps[E, FROM, TO] = steps(graph.E().has(Key("_id") of id))
 
