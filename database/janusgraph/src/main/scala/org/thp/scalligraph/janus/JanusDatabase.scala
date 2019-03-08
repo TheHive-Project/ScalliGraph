@@ -1,6 +1,6 @@
 package org.thp.scalligraph.janus
 
-import java.util.Date
+import java.util.{Date, UUID}
 
 import scala.util.Try
 
@@ -10,11 +10,13 @@ import com.typesafe.config.ConfigFactory
 import gremlin.scala._
 import javax.inject.{Inject, Singleton}
 import org.apache.tinkerpop.gremlin.structure.{Edge ⇒ _, Element ⇒ _, Graph ⇒ _, Vertex ⇒ _}
-import org.janusgraph.core.schema.{ConsistencyModifier, JanusGraphManagement, JanusGraphSchemaType, Mapping}
 import org.janusgraph.core._
+import org.janusgraph.core.schema.{ConsistencyModifier, JanusGraphManagement, JanusGraphSchemaType, Mapping}
 import org.janusgraph.diskstorage.locking.PermanentLockingException
+import org.slf4j.MDC
+import org.thp.scalligraph._
+import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
-import org.thp.scalligraph.{Config, InternalError, Retry}
 
 object JanusDatabase {
   val defaultConfiguration = Configuration(ConfigFactory.parseString("""
@@ -28,32 +30,40 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
 
   @Inject() def this(configuration: Configuration) = {
     this(
-      JanusGraphFactory.open(new Config(JanusDatabase.defaultConfiguration ++ configuration)),
-      configuration.getOptional[Int]("db.maxRetryOnConflict").getOrElse(5),
-      configuration.getOptional[Int]("db.chunkSize").getOrElse(32 * 1024)
+      JanusGraphFactory.open(new Config(JanusDatabase.defaultConfiguration ++ configuration.get[Configuration]("db.janusgraph"))),
+      configuration.get[Int]("db.maxRetryOnConflict"),
+      configuration.underlying.getBytes("db.chunkSize").toInt
     )
   }
 
   def this() = this(Configuration.empty)
 
-  override def noTransaction[A](body: Graph ⇒ A): A = body(graph)
+  override def noTransaction[A](body: Graph ⇒ A): A = {
+    logger.debug(s"Begin of no-transaction")
+    val a = body(graph)
+    logger.debug(s"End of no-transaction")
+    a
+  }
 
   override def transaction[A](body: Graph ⇒ A): A =
     Retry(maxRetryOnConflict, classOf[PermanentLockingException], classOf[SchemaViolationException]) {
-      logger.debug(s"Begin of transaction")
       //    val tx = graph.tx()
       //    tx.open() /*.createThreadedTx[JanusGraphTransaction]()*/
       // Transaction is automatically open at the first operation.
       val tx = graph.tx.createThreadedTx[JanusGraphTransaction]()
+      MDC.put("tx", f"${tx.hashCode()}%08x")
+      logger.debug("Begin of transaction")
       try {
         val a = body(tx)
         tx.commit()
-        logger.debug(s"End of transaction")
+        logger.debug("End of transaction")
+        MDC.remove("tx")
         a
       } catch {
         case e: Throwable ⇒
           logger.error(s"Exception raised, rollback (${e.getMessage})")
           Try(tx.rollback())
+          MDC.remove("tx")
           throw e
       }
     }.fold[A]({
@@ -62,6 +72,7 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
       case t                            ⇒ throw t
     }, a ⇒ a)
 
+  // FIXME "isAssignableFrom" can be replaced by "==" because classes are final.
   def convertToJava(c: Class[_]): Class[_] =
     if (classOf[Int].isAssignableFrom(c)) classOf[java.lang.Integer]
     else if (classOf[Double].isAssignableFrom(c)) classOf[java.lang.Double]
@@ -74,48 +85,47 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
     else c
 
   private def createEntityProperties(mgmt: JanusGraphManagement): Unit = {
-    Option(mgmt.getPropertyKey("_id")).getOrElse {
-      mgmt
-        .makePropertyKey("_id")
-        .dataType(convertToJava(classOf[String]))
-        .cardinality(Cardinality.SINGLE)
-        .make()
-    }
-    Option(mgmt.getPropertyKey("_createdBy")).getOrElse {
-      mgmt
-        .makePropertyKey("_createdBy")
-        .dataType(convertToJava(classOf[String]))
-        .cardinality(Cardinality.SINGLE)
-        .make()
-    }
-    Option(mgmt.getPropertyKey("_createdAt")).getOrElse {
-      mgmt
-        .makePropertyKey("_createdAt")
-        .dataType(convertToJava(classOf[Date]))
-        .cardinality(Cardinality.SINGLE)
-        .make()
-    }
-    Option(mgmt.getPropertyKey("_updatedBy")).getOrElse {
-      mgmt
-        .makePropertyKey("_updatedBy")
-        .dataType(convertToJava(classOf[String]))
-        .cardinality(Cardinality.SINGLE)
-        .make()
-    }
-    Option(mgmt.getPropertyKey("_updatedAt")).getOrElse {
-      mgmt
-        .makePropertyKey("_updatedAt")
-        .dataType(convertToJava(classOf[Date]))
-        .cardinality(Cardinality.SINGLE)
-        .make()
-    }
+    mgmt
+      .makePropertyKey("_id")
+      .dataType(convertToJava(classOf[String]))
+      .cardinality(Cardinality.SINGLE)
+      .make()
+    mgmt
+      .makePropertyKey("_label")
+      .dataType(convertToJava(classOf[String]))
+      .cardinality(Cardinality.SINGLE)
+      .make()
+    mgmt
+      .makePropertyKey("_createdBy")
+      .dataType(convertToJava(classOf[String]))
+      .cardinality(Cardinality.SINGLE)
+      .make()
+    mgmt
+      .makePropertyKey("_createdAt")
+      .dataType(convertToJava(classOf[Date]))
+      .cardinality(Cardinality.SINGLE)
+      .make()
+    mgmt
+      .makePropertyKey("_updatedBy")
+      .dataType(convertToJava(classOf[String]))
+      .cardinality(Cardinality.SINGLE)
+      .make()
+    mgmt
+      .makePropertyKey("_updatedAt")
+      .dataType(convertToJava(classOf[Date]))
+      .cardinality(Cardinality.SINGLE)
+      .make()
     ()
   }
 
   private def createElementLabels(mgmt: JanusGraphManagement, models: Seq[Model]): Unit =
     models.foreach {
-      case m: VertexModel     ⇒ mgmt.getOrCreateVertexLabel(m.label)
-      case m: EdgeModel[_, _] ⇒ mgmt.getOrCreateEdgeLabel(m.label)
+      case m: VertexModel ⇒
+        logger.trace(s"mgmt.getOrCreateVertexLabel(${m.label})")
+        mgmt.getOrCreateVertexLabel(m.label)
+      case m: EdgeModel[_, _] ⇒
+        logger.trace(s"mgmt.getOrCreateEdgeLabel(${m.label})")
+        mgmt.getOrCreateEdgeLabel(m.label)
     }
 
   private def createProperties(mgmt: JanusGraphManagement, models: Seq[Model]): Unit =
@@ -142,13 +152,14 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
             case MappingCardinality.list   ⇒ Cardinality.LIST
             case MappingCardinality.set    ⇒ Cardinality.SET
           }
-          Option(mgmt.getPropertyKey(fieldName)).getOrElse {
-            mgmt
-              .makePropertyKey(fieldName)
-              .dataType(convertToJava(mapping.graphTypeClass))
-              .cardinality(cardinality)
-              .make()
-          }
+          logger.trace(
+            s"mgmt.makePropertyKey($fieldName).dataType(${convertToJava(mapping.graphTypeClass).getSimpleName}.class).cardinality($cardinality).make()")
+          mgmt
+            .makePropertyKey(fieldName)
+            .dataType(convertToJava(mapping.graphTypeClass))
+            .cardinality(cardinality)
+            .make()
+
       }
 
   private def createIndex(
@@ -158,33 +169,32 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
       indexType: IndexType.Value,
       properties: Seq[String]): Unit = {
     val indexName = elementLabel.name + "_" + properties.mkString("_")
-    Option(mgmt.getGraphIndex(indexName)).getOrElse {
-      val index = mgmt.buildIndex(indexName, elementClass).indexOnly(elementLabel)
-      val propertyKeys = properties.map { p ⇒
-        Option(mgmt.getPropertyKey(p)).getOrElse(throw InternalError(s"Property $p in ${elementLabel.name} not found"))
-      }
-      indexType match {
-        case IndexType.unique ⇒
-          logger.debug(s"Creating unique index on fields $elementLabel:${propertyKeys.map(_.label()).mkString(",")}")
-          propertyKeys.foreach(index.addKey)
-          index.unique()
-          val i = index.buildCompositeIndex()
-          mgmt.setConsistency(i, ConsistencyModifier.LOCK)
-        case IndexType.standard ⇒
-          logger.debug(s"Creating index on fields $elementLabel:${propertyKeys.map(_.label()).mkString(",")}")
-          propertyKeys.foreach(index.addKey)
-          index.buildCompositeIndex()
-        case IndexType.fulltext ⇒
-          logger.debug(s"Creating fulltext index on fields $elementLabel:${propertyKeys.map(_.label()).mkString(",")}")
-          propertyKeys.foreach(k ⇒ index.addKey(k, Mapping.TEXT.asParameter()))
-          index.buildMixedIndex("search")
-      }
+    val index     = mgmt.buildIndex(indexName, elementClass).indexOnly(elementLabel)
+    val propertyKeys = (properties :+ "_label").map { p ⇒
+      Option(mgmt.getPropertyKey(p)).getOrElse(throw InternalError(s"Property $p in ${elementLabel.name} not found"))
+    }
+    indexType match {
+      case IndexType.unique ⇒
+        logger.debug(s"Creating unique index on fields $elementLabel:${propertyKeys.mkString(",")}")
+        propertyKeys.foreach(index.addKey)
+        index.unique()
+        val i = index.buildCompositeIndex()
+        mgmt.setConsistency(i, ConsistencyModifier.LOCK)
+      case IndexType.standard ⇒
+        logger.debug(s"Creating index on fields $elementLabel:${propertyKeys.mkString(",")}")
+        propertyKeys.foreach(index.addKey)
+        index.buildCompositeIndex()
+      case IndexType.fulltext ⇒
+        logger.debug(s"Creating fulltext index on fields $elementLabel:${propertyKeys.mkString(",")}")
+        propertyKeys.foreach(k ⇒ index.addKey(k, Mapping.TEXT.asParameter()))
+        index.buildMixedIndex("search")
     }
     ()
   }
 
   override def createSchema(models: Seq[Model]): Unit =
     Retry(maxRetryOnConflict, classOf[PermanentLockingException]) {
+      logger.info("Creating database schema")
       graph.synchronized {
         val mgmt = graph.openManagement()
         val alreadyExists = models
@@ -193,28 +203,31 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
           .map(_.toString)
         if (alreadyExists.nonEmpty) {
           logger.info(s"Models already exists. Skipping schema creation (existing labels: ${alreadyExists.mkString(",")})")
-          mgmt.rollback()
+//          mgmt.rollback()
         } else {
           //    mgmt.setConsistency(leadidCUniqueIndex, ConsistencyModifier.LOCK)
-          createEntityProperties(mgmt)
           createElementLabels(mgmt, models)
+          createEntityProperties(mgmt)
           createProperties(mgmt, models)
-
-          Option(mgmt.getGraphIndex("_id_vertex_index")).getOrElse {
-            logger.debug("Creating unique index on fields _id")
-            mgmt
-              .buildIndex("_id_vertex_index", classOf[Vertex])
-              .addKey(mgmt.getPropertyKey("_id"))
-              .unique()
-              .buildCompositeIndex()
-          }
-          Option(mgmt.getGraphIndex("_id_edge_index")).getOrElse {
-            mgmt
-              .buildIndex("_id_edge_index", classOf[Vertex])
-              .addKey(mgmt.getPropertyKey("_id"))
-              .unique()
-              .buildCompositeIndex()
-          }
+          logger.debug("Creating unique index on fields _id")
+          mgmt
+            .buildIndex("_id_vertex_index", classOf[Vertex])
+            .addKey(mgmt.getPropertyKey("_id"))
+            .unique()
+            .buildCompositeIndex()
+//            mgmt
+//              .buildIndex("_id_edge_index", classOf[Edge])
+//              .addKey(mgmt.getPropertyKey("_id"))
+//              .unique()
+//              .buildCompositeIndex()
+          mgmt
+            .buildIndex("_label_vertex_index", classOf[Vertex])
+            .addKey(mgmt.getPropertyKey("_label"))
+            .buildCompositeIndex()
+          mgmt
+            .buildIndex("_label_edge_index", classOf[Edge])
+            .addKey(mgmt.getPropertyKey("_label"))
+            .buildCompositeIndex()
 
           for {
             model                   ← models
@@ -230,6 +243,45 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
         }
       }
     }.get
+
+  override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
+    val createdVertex = model.create(v)(this, graph)
+    setSingleProperty(createdVertex, "_id", UUID.randomUUID, idMapping)
+    setSingleProperty(createdVertex, "_createdAt", new Date, createdAtMapping)
+    setSingleProperty(createdVertex, "_createdBy", authContext.userId, createdByMapping)
+    setSingleProperty(createdVertex, "_label", model.label, UniMapping.stringMapping)
+    logger.trace(s"Created vertex is ${Model.printElement(createdVertex)}")
+    model.toDomain(createdVertex)(this)
+  }
+
+  override def createEdge[E <: Product, FROM <: Product, TO <: Product](
+      graph: Graph,
+      authContext: AuthContext,
+      model: Model.Edge[E, FROM, TO],
+      e: E,
+      from: FROM with Entity,
+      to: TO with Entity): E with Entity = {
+    val edgeMaybe = for {
+      f ← graph.V().has(Key("_id") of from._id).headOption()
+      t ← graph.V().has(Key("_id") of to._id).headOption()
+    } yield {
+      val createdEdge = model.create(e, f, t)(this, graph)
+      setSingleProperty(createdEdge, "_id", UUID.randomUUID, idMapping)
+      setSingleProperty(createdEdge, "_createdAt", new Date, createdAtMapping)
+      setSingleProperty(createdEdge, "_createdBy", authContext.userId, createdByMapping)
+      setSingleProperty(createdEdge, "_label", model.label, UniMapping.stringMapping)
+      logger.trace(s"Create edge ${model.label} from $f to $t: ${Model.printElement(createdEdge)}")
+      model.toDomain(createdEdge)(this)
+    }
+    edgeMaybe.getOrElse {
+      val error = graph.V().has(Key("_id") of from._id).headOption().map(_ ⇒ "").getOrElse(s"${from._model.label}:${from._id} not found ") +
+        graph.V().has(Key("_id") of to._id).headOption().map(_ ⇒ "").getOrElse(s"${to._model.label}:${to._id} not found")
+      sys.error(s"Fail to create edge between ${from._model.label}:${from._id} and ${to._model.label}:${to._id}, $error")
+    }
+  }
+
+  override def vertexStep(graph: Graph, model: Model): GremlinScala[Vertex] = graph.V.has(Key("_label") of model.label)
+  override def edgeStep(graph: Graph, model: Model): GremlinScala[Edge]     = graph.E.has(Key("_label") of model.label)
 
   override def drop(): Unit = JanusGraphFactory.drop(graph)
 }

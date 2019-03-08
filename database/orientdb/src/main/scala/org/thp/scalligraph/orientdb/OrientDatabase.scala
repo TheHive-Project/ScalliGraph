@@ -1,21 +1,20 @@
 package org.thp.scalligraph.orientdb
 
-import java.io.InputStream
 import java.util.{List ⇒ JList, Set ⇒ JSet}
 
 import scala.collection.JavaConverters._
 import scala.util.Try
+
 import play.api.Configuration
-import com.orientechnologies.orient.core.db.record.OIdentifiable
+
 import com.orientechnologies.orient.core.exception.OConcurrentModificationException
-import com.orientechnologies.orient.core.intent.OIntentMassiveInsert
 import com.orientechnologies.orient.core.metadata.schema.OClass.INDEX_TYPE
 import com.orientechnologies.orient.core.metadata.schema.{OClass, OSchema, OType}
-import com.orientechnologies.orient.core.record.impl.ORecordBytes
 import com.orientechnologies.orient.core.storage.ORecordDuplicatedException
+import com.typesafe.config.ConfigFactory
 import gremlin.scala.{Element, Vertex, _}
-import javax.inject.Singleton
-import org.apache.tinkerpop.gremlin.orientdb.{OrientGraph, OrientGraphFactory}
+import javax.inject.{Inject, Singleton}
+import org.apache.tinkerpop.gremlin.orientdb.OrientGraphFactory
 import org.apache.tinkerpop.gremlin.structure.Graph
 import org.thp.scalligraph.models.{IndexType, _}
 import org.thp.scalligraph.{InternalError, Retry}
@@ -25,16 +24,28 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
   val attachmentVertexLabel  = "binaryData"
   val attachmentPropertyName = "binary"
 
-  def this(url: String, maxRetryOnConflict: Int, chunkSize: Int) = this(new OrientGraphFactory(url), maxRetryOnConflict, chunkSize)
+  def this(url: String, user: String, password: String, maxRetryOnConflict: Int, chunkSize: Int) =
+    this(new OrientGraphFactory(url, user, password), maxRetryOnConflict, chunkSize)
 
+  @Inject()
   def this(configuration: Configuration) =
     this(
-      configuration.getOptional[String]("database.url").getOrElse(s"memory:test-${math.random}"),
-      configuration.getOptional[Int]("database.maxRetryOnConflict").getOrElse(5),
-      configuration.getOptional[Int]("db.chunkSize").getOrElse(32 * 1024)
+      configuration.get[String]("db.url"),
+      configuration.get[String]("db.user"),
+      configuration.get[String]("db.password"),
+      configuration.get[Int]("db.maxRetryOnConflict"),
+      configuration.underlying.getBytes("db.chunkSize").toInt
     )
 
-  def this() = this(Configuration.empty)
+  def this() = this(Configuration(ConfigFactory.parseString(s"""
+      |db {
+      |  url = memory:test-${math.random}
+      |  user = admin
+      |  password = admin
+      |  maxRetryOnConflict = 5
+      |  chunkSize = 32k
+      |}
+    """.stripMargin)))
 
   override def noTransaction[A](body: Graph ⇒ A): A = body(graphFactory.getNoTx)
 
@@ -169,52 +180,51 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
     ()
   }
 
-  override def loadBinary(id: String)(implicit graph: Graph): InputStream = loadBinary(graph.V().has(Key("_id") of id).head()) // check
-
-  override def loadBinary(vertex: Vertex)(implicit graph: Graph): InputStream =
-    new InputStream {
-      private var recordIds                   = vertex.value[JList[OIdentifiable]]("binary").asScala.toList
-      private var buffer: Option[Array[Byte]] = _
-      private var index                       = 0
-      private def getNextChunk(): Unit =
-        recordIds match {
-          case first :: tail ⇒
-            recordIds = tail
-            buffer = Some(first.getRecord[ORecordBytes].toStream)
-            index = 0
-          case _ ⇒ buffer = None
-        }
-      override def read(): Int =
-        buffer match {
-          case Some(b) if b.length > index ⇒
-            val d = b(index)
-            index += 1
-            d.toInt & 0xff
-          case None ⇒ -1
-          case _ ⇒
-            getNextChunk()
-            read()
-        }
-    }
-
-  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex = {
-    val db = graph.asInstanceOf[OrientGraph].database()
-
-    db.declareIntent(new OIntentMassiveInsert)
-    val chunkIds = Iterator
-      .continually {
-        val chunk = new ORecordBytes
-        val len   = chunk.fromInputStream(is, chunkSize)
-        db.save[ORecordBytes](chunk)
-        len → chunk.getIdentity.asInstanceOf[OIdentifiable]
-      }
-      .takeWhile(_._1 > 0)
-      .map(_._2)
-      .to[Seq]
-    db.declareIntent(null)
-    val v = graph.addVertex(attachmentVertexLabel)
-    v.property("_id", id)
-    v.property(attachmentPropertyName, chunkIds.asJava)
-    v
-  }
+//  override def loadBinary(id: String)(implicit graph: Graph): InputStream =
+//    new InputStream {
+//      val vertex = graph.V().has(Key("_id") of id).head()
+//      private var recordIds                   = vertex.value[JList[OIdentifiable]]("binary").asScala.toList
+//      private var buffer: Option[Array[Byte]] = _
+//      private var index                       = 0
+//      private def getNextChunk(): Unit =
+//        recordIds match {
+//          case first :: tail ⇒
+//            recordIds = tail
+//            buffer = Some(first.getRecord[ORecordBytes].toStream)
+//            index = 0
+//          case _ ⇒ buffer = None
+//        }
+//      override def read(): Int =
+//        buffer match {
+//          case Some(b) if b.length > index ⇒
+//            val d = b(index)
+//            index += 1
+//            d.toInt & 0xff
+//          case None ⇒ -1
+//          case _ ⇒
+//            getNextChunk()
+//            read()
+//        }
+//    }
+//
+//  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex = {
+//    val db = graph.asInstanceOf[OrientGraph].database()
+//
+//    db.declareIntent(new OIntentMassiveInsert)
+//    val chunkIds = Iterator
+//      .continually {
+//        val chunk = new ORecordBytes
+//        val len   = chunk.fromInputStream(is, chunkSize)
+//        db.save[ORecordBytes](chunk)
+//        len → chunk.getIdentity.asInstanceOf[OIdentifiable]
+//      }
+//      .takeWhile(_._1 > 0)
+//      .map(_._2)
+//      .to[Seq]
+//    db.declareIntent(null)
+//    val v = graph.addVertex(attachmentVertexLabel)
+//    v.property("_id", id)
+//    v.property(attachmentPropertyName, chunkIds.asJava)
+//    v
+//  }
 }

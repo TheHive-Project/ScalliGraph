@@ -1,7 +1,11 @@
 package org.thp.scalligraph.models
 
-import java.io.InputStream
 import java.util.{Base64, Date, UUID}
+
+import scala.collection.JavaConverters._
+import scala.reflect.runtime.{universe ⇒ ru}
+
+import play.api.Logger
 
 import gremlin.scala._
 import org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality
@@ -10,10 +14,6 @@ import org.thp.scalligraph.controllers.UpdateOps
 import org.thp.scalligraph.query.PublicProperty
 import org.thp.scalligraph.services.ElementSrv
 import org.thp.scalligraph.{FPath, InternalError}
-import play.api.Logger
-
-import scala.collection.JavaConverters._
-import scala.reflect.runtime.{universe ⇒ ru}
 
 class DatabaseException(message: String = "Violation of database schema", cause: Exception) extends Exception(message, cause)
 
@@ -38,7 +38,6 @@ trait Database {
   def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Unit
   def createSchema(model: Model, models: Model*): Unit = createSchema(model +: models)
   def createSchema(models: Seq[Model]): Unit
-//  def createSchema(models: Seq[Model], vertexSrvs: Seq[VertexSrv[_, _]], edgeSrvs: Seq[EdgeSrv[_, _, _]])(implicit authContext: AuthContext): Unit
 
   def drop(): Unit
 
@@ -57,7 +56,7 @@ trait Database {
       authContext: AuthContext,
       elementSrv: ElementSrv[_, _],
       id: String,
-      properties: Seq[PublicProperty[_, _]],
+      properties: Seq[PublicProperty[_, _, _]],
       fields: Map[FPath, UpdateOps.Type]): Unit
 
   def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D
@@ -85,10 +84,13 @@ trait Database {
 
     }
 
+  def vertexStep(graph: Graph, model: Model): GremlinScala[Vertex]
+  def edgeStep(graph: Graph, model: Model): GremlinScala[Edge]
+
   val extraModels: Seq[Model]
-  def loadBinary(initialVertex: Vertex)(implicit graph: Graph): InputStream
-  def loadBinary(id: String)(implicit graph: Graph): InputStream
-  def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex
+  //def loadBinary(initialVertex: Vertex)(implicit graph: Graph): InputStream
+//  def loadBinary(id: String)(implicit graph: Graph): InputStream
+//  def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex
 }
 
 abstract class BaseDatabase extends Database {
@@ -201,7 +203,7 @@ abstract class BaseDatabase extends Database {
       authContext: AuthContext,
       elementSrv: ElementSrv[_, _],
       id: String,
-      properties: Seq[PublicProperty[_, _]],
+      properties: Seq[PublicProperty[_, _, _]],
       fields: Map[FPath, UpdateOps.Type]): Unit =
     fields.foreach {
       case (key, UpdateOps.SetAttribute(value)) ⇒
@@ -243,7 +245,7 @@ abstract class BaseDatabase extends Database {
       .properties[G](key)
       .asScala
       .map(p ⇒ mapping.toDomain(p.value()))
-      .toSeq
+      .toList
 
   override def getSetProperty[D, G](element: Element, key: String, mapping: SetMapping[D, G]): Set[D] =
     element
@@ -277,8 +279,8 @@ abstract class BaseDatabase extends Database {
   val chunkSize: Int = 32 * 1024
 
   val binaryLinkModel: EdgeModel[Binary, Binary] = new EdgeModel[Binary, Binary] {
-    override val fromLabel: String                                                                       = "binary"
-    override val toLabel: String                                                                         = "binary"
+    override val fromLabel: String                                                                       = "binaryData"
+    override val toLabel: String                                                                         = "binaryData"
     override def create(e: Product, from: Vertex, to: Vertex)(implicit db: Database, graph: Graph): Edge = from.addEdge(label, to)
     override type E = Product
     override val label: String                                = "nextChunk"
@@ -322,69 +324,74 @@ abstract class BaseDatabase extends Database {
       }
     }
   }
+
+  override def vertexStep(graph: Graph, model: Model): GremlinScala[Vertex] = graph.V.hasLabel(model.label)
+
+  override def edgeStep(graph: Graph, model: Model): GremlinScala[Edge] = graph.E.hasLabel(model.label)
+
   override val extraModels: Seq[Model] = Seq(binaryModel, binaryLinkModel)
 
-  override def loadBinary(initialVertex: Vertex)(implicit graph: Graph): InputStream = loadBinary(initialVertex.value[String]("_id"))
+//  override def loadBinary(initialVertex: Vertex)(implicit graph: Graph): InputStream = loadBinary(initialVertex.value[String]("_id"))
 
-  override def loadBinary(id: String)(implicit graph: Graph): InputStream =
-    new InputStream {
-      var vertex: GremlinScala[Vertex] = graph.V().has(Key("_id") of id)
-      var buffer: Option[Array[Byte]]  = vertex.clone.value[String]("binary").map(Base64.getDecoder.decode).headOption()
-      var index                        = 0
-
-      override def read(): Int =
-        buffer match {
-          case Some(b) if b.length > index ⇒
-            val d = b(index)
-            index += 1
-            d.toInt & 0xff
-          case None ⇒ -1
-          case _ ⇒
-            vertex = vertex.out("nextChunk")
-            buffer = vertex.clone.value[String]("binary").map(Base64.getDecoder.decode).headOption()
-            index = 0
-            read()
-        }
-    }
-
-  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex = {
-
-    def readNextChunk: String = {
-      val buffer = new Array[Byte](chunkSize)
-      val len    = is.read(buffer)
-      logger.trace(s"$len bytes read")
-      if (len == chunkSize)
-        Base64.getEncoder.encodeToString(buffer)
-      else if (len > 0)
-        Base64.getEncoder.encodeToString(buffer.take(len))
-      else
-        ""
-    }
-
-    val chunks: Iterator[Vertex] = Iterator
-      .continually(readNextChunk)
-      .takeWhile(_.nonEmpty)
-      .map { data ⇒
-        val v = graph.addVertex("binary")
-        setSingleProperty(v, "binary", data, UniMapping.stringMapping)
-        setSingleProperty(v, "_id", UUID.randomUUID, idMapping)
-        v
-      }
-    if (chunks.isEmpty) {
-      logger.debug("Saving empty file")
-      val v = graph.addVertex("binary")
-      setSingleProperty(v, "binary", "", UniMapping.stringMapping)
-      setSingleProperty(v, "_id", UUID.randomUUID, idMapping)
-      v
-    } else {
-      val firstVertex = chunks.next
-      chunks.foldLeft(firstVertex) {
-        case (previousVertex, currentVertex) ⇒
-          previousVertex.addEdge("nextChunk", currentVertex)
-          currentVertex
-      }
-      firstVertex
-    }
-  }
+//  override def loadBinary(id: String)(implicit graph: Graph): InputStream =
+//    new InputStream {
+//      var vertex: GremlinScala[Vertex] = graph.V().has(Key("_id") of id)
+//      var buffer: Option[Array[Byte]]  = vertex.clone.value[String]("binary").map(Base64.getDecoder.decode).headOption()
+//      var index                        = 0
+//
+//      override def read(): Int =
+//        buffer match {
+//          case Some(b) if b.length > index ⇒
+//            val d = b(index)
+//            index += 1
+//            d.toInt & 0xff
+//          case None ⇒ -1
+//          case _ ⇒
+//            vertex = vertex.out("nextChunk")
+//            buffer = vertex.clone.value[String]("binary").map(Base64.getDecoder.decode).headOption()
+//            index = 0
+//            read()
+//        }
+//    }
+//
+//  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex = {
+//
+//    def readNextChunk: String = {
+//      val buffer = new Array[Byte](chunkSize)
+//      val len    = is.read(buffer)
+//      logger.trace(s"$len bytes read")
+//      if (len == chunkSize)
+//        Base64.getEncoder.encodeToString(buffer)
+//      else if (len > 0)
+//        Base64.getEncoder.encodeToString(buffer.take(len))
+//      else
+//        ""
+//    }
+//
+//    val chunks: Iterator[Vertex] = Iterator
+//      .continually(readNextChunk)
+//      .takeWhile(_.nonEmpty)
+//      .map { data ⇒
+//        val v = graph.addVertex("binary")
+//        setSingleProperty(v, "binary", data, UniMapping.stringMapping)
+//        setSingleProperty(v, "_id", UUID.randomUUID, idMapping)
+//        v
+//      }
+//    if (chunks.isEmpty) {
+//      logger.debug("Saving empty file")
+//      val v = graph.addVertex("binary")
+//      setSingleProperty(v, "binary", "", UniMapping.stringMapping)
+//      setSingleProperty(v, "_id", UUID.randomUUID, idMapping)
+//      v
+//    } else {
+//      val firstVertex = chunks.next
+//      chunks.foldLeft(firstVertex) {
+//        case (previousVertex, currentVertex) ⇒
+//          previousVertex.addEdge("nextChunk", currentVertex)
+//          currentVertex
+//      }
+//      firstVertex
+//    }
+//  }
 }
 case class Binary(data: Array[Byte])
