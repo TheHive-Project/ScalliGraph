@@ -6,15 +6,16 @@ import play.api.test.PlaySpecification
 
 import org.thp.scalligraph.AppBuilder
 
+case class DummyAuthContext(
+                             userId: String = "",
+                             userName: String = "",
+                             organisation: String = "",
+                             permissions: Seq[Permission] = Nil,
+                             requestId: String = "")
+  extends AuthContext
+
 class ModernTest extends PlaySpecification {
 
-  case class DummyAuthContext(
-      userId: String = "",
-      userName: String = "",
-      organisation: String = "",
-      permissions: Seq[Permission] = Nil,
-      requestId: String = "")
-      extends AuthContext
 
   implicit val authContext: AuthContext = DummyAuthContext("me")
 

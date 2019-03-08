@@ -1,4 +1,5 @@
 package org.thp.scalligraph
+
 import java.lang.annotation.Annotation
 
 import play.api.inject.guice.GuiceApplicationBuilder
@@ -7,7 +8,11 @@ import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
 
 import com.google.inject.Inject
-import net.codingwell.scalaguice.ScalaModule
+import net.codingwell.scalaguice.{ ScalaModule, ScalaMultibinder }
+import org.specs2.mock.Mockito
+import org.thp.scalligraph.auth.{ AuthSrv, UserSrv }
+import org.thp.scalligraph.models.Database
+import org.thp.scalligraph.query.QueryExecutor
 
 class Parent extends Annotation {
   override def annotationType(): Class[_ <: Annotation] = classOf[Parent]
@@ -39,11 +44,16 @@ class TestServiceModule[TestServiceImpl <: TestService: Manifest] extends ScalaM
   }
 }
 
-class Module1 extends TestServiceModule[TestService1]
-class Module2 extends TestServiceModule[TestService2]
-class Module3 extends TestServiceModule[TestService3]
-
-class ScalligraphApplicationTest extends PlaySpecification {
+object TestModule extends ScalaModule with Mockito {
+  override def configure(): Unit = {
+    bind[AuthSrv].toInstance(mock[AuthSrv])
+    bind[UserSrv].toInstance(mock[UserSrv])
+      bind[Database].toInstance(mock[Database])
+    ScalaMultibinder.newSetBinder[QueryExecutor](binder)
+    ScalaMultibinder.newSetBinder[play.api.routing.Router](binder)
+  }
+}
+class ScalligraphApplicationTest extends PlaySpecification with Mockito {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
   "create an application with overridden module" in {
@@ -54,7 +64,8 @@ class ScalligraphApplicationTest extends PlaySpecification {
         new play.api.mvc.CookiesModule,
         new TestServiceModule[TestService1],
         new TestServiceModule[TestService2],
-        new TestServiceModule[TestService3]
+        new TestServiceModule[TestService3],
+        TestModule
       )
 
     val application = applicationBuilder

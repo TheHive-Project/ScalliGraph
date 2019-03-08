@@ -1,23 +1,23 @@
 package org.thp.scalligraph.orientdb
 
-import java.util.{List ⇒ JList, Set ⇒ JSet}
+import java.util.{ List => JList, Set => JSet }
 
 import scala.collection.JavaConverters._
 import scala.util.Try
 
-import play.api.Configuration
+import play.api.{ Configuration, Environment }
 
 import com.orientechnologies.orient.core.exception.OConcurrentModificationException
 import com.orientechnologies.orient.core.metadata.schema.OClass.INDEX_TYPE
-import com.orientechnologies.orient.core.metadata.schema.{OClass, OSchema, OType}
+import com.orientechnologies.orient.core.metadata.schema.{ OClass, OSchema, OType }
 import com.orientechnologies.orient.core.storage.ORecordDuplicatedException
-import com.typesafe.config.ConfigFactory
-import gremlin.scala.{Element, Vertex, _}
-import javax.inject.{Inject, Singleton}
+import gremlin.scala.{ Element, Vertex, _ }
+import javax.inject.{ Inject, Singleton }
 import org.apache.tinkerpop.gremlin.orientdb.OrientGraphFactory
 import org.apache.tinkerpop.gremlin.structure.Graph
-import org.thp.scalligraph.models.{IndexType, _}
-import org.thp.scalligraph.{InternalError, Retry}
+import org.slf4j.MDC
+import org.thp.scalligraph.models.{ IndexType, _ }
+import org.thp.scalligraph.{ InternalError, Retry }
 
 @Singleton
 class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, override val chunkSize: Int) extends BaseDatabase {
@@ -30,39 +30,35 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
   @Inject()
   def this(configuration: Configuration) =
     this(
-      configuration.get[String]("db.url"),
-      configuration.get[String]("db.user"),
-      configuration.get[String]("db.password"),
+      configuration.get[String]("db.orientdb.url"),
+      configuration.get[String]("db.orientdb.user"),
+      configuration.get[String]("db.orientdb.password"),
       configuration.get[Int]("db.maxRetryOnConflict"),
       configuration.underlying.getBytes("db.chunkSize").toInt
     )
 
-  def this() = this(Configuration(ConfigFactory.parseString(s"""
-      |db {
-      |  url = memory:test-${math.random}
-      |  user = admin
-      |  password = admin
-      |  maxRetryOnConflict = 5
-      |  chunkSize = 32k
-      |}
-    """.stripMargin)))
+  def this() = this(Configuration.load(Environment.simple()))
 
   override def noTransaction[A](body: Graph ⇒ A): A = body(graphFactory.getNoTx)
 
   override def transaction[A](body: Graph ⇒ A): A =
     Retry(maxRetryOnConflict, classOf[OConcurrentModificationException], classOf[ORecordDuplicatedException]) {
       val tx = graphFactory.getTx
+      MDC.put("tx", f"${tx.hashCode()}%08x")
       logger.debug(s"[$tx] Begin of transaction")
       try {
         val a = body(tx)
         tx.commit()
+        logger.debug(s"[$tx] End of transaction")
+        MDC.remove("tx")
         a
       } catch {
         case e: Throwable ⇒
+          logger.error(s"Exception raised, rollback (${e.getMessage})")
           Try(tx.rollback())
+          MDC.remove("tx")
           throw e
       } finally {
-        logger.debug(s"[$tx] End of transaction")
         tx.close()
       }
     }.fold[A](

@@ -40,12 +40,12 @@ object MultiAuthSrv {
 }
 
 @Singleton
-class MultiAuthSrvProvider @Inject()(val authProviders: immutable.Set[AuthSrv] /*, implicit val ec: ExecutionContext*/ ) extends Provider[AuthSrv] {
+class MultiAuthSrvProvider @Inject()(val authProviders: immutable.Set[AuthSrv]) extends Provider[AuthSrv] {
   override def get(): AuthSrv = new MultiAuthSrv(authProviders)
 }
 
-class MultiAuthSrv(val authProviders: immutable.Set[AuthSrv] /*, implicit val ec: ExecutionContext*/ ) extends AuthSrv {
-  val name                                             = "multi"
+class MultiAuthSrv(val authProviders: immutable.Set[AuthSrv]) extends AuthSrv {
+  val name: String                                     = "multi"
   override val capabilities: Set[AuthCapability.Value] = authProviders.flatMap(_.capabilities)
 
   private[auth] def forAllAuthProvider[A](body: AuthSrv ⇒ Try[A]): Try[A] =

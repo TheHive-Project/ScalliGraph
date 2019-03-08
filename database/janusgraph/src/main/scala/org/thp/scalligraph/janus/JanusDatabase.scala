@@ -1,42 +1,35 @@
 package org.thp.scalligraph.janus
 
-import java.util.{Date, UUID}
+import java.util.{ Date, UUID }
 
 import scala.util.Try
 
-import play.api.Configuration
+import play.api.{ Configuration, Environment }
 
-import com.typesafe.config.ConfigFactory
 import gremlin.scala._
-import javax.inject.{Inject, Singleton}
-import org.apache.tinkerpop.gremlin.structure.{Edge ⇒ _, Element ⇒ _, Graph ⇒ _, Vertex ⇒ _}
+import javax.inject.{ Inject, Singleton }
+import org.apache.tinkerpop.gremlin.structure.{ Edge => _, Element => _, Graph => _, Vertex => _ }
 import org.janusgraph.core._
-import org.janusgraph.core.schema.{ConsistencyModifier, JanusGraphManagement, JanusGraphSchemaType, Mapping}
+import org.janusgraph.core.schema.{ ConsistencyModifier, JanusGraphManagement, JanusGraphSchemaType, Mapping }
 import org.janusgraph.diskstorage.locking.PermanentLockingException
 import org.slf4j.MDC
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
 
-object JanusDatabase {
-  val defaultConfiguration = Configuration(ConfigFactory.parseString("""
-    |storage.backend: inmemory
-    |storage.directory: target/thehive-test-2.db
-   """.stripMargin))
-}
 @Singleton
 class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chunkSize: Int) extends BaseDatabase {
   val name = "janus"
 
   @Inject() def this(configuration: Configuration) = {
     this(
-      JanusGraphFactory.open(new Config(JanusDatabase.defaultConfiguration ++ configuration.get[Configuration]("db.janusgraph"))),
+      JanusGraphFactory.open(new Config(configuration.get[Configuration]("db.janusgraph"))),
       configuration.get[Int]("db.maxRetryOnConflict"),
       configuration.underlying.getBytes("db.chunkSize").toInt
     )
   }
 
-  def this() = this(Configuration.empty)
+  def this() = this(Configuration.load(Environment.simple()))
 
   override def noTransaction[A](body: Graph ⇒ A): A = {
     logger.debug(s"Begin of no-transaction")
