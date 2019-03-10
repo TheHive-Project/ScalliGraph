@@ -1,16 +1,16 @@
 package org.thp.scalligraph.janus
 
-import java.util.{ Date, UUID }
+import java.util.{Date, UUID}
 
 import scala.util.Try
 
-import play.api.{ Configuration, Environment }
+import play.api.{Configuration, Environment}
 
 import gremlin.scala._
-import javax.inject.{ Inject, Singleton }
-import org.apache.tinkerpop.gremlin.structure.{ Edge => _, Element => _, Graph => _, Vertex => _ }
+import javax.inject.{Inject, Singleton}
+import org.apache.tinkerpop.gremlin.structure.{Edge ⇒ _, Element ⇒ _, Graph ⇒ _, Vertex ⇒ _}
 import org.janusgraph.core._
-import org.janusgraph.core.schema.{ ConsistencyModifier, JanusGraphManagement, JanusGraphSchemaType, Mapping }
+import org.janusgraph.core.schema.{ConsistencyModifier, JanusGraphManagement, JanusGraphSchemaType, Mapping}
 import org.janusgraph.diskstorage.locking.PermanentLockingException
 import org.slf4j.MDC
 import org.thp.scalligraph._

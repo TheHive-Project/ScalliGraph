@@ -1,22 +1,15 @@
 package org.thp.scalligraph
 
-import java.lang.annotation.Annotation
-
+import com.google.inject.Inject
+import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
+import org.specs2.mock.Mockito
+import org.thp.scalligraph.auth.{AuthSrv, UserSrv}
+import org.thp.scalligraph.models.Database
+import org.thp.scalligraph.query.QueryExecutor
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
-
-import com.google.inject.Inject
-import net.codingwell.scalaguice.{ ScalaModule, ScalaMultibinder }
-import org.specs2.mock.Mockito
-import org.thp.scalligraph.auth.{ AuthSrv, UserSrv }
-import org.thp.scalligraph.models.Database
-import org.thp.scalligraph.query.QueryExecutor
-
-class Parent extends Annotation {
-  override def annotationType(): Class[_ <: Annotation] = classOf[Parent]
-}
 
 trait TestService {
   def id: String
@@ -48,9 +41,10 @@ object TestModule extends ScalaModule with Mockito {
   override def configure(): Unit = {
     bind[AuthSrv].toInstance(mock[AuthSrv])
     bind[UserSrv].toInstance(mock[UserSrv])
-      bind[Database].toInstance(mock[Database])
+    bind[Database].toInstance(mock[Database])
     ScalaMultibinder.newSetBinder[QueryExecutor](binder)
     ScalaMultibinder.newSetBinder[play.api.routing.Router](binder)
+    ()
   }
 }
 class ScalligraphApplicationTest extends PlaySpecification with Mockito {

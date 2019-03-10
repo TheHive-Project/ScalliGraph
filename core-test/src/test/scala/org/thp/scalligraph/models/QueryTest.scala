@@ -39,7 +39,11 @@ class QueryTest extends PlaySpecification with Mockito {
         db.transaction { implicit graph ⇒
           val authGraph = AuthGraph(Some(userSrv.initialAuthContext), graph)
           val input =
-            Field(Json.arr(Json.obj("_name" → "allPeople"), Json.obj("_name" → "sort", "_fields" -> Json.arr(Json.obj("age" → "incr"))), Json.obj("_name" → "toList")))
+            Field(
+              Json.arr(
+                Json.obj("_name" → "allPeople"),
+                Json.obj("_name" → "sort", "_fields" → Json.arr(Json.obj("age" → "incr"))),
+                Json.obj("_name" → "toList")))
           val result = queryExecutor.parser(input).map { query ⇒
             queryExecutor.execute(query)(authGraph).toJson
           }

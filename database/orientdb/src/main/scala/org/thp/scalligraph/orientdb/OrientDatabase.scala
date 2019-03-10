@@ -1,23 +1,23 @@
 package org.thp.scalligraph.orientdb
 
-import java.util.{ List => JList, Set => JSet }
+import java.util.{List ⇒ JList, Set ⇒ JSet}
 
 import scala.collection.JavaConverters._
 import scala.util.Try
 
-import play.api.{ Configuration, Environment }
+import play.api.{Configuration, Environment}
 
 import com.orientechnologies.orient.core.exception.OConcurrentModificationException
 import com.orientechnologies.orient.core.metadata.schema.OClass.INDEX_TYPE
-import com.orientechnologies.orient.core.metadata.schema.{ OClass, OSchema, OType }
+import com.orientechnologies.orient.core.metadata.schema.{OClass, OSchema, OType}
 import com.orientechnologies.orient.core.storage.ORecordDuplicatedException
-import gremlin.scala.{ Element, Vertex, _ }
-import javax.inject.{ Inject, Singleton }
+import gremlin.scala._
+import javax.inject.{Inject, Singleton}
 import org.apache.tinkerpop.gremlin.orientdb.OrientGraphFactory
 import org.apache.tinkerpop.gremlin.structure.Graph
 import org.slf4j.MDC
-import org.thp.scalligraph.models.{ IndexType, _ }
-import org.thp.scalligraph.{ InternalError, Retry }
+import org.thp.scalligraph.models._
+import org.thp.scalligraph.{InternalError, Retry}
 
 @Singleton
 class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, override val chunkSize: Int) extends BaseDatabase {

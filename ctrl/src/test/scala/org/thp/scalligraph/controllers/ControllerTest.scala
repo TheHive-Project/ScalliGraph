@@ -4,12 +4,12 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.Source
 import org.specs2.concurrent.ExecutionEnv
 import org.specs2.mock.Mockito
-import play.api.{Application, Configuration, Environment}
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.libs.json.Json
+import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.mvc.{AnyContentAsJson, DefaultActionBuilder, Results}
 import play.api.test.{FakeRequest, Helpers, PlaySpecification}
-import play.api.libs.logback.LogbackLoggerConfigurator
+import play.api.{Application, Configuration, Environment}
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
