@@ -2,11 +2,11 @@ package org.thp.scalligraph.models
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.DurationInt
-import scala.concurrent.{ Await, Future, Promise }
+import scala.concurrent.{Await, Future, Promise}
 
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
-import play.api.{ Configuration, Environment }
+import play.api.{Configuration, Environment}
 
 import org.specs2.specification.core.Fragments
 import org.thp.scalligraph.VertexEntity
@@ -26,18 +26,18 @@ class IndexTest extends PlaySpecification {
     s"[${dbProvider.name}] Creating duplicate entries on unique index constraint" should {
       "throw an exception in the same transaction" in {
         db.transaction { implicit graph ⇒
-          db.createVertex(graph, DummyAuthContext(), model,EntityWithUniqueName("singleTransaction", 1))
-          db.createVertex(graph, DummyAuthContext(), model,EntityWithUniqueName("singleTransaction", 2))
+          db.createVertex(graph, DummyAuthContext(), model, EntityWithUniqueName("singleTransaction", 1))
+          db.createVertex(graph, DummyAuthContext(), model, EntityWithUniqueName("singleTransaction", 2))
         } must throwA[Exception]
       }
 
       "throw an exception in the different transactions" in {
         {
           db.transaction { implicit graph ⇒
-            db.createVertex(graph, DummyAuthContext(), model,EntityWithUniqueName("singleTransaction", 1))
+            db.createVertex(graph, DummyAuthContext(), model, EntityWithUniqueName("singleTransaction", 1))
           }
           db.transaction { implicit graph ⇒
-            db.createVertex(graph, DummyAuthContext(), model,EntityWithUniqueName("singleTransaction", 2))
+            db.createVertex(graph, DummyAuthContext(), model, EntityWithUniqueName("singleTransaction", 2))
           }
         } must throwA[Exception]
       }
@@ -47,7 +47,7 @@ class IndexTest extends PlaySpecification {
           Future {
             db.transaction { implicit graph ⇒
               Await.result(waitBeforeCreate, 2.seconds)
-              db.createVertex(graph, DummyAuthContext(), model,EntityWithUniqueName(name, 1))
+              db.createVertex(graph, DummyAuthContext(), model, EntityWithUniqueName(name, 1))
               Await.result(waitBeforeCommit, 2.seconds)
             }
           }

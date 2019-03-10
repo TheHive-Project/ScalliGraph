@@ -314,6 +314,8 @@ object SchemaGenerator {
         case _: FilterQuery ⇒
           logger.debug(s"$tpe : add field filter")
           Seq(currentObject.andThen(_.flatMap(o ⇒ getFilterField(tpe, o))))
+        case _: AggregationQuery ⇒ // TODO add support of aggregation query
+          Seq.empty
         case q ⇒
           logger.debug(s"$tpe : add field ${q.name}")
           q.paramType match {

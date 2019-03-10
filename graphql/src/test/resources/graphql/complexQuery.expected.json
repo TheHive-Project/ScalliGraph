@@ -14,8 +14,8 @@
           {"name": "josh", "age": 32},
           {"name": "marc", "age": 34},
           {"name": "marko", "age": 29},
-          {"name": "peter", "age": 25},
-          {"name": "vadas", "age": 17}
+          {"name": "peter", "age": 35},
+          {"name": "vadas", "age": 27}
         ]
       }
     }
