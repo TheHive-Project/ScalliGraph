@@ -64,7 +64,6 @@ lazy val coreTest = (project in file("core-test"))
   .dependsOn(janus)
   .dependsOn(orientdb)
   .dependsOn(neo4j)
-  .dependsOn(arangodb)
   .settings(
     name := "scalligraph-core-test",
     libraryDependencies ++= Seq(
@@ -108,16 +107,6 @@ lazy val neo4j = (project in file("database/neo4j"))
       gremlinScala,
       neo4jGremlin,
       neo4jTinkerpop,
-      specs % Test
-    )
-  )
-
-lazy val arangodb = (project in file("database/arangodb"))
-  .dependsOn(core)
-  .settings(
-    name := "scalligraph-arangodb",
-    libraryDependencies ++= Seq(
-      arangodbTinkerpop,
       specs % Test
     )
   )

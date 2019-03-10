@@ -1,15 +1,18 @@
 package org.thp.scalligraph.models
 
-import javax.inject.{ Inject, Provider }
+import com.typesafe.config.ConfigFactory
+import javax.inject.{Inject, Provider}
 import org.thp.scalligraph.janus.JanusDatabase
 import org.thp.scalligraph.neo4j.Neo4jDatabase
 import org.thp.scalligraph.orientdb.OrientDatabase
-import org.thp.scalligraph.arangodb.ArangoDatabase
-import play.api.{ Configuration, Environment, Logger }
+import play.api.{Configuration, Environment, Logger}
 
 class DatabaseProviders @Inject()(config: Configuration) {
 
-  def this() = this(Configuration.load(Environment.simple()))
+  def this() =
+    this(
+      Configuration.load(Environment.simple()) ++
+        Configuration(ConfigFactory.parseString(s"db.janusgraph.storage.directory = target/janusgraph-test-database-${math.random}.db")))
 
   lazy val logger = Logger(getClass)
 
@@ -19,9 +22,7 @@ class DatabaseProviders @Inject()(config: Configuration) {
 
   lazy val neo4j: DatabaseProvider = new DatabaseProvider("neo4j", new Neo4jDatabase(config))
 
-  lazy val arangodb: DatabaseProvider = new DatabaseProvider("arangodb", new ArangoDatabase(config))
-
-  lazy val list: Seq[DatabaseProvider] = janus /*:: orientdb*/ /*:: neo4j :: arangodb*/ :: Nil
+  lazy val list: Seq[DatabaseProvider] = janus :: orientdb /*:: neo4j*/ :: Nil
 }
 
 class DatabaseProvider(val name: String, db: ⇒ Database) extends Provider[Database] {
