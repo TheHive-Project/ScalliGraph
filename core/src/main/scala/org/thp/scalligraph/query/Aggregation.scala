@@ -1,6 +1,6 @@
 package org.thp.scalligraph.query
 
-import java.lang.{Double ⇒ JDouble, Float ⇒ JFloat, Long ⇒ JLong}
+import java.lang.{Double ⇒ JDouble, Float ⇒ JFloat, Integer ⇒ JInt, Long ⇒ JLong}
 import java.util.{Collection ⇒ JCollection, List ⇒ JList, Map ⇒ JMap}
 
 import scala.collection.JavaConverters._
@@ -151,10 +151,10 @@ case class AggAvg(aggName: Option[String], fieldName: String) extends AggFunctio
     val publicProperty = getProperty(publicProperties, stepType, fieldName)
 
     val result = publicProperty.mapping.graphTypeClass match {
-      case c if c == classOf[Int]    ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Int]].mean[Number]
-      case c if c == classOf[Long]   ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Long]].mean[Number]
-      case c if c == classOf[Float]  ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Float]].mean[Number]
-      case c if c == classOf[Double] ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Double]].mean[Number]
+      case c if c == classOf[Int]    ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Int]].mean
+      case c if c == classOf[Long]   ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Long]].mean
+      case c if c == classOf[Float]  ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Float]].mean
+      case c if c == classOf[Double] ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Double]].mean
     }
     ScalarSteps(result)
   }
@@ -170,10 +170,10 @@ case class AggMin(aggName: Option[String], fieldName: String) extends AggFunctio
       authContext: Option[AuthContext]): ScalarSteps[AnyVal] = {
     val publicProperty = getProperty(publicProperties, stepType, fieldName)
     val result = publicProperty.mapping.graphTypeClass match {
-      case c if c == classOf[Int]    ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Int]].min
-      case c if c == classOf[Long]   ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Long]].min
-      case c if c == classOf[Float]  ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Float]].min
-      case c if c == classOf[Double] ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Double]].min
+      case c if c == classOf[Int]    ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Int]].min[JInt]
+      case c if c == classOf[Long]   ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Long]].min[JLong]
+      case c if c == classOf[Float]  ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Float]].min[JFloat]
+      case c if c == classOf[Double] ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Double]].min[JDouble]
       case _                         ⇒ ???
     }
     ScalarSteps(result.asInstanceOf[GremlinScala[AnyVal]])
@@ -189,10 +189,10 @@ case class AggMax(fieldName: String) extends AggFunction[AnyVal, AnyVal](s"max_$
       authContext: Option[AuthContext]): ScalarSteps[AnyVal] = {
     val publicProperty = getProperty(publicProperties, stepType, fieldName)
     val result = publicProperty.mapping.graphTypeClass match {
-      case c if c == classOf[Int]    ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Int]].max
-      case c if c == classOf[Long]   ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Long]].max
-      case c if c == classOf[Float]  ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Float]].max
-      case c if c == classOf[Double] ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Double]].max
+      case c if c == classOf[Int]    ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Int]].max[JInt]
+      case c if c == classOf[Long]   ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Long]].max[JLong]
+      case c if c == classOf[Float]  ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Float]].max[JFloat]
+      case c if c == classOf[Double] ⇒ publicProperty(fromStep.raw, authContext).asInstanceOf[GremlinScala[Double]].max[JDouble]
       case _                         ⇒ ???
     }
     ScalarSteps(result.asInstanceOf[GremlinScala[AnyVal]])
