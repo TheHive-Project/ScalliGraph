@@ -18,7 +18,7 @@ import org.thp.scalligraph.services.StorageSrv
 class OrientDatabaseStorageSrv(db: OrientDatabase, chunkSize: Int) extends StorageSrv {
 
   @Inject
-  def this(db: OrientDatabase, configuration: Configuration) = this(db, configuration.underlying.getBytes("attachment.database.chunkSize").toInt)
+  def this(db: OrientDatabase, configuration: Configuration) = this(db, configuration.underlying.getBytes("storage.database.chunkSize").toInt)
 
   override def loadBinary(id: String)(implicit graph: Graph): InputStream =
     new InputStream {

@@ -19,7 +19,7 @@ trait StorageSrv {
 class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
 
   @Inject()
-  def this(configuration: Configuration) = this(Paths.get(configuration.get[String]("attachment.localfs.location")))
+  def this(configuration: Configuration) = this(Paths.get(configuration.get[String]("storage.localfs.location")))
 
   def loadBinary(id: String)(implicit graph: Graph): InputStream =
     Files.newInputStream(directory.resolve(id))
@@ -34,7 +34,7 @@ class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
 class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
 
   @Inject
-  def this(db: Database, configuration: Configuration) = this(db, configuration.underlying.getBytes("attachment.database.chunkSize").toInt)
+  def this(db: Database, configuration: Configuration) = this(db, configuration.underlying.getBytes("storage.database.chunkSize").toInt)
 
   override def loadBinary(id: String)(implicit graph: Graph): InputStream =
     new InputStream {
