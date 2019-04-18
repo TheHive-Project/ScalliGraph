@@ -1,10 +1,11 @@
 package org.thp.scalligraph
 
-import org.thp.scalligraph.macros.AnnotationMacro
-import play.api.libs.json.Writes
-
 import scala.annotation.{compileTimeOnly, StaticAnnotation}
 import scala.language.experimental.{macros ⇒ enableMacros}
+
+import play.api.libs.json.Writes
+
+import org.thp.scalligraph.macros.AnnotationMacro
 
 @compileTimeOnly("enable macro paradise to expand macro annotations")
 class VertexEntity extends StaticAnnotation {

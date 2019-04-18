@@ -1,9 +1,10 @@
 package org.thp.scalligraph.models
 
+import play.api.libs.json._
+
 import org.specs2.mock.Mockito
 import org.specs2.mutable.Specification
 import org.thp.scalligraph.WithOutput
-import play.api.libs.json._
 
 class JsonMacroTest extends Specification with TestUtils with Mockito {
   "Json macro" should {

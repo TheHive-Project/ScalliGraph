@@ -1,10 +1,11 @@
 package org.thp.scalligraph.macros
 
-import org.thp.scalligraph.models.Entity
-import org.thp.scalligraph.{MacroUtil, WithOutput}
+import scala.reflect.macros.blackbox
+
 import play.api.libs.json.Writes
 
-import scala.reflect.macros.blackbox
+import org.thp.scalligraph.models.Entity
+import org.thp.scalligraph.{MacroUtil, WithOutput}
 
 class JsonMacro(val c: blackbox.Context) extends MacroUtil {
 

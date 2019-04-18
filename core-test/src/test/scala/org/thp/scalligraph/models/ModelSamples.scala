@@ -1,8 +1,9 @@
 package org.thp.scalligraph.models
 
+import play.api.libs.json.{JsString, Reads, Writes}
+
 import org.scalactic.Good
 import org.thp.scalligraph.controllers.{FString, FieldsParser}
-import play.api.libs.json.{JsString, Reads, Writes}
 
 object ModelSamples {
   val hobbiesParser: FieldsParser[Seq[String]] = FieldsParser("hobbies") {

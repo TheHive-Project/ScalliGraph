@@ -1,15 +1,18 @@
 package org.thp.scalligraph
 
+import scala.collection.JavaConverters._
+
+import play.api.inject.guice._
+import play.api.routing.Router
+import play.api.{ApplicationLoader, Configuration, Environment, Logger}
+
 import com.google.inject.internal.{BindingImpl, Scoping}
 import com.google.inject.spi._
 import com.google.inject.util.{Modules ⇒ GuiceModules}
 import com.google.inject.{Binder, Module ⇒ GuiceModule, _}
 import javax.inject.Inject
 import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
-import play.api.inject.guice._
-import play.api.routing.Router
-import play.api.{ApplicationLoader, Configuration, Environment, Logger}
-import scala.collection.JavaConverters._
+import org.thp.scalligraph.controllers.{AuthenticateSrv, DefaultAuthenticateSrv}
 
 class ScalligraphGuiceableModule(modules: Seq[GuiceableModule]) extends GuiceableModule {
   override def guiced(env: Environment, conf: Configuration, binderOptions: Set[BinderOption]): Seq[GuiceModule] = {
@@ -81,6 +84,7 @@ class ScalligraphApplicationLoader extends GuiceApplicationLoader {
 class ScalligraphModule extends ScalaModule {
   override def configure(): Unit = {
     Logger(getClass).info("Loading scalligraph module")
+    bind[AuthenticateSrv].to[DefaultAuthenticateSrv]
     bind[Router].toProvider[ScalligraphRouter]
     ()
   }

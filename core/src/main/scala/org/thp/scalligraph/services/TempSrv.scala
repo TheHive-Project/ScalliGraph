@@ -4,15 +4,16 @@ import java.io.IOException
 import java.nio.file._
 import java.nio.file.attribute.BasicFileAttributes
 
-import akka.stream.Materializer
-import javax.inject.{Inject, Singleton}
-import org.thp.scalligraph.Instance
-import org.thp.scalligraph.auth.AuthContext
+import scala.concurrent.{ExecutionContext, Future}
+
 import play.api.Logger
 import play.api.inject.ApplicationLifecycle
 import play.api.mvc.{Filter, RequestHeader, Result}
 
-import scala.concurrent.{ExecutionContext, Future}
+import akka.stream.Materializer
+import javax.inject.{Inject, Singleton}
+import org.thp.scalligraph.Instance
+import org.thp.scalligraph.auth.AuthContext
 
 @Singleton
 class TempSrv @Inject()(lifecycle: ApplicationLifecycle, implicit val ec: ExecutionContext) {

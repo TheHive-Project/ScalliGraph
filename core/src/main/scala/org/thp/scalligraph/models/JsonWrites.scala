@@ -1,9 +1,10 @@
 package org.thp.scalligraph.models
 
-import org.thp.scalligraph.macros.JsonMacro
+import scala.language.experimental.macros
+
 import play.api.libs.json.Writes
 
-import scala.language.experimental.macros
+import org.thp.scalligraph.macros.JsonMacro
 
 object JsonWrites {
   def apply[T]: Writes[T] = macro JsonMacro.getJsonWrites[T]

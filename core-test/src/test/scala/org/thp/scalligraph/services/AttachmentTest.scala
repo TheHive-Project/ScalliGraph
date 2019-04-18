@@ -2,15 +2,16 @@ package org.thp.scalligraph.services
 
 import java.nio.file.{Files, Path, Paths}
 
+import scala.tools.nsc.interpreter.InputStream
+
+import play.api.libs.logback.LogbackLoggerConfigurator
+import play.api.{Configuration, Environment}
+
 import org.specs2.mutable.Specification
 import org.specs2.specification.core.{Fragment, Fragments}
 import org.thp.scalligraph.janus.JanusDatabase
 import org.thp.scalligraph.models.{Database, DatabaseProvider, DatabaseProviders}
 import org.thp.scalligraph.orientdb.{OrientDatabase, OrientDatabaseStorageSrv}
-import play.api.libs.logback.LogbackLoggerConfigurator
-import play.api.{Configuration, Environment}
-
-import scala.tools.nsc.interpreter.InputStream
 
 class AttachmentTest extends Specification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)

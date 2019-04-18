@@ -1,9 +1,9 @@
 package org.thp.scalligraph.macros
 
-import org.thp.scalligraph.{MacroLogger, MacroUtil}
-
 import scala.reflect.macros.whitebox
 import scala.util.{Try ⇒ UTry}
+
+import org.thp.scalligraph.{MacroLogger, MacroUtil}
 
 class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMacro with MacroLogger {
 

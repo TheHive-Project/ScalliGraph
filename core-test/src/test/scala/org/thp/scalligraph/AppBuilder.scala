@@ -1,9 +1,11 @@
 package org.thp.scalligraph
 
 import scala.reflect.ClassTag
-import play.api.{Application, Configuration}
+
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.libs.concurrent.Akka
+import play.api.{Application, Configuration}
+
 import akka.actor.{Actor, ActorRef, Props}
 import com.google.inject.name.Names
 import com.google.inject.util.Providers
