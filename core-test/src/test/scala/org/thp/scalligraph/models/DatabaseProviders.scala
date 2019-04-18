@@ -1,11 +1,12 @@
 package org.thp.scalligraph.models
 
+import play.api.{Configuration, Environment, Logger}
+
 import com.typesafe.config.ConfigFactory
 import javax.inject.{Inject, Provider}
 import org.thp.scalligraph.janus.JanusDatabase
 import org.thp.scalligraph.neo4j.Neo4jDatabase
 import org.thp.scalligraph.orientdb.OrientDatabase
-import play.api.{Configuration, Environment, Logger}
 
 class DatabaseProviders @Inject()(config: Configuration) {
 
@@ -22,7 +23,7 @@ class DatabaseProviders @Inject()(config: Configuration) {
 
   lazy val neo4j: DatabaseProvider = new DatabaseProvider("neo4j", new Neo4jDatabase(config))
 
-  lazy val list: Seq[DatabaseProvider] = janus :: orientdb /*:: neo4j*/ :: Nil
+  lazy val list: Seq[DatabaseProvider] = janus /* :: orientdb :: neo4j*/ :: Nil
 }
 
 class DatabaseProvider(val name: String, db: ⇒ Database) extends Provider[Database] {
