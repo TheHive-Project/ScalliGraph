@@ -1,5 +1,6 @@
 package org.thp.scalligraph.services
 import java.io.InputStream
+import java.net.URI
 import java.nio.file.{Files, Path, Paths}
 import java.util.{Base64, UUID}
 
@@ -7,6 +8,9 @@ import play.api.{Configuration, Logger}
 
 import gremlin.scala._
 import javax.inject.{Inject, Singleton}
+import org.apache.hadoop.conf.{Configuration ⇒ HadoopConfig}
+import org.apache.hadoop.fs.{FileSystem ⇒ HDFileSystem, Path ⇒ HDPath}
+import org.apache.hadoop.io.IOUtils
 import org.apache.tinkerpop.gremlin.structure.T
 import org.thp.scalligraph.models.{Database, UniMapping}
 
@@ -26,6 +30,42 @@ class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
   def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex = {
     val id = UUID.randomUUID().toString
     Files.copy(is, directory.resolve(id))
+    graph.addVertex(T.label, "binaryData", "_id", id)
+  }
+}
+
+object HadoopStorageSrv {
+  def loadConfiguration(conf: Configuration): HadoopConfig = {
+    val hadoopConfig = new HadoopConfig()
+    conf.entrySet.foreach {
+      case (name, value) ⇒
+        value.unwrapped() match {
+          case s: String ⇒ hadoopConfig.set(name, s)
+        }
+    }
+    hadoopConfig
+  }
+}
+
+@Singleton
+class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
+
+  @Inject()
+  def this(configuration: Configuration) =
+    this(
+      HDFileSystem.get(
+        URI.create(configuration.get[String]("storage.hdfs.root")),
+        HadoopStorageSrv.loadConfiguration(configuration.get[Configuration]("storage.hdfs"))),
+      new HDPath(configuration.get[String]("storage.hdfs.location"))
+    )
+
+  override def loadBinary(id: String)(implicit graph: Graph): InputStream =
+    fs.open(new HDPath(id)).getWrappedStream
+
+  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex = {
+//    val id = UUID.randomUUID().toString
+    val os = fs.create(new HDPath(location, id), false)
+    IOUtils.copyBytes(is, os, 4096)
     graph.addVertex(T.label, "binaryData", "_id", id)
   }
 }
