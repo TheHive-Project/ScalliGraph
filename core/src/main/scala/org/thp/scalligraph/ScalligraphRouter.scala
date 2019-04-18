@@ -1,21 +1,24 @@
 package org.thp.scalligraph
 
-import com.google.inject.Provider
-import javax.inject.Inject
-import org.thp.scalligraph.controllers.ApiMethod
-import org.thp.scalligraph.models.Database
-import org.thp.scalligraph.query.{AuthGraph, Query, QueryExecutor}
+import scala.collection.immutable
+import scala.util.Success
+
 import play.api.http.HttpConfiguration
 import play.api.mvc.Results
 import play.api.routing.Router.Routes
-import play.api.routing.{Router, SimpleRouter}
 import play.api.routing.sird._
-import scala.collection.immutable
+import play.api.routing.{Router, SimpleRouter}
+
+import com.google.inject.Provider
+import javax.inject.Inject
+import org.thp.scalligraph.controllers.EntryPoint
+import org.thp.scalligraph.models.Database
+import org.thp.scalligraph.query.{AuthGraph, Query, QueryExecutor}
 
 class ScalligraphRouter @Inject()(
     httpConfig: HttpConfiguration,
     routers: immutable.Set[Router],
-    apiMethod: ApiMethod,
+    entryPoint: EntryPoint,
     db: Database,
     queryExecutors: immutable.Set[QueryExecutor])
     extends Provider[Router] {
@@ -25,13 +28,15 @@ class ScalligraphRouter @Inject()(
         .filter(_.versionCheck(version))
         .reduceOption(_ ++ _)
         .getOrElse(???)
-      apiMethod("query")
+      entryPoint("query")
         .extract('query, queryExecutor.parser.on("query"))
-        .requires() { implicit request ⇒
-          db.transaction { implicit graph ⇒
-            val authGraph    = AuthGraph(Some(request), graph)
-            val query: Query = request.body('query)
-            Results.Ok(queryExecutor.execute(query)(authGraph).toJson)
+        .authenticated { implicit request ⇒
+          db.tryTransaction { implicit graph ⇒
+            val authGraph = AuthGraph(request, graph)
+            // macro can't be used because it is in the same module
+            // val query: Query = request.body('query
+            val query: Query = request.body.list.head
+            Success(Results.Ok(queryExecutor.execute(query)(authGraph).toJson))
           }
         }
   }

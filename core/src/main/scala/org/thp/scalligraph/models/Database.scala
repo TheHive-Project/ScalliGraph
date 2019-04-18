@@ -4,6 +4,7 @@ import java.util.{Base64, Date, UUID}
 
 import scala.collection.JavaConverters._
 import scala.reflect.runtime.{universe ⇒ ru}
+import scala.util.Try
 
 import play.api.Logger
 
@@ -26,7 +27,8 @@ trait Database {
   val binaryMapping: SingleMapping[Array[Byte], String]
 
   def noTransaction[A](body: Graph ⇒ A): A
-  def transaction[A](body: Graph ⇒ A): A
+  def tryTransaction[A](body: Graph ⇒ Try[A]): Try[A]
+  def transaction[A](body: Graph ⇒ A): A = tryTransaction(graph ⇒ Try(body(graph))).get
 
   def version: Int
   def setVersion(v: Int): Unit
@@ -35,9 +37,9 @@ trait Database {
   def getVertexModel[E <: Product: ru.TypeTag]: Model.Vertex[E]
   def getEdgeModel[E <: Product: ru.TypeTag, FROM <: Product, TO <: Product]: Model.Edge[E, FROM, TO]
 
-  def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Unit
-  def createSchema(model: Model, models: Model*): Unit = createSchema(model +: models)
-  def createSchema(models: Seq[Model]): Unit
+  def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Try[Unit]
+  def createSchema(model: Model, models: Model*): Try[Unit] = createSchema(model +: models)
+  def createSchema(models: Seq[Model]): Try[Unit]
 
   def drop(): Unit
 
@@ -50,6 +52,7 @@ trait Database {
       from: FROM with Entity,
       to: TO with Entity): E with Entity
 
+  def update(graph: Graph, element: Element, authContext: AuthContext, model: Model, fields: Map[FPath, UpdateOps.Type]): Unit
   def update(graph: Graph, authContext: AuthContext, model: Model, id: String, fields: Map[FPath, UpdateOps.Type]): Unit
   def update(
       graph: Graph,
@@ -96,17 +99,17 @@ trait Database {
 abstract class BaseDatabase extends Database {
   lazy val logger = Logger("org.thp.scalligraph.models.Database")
 
-  val idMapping: SingleMapping[UUID, String]          = SingleMapping[UUID, String](uuid ⇒ Some(uuid.toString), UUID.fromString)
+  val idMapping: SingleMapping[UUID, String]          = SingleMapping[UUID, String]("", uuid ⇒ Some(uuid.toString), UUID.fromString)
   val createdAtMapping: SingleMapping[Date, Date]     = UniMapping.dateMapping
   val createdByMapping: SingleMapping[String, String] = UniMapping.stringMapping
   val updatedAtMapping: OptionMapping[Date, Date]     = UniMapping.dateMapping.optional
   val updatedByMapping: OptionMapping[String, String] = UniMapping.stringMapping.optional
   val binaryMapping: SingleMapping[Array[Byte], String] =
-    SingleMapping[Array[Byte], String](data ⇒ Some(Base64.getEncoder.encodeToString(data)), Base64.getDecoder.decode)
+    SingleMapping[Array[Byte], String]("", data ⇒ Some(Base64.getEncoder.encodeToString(data)), Base64.getDecoder.decode)
 
-  override def version: Int = transaction(_.variables.get[Int]("version").orElse(0))
+  override def version: Int = transaction(graph ⇒ graph.variables.get[Int]("version").orElse(0))
 
-  override def setVersion(v: Int): Unit = transaction(_.variables.set("version", v))
+  override def setVersion(v: Int): Unit = transaction(graph ⇒ graph.variables.set("version", v))
 
   override def getModel[E <: Product: ru.TypeTag]: Model.Base[E] = {
     val rm = ru.runtimeMirror(getClass.getClassLoader)
@@ -139,12 +142,13 @@ abstract class BaseDatabase extends Database {
     }
   }
 
-  override def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Unit = {
-    createSchema(schemaObject.modelList ++ extraModels)
-    transaction(graph ⇒ schemaObject.initialValues.foreach(_.create()(this, graph, authContext)))
-  }
+  override def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Try[Unit] =
+    createSchema(schemaObject.modelList ++ extraModels).map { _ ⇒
+      transaction(graph ⇒ schemaObject.initialValues.foreach(_.create()(this, graph, authContext)))
+      transaction(graph ⇒ schemaObject.init(graph, authContext))
+    }
 
-  override def createSchema(models: Seq[Model]): Unit
+  override def createSchema(models: Seq[Model]): Try[Unit]
 
   override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
     val createdVertex = model.create(v)(this, graph)
@@ -180,7 +184,7 @@ abstract class BaseDatabase extends Database {
     }
   }
 
-  def update(element: Element, authContext: AuthContext, model: Model, fields: Map[FPath, UpdateOps.Type]): Unit = {
+  override def update(graph: Graph, element: Element, authContext: AuthContext, model: Model, fields: Map[FPath, UpdateOps.Type]): Unit = {
     setOptionProperty(element, "_updatedAt", Some(new Date), updatedAtMapping)
     setOptionProperty(element, "_updatedBy", Some(authContext.userId), updatedByMapping)
     logger.trace(s"Update ${element.id()} by ${authContext.userId}")
@@ -195,7 +199,7 @@ abstract class BaseDatabase extends Database {
   }
   override def update(graph: Graph, authContext: AuthContext, model: Model, id: String, fields: Map[FPath, UpdateOps.Type]): Unit = {
     val element: Element = model.get(id)(this, graph)
-    update(element, authContext, model, fields)
+    update(graph, element, authContext, model, fields)
   }
 
   def update(
@@ -204,20 +208,20 @@ abstract class BaseDatabase extends Database {
       elementSrv: ElementSrv[_, _],
       id: String,
       properties: Seq[PublicProperty[_, _, _]],
-      fields: Map[FPath, UpdateOps.Type]): Unit =
-    fields.foreach {
-      case (key, UpdateOps.SetAttribute(value)) ⇒
-        for {
-          property            ← properties.find(_.propertyName == key.toString)
-          (elementFunc, prop) ← property.fn(Some(authContext)).headOption.asInstanceOf[Option[(GremlinScala[Any] ⇒ GremlinScala[Any], String)]]
-          e = elementSrv.get(id)(graph).asInstanceOf[ElementSteps[_, _, _]].raw.asInstanceOf[GremlinScala[Any]]
-          element ← elementFunc(e).traversal.limit(1).toList.asScala.headOption.asInstanceOf[Option[Element]]
-          _ = setOptionProperty(element, "_updatedAt", Some(new Date), updatedAtMapping)
-          _ = setOptionProperty(element, "_updatedBy", Some(authContext.userId), updatedByMapping)
-          _ = logger.trace(s"Update ${element.id()} by ${authContext.userId}: $key = $value")
-        } setProperty(element, prop, value, property.mapping.asInstanceOf[Mapping[Any, _, _]])
-      case _ ⇒ ???
-    }
+      fields: Map[FPath, UpdateOps.Type]): Unit = ??? // TODO
+//    fields.foreach {
+//      case (key, UpdateOps.SetAttribute(value)) ⇒
+//        for {
+//          property            ← properties.find(_.propertyName == key.toString)
+//          (elementFunc, prop) ← property.fn(authContext).headOption.asInstanceOf[Option[(GremlinScala[Any] ⇒ GremlinScala[Any], String)]]
+//          e = elementSrv.get(id)(graph).asInstanceOf[ElementSteps[_, _, _]].raw.asInstanceOf[GremlinScala[Any]]
+//          element ← elementFunc(e).traversal.limit(1).toList.asScala.headOption.asInstanceOf[Option[Element]]
+//          _ = setOptionProperty(element, "_updatedAt", Some(new Date), updatedAtMapping)
+//          _ = setOptionProperty(element, "_updatedBy", Some(authContext.userId), updatedByMapping)
+//          _ = logger.trace(s"Update ${element.id()} by ${authContext.userId}: $key = $value")
+//        } setProperty(element, prop, value, property.mapping.asInstanceOf[Mapping[Any, _, _]])
+//      case _ ⇒ ???
+//    }
 
   override def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D = {
     val values = element.properties[G](key)

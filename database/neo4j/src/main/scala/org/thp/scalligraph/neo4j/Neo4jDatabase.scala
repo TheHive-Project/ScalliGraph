@@ -4,7 +4,7 @@ import java.nio.file.{Files, Paths}
 import java.util.Date
 
 import scala.reflect.ClassTag
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 import play.api.Configuration
 
@@ -51,36 +51,40 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
     body(graph)
   }
 
-  override def transaction[A](body: Graph ⇒ A): A =
+  override def tryTransaction[A](body: Graph ⇒ Try[A]): Try[A] =
     Retry(maxRetryOnConflict, classOf[ConstraintViolationException]) {
       val tx = graph.tx
-      if (tx.isOpen) body(graph)
-      else
-        graph.synchronized {
-          logger.debug(s"[$tx] Begin of transaction")
-          tx.open()
-          try {
-            val a = body(graph)
-            tx.commit()
-            a
-          } catch {
-            case e: Throwable ⇒
-              Try(tx.rollback())
-              throw e
-          } finally {
+      val r =
+        if (tx.isOpen) Try(body(graph)).flatten
+        else
+          graph.synchronized {
+            logger.debug(s"[$tx] Begin of transaction")
+            tx.open()
+            val r2 = Try {
+              val a = body(graph)
+              tx.commit()
+              a
+            }.flatten
+              .recoverWith {
+                case e: Throwable ⇒
+                  Try(tx.rollback())
+                  Failure(e)
+              }
             logger.debug(s"[$tx] End of transaction")
             tx.close()
+            r2
           }
-        }
-    }.fold[A]({
-      case t: ConstraintViolationException ⇒ throw new DatabaseException(cause = t)
-      case t                               ⇒ throw t
-    }, a ⇒ a)
+      r.recoverWith {
+        case t: ConstraintViolationException ⇒ Failure(new DatabaseException(cause = t))
+        case t                               ⇒ Failure(t)
 
-  override def createSchema(models: Seq[Model]): Unit =
+      }
+    }
+
+  override def createSchema(models: Seq[Model]): Try[Unit] =
     // Cypher can't be used here to create schema as it is not compatible with scala 2.12
     // https://github.com/neo4j/neo4j/issues/8832
-    transaction { _ ⇒
+    tryTransaction { _ ⇒
       val neo4jGraph = graph.getBaseGraph.asInstanceOf[Neo4jGraphAPIImpl].getGraphDatabase
       for {
         model ← models
@@ -121,11 +125,12 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
           }
         }
       }
+      Success(())
     }
 
   override def drop(): Unit = graph.getBaseGraph.shutdown() // FIXME this is not a real drop
 
-  val dateMapping: SingleMapping[Date, Long] = SingleMapping[Date, Long](d ⇒ Some(d.getTime), new Date(_))
+  val dateMapping: SingleMapping[Date, Long] = SingleMapping[Date, Long](0, d ⇒ Some(d.getTime), new Date(_))
 
   def fixMapping[M <: Mapping[_, _, _]](mapping: M): M =
     if (mapping.domainTypeClass == classOf[Date]) {

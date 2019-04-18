@@ -1,14 +1,15 @@
 package org.thp.scalligraph.models
 
-import gremlin.scala.{Graph, GremlinScala, Vertex}
-import play.api.{Configuration, Environment}
 import play.api.libs.logback.LogbackLoggerConfigurator
+import play.api.test.PlaySpecification
+import play.api.{Configuration, Environment}
+
+import gremlin.scala.{Graph, GremlinScala, Vertex}
 import org.specs2.mock.Mockito
 import org.specs2.specification.core.Fragments
 import org.thp.scalligraph.VertexEntity
 import org.thp.scalligraph.auth.{AuthContext, UserSrv}
 import org.thp.scalligraph.services.VertexSrv
-import play.api.test.PlaySpecification
 
 @VertexEntity
 case class MyEntity(name: String, value: Int)
@@ -38,17 +39,18 @@ class SimpleEntityTest extends PlaySpecification with Mockito {
 
       "create and get entities" in db.transaction { implicit graph ⇒
         val createdEntity: MyEntity with Entity = myEntitySrv.create(MyEntity("e^π", -1))
-        val e                                   = myEntitySrv.getOrFail(createdEntity._id)
-        e.name must_=== "e^π"
-        e.value must_=== -1
-        e._createdBy must_=== "test"
+        myEntitySrv.getOrFail(createdEntity._id) must beSuccessfulTry.withValue { e: MyEntity with Entity ⇒
+          e.name must_=== "e^π"
+          e.value must_=== -1
+          e._createdBy must_=== "admin"
+        }
       }
 
       "update an entity" in db.transaction { implicit graph ⇒
         val id = myEntitySrv.create(MyEntity("super", 7))._id
         myEntitySrv.update(id, "value", 8)
 
-        myEntitySrv.getOrFail(id).value must_=== 8
+        myEntitySrv.getOrFail(id) must beSuccessfulTry.withValue((_: MyEntity with Entity).value must_=== 8)
       }
     }
   }

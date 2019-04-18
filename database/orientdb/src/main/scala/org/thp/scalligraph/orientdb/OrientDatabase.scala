@@ -3,7 +3,7 @@ package org.thp.scalligraph.orientdb
 import java.util.{List ⇒ JList, Set ⇒ JSet}
 
 import scala.collection.JavaConverters._
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 import play.api.{Configuration, Environment}
 
@@ -41,45 +41,43 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
 
   override def noTransaction[A](body: Graph ⇒ A): A = body(graphFactory.getNoTx)
 
-  override def transaction[A](body: Graph ⇒ A): A =
+  override def tryTransaction[A](body: Graph ⇒ Try[A]): Try[A] =
     Retry(maxRetryOnConflict, classOf[OConcurrentModificationException], classOf[ORecordDuplicatedException]) {
       val tx = graphFactory.getTx
       MDC.put("tx", f"${tx.hashCode()}%08x")
       logger.debug(s"[$tx] Begin of transaction")
-      try {
+      val r = Try {
         val a = body(tx)
         tx.commit()
         logger.debug(s"[$tx] End of transaction")
         MDC.remove("tx")
         a
-      } catch {
-        case e: Throwable ⇒
-          logger.error(s"Exception raised, rollback (${e.getMessage})")
-          Try(tx.rollback())
-          MDC.remove("tx")
-          throw e
-      } finally {
-        tx.close()
-      }
-    }.fold[A](
-      {
-        case t: OConcurrentModificationException ⇒ throw new DatabaseException(cause = t)
-        case t: ORecordDuplicatedException       ⇒ throw new DatabaseException(cause = t)
-        case t                                   ⇒ throw t
-      },
-      a ⇒ a
-    )
+      }.flatten
+        .recoverWith {
+          case t: OConcurrentModificationException ⇒ Failure(new DatabaseException(cause = t))
+          case t: ORecordDuplicatedException       ⇒ Failure(new DatabaseException(cause = t))
+          case e: Throwable ⇒
+            logger.error(s"Exception raised, rollback (${e.getMessage})")
+            Try(tx.rollback())
+            MDC.remove("tx")
+            Failure(e)
+        }
+      tx.close()
+      r
+    }
 
   private def getVariablesVertex(implicit graph: Graph): Option[Vertex] = graph.traversal().V().hasLabel("variables").headOption()
 
-  override def version: Int = transaction { implicit graph ⇒
-    getVariablesVertex.fold(0)(v ⇒ getSingleProperty(v, "version", UniMapping.intMapping))
-  }
+  override def version: Int =
+    tryTransaction { implicit graph ⇒
+      Success(getVariablesVertex.fold(0)(v ⇒ getSingleProperty(v, "version", UniMapping.intMapping)))
+    }.get
 
-  override def setVersion(v: Int): Unit = transaction { implicit graph ⇒
-    val variables = getVariablesVertex.getOrElse(graph.addVertex("variables"))
-    setSingleProperty(variables, "version", v, UniMapping.intMapping)
-  }
+  override def setVersion(v: Int): Unit =
+    tryTransaction { implicit graph ⇒
+      val variables = getVariablesVertex.getOrElse(graph.addVertex("variables"))
+      Success(setSingleProperty(variables, "version", v, UniMapping.intMapping))
+    }.get
 
   private def createElementSchema(schema: OSchema, model: Model, superClassName: String, strict: Boolean): OClass = {
     val superClass = schema.getClass(superClassName)
@@ -135,7 +133,7 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
       edgeClass.createProperty("out", OType.LINK, fromClass)
     }
 
-  override def createSchema(models: Seq[Model]): Unit = {
+  override def createSchema(models: Seq[Model]): Try[Unit] = {
     val schema = graphFactory.getNoTx.database().getMetadata.getSchema
     models.foreach {
       case model: VertexModel ⇒ createElementSchema(schema, model, OClass.VERTEX_CLASS_NAME, strict = false)
@@ -148,7 +146,7 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
     val superClass = schema.getClass(OClass.VERTEX_CLASS_NAME)
     val clazz      = schema.createClass(attachmentVertexLabel, superClass)
     clazz.createProperty(attachmentPropertyName, OType.LINKLIST)
-    ()
+    Success(())
   }
 
   override def drop(): Unit = graphFactory.drop()

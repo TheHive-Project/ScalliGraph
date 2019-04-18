@@ -2,7 +2,7 @@ package org.thp.scalligraph.janus
 
 import java.util.{Date, UUID}
 
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 import play.api.{Configuration, Environment}
 
@@ -27,6 +27,7 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
       configuration.get[Int]("db.maxRetryOnConflict"),
       configuration.underlying.getBytes("db.chunkSize").toInt
     )
+    logger.info(s"Instantiate JanusDatabase using ${configuration.get[String]("db.janusgraph.storage.backend")} backend")
   }
 
   def this() = this(Configuration.load(Environment.simple()))
@@ -38,7 +39,7 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
     a
   }
 
-  override def transaction[A](body: Graph ⇒ A): A =
+  override def tryTransaction[A](body: Graph ⇒ Try[A]): Try[A] =
     Retry(maxRetryOnConflict, classOf[PermanentLockingException], classOf[SchemaViolationException]) {
       //    val tx = graph.tx()
       //    tx.open() /*.createThreadedTx[JanusGraphTransaction]()*/
@@ -46,24 +47,23 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
       val tx = graph.tx.createThreadedTx[JanusGraphTransaction]()
       MDC.put("tx", f"${tx.hashCode()}%08x")
       logger.debug("Begin of transaction")
-      try {
+      Try {
         val a = body(tx)
         tx.commit()
         logger.debug("End of transaction")
         MDC.remove("tx")
         a
-      } catch {
-        case e: Throwable ⇒
-          logger.error(s"Exception raised, rollback (${e.getMessage})")
-          Try(tx.rollback())
-          MDC.remove("tx")
-          throw e
-      }
-    }.fold[A]({
-      case t: PermanentLockingException ⇒ throw new DatabaseException(cause = t)
-      case t: SchemaViolationException  ⇒ throw new DatabaseException(cause = t)
-      case t                            ⇒ throw t
-    }, a ⇒ a)
+      }.flatten
+        .recoverWith {
+          case t: PermanentLockingException ⇒ Failure(new DatabaseException(cause = t))
+          case t: SchemaViolationException  ⇒ Failure(new DatabaseException(cause = t))
+          case e: Throwable ⇒
+            logger.error(s"Exception raised, rollback (${e.getMessage})")
+            Try(tx.rollback())
+            MDC.remove("tx")
+            Failure(e)
+        }
+    }
 
   // FIXME "isAssignableFrom" can be replaced by "==" because classes are final.
   def convertToJava(c: Class[_]): Class[_] =
@@ -185,7 +185,7 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
     ()
   }
 
-  override def createSchema(models: Seq[Model]): Unit =
+  override def createSchema(models: Seq[Model]): Try[Unit] =
     Retry(maxRetryOnConflict, classOf[PermanentLockingException]) {
       logger.info("Creating database schema")
       graph.synchronized {
@@ -234,8 +234,9 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
           ()
           mgmt.commit()
         }
+        Success(())
       }
-    }.get
+    }
 
   override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
     val createdVertex = model.create(v)(this, graph)
