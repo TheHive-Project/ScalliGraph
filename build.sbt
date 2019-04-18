@@ -1,9 +1,10 @@
 import Dependencies._
 
+// format: off
 lazy val scalligraph = (project in file("."))
-  .dependsOn(core, common, ctrl, graphql, janus, orientdb/*, neo4j, coreTest*/)
+  .dependsOn(core, /*graphql, */janus, orientdb/*, neo4j, coreTest*/)
   .dependsOn(coreTest % "test -> test")
-  .aggregate(core, common, ctrl, graphql, janus, orientdb, neo4j, coreTest)
+  .aggregate(core, /*graphql, */janus, orientdb, neo4j, coreTest)
   .settings(
     inThisBuild(
       List(
@@ -44,18 +45,25 @@ lazy val scalligraph = (project in file("."))
       )),
     name := "scalligraph"
   )
+// format: on
 
 lazy val core = (project in file("core"))
-  .dependsOn(ctrl)
   .settings(
     name := "scalligraph-core",
     libraryDependencies ++= Seq(
       gremlinScala,
       scalactic,
-      scalaCompiler(scalaVersion.value),
       playGuice,
       scalaGuice,
-      specs % Test
+      hadoopClient,
+      playCore,
+      apacheConfiguration,
+      bouncyCastle,
+      shapeless,
+      scalaCompiler(scalaVersion.value),
+      scalaReflect(scalaVersion.value),
+      specs       % Test,
+      playLogback % Test
     )
   )
 
@@ -80,7 +88,8 @@ lazy val janus = (project in file("database/janusgraph"))
       janusGraph,
       janusGraphBerkeleyDB,
       janusGraphHBase,
-      hbaseClient,
+//      hbaseClient,
+      cassandra,
 //      hbaseCommon,
 //      hadoopCommon,
 //      gremlinServer,
@@ -111,44 +120,16 @@ lazy val neo4j = (project in file("database/neo4j"))
     )
   )
 
-lazy val common = (project in file("common"))
-  .settings(
-    name := "scalligraph-common",
-    libraryDependencies ++= Seq(
-      scalaReflect(scalaVersion.value),
-      playCore,
-      scalactic,
-      apacheConfiguration,
-      specs % Test
-    )
-  )
-
-lazy val ctrl = (project in file("ctrl"))
-  .dependsOn(common)
-  .settings(
-    name := "scalligraph-ctrl",
-    libraryDependencies ++= Seq(
-      scalaReflect(scalaVersion.value),
-      scalaCompiler(scalaVersion.value),
-      playCore,
-      scalaGuice,
-      bouncyCastle,
-      shapeless,
-      playLogback % Test,
-      specs       % Test
-    )
-  )
-
-lazy val graphql = (project in file("graphql"))
-  .dependsOn(core)
-  .dependsOn(coreTest % "test->test")
-  .dependsOn(janus)
-  .settings(
-    name := "scalligraph-graphql",
-    libraryDependencies ++= Seq(
-      scalaGuice,
-      sangria,
-      sangriaPlay,
-      specs % Test
-    )
-  )
+//lazy val graphql = (project in file("graphql"))
+//  .dependsOn(core)
+//  .dependsOn(coreTest % "test->test")
+//  .dependsOn(janus)
+//  .settings(
+//    name := "scalligraph-graphql",
+//    libraryDependencies ++= Seq(
+//      scalaGuice,
+//      sangria,
+//      sangriaPlay,
+//      specs % Test
+//    )
+//  )
