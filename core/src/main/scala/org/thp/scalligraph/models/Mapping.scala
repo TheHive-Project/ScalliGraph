@@ -3,9 +3,12 @@ package org.thp.scalligraph.models
 import java.util.Date
 
 import scala.reflect.{classTag, ClassTag}
+
 import play.api.libs.json.{JsObject, Json}
+
 import gremlin.scala.dsl.Converter
 import org.thp.scalligraph.Hash
+import org.thp.scalligraph.auth.Permission
 
 object MappingCardinality extends Enumeration {
   val option, single, list, set = Value
@@ -22,15 +25,17 @@ trait UniMapping[D] {
 
 object UniMapping {
   implicit val jsonMapping: SingleMapping[JsObject, String] =
-    SingleMapping[JsObject, String](toGraphOptFn = j ⇒ Some(j.toString), toDomainFn = s ⇒ Json.parse(s).as[JsObject])
-  implicit val stringMapping: SingleMapping[String, String]    = SingleMapping[String, String]()
-  implicit val longMapping: SingleMapping[Long, Long]          = SingleMapping[Long, Long]()
-  implicit val intMapping: SingleMapping[Int, Int]             = SingleMapping[Int, Int]()
-  implicit val dateMapping: SingleMapping[Date, Date]          = SingleMapping[Date, Date]()
-  implicit val booleanMapping: SingleMapping[Boolean, Boolean] = SingleMapping[Boolean, Boolean]()
-  implicit val doubleMapping: SingleMapping[Double, Double]    = SingleMapping[Double, Double]()
-  implicit val floatMapping: SingleMapping[Float, Float]       = SingleMapping[Float, Float]()
+    SingleMapping[JsObject, String]("", toGraphOptFn = j ⇒ Some(j.toString), toDomainFn = s ⇒ Json.parse(s).as[JsObject])
+  implicit val stringMapping: SingleMapping[String, String]         = SingleMapping[String, String]("")
+  implicit val longMapping: SingleMapping[Long, Long]               = SingleMapping[Long, Long](0)
+  implicit val intMapping: SingleMapping[Int, Int]                  = SingleMapping[Int, Int](0)
+  implicit val dateMapping: SingleMapping[Date, Date]               = SingleMapping[Date, Date](new Date(0))
+  implicit val booleanMapping: SingleMapping[Boolean, Boolean]      = SingleMapping[Boolean, Boolean](false)
+  implicit val doubleMapping: SingleMapping[Double, Double]         = SingleMapping[Double, Double](0)
+  implicit val floatMapping: SingleMapping[Float, Float]            = SingleMapping[Float, Float](0)
+  implicit val permissionMapping: SingleMapping[Permission, String] = SingleMapping[Permission, String]("")
   implicit val hashMapping: SingleMapping[Hash, String] = SingleMapping[Hash, String](
+    "",
     toGraphOptFn = h ⇒ Some(h.toString),
     toDomainFn = Hash(_)
   )
@@ -44,6 +49,7 @@ sealed trait Mapping[D, SD, G] extends UniMapping[D] with Converter[SD] {
   val graphTypeClass: Class[_]
   val domainTypeClass: Class[_]
   val cardinality: MappingCardinality.Value
+  val noValue: G
   val isReadonly: Boolean
   override def toGraph(d: SD): G = toGraphOpt(d).get
   def toGraphOpt(d: SD): Option[G]
@@ -57,6 +63,7 @@ sealed trait Mapping[D, SD, G] extends UniMapping[D] with Converter[SD] {
 }
 
 case class OptionMapping[D: ClassTag, G: ClassTag](
+    noValue: G,
     toGraphOptFn: D ⇒ Option[G] = (d: D) ⇒ Some(d.asInstanceOf[G]),
     toDomainFn: G ⇒ D = (g: G) ⇒ g.asInstanceOf[D],
     isReadonly: Boolean = false
@@ -70,6 +77,7 @@ case class OptionMapping[D: ClassTag, G: ClassTag](
 }
 
 case class SingleMapping[D: ClassTag, G: ClassTag](
+    noValue: G,
     toGraphOptFn: D ⇒ Option[G] = (d: D) ⇒ Some(d.asInstanceOf[G]),
     toDomainFn: G ⇒ D = (g: G) ⇒ g.asInstanceOf[D],
     isReadonly: Boolean = false
@@ -80,12 +88,13 @@ case class SingleMapping[D: ClassTag, G: ClassTag](
   override def toGraphOpt(d: D): Option[G]           = toGraphOptFn(d)
   override def toDomain(g: G): D                     = toDomainFn(g)
   override def readonly: SingleMapping[D, G]         = copy(isReadonly = true)
-  override def optional: OptionMapping[D, G]         = OptionMapping[D, G](toGraphOptFn, toDomainFn, isReadonly)
-  override def sequence: ListMapping[D, G]           = ListMapping[D, G](toGraphOptFn, toDomainFn, isReadonly)
-  override def set: SetMapping[D, G]                 = SetMapping[D, G](toGraphOptFn, toDomainFn, isReadonly)
+  override def optional: OptionMapping[D, G]         = OptionMapping[D, G](noValue, toGraphOptFn, toDomainFn, isReadonly)
+  override def sequence: ListMapping[D, G]           = ListMapping[D, G](noValue, toGraphOptFn, toDomainFn, isReadonly)
+  override def set: SetMapping[D, G]                 = SetMapping[D, G](noValue, toGraphOptFn, toDomainFn, isReadonly)
 }
 
 case class ListMapping[D: ClassTag, G: ClassTag](
+    noValue: G,
     toGraphOptFn: D ⇒ Option[G] = (d: D) ⇒ Some(d.asInstanceOf[G]),
     toDomainFn: G ⇒ D = (g: G) ⇒ g.asInstanceOf[D],
     isReadonly: Boolean = false
@@ -99,6 +108,7 @@ case class ListMapping[D: ClassTag, G: ClassTag](
 }
 
 case class SetMapping[D: ClassTag, G: ClassTag](
+    noValue: G,
     toGraphOptFn: D ⇒ Option[G] = (d: D) ⇒ Some(d.asInstanceOf[G]),
     toDomainFn: G ⇒ D = (g: G) ⇒ g.asInstanceOf[D],
     isReadonly: Boolean = false

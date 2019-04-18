@@ -1,9 +1,9 @@
 package org.thp.scalligraph.macros
 
+import scala.reflect.macros.blackbox
+
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.{MacroLogger, MacroUtil}
-
-import scala.reflect.macros.blackbox
 
 trait MappingMacro extends MacroUtil with MacroLogger {
   val c: blackbox.Context
@@ -64,7 +64,7 @@ trait MappingMacro extends MacroUtil with MacroLogger {
               "Wrong value " + other +
               " for numeration " + ${symbol.toString} +
               ". Possible values are " + ${members.map(_._1).mkString(",")})"""
-        Some(q"org.thp.scalligraph.models.SingleMapping[$eType, String](e ⇒ Some(e.toString), g ⇒ g match { case ..$valueCases })")
+        Some(q"""org.thp.scalligraph.models.SingleMapping[$eType, String]("", e ⇒ Some(e.toString), g ⇒ g match { case ..$valueCases })""")
       case _ ⇒ None
     }
 }
