@@ -1,13 +1,15 @@
 package org.thp.scalligraph.query
 
+import scala.reflect.runtime.{universe ⇒ ru}
+
+import play.api.libs.json.{JsNull, Json}
+
 import gremlin.scala.{Element, Graph}
 import org.scalactic._
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
-import play.api.libs.json.{JsNull, Json, OWrites, Writes}
-
-import scala.reflect.runtime.{universe ⇒ ru}
+import org.thp.scalligraph.models.ResultWithTotalSize
 
 abstract class QueryExecutor { executor ⇒
   val version: (Int, Int)                                        = 1 → 1
@@ -24,32 +26,35 @@ abstract class QueryExecutor { executor ⇒
   def execute(q: Query)(implicit authGraph: AuthGraph): Output[_] =
     execute(q, authGraph.graph, authGraph.auth)
 
-  def execute(q: Query, graph: Graph, authContext: Option[AuthContext]): Output[_] = {
+  def execute(q: Query, graph: Graph, authContext: AuthContext): Output[_] = {
     val outputType  = q.toType(ru.typeOf[Graph])
     val outputValue = q((), graph, authContext)
     toOutput(outputValue, outputType, authContext)
   }
 
-  private def toOutput(value: Any, tpe: ru.Type, authContext: Option[AuthContext]): Output[_] =
+  private def toOutput(value: Any, tpe: ru.Type, authContext: AuthContext): Output[_] =
     value match {
       case o: Output[_] ⇒ o
       case s: Seq[o] ⇒
         val subType = RichType.getTypeArgs(tpe, ru.typeOf[Seq[_]]).head
-        val writes  = OWrites[Seq[o]](x ⇒ Json.obj("result" → x.map(toOutput(_, subType, authContext).toJson)))
-        Output.apply[Seq[o]](s)(writes)
+        val result  = s.map(x ⇒ toOutput(x, subType, authContext).toJson)
+        Output(s, Json.obj("result" → result))
       case s: Option[o] ⇒
-        val subType = RichType.getTypeArgs(tpe, ru.typeOf[Option[_]]).head
-        val writes = Writes[Option[o]] {
-          case None    ⇒ JsNull
-          case Some(x) ⇒ toOutput(x, subType, authContext).toJson
+        s.fold[Output[_]](Output(None, JsNull)) { v ⇒
+          val subType = RichType.getTypeArgs(tpe, ru.typeOf[Option[_]]).head
+          toOutput(v, subType, authContext)
         }
-        Output[None.type](None)(OWrites[None.type](_ ⇒ Json.obj("result" → JsNull))) // FIXME ??
-      case o ⇒
+      case ResultWithTotalSize(result, _) ⇒
+        val subType = RichType.getTypeArgs(tpe, ru.typeOf[ResultWithTotalSize[_]]).head
+        val seqType = ru.appliedType(ru.typeOf[Seq[_]].typeConstructor, subType)
+        val lOutput = toOutput(result, seqType, authContext)
+        Output(value, lOutput.toJson)
+      case _ ⇒
         allQueries
           .find(q ⇒ q.checkFrom(tpe) && q.toType(tpe) <:< ru.typeOf[Output[_]] && q.paramType == ru.typeOf[Unit])
           .map(q ⇒ q.asInstanceOf[Query]((), value, authContext))
           .getOrElse {
-            throw BadRequestError(s"Value of type $tpe can't be output")
+            throw BadRequestError(s"Value of type $tpe ($value) can't be output")
           }
           .asInstanceOf[Output[_]]
     }
