@@ -2,7 +2,7 @@ package org.thp.scalligraph.controllers
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.higherKinds
-import scala.util.{Success, Try}
+import scala.util.{Failure, Success, Try}
 
 import play.api.Logger
 import play.api.http.HttpErrorHandler
@@ -12,10 +12,12 @@ import play.api.mvc._
 
 import akka.stream.Materializer
 import akka.stream.scaladsl.{Keep, Sink, Source}
+import gremlin.scala.Graph
 import javax.inject.{Inject, Singleton}
 import org.scalactic.{Bad, Good}
 import org.slf4j.MDC
 import org.thp.scalligraph.AttributeCheckingError
+import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.record.Record
 import shapeless.labelled.FieldType
 import shapeless.{::, labelled, HList, HNil, Witness}
@@ -44,7 +46,7 @@ class EntryPoint @Inject()(
     * @return empty entry point
     */
   def apply(name: String): EntryPointBuilder[HNil, Request] =
-    EntryPointBuilder[HNil, Request](name, BaseFieldsParser.good(HNil), Future.successful)
+    EntryPointBuilder[HNil, Request](name, BaseFieldsParser.good(HNil), Success.apply)
 
   /**
     * An entry point is defined by its name, a fields parser which transform request into a record V and the type of request (
@@ -59,7 +61,7 @@ class EntryPoint @Inject()(
   case class EntryPointBuilder[V <: HList, R[_] <: Request[_]](
       name: String,
       fieldsParser: BaseFieldsParser[V],
-      req: Request[AnyContent] ⇒ Future[R[AnyContent]]) {
+      req: Request[AnyContent] ⇒ Try[R[AnyContent]]) {
 
     /**
       * Extract a field from request.
@@ -81,11 +83,9 @@ class EntryPoint @Inject()(
         name,
         fieldsParser,
         request ⇒
-          Future.fromTry {
-            authenticateSrv.getAuthContext(request).flatMap { authContext ⇒
-              logger.trace(s"check user permissions of ${authContext.userName}")
-              Success(new AuthenticatedRequest[AnyContent](authContext, request))
-            }
+          authenticateSrv.getAuthContext(request).map { authContext ⇒
+            logger.trace(s"check user permissions of ${authContext.userName}")
+            new AuthenticatedRequest(authContext, request)
         }
       )
 
@@ -113,63 +113,19 @@ class EntryPoint @Inject()(
           .withHeaders("X-total" → numberOfElement.toString)
       }
 
-      actionBuilder.async { request: Request[AnyContent] ⇒
+      actionBuilder.async { request ⇒
         MDC.put("request", f"${request.id}%08x")
-        fieldsParser(Field(request)) match {
+        val tryResult = fieldsParser(Field(request)) match {
           case Good(values) ⇒
             req(request).map { r ⇒
               sourceToResult(block(r.map(_ ⇒ Record(values)).asInstanceOf[R[Record[V]]]))
             }
           case Bad(errors) ⇒
-            Future.successful(BadRequest(Json.toJson(AttributeCheckingError(errors.toSeq))))
+            Failure(AttributeCheckingError(errors.toSeq))
         }
+        tryResult.fold[Future[Result]](errorHandler.onServerError(request, _), Future.successful)
       }
     }
-
-    def iterator[T: Writes](block: R[Record[V]] ⇒ Iterator[T]): Action[AnyContent] =
-      actionBuilder.async { request: Request[AnyContent] ⇒
-        MDC.put("request", f"${request.id}%08x")
-        fieldsParser(Field(request)) match {
-          case Good(values) ⇒
-            req(request).map { r ⇒
-              Results.Ok
-                .chunked {
-                  Source
-                    .fromIterator(() ⇒ block(r.map(_ ⇒ Record(values)).asInstanceOf[R[Record[V]]]))
-                    .map(t ⇒ Json.toJson(t).toString)
-                    .intersperse("[", ",", "]")
-                }
-                .as("application/json")
-            }
-          case Bad(errors) ⇒
-            Future.successful(BadRequest(Json.toJson(AttributeCheckingError(errors.toSeq))))
-        }
-      }
-
-    def iteratorWithTotal[T: Writes](block: R[Record[V]] ⇒ (Int, Iterator[T])): Action[AnyContent] =
-      actionBuilder.async { request: Request[AnyContent] ⇒
-        MDC.put("request", f"${request.id}%08x")
-        fieldsParser(Field(request)) match {
-          case Good(values) ⇒
-            req(request)
-              .map(r ⇒ block(r.map(_ ⇒ Record(values)).asInstanceOf[R[Record[V]]]))
-              .map {
-                case (total, it) ⇒
-                  val res = Results.Ok
-                    .chunked {
-                      Source
-                        .fromIterator(() ⇒ it)
-                        .map(t ⇒ Json.toJson(t).toString)
-                        .intersperse("[", ",", "]")
-                    }
-                    .as("application/json")
-                  if (total >= 0) res.withHeaders("X-Total" → total.toString)
-                  else res
-              }
-          case Bad(errors) ⇒
-            Future.successful(BadRequest(Json.toJson(AttributeCheckingError(errors.toSeq))))
-        }
-      }
 
     /**
       * Materialize action using a function that transform request into future response
@@ -178,11 +134,11 @@ class EntryPoint @Inject()(
       * @return Action
       */
     def async(block: R[Record[V]] ⇒ Future[Result]): Action[AnyContent] =
-      actionBuilder.async { request: Request[AnyContent] ⇒
+      actionBuilder.async { request ⇒
         MDC.put("request", f"${request.id}%08x") // FIXME Future uses other thread
         fieldsParser(Field(request)) match {
           case Good(values) ⇒
-            req(request).flatMap { r ⇒
+            Future.fromTry(req(request)).flatMap { r ⇒
               block(r.map(_ ⇒ Record(values)).asInstanceOf[R[Record[V]]])
             }
           case Bad(errors) ⇒
@@ -200,6 +156,15 @@ class EntryPoint @Inject()(
       async { r ⇒
         block(r).fold[Future[Result]](errorHandler.onServerError(r.asInstanceOf[RequestHeader], _), Future.successful)
       }
-  }
 
+    def authTransaction(db: Database)(block: AuthenticatedRequest[Record[V]] ⇒ Graph ⇒ Try[Result])(
+        implicit ev: R[Record[V]] =:= Request[Record[V]]): Action[AnyContent] =
+      apply { request ⇒
+        authenticateSrv.getAuthContext(ev(request)).flatMap { authContext ⇒
+          logger.trace(s"check user permissions of ${authContext.userName}")
+          val authReq = new AuthenticatedRequest(authContext, ev(request))
+          db.tryTransaction(graph ⇒ block(authReq)(graph))
+        }
+      }
+  }
 }
