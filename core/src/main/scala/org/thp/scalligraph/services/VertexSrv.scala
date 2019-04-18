@@ -1,10 +1,10 @@
 package org.thp.scalligraph.services
 
+import scala.reflect.runtime.{universe ⇒ ru}
+
 import gremlin.scala._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
-
-import scala.reflect.runtime.{universe ⇒ ru}
 
 abstract class VertexSrv[V <: Product: ru.TypeTag, S <: BaseVertexSteps[V, S]](implicit db: Database) extends ElementSrv[V, S] {
 
@@ -13,8 +13,6 @@ abstract class VertexSrv[V <: Product: ru.TypeTag, S <: BaseVertexSteps[V, S]](i
   def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): S
 
   def initSteps(implicit graph: Graph): S = steps(db.vertexStep(graph, model))
-
-  override def get(id: String)(implicit graph: Graph): S = steps(graph.V().has(Key("_id") of id))
 
   def create(e: V)(implicit graph: Graph, authContext: AuthContext): V with Entity =
     db.createVertex[V](graph, authContext, model, e)
