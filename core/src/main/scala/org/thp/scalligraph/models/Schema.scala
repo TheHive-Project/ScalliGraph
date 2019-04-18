@@ -1,9 +1,10 @@
 package org.thp.scalligraph.models
 
+import play.api.Logger
+
 import gremlin.scala.Graph
 import javax.inject.{Inject, Named, Singleton}
 import org.thp.scalligraph.auth.{AuthContext, UserSrv}
-import play.api.Logger
 
 case class InitialValue[V <: Product](model: Model.Vertex[V], value: V) {
   def create()(implicit db: Database, graph: Graph, authContext: AuthContext): V with Entity =
@@ -13,7 +14,8 @@ case class InitialValue[V <: Product](model: Model.Vertex[V], value: V) {
 trait Schema {
   def modelList: Seq[Model]
   def initialValues: Seq[InitialValue[_]]
-  def getModel(label: String): Option[Model] = modelList.find(_.label == label)
+  def getModel(label: String): Option[Model]                      = modelList.find(_.label == label)
+  def init(implicit graph: Graph, authContext: AuthContext): Unit = ()
 }
 
 @Singleton
