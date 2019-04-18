@@ -1,22 +1,14 @@
 package org.thp.scalligraph.models
 
-import org.specs2.specification.core.{Fragment, Fragments}
-import org.thp.scalligraph.auth.{AuthContext, Permission}
 import play.api.test.PlaySpecification
 
+import org.specs2.specification.core.{Fragment, Fragments}
 import org.thp.scalligraph.AppBuilder
-
-case class DummyAuthContext(
-    userId: String = "",
-    userName: String = "",
-    organisation: String = "",
-    permissions: Seq[Permission] = Nil,
-    requestId: String = "")
-    extends AuthContext
+import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
 
 class ModernTest extends PlaySpecification {
 
-  implicit val authContext: AuthContext = DummyAuthContext("me")
+  implicit val authContext: AuthContext = AuthContextImpl("me", "", "", "", Set.empty)
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider ⇒
     val app: AppBuilder = AppBuilder()
@@ -25,7 +17,7 @@ class ModernTest extends PlaySpecification {
   }
 
   def setupDatabase(app: AppBuilder): Unit =
-    DatabaseBuilder.build(app.instanceOf[ModernSchema])(app.instanceOf[Database], authContext)
+    DatabaseBuilder.build(app.instanceOf[ModernSchema])(app.instanceOf[Database], authContext).get
 
   def teardownDatabase(app: AppBuilder): Unit = app.instanceOf[Database].drop()
 

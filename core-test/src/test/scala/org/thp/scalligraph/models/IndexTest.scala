@@ -10,6 +10,7 @@ import play.api.{Configuration, Environment}
 
 import org.specs2.specification.core.Fragments
 import org.thp.scalligraph.VertexEntity
+import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
 
 @DefineIndex(IndexType.unique, "name")
 @VertexEntity
@@ -17,6 +18,7 @@ case class EntityWithUniqueName(name: String, value: Int)
 
 class IndexTest extends PlaySpecification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
+  val authContext: AuthContext = AuthContextImpl("me", "", "", "", Set.empty)
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider ⇒
     implicit val db: Database = dbProvider.get()
@@ -26,18 +28,18 @@ class IndexTest extends PlaySpecification {
     s"[${dbProvider.name}] Creating duplicate entries on unique index constraint" should {
       "throw an exception in the same transaction" in {
         db.transaction { implicit graph ⇒
-          db.createVertex(graph, DummyAuthContext(), model, EntityWithUniqueName("singleTransaction", 1))
-          db.createVertex(graph, DummyAuthContext(), model, EntityWithUniqueName("singleTransaction", 2))
+          db.createVertex(graph, authContext, model, EntityWithUniqueName("singleTransaction", 1))
+          db.createVertex(graph, authContext, model, EntityWithUniqueName("singleTransaction", 2))
         } must throwA[Exception]
       }
 
       "throw an exception in the different transactions" in {
         {
           db.transaction { implicit graph ⇒
-            db.createVertex(graph, DummyAuthContext(), model, EntityWithUniqueName("singleTransaction", 1))
+            db.createVertex(graph, authContext, model, EntityWithUniqueName("singleTransaction", 1))
           }
           db.transaction { implicit graph ⇒
-            db.createVertex(graph, DummyAuthContext(), model, EntityWithUniqueName("singleTransaction", 2))
+            db.createVertex(graph, authContext, model, EntityWithUniqueName("singleTransaction", 2))
           }
         } must throwA[Exception]
       }
@@ -47,7 +49,7 @@ class IndexTest extends PlaySpecification {
           Future {
             db.transaction { implicit graph ⇒
               Await.result(waitBeforeCreate, 2.seconds)
-              db.createVertex(graph, DummyAuthContext(), model, EntityWithUniqueName(name, 1))
+              db.createVertex(graph, authContext, model, EntityWithUniqueName(name, 1))
               Await.result(waitBeforeCommit, 2.seconds)
             }
           }
