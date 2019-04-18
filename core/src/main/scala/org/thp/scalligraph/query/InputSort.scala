@@ -21,12 +21,15 @@ case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
       publicProperties: List[PublicProperty[_ <: Element, _, _]],
       stepType: ru.Type,
       step: S,
-      authContext: Option[AuthContext]): S = {
+      authContext: AuthContext): S = {
     val orderBys = fieldOrder.flatMap {
       case (fieldName, order) ⇒
-        getProperty(publicProperties, stepType, fieldName)
-          .get(authContext)
-          .map(f ⇒ orderby(f, order))
+        val property = getProperty(publicProperties, stepType, fieldName)
+        property.definition
+          .map {
+            case f: (GremlinScala[a] ⇒ GremlinScala[b]) ⇒
+              orderby[Any, a, b](_.coalesce(f, _.constant(property.mapping.noValue.asInstanceOf[b])), order)
+          }
     }
     step
       .asInstanceOf[ScalliSteps[_, _, S]]

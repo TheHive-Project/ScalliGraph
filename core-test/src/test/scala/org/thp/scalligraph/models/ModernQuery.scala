@@ -1,11 +1,13 @@
 package org.thp.scalligraph.models
 
+import scala.language.implicitConversions
+
+import play.api.libs.json.{Json, OWrites, Writes}
+
 import gremlin.scala.{Element, Key, P, Vertex}
+import org.thp.scalligraph.Output
 import org.thp.scalligraph.controllers.FieldsParser
 import org.thp.scalligraph.query._
-import org.thp.scalligraph.Output
-import play.api.libs.json.{Json, OWrites, Writes}
-import scala.language.implicitConversions
 
 case class OutputPerson(createdBy: String, label: String, name: String, age: Int)
 object OutputPerson {
@@ -34,6 +36,7 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
 
   override val publicProperties: List[PublicProperty[_ <: Element, _, _]] = {
     val labelMapping = SingleMapping[String, String](
+      "",
       toGraphOptFn = {
         case d if d startsWith "Mister " ⇒ Some(d.drop(7))
         case d                           ⇒ Some(d)
@@ -51,10 +54,13 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
       .property[String]("createdBy").rename("_createdBy")
       .property[String]("name").simple
       .property[String]("lang").simple
-      .property[String]("any").seq(
-        _.simple("_createdBy")
-         .simple("name")
-         .simple("lang"))
+      .property[String]("any").derived(
+      _.value[String]("_createdBy"),
+        _.value[String]("name"),
+      _.value[String]("lang"))((a, b, c, d) ⇒ ()) // FIXME
+//        _.simple("_createdBy")
+//         .simple("name")
+//         .simple("lang"))
       .build
   }
 
@@ -62,7 +68,8 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
     Query.init[PersonSteps]("allPeople", (graph, _) ⇒ personSrv.initSteps(graph)),
     Query.init[SoftwareSteps]("allSoftware", (graph, _) ⇒ softwareSrv.initSteps(graph)),
     Query.initWithParam[SeniorAgeThreshold, PersonSteps]("seniorPeople", FieldsParser[SeniorAgeThreshold], { (seniorAgeThreshold, graph, _) ⇒
-      personSrv.initSteps(graph).where(_.has(Key[Int]("age"), P.gte(seniorAgeThreshold.age)))
+      // personSrv.initSteps(graph).where(_.has(Key[Int]("age"), P.gte(seniorAgeThreshold.age)))
+      personSrv.initSteps(graph).has(Key[Int]("age"), P.gte(seniorAgeThreshold.age))
     }),
     Query[PersonSteps, SoftwareSteps]("created", (personSteps, _) ⇒ personSteps.created),
     Query.withParam[FriendLevel, PersonSteps, PersonSteps]("friends", FieldsParser[FriendLevel], (friendLevel, personSteps, _) ⇒ personSteps.friends(friendLevel.level)),

@@ -3,11 +3,13 @@ package org.thp.scalligraph.graphql
 import java.util.Date
 
 import scala.reflect.runtime.{currentMirror ⇒ rm, universe ⇒ ru}
+
 import play.api.Logger
 
 import gremlin.scala.{Element, Graph, GremlinScala, P}
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.models.{EntityFilter, MappingCardinality, ScalarSteps, ScalliSteps}
+import org.thp.scalligraph.models.{Schema ⇒ _, _}
 import org.thp.scalligraph.query._
 import org.thp.scalligraph._
 import sangria.marshalling.{CoercedScalaResultMarshaller, FromInput, ResultMarshaller}
@@ -38,10 +40,10 @@ object SchemaGenerator {
     def inputField: InputField[Option[V]] = InputField(fieldName, OptionInputType(inputType))
 
     def getEntityFilter(value: V): EntityFilter = {
-      val f = filter(value)
+      val f: GremlinScala[_] ⇒ GremlinScala[_] = filter(value)
       new EntityFilter {
-        override def apply[G](authContext: Option[AuthContext])(raw: GremlinScala[G]): GremlinScala[G] = {
-          val x = property.get(authContext).map(_.andThen(f)).asInstanceOf[Seq[GremlinScala[G] ⇒ GremlinScala[_]]]
+        override def apply[G](authContext: AuthContext)(raw: GremlinScala[G]): GremlinScala[G] = {
+          val x: Seq[GremlinScala[G] ⇒ GremlinScala[_]] = property.definition.map(_.andThen(f)).asInstanceOf[Seq[GremlinScala[G] ⇒ GremlinScala[_]]]
           raw.or(x: _*)
         }
       }
@@ -324,7 +326,7 @@ object SchemaGenerator {
           }
       }
 
-  def getPropertyFields[B](property: PublicProperty[_, _, B])(
+  def getPropertyFields[A <: Element, B](property: PublicProperty[A, _, B])(
       implicit executor: QueryExecutor,
       objectCatalog: TypeCatalog[CacheFunction[Option[OutputType[_]]]]): CacheFunction[Option[Field[AuthGraph, Any]]] = {
     val t          = rm.classSymbol(property.mapping.domainTypeClass).toType // FIXME domainType or graphType ?
@@ -340,10 +342,14 @@ object SchemaGenerator {
     val objectType = getObject(stepType).apply().get
     CacheFunction(
       Some(
-        Field[AuthGraph, ScalliSteps[_, B, _ <: AnyRef], ScalarSteps[B], Any](
+        Field[AuthGraph, ScalliSteps[A, _, _ <: AnyRef], ScalarSteps[B], Any]( // FIXME should be ElementStep instead of ScalliSteps. Property can be applied only on element step.
           property.propertyName,
           objectType,
-          resolve = ctx ⇒ Value(duplicate(ctx.value).get[B](ctx.ctx.auth, property)))
+          resolve = ctx ⇒
+            Value(duplicate(ctx.value) // ScalliSteps[EndDomain, EndGraph => B, ThisStep <: AnyRef]
+              .asInstanceOf[ElementSteps[_, A, _]] // ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisStep <: ElementSteps[E, EndGraph, ThisStep]] ScalliSteps[E with Entity, EndGraph, ThisStep]
+              .get[B](ctx.ctx.auth, property))
+        ) // def get[A](authContext: AuthContext, property: PublicProperty[EndGraph, _, A]): ScalarSteps[A] = {
           .asInstanceOf[Field[AuthGraph, Any]]))
   }
 

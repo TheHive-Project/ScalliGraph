@@ -26,18 +26,18 @@ object Order {
       properties: List[PublicProperty[_ <: Element, _, _]],
       stepType: OutputType[S]): Option[Field[AuthGraph, S]] = {
 
-    case class FieldOrder(property: PublicProperty[_ <: Element, _, _], order: org.apache.tinkerpop.gremlin.process.traversal.Order) {
-      def orderBy(authContext: Option[AuthContext]): OrderBy[_] = By(property(__, authContext), order)
+    case class FieldOrder[A <: Element](property: PublicProperty[A, _, _], order: org.apache.tinkerpop.gremlin.process.traversal.Order) {
+      def orderBy(authContext: AuthContext): OrderBy[_] = By(property.get(__[A], authContext), order)
     }
 
     val fields = properties.map(p ⇒ InputField(p.propertyName, OptionInputType(orderEnumeration)))
-    val inputType: InputObjectType[Seq[FieldOrder]] =
-      InputObjectType[Seq[FieldOrder]](classTag[S].runtimeClass.getSimpleName + "Order", fields)
+    val inputType: InputObjectType[Seq[FieldOrder[_]]] =
+      InputObjectType[Seq[FieldOrder[_]]](classTag[S].runtimeClass.getSimpleName + "Order", fields)
 
-    val fromInput: FromInput[Seq[FieldOrder]] = new FromInput[Seq[FieldOrder]] {
+    val fromInput: FromInput[Seq[FieldOrder[_]]] = new FromInput[Seq[FieldOrder[_]]] {
       override val marshaller: ResultMarshaller = CoercedScalaResultMarshaller.default
 
-      override def fromResult(node: marshaller.Node): Seq[FieldOrder] = {
+      override def fromResult(node: marshaller.Node): Seq[FieldOrder[_]] = {
         val input = node.asInstanceOf[Map[String, Option[Any]]]
         for {
           (key, valueMaybe) ← input.toSeq
@@ -48,8 +48,8 @@ object Order {
       }
     }
     val arg = Argument("order", inputType)(
-      fromInput.asInstanceOf[FromInput[Seq[FieldOrder] @@ FromInput.InputObjectResult]],
-      WithoutInputTypeTags.ioArgTpe[Seq[FieldOrder]]
+      fromInput.asInstanceOf[FromInput[Seq[FieldOrder[_]] @@ FromInput.InputObjectResult]],
+      WithoutInputTypeTags.ioArgTpe[Seq[FieldOrder[_]]]
     )
     Some(
       Field[AuthGraph, S, S, S](

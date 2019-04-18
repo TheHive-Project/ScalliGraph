@@ -4,7 +4,7 @@ import scala.reflect.runtime.{universe ⇒ ru}
 
 import play.api.Logger
 
-import gremlin.scala.{Element, GremlinScala, P}
+import gremlin.scala.{Element, GremlinScala, Key, P}
 import org.scalactic.Accumulation._
 import org.scalactic.{Bad, Good, One}
 import org.thp.scalligraph.InvalidFormatAttributeError
@@ -17,7 +17,7 @@ trait InputFilter extends InputQuery {
       publicProperties: List[PublicProperty[_ <: Element, _, _]],
       stepType: ru.Type,
       step: S,
-      authContext: Option[AuthContext]): S
+      authContext: AuthContext): S
 }
 
 case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilter {
@@ -25,14 +25,15 @@ case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilt
       publicProperties: List[PublicProperty[_ <: Element, _, _]],
       stepType: ru.Type,
       step: S,
-      authContext: Option[AuthContext]): S = {
-    val filter = getProperty(publicProperties, stepType, fieldName)
-      .get(authContext)
+      authContext: AuthContext): S = {
+    val scalliStep = step.asInstanceOf[ScalliSteps[_, _, S]]
+    getProperty(publicProperties, stepType, fieldName).definition
       .map(f ⇒ f.andThen(_.is(predicate)))
-      .asInstanceOf[Seq[GremlinScala[_] ⇒ GremlinScala[_]]]
-    step
-      .asInstanceOf[ScalliSteps[_, _, S]]
-      .where(_.or(filter: _*))
+      .asInstanceOf[Seq[GremlinScala[_] ⇒ GremlinScala[_]]] match {
+      case Seq()  ⇒ scalliStep.where(_.is(null)) // TODO need checks
+      case Seq(f) ⇒ scalliStep.where(f)
+      case f      ⇒ scalliStep.where(_.or(f: _*))
+    }
   }
 }
 
@@ -41,15 +42,15 @@ case class OrFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
       publicProperties: List[PublicProperty[_ <: Element, _, _]],
       stepType: ru.Type,
       step: S,
-      authContext: Option[AuthContext]): S =
+      authContext: AuthContext): S =
     step match {
       case s: ScalliSteps[_, gt, S] ⇒
         inputFilters.map { ff ⇒ (g: GremlinScala[gt]) ⇒
           ff[S](publicProperties, stepType, s.newInstance(g), authContext).raw //.asInstanceOf[S]
         } match {
-          case Seq()       ⇒ s.where(_.is(null)) // TODO need checks
-          case Seq(f)      ⇒ s.where(f)
-          case Seq(f @ _*) ⇒ s.asInstanceOf[ScalliSteps[_, gt, S]].where(_.or(f: _*))
+          case Seq()  ⇒ s.where(_.is(null)) // TODO need checks
+          case Seq(f) ⇒ s.where(f)
+          case f      ⇒ s.asInstanceOf[ScalliSteps[_, gt, S]].where(_.or(f: _*))
         }
     }
 }
@@ -59,10 +60,10 @@ case class AndFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
       publicProperties: List[PublicProperty[_ <: Element, _, _]],
       stepType: ru.Type,
       step: S,
-      authContext: Option[AuthContext]): S =
+      authContext: AuthContext): S =
     step match {
       case s: ScalliSteps[_, gt, S] ⇒
-        inputFilters.map { ff ⇒ (g: GremlinScala[gt]) ⇒
+        inputFilters.filterNot(_ == YesFilter).map { ff ⇒ (g: GremlinScala[gt]) ⇒
           ff[S](publicProperties, stepType, s.newInstance(g), authContext).raw
         } match {
           case Seq()       ⇒ step
@@ -78,7 +79,7 @@ case class NotFilter(inputFilter: InputFilter) extends InputFilter {
       publicProperties: List[PublicProperty[_ <: Element, _, _]],
       stepType: ru.Type,
       step: S,
-      authContext: Option[AuthContext]): S =
+      authContext: AuthContext): S =
     step match {
       case s: ScalliSteps[_, gt, S] ⇒
         val filter = (g: GremlinScala[gt]) ⇒ inputFilter[S](publicProperties, stepType, s.newInstance(g), authContext).raw
@@ -92,11 +93,19 @@ object YesFilter extends InputFilter {
       publicProperties: List[PublicProperty[_ <: Element, _, _]],
       stepType: ru.Type,
       step: S,
-      authContext: Option[AuthContext]): S = step
+      authContext: AuthContext): S = step
 }
 
 object InputFilter {
   lazy val logger = Logger(getClass)
+
+  def apply[S0 <: ScalliSteps[_, _, _]](f: S0 ⇒ S0): InputFilter = new InputFilter {
+    override def apply[S <: ScalliSteps[_, _, _]](
+        publicProperties: List[PublicProperty[_ <: Element, _, _]],
+        stepType: ru.Type,
+        step: S,
+        authContext: AuthContext): S = f(step.asInstanceOf[S0]).asInstanceOf[S]
+  }
 
   def stringContains(value: String): P[String]   = P.fromPredicate[String]((v, r) ⇒ v contains r, value)
   def stringStartsWith(value: String): P[String] = P.fromPredicate[String]((v, r) ⇒ v startsWith r, value)
@@ -118,6 +127,8 @@ object InputFilter {
   def and(filters: Seq[InputFilter]): AndFilter                   = AndFilter(filters)
   def not(filter: InputFilter): NotFilter                         = NotFilter(filter)
   def yes: YesFilter.type                                         = YesFilter
+  def withId(id: String): InputFilter =
+    InputFilter[ScalliSteps[_, Element, _]](s ⇒ s.where(_.has(Key("_id") of id)).asInstanceOf[ScalliSteps[_, Element, _]])
 //  def in(field: String, values: Seq[Any]) = OrFilter(values.map(v ⇒ PredicateFilter(field, P.is(v))))
 
   implicit val fieldsParser: FieldsParser[InputFilter] = FieldsParser("query") {
@@ -133,6 +144,7 @@ object InputFilter {
     case (_, FObjOne("_contains", FObjOne(key, FString(value))))   ⇒ Good(contains(key, value))
     case (_, FObjOne("_startsWith", FObjOne(key, FString(value)))) ⇒ Good(startsWith(key, value))
     case (_, FObjOne("_endsWith", FObjOne(key, FString(value))))   ⇒ Good(endsWith(key, value))
+    case (_, FObjOne("_id", FString(id)))                          ⇒ Good(withId(id))
     case (_, FObjOne("_string", _)) ⇒
       logger.warn("string filter is not supported, it is ignored")
       Good(yes)
