@@ -168,6 +168,9 @@ trait MacroUtil extends MacroLogger {
         } else {
           val moduleClass = tpe.asInstanceOf[TypeRef].pre.typeSymbol
           val ownerSymbol = moduleClass.owner.typeSignature.member(moduleClass.name.toTermName)
+          if (ownerSymbol == NoSymbol) {
+            c.abort(c.enclosingPosition, s"Enumeration in a module is not supported. Put $moduleClass outside ${moduleClass.owner}")
+          }
           valueName → q"$ownerSymbol.${value.asTerm.getter}"
         }
       })

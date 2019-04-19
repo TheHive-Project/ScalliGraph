@@ -11,14 +11,16 @@ class FieldsParserMacro(val c: blackbox.Context) extends MacroLogger with Update
 
   def getOrBuildFieldsParser[E: WeakTypeTag]: Tree = {
     val eType = weakTypeOf[E]
-    initLogger(eType.typeSymbol)
+    if (eType <:< typeOf[Enumeration#Value]) initLogger(eType.asInstanceOf[TypeRef].pre.typeSymbol)
+    else initLogger(eType.typeSymbol)
     if (eType <:< typeOf[FFile]) {
       q"org.thp.scalligraph.controllers.FieldsParser.file"
     } else
-      getParserFromAnnotation(eType.typeSymbol, eType)
+      ret(s"FieldParser of $eType",
+        getParserFromAnnotation(eType.typeSymbol, eType)
         .orElse(getParserFromImplicit(eType))
         .orElse(buildParser(eType))
-        .getOrElse(c.abort(c.enclosingPosition, s"Build FieldsParser of $eType fails"))
+        .getOrElse(c.abort(c.enclosingPosition, s"Build FieldsParser of $eType fails")))
   }
 
   def getOrBuildUpdateFieldsParser[E: WeakTypeTag]: Tree = {
@@ -124,13 +126,9 @@ trait FieldsParserUtil extends MacroLogger with MacroUtil {
         trace(s"build FieldsParser enumeration of ${values.map(_._1).mkString("[", ",", "]")}")
         val caseValues = values
           .map {
-            case (name, value) ⇒ cq"$name ⇒ $value"
-          } :+ // TODO replace throw by Failure or Bad
-          cq"""other ⇒ throw org.thp.scalligraph.InternalError(
-            "Wrong value " + other +
-            " for numeration " + ${eType.toString} +
-            ". Possible values are " + ${values.map(_._1).mkString(",")})"""
-        Some(q"""org.thp.scalligraph.controllers.FieldsParser.string.map("enum") { case ..$caseValues }""")
+            case (name, value) ⇒ cq"(_, org.thp.scalligraph.controllers.FString($name)) ⇒ org.scalactic.Good($value)"
+          }
+        Some(q"org.thp.scalligraph.controllers.FieldsParser(${eType.toString}, Set(${values.map(_._1): _*})) { case ..$caseValues }")
       case _ ⇒
         None
     }

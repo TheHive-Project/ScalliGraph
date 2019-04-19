@@ -45,7 +45,7 @@ object InputSort {
             try Good(new InputSort(name → Order.valueOf(order)))
             catch {
               case _: IllegalArgumentException ⇒
-                Bad(One(InvalidFormatAttributeError("order", "order", Seq("field: 'incr", "field: 'decr", "field: 'shuffle"), FString(order))))
+                Bad(One(InvalidFormatAttributeError("order", "order", Set("field: 'incr", "field: 'decr", "field: 'shuffle"), FString(order))))
             }
         }
         .map(x ⇒ new InputSort(x.flatMap(_.fieldOrder): _*))

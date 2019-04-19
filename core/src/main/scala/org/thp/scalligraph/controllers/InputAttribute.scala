@@ -29,7 +29,7 @@ abstract class BaseFieldsParser[+T] {
 }
 
 object BaseFieldsParser {
-  def good[T](value: T): FieldsParser[T] = FieldsParser[T]("empty", Nil) {
+  def good[T](value: T): FieldsParser[T] = FieldsParser[T]("empty", Set.empty[String]) {
     case _ ⇒ Good(value)
   }
 }
@@ -79,7 +79,7 @@ object UpdateFieldsParser {
     macro FieldsParserMacro.getOrBuildUpdateFieldsParser[T]
 }
 
-class FieldsParser[T](val formatName: String, val acceptedInput: Seq[String], val parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]])
+class FieldsParser[T](val formatName: String, val acceptedInput: Set[String], val parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]])
     extends BaseFieldsParser[T] {
 
   def apply(path: FPath, field: Field): T Or Every[AttributeError] =
@@ -132,7 +132,7 @@ class FieldsParser[T](val formatName: String, val acceptedInput: Seq[String], va
                 .validatedBy { case (f, i) ⇒ apply(path.toSeq(i), f) }
             case FNull | FUndefined ⇒ Good(Nil)
             case other ⇒
-              Bad(One(InvalidFormatAttributeError(path.toString, "object", Seq(s"[$formatName]"), other)))
+              Bad(One(InvalidFormatAttributeError(path.toString, "object", Set(s"[$formatName]"), other)))
           }
       }
     )
@@ -159,15 +159,15 @@ class FieldsParser[T](val formatName: String, val acceptedInput: Seq[String], va
 }
 
 object FieldsParser {
-  def apply[T](formatName: String, acceptedInput: Seq[String])(parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]]) =
+  def apply[T](formatName: String, acceptedInput: Set[String])(parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]]) =
     new FieldsParser[T](formatName, acceptedInput, parse)
   def apply[T](formatName: String)(parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]]) =
-    new FieldsParser[T](formatName, Seq(formatName), parse)
+    new FieldsParser[T](formatName, Set(formatName), parse)
   def good[T](value: T): FieldsParser[T] =
-    new FieldsParser[T]("good", Nil, {
+    new FieldsParser[T]("good", Set.empty, {
       case _ ⇒ Good(value)
     })
-  def empty[T]: FieldsParser[T] = new FieldsParser[T]("empty", Nil, PartialFunction.empty)
+  def empty[T]: FieldsParser[T] = new FieldsParser[T]("empty", Set.empty, PartialFunction.empty)
   def apply[T]: FieldsParser[T] = macro FieldsParserMacro.getOrBuildFieldsParser[T]
 
   private def unlift[T, R](f: T ⇒ Option[R]): PartialFunction[T, R] =

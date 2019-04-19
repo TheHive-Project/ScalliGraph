@@ -65,7 +65,7 @@ abstract class QueryExecutor { executor ⇒
         query
           .paramParser(from)
           .map(p ⇒ query.toQuery(p))
-      } else Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name), field)))
+      } else Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name).toSet, field)))
 
     field match {
       case FNamedObj(name, f) ⇒
@@ -79,9 +79,9 @@ abstract class QueryExecutor { executor ⇒
               .collect { case Bad(x) ⇒ x }
               .reduceOption(_ ++ _)
               .map(Bad(_))
-              .getOrElse(Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name), field))))
+              .getOrElse(Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name).toSet, field))))
           }
-      case _ ⇒ Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name), field)))
+      case _ ⇒ Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name).toSet, field)))
     }
   }
 

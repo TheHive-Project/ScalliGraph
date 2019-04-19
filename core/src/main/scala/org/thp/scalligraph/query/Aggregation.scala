@@ -76,7 +76,7 @@ object GroupAggregation {
           name,
           (name: String) ⇒
             FieldsParser[Aggregation[_, _]]("aggregation") {
-              case _ ⇒ Bad(One(InvalidFormatAttributeError("_agg", "aggregation name", Seq("avg", "min", "max", "count", "top"), FString(name))))
+              case _ ⇒ Bad(One(InvalidFormatAttributeError("_agg", "aggregation name", Set("avg", "min", "max", "count", "top"), FString(name))))
           }
         )
     FieldsParser("aggregation") {

@@ -153,7 +153,7 @@ object InputFilter {
       val values = FSeq.parser(o.get("_values")).flatMap { s ⇒
         s.values.validatedBy {
           case FNative(value) ⇒ Good(value)
-          case other          ⇒ Bad(One(InvalidFormatAttributeError("_in._values", "native value", Seq("string", "number", "boolean"), other)))
+          case other          ⇒ Bad(One(InvalidFormatAttributeError("_in._values", "native value", Set("string", "number", "boolean"), other)))
         }
       }
       withGood(field, values)(in(_, _: _*))
