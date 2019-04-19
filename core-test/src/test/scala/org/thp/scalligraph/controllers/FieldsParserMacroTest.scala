@@ -1,7 +1,17 @@
 package org.thp.scalligraph.controllers
 
-import org.scalactic.Good
+import org.scalactic.{Bad, Good, One}
 import org.specs2.mutable.Specification
+import org.thp.scalligraph.InvalidFormatAttributeError
+
+object TestEnumeration extends Enumeration {
+  val a, b, c = Value
+}
+
+sealed trait TestSealedClassEnumeration
+object EnumA extends TestSealedClassEnumeration
+object EnumB extends TestSealedClassEnumeration
+object EnumC extends TestSealedClassEnumeration
 
 class FieldsParserMacroTest extends Specification with TestUtils {
 
@@ -126,7 +136,20 @@ class FieldsParserMacroTest extends Specification with TestUtils {
       val simpleClass = Seq(SimpleClassForFieldsParserMacroTest("simpleClass", 42), SimpleClassForFieldsParserMacroTest("simpleClassBis", 43))
 
       fieldsParser(fields) must_=== Good(simpleClass)
+    }
 
+    "parse an enumeration" in {
+      val fieldsParser = FieldsParser[TestEnumeration.Value]
+      fieldsParser(FString("a")) must_=== Good(TestEnumeration.a)
+      fieldsParser(FString("d")) must_=== Bad(
+        One(InvalidFormatAttributeError("", "org.thp.scalligraph.controllers.TestEnumeration.Value", Set("a", "b", "c"), FString("d"))))
+    }
+
+    "parse an sealed type" in {
+      val fieldsParser = FieldsParser[TestSealedClassEnumeration]
+      fieldsParser(FString("EnumA")) must_=== Good(EnumA)
+      fieldsParser(FString("d")) must_=== Bad(One(
+        InvalidFormatAttributeError("", "org.thp.scalligraph.controllers.TestSealedClassEnumeration", Set("EnumA", "EnumB", "EnumC"), FString("d"))))
     }
   }
 }
