@@ -65,16 +65,15 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
         }
     }
 
-  // FIXME "isAssignableFrom" can be replaced by "==" because classes are final.
   def convertToJava(c: Class[_]): Class[_] =
-    if (classOf[Int].isAssignableFrom(c)) classOf[java.lang.Integer]
-    else if (classOf[Double].isAssignableFrom(c)) classOf[java.lang.Double]
-    else if (classOf[Float].isAssignableFrom(c)) classOf[java.lang.Float]
-    else if (classOf[Char].isAssignableFrom(c)) classOf[java.lang.Character]
-    else if (classOf[Long].isAssignableFrom(c)) classOf[java.lang.Long]
-    else if (classOf[Short].isAssignableFrom(c)) classOf[java.lang.Short]
-    else if (classOf[Byte].isAssignableFrom(c)) classOf[java.lang.Byte]
-    else if (classOf[Boolean].isAssignableFrom(c)) classOf[java.lang.Boolean]
+    if (classOf[Int] == c) classOf[java.lang.Integer]
+    else if (classOf[Double]== c) classOf[java.lang.Double]
+    else if (classOf[Float]== c) classOf[java.lang.Float]
+    else if (classOf[Char]== c) classOf[java.lang.Character]
+    else if (classOf[Long]== c) classOf[java.lang.Long]
+    else if (classOf[Short]== c) classOf[java.lang.Short]
+    else if (classOf[Byte]== c) classOf[java.lang.Byte]
+    else if (classOf[Boolean]== c) classOf[java.lang.Boolean]
     else c
 
   private def createEntityProperties(mgmt: JanusGraphManagement): Unit = {
