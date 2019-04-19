@@ -84,7 +84,6 @@ class EntryPoint @Inject()(
         fieldsParser,
         request ⇒
           authenticateSrv.getAuthContext(request).map { authContext ⇒
-            logger.trace(s"check user permissions of ${authContext.userName}")
             new AuthenticatedRequest(authContext, request)
         }
       )
@@ -135,7 +134,7 @@ class EntryPoint @Inject()(
       */
     def async(block: R[Record[V]] ⇒ Future[Result]): Action[AnyContent] =
       actionBuilder.async { request ⇒
-        MDC.put("request", f"${request.id}%08x") // FIXME Future uses other thread
+        MDC.put("request", f"${request.id}%08x")
         fieldsParser(Field(request)) match {
           case Good(values) ⇒
             Future.fromTry(req(request)).flatMap { r ⇒
@@ -160,8 +159,8 @@ class EntryPoint @Inject()(
     def authTransaction(db: Database)(block: AuthenticatedRequest[Record[V]] ⇒ Graph ⇒ Try[Result])(
         implicit ev: R[Record[V]] =:= Request[Record[V]]): Action[AnyContent] =
       apply { request ⇒
+        MDC.put("request", f"${request.id}%08x")
         authenticateSrv.getAuthContext(ev(request)).flatMap { authContext ⇒
-          logger.trace(s"check user permissions of ${authContext.userName}")
           val authReq = new AuthenticatedRequest(authContext, ev(request))
           db.tryTransaction(graph ⇒ block(authReq)(graph))
         }
