@@ -4,21 +4,21 @@ import java.util.{Base64, Date, UUID}
 
 import scala.collection.JavaConverters._
 import scala.reflect.runtime.{universe ⇒ ru}
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 import play.api.Logger
 
 import gremlin.scala._
 import org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.controllers.UpdateOps
-import org.thp.scalligraph.query.PublicProperty
-import org.thp.scalligraph.services.ElementSrv
-import org.thp.scalligraph.{FPath, InternalError}
+import org.thp.scalligraph.controllers.FAny
+import org.thp.scalligraph.services.RichGremlinScala
+import org.thp.scalligraph.{InternalError, RichSeq, UnknownAttributeError}
 
 class DatabaseException(message: String = "Violation of database schema", cause: Exception) extends Exception(message, cause)
 
 trait Database {
+  lazy val logger = Logger("org.thp.scalligraph.models.Database")
   val idMapping: SingleMapping[UUID, String]
   val createdAtMapping: SingleMapping[Date, Date]
   val createdByMapping: SingleMapping[String, String]
@@ -52,15 +52,13 @@ trait Database {
       from: FROM with Entity,
       to: TO with Entity): E with Entity
 
-  def update(graph: Graph, element: Element, authContext: AuthContext, model: Model, fields: Map[FPath, UpdateOps.Type]): Unit
-  def update(graph: Graph, authContext: AuthContext, model: Model, id: String, fields: Map[FPath, UpdateOps.Type]): Unit
   def update(
+      elementTraversal: GremlinScala[_ <: Element],
+      fields: Seq[(String, Any)],
+      model: Model,
       graph: Graph,
-      authContext: AuthContext,
-      elementSrv: ElementSrv[_, _],
-      id: String,
-      properties: Seq[PublicProperty[_, _, _]],
-      fields: Map[FPath, UpdateOps.Type]): Unit
+      authContext: AuthContext
+  ): Try[Unit]
 
   def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D
   def getOptionProperty[D, G](element: Element, key: String, mapping: OptionMapping[D, G]): Option[D]
@@ -78,27 +76,23 @@ trait Database {
   def setOptionProperty[D, G](element: Element, key: String, value: Option[D], mapping: OptionMapping[D, _]): Unit
   def setListProperty[D, G](element: Element, key: String, values: Seq[D], mapping: ListMapping[D, _]): Unit
   def setSetProperty[D, G](element: Element, key: String, values: Set[D], mapping: SetMapping[D, _]): Unit
-  def setProperty[D](element: Element, key: String, value: D, mapping: Mapping[D, _, _]): Unit =
+  def setProperty[D](element: Element, key: String, value: D, mapping: Mapping[D, _, _]): Unit = {
+    logger.trace(s"update ${element.id()}, $key = $value")
     mapping match {
       case m: SingleMapping[d, _] ⇒ setSingleProperty(element, key, value, m)
       case m: OptionMapping[d, _] ⇒ setOptionProperty(element, key, value.asInstanceOf[Option[d]], m)
       case m: ListMapping[d, _]   ⇒ setListProperty(element, key, value.asInstanceOf[Seq[d]], m)
       case m: SetMapping[d, _]    ⇒ setSetProperty(element, key, value.asInstanceOf[Set[d]], m)
-
     }
+  }
 
   def vertexStep(graph: Graph, model: Model): GremlinScala[Vertex]
   def edgeStep(graph: Graph, model: Model): GremlinScala[Edge]
 
   val extraModels: Seq[Model]
-  //def loadBinary(initialVertex: Vertex)(implicit graph: Graph): InputStream
-//  def loadBinary(id: String)(implicit graph: Graph): InputStream
-//  def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex
 }
 
 abstract class BaseDatabase extends Database {
-  lazy val logger = Logger("org.thp.scalligraph.models.Database")
-
   val idMapping: SingleMapping[UUID, String]          = SingleMapping[UUID, String]("", uuid ⇒ Some(uuid.toString), UUID.fromString)
   val createdAtMapping: SingleMapping[Date, Date]     = UniMapping.dateMapping
   val createdByMapping: SingleMapping[String, String] = UniMapping.stringMapping
@@ -180,48 +174,43 @@ abstract class BaseDatabase extends Database {
     edgeMaybe.getOrElse {
       val error = graph.V().has(Key("_id") of from._id).headOption().map(_ ⇒ "").getOrElse(s"${from._model.label}:${from._id} not found ") +
         graph.V().has(Key("_id") of to._id).headOption().map(_ ⇒ "").getOrElse(s"${to._model.label}:${to._id} not found")
-      sys.error(s"Fail to create edge between ${from._model.label}:${from._id} and ${to._model.label}:${to._id}, $error")
+      throw InternalError(s"Fail to create edge between ${from._model.label}:${from._id} and ${to._model.label}:${to._id}, $error")
     }
-  }
-
-  override def update(graph: Graph, element: Element, authContext: AuthContext, model: Model, fields: Map[FPath, UpdateOps.Type]): Unit = {
-    setOptionProperty(element, "_updatedAt", Some(new Date), updatedAtMapping)
-    setOptionProperty(element, "_updatedBy", Some(authContext.userId), updatedByMapping)
-    logger.trace(s"Update ${element.id()} by ${authContext.userId}")
-    fields.foreach {
-      case (key, UpdateOps.SetAttribute(value)) ⇒
-        val mapping = model.fields(key.toString).asInstanceOf[Mapping[Any, _, _]]
-        setProperty(element, key.toString, value, mapping)
-        logger.trace(s" - $key = $value")
-      case (_, UpdateOps.UnsetAttribute) ⇒ throw InternalError("Unset an attribute is not yet implemented")
-      // TODO
-    }
-  }
-  override def update(graph: Graph, authContext: AuthContext, model: Model, id: String, fields: Map[FPath, UpdateOps.Type]): Unit = {
-    val element: Element = model.get(id)(this, graph)
-    update(graph, element, authContext, model, fields)
   }
 
   def update(
+      elementTraversal: GremlinScala[_ <: Element],
+      fields: Seq[(String, Any)],
+      model: Model,
       graph: Graph,
-      authContext: AuthContext,
-      elementSrv: ElementSrv[_, _],
-      id: String,
-      properties: Seq[PublicProperty[_, _, _]],
-      fields: Map[FPath, UpdateOps.Type]): Unit = ??? // TODO
-//    fields.foreach {
-//      case (key, UpdateOps.SetAttribute(value)) ⇒
-//        for {
-//          property            ← properties.find(_.propertyName == key.toString)
-//          (elementFunc, prop) ← property.fn(authContext).headOption.asInstanceOf[Option[(GremlinScala[Any] ⇒ GremlinScala[Any], String)]]
-//          e = elementSrv.get(id)(graph).asInstanceOf[ElementSteps[_, _, _]].raw.asInstanceOf[GremlinScala[Any]]
-//          element ← elementFunc(e).traversal.limit(1).toList.asScala.headOption.asInstanceOf[Option[Element]]
-//          _ = setOptionProperty(element, "_updatedAt", Some(new Date), updatedAtMapping)
-//          _ = setOptionProperty(element, "_updatedBy", Some(authContext.userId), updatedByMapping)
-//          _ = logger.trace(s"Update ${element.id()} by ${authContext.userId}: $key = $value")
-//        } setProperty(element, prop, value, property.mapping.asInstanceOf[Mapping[Any, _, _]])
-//      case _ ⇒ ???
-//    }
+      authContext: AuthContext
+  ): Try[Unit] =
+    elementTraversal.getOrFail
+      .flatMap { element ⇒
+        logger.trace(s"Update ${element.id()} by ${authContext.userId}")
+        fields
+          .toTry {
+            case (key, value) ⇒
+              model.fields
+                .get(key)
+                .fold[Try[Mapping[_, _, _]]](Failure(UnknownAttributeError(key, FAny(Seq(value.toString)))))(Success.apply)
+                .flatMap { mapping ⇒
+                  // TODO check if value has the correct type
+                  setProperty(element, key.toString, value, mapping.asInstanceOf[Mapping[Any, _, _]])
+                  logger.trace(s" - $key = $value")
+                  Success(())
+//                  }
+//                  else {
+//                    Failure(InvalidFormatAttributeError(key.toString, mapping.domainType.toString, Set.empty, FAny(Seq(value.toString))))
+//                  }
+                }
+          }
+          .map { _ ⇒
+            setOptionProperty(element, "_updatedAt", Some(new Date), updatedAtMapping)
+            setOptionProperty(element, "_updatedBy", Some(authContext.userId), updatedByMapping)
+            ()
+          }
+      }
 
   override def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D = {
     val values = element.properties[G](key)
@@ -335,67 +324,5 @@ abstract class BaseDatabase extends Database {
 
   override val extraModels: Seq[Model] = Seq(binaryModel, binaryLinkModel)
 
-//  override def loadBinary(initialVertex: Vertex)(implicit graph: Graph): InputStream = loadBinary(initialVertex.value[String]("_id"))
-
-//  override def loadBinary(id: String)(implicit graph: Graph): InputStream =
-//    new InputStream {
-//      var vertex: GremlinScala[Vertex] = graph.V().has(Key("_id") of id)
-//      var buffer: Option[Array[Byte]]  = vertex.clone.value[String]("binary").map(Base64.getDecoder.decode).headOption()
-//      var index                        = 0
-//
-//      override def read(): Int =
-//        buffer match {
-//          case Some(b) if b.length > index ⇒
-//            val d = b(index)
-//            index += 1
-//            d.toInt & 0xff
-//          case None ⇒ -1
-//          case _ ⇒
-//            vertex = vertex.out("nextChunk")
-//            buffer = vertex.clone.value[String]("binary").map(Base64.getDecoder.decode).headOption()
-//            index = 0
-//            read()
-//        }
-//    }
-//
-//  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex = {
-//
-//    def readNextChunk: String = {
-//      val buffer = new Array[Byte](chunkSize)
-//      val len    = is.read(buffer)
-//      logger.trace(s"$len bytes read")
-//      if (len == chunkSize)
-//        Base64.getEncoder.encodeToString(buffer)
-//      else if (len > 0)
-//        Base64.getEncoder.encodeToString(buffer.take(len))
-//      else
-//        ""
-//    }
-//
-//    val chunks: Iterator[Vertex] = Iterator
-//      .continually(readNextChunk)
-//      .takeWhile(_.nonEmpty)
-//      .map { data ⇒
-//        val v = graph.addVertex("binary")
-//        setSingleProperty(v, "binary", data, UniMapping.stringMapping)
-//        setSingleProperty(v, "_id", UUID.randomUUID, idMapping)
-//        v
-//      }
-//    if (chunks.isEmpty) {
-//      logger.debug("Saving empty file")
-//      val v = graph.addVertex("binary")
-//      setSingleProperty(v, "binary", "", UniMapping.stringMapping)
-//      setSingleProperty(v, "_id", UUID.randomUUID, idMapping)
-//      v
-//    } else {
-//      val firstVertex = chunks.next
-//      chunks.foldLeft(firstVertex) {
-//        case (previousVertex, currentVertex) ⇒
-//          previousVertex.addEdge("nextChunk", currentVertex)
-//          currentVertex
-//      }
-//      firstVertex
-//    }
-//  }
 }
 case class Binary(data: Array[Byte])

@@ -4,7 +4,7 @@ import scala.reflect.runtime.{universe ⇒ ru}
 
 import play.api.libs.json.{JsNull, Json}
 
-import gremlin.scala.{Element, Graph}
+import gremlin.scala.Graph
 import org.scalactic._
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
@@ -12,9 +12,9 @@ import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.ResultWithTotalSize
 
 abstract class QueryExecutor { executor ⇒
-  val version: (Int, Int)                                        = 1 → 1
-  val publicProperties: List[PublicProperty[_ <: Element, _, _]] = Nil
-  val queries: Seq[ParamQuery[_]]                                = Nil
+  val version: (Int, Int)                          = 1 → 1
+  val publicProperties: List[PublicProperty[_, _]] = Nil
+  val queries: Seq[ParamQuery[_]]                  = Nil
 
   final lazy val allQueries = queries :+ sortQuery :+ filterQuery :+ aggregationQuery :+ ToListQuery
   lazy val sortQuery        = new SortQuery(publicProperties)
@@ -98,8 +98,8 @@ abstract class QueryExecutor { executor ⇒
 
   def ++(other: QueryExecutor): QueryExecutor = new QueryExecutor {
     override val version: (Int, Int) = math.max(executor.version._1, other.version._1) → math.min(executor.version._2, other.version._2)
-    override val publicProperties: List[PublicProperty[_ <: Element, _, _]] =
-      (executor.publicProperties :: other.publicProperties).asInstanceOf[List[PublicProperty[_ <: Element, _, _]]]
+    override val publicProperties: List[PublicProperty[_, _]] =
+      (executor.publicProperties :: other.publicProperties).asInstanceOf[List[PublicProperty[_, _]]]
     override val queries: Seq[ParamQuery[_]] = executor.queries ++ other.queries
   }
 }

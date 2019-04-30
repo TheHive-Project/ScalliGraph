@@ -15,7 +15,7 @@ import org.thp.scalligraph.services.VertexSrv
 case class MyEntity(name: String, value: Int)
 
 object MyEntity {
-  val initialValues = Seq(MyEntity("ini1", 1), MyEntity("ini1", 2))
+  val initialValues: Seq[MyEntity] = Seq(MyEntity("ini1", 1), MyEntity("ini1", 2))
 }
 
 class SimpleEntityTest extends PlaySpecification with Mockito {
@@ -48,7 +48,7 @@ class SimpleEntityTest extends PlaySpecification with Mockito {
 
       "update an entity" in db.transaction { implicit graph ⇒
         val id = myEntitySrv.create(MyEntity("super", 7))._id
-        myEntitySrv.update(id, "value", 8)
+        myEntitySrv.get(id).update("value" → 8) must beSuccessfulTry
 
         myEntitySrv.getOrFail(id) must beSuccessfulTry.withValue((_: MyEntity with Entity).value must_=== 8)
       }

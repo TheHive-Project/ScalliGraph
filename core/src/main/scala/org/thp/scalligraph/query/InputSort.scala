@@ -2,7 +2,7 @@ package org.thp.scalligraph.query
 
 import scala.reflect.runtime.{universe ⇒ ru}
 
-import gremlin.scala.{__, Element, GremlinScala, OrderBy}
+import gremlin.scala.{__, GremlinScala, OrderBy}
 import org.apache.tinkerpop.gremlin.process.traversal.Order
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
 import org.scalactic.Accumulation._
@@ -18,7 +18,7 @@ case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
       traversal.by(f(__[F]).traversal, order)
   }
   override def apply[S <: ScalliSteps[_, _, _]](
-      publicProperties: List[PublicProperty[_ <: Element, _, _]],
+      publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
       authContext: AuthContext): S = {

@@ -4,7 +4,7 @@ import scala.reflect.runtime.{currentMirror ⇒ rm, universe ⇒ ru}
 
 import play.api.libs.json.JsValue
 
-import gremlin.scala.{Element, Graph, GremlinScala}
+import gremlin.scala.{Graph, GremlinScala}
 import org.scalactic.Good
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
@@ -77,7 +77,7 @@ object Query {
   }
 }
 
-class SortQuery(publicProperties: List[PublicProperty[_ <: Element, _, _]]) extends ParamQuery[InputSort] {
+class SortQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[InputSort] {
   override val paramParser: FieldsParser[InputSort] = InputSort.fieldsParser
   override val name: String                         = "sort"
   override def checkFrom(t: ru.Type): Boolean       = t <:< ru.typeOf[ScalliSteps[_, _, _]]
@@ -86,7 +86,7 @@ class SortQuery(publicProperties: List[PublicProperty[_ <: Element, _, _]]) exte
     inputSort(publicProperties, rm.classSymbol(from.getClass).toType, from.asInstanceOf[ScalliSteps[_, _, _ <: AnyRef]], authContext)
 }
 
-class FilterQuery(publicProperties: List[PublicProperty[_ <: Element, _, _]]) extends ParamQuery[InputFilter] {
+class FilterQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[InputFilter] {
   override val paramParser: FieldsParser[InputFilter] = InputFilter.fieldsParser
   override val name: String                           = "filter"
   override def checkFrom(t: ru.Type): Boolean         = t <:< ru.typeOf[ScalliSteps[_, _, _]]
@@ -95,7 +95,7 @@ class FilterQuery(publicProperties: List[PublicProperty[_ <: Element, _, _]]) ex
     inputFilter(publicProperties, rm.classSymbol(from.getClass).toType, from.asInstanceOf[ScalliSteps[_, _, _ <: AnyRef]], authContext)
 }
 
-class AggregationQuery(publicProperties: List[PublicProperty[_ <: Element, _, _]]) extends ParamQuery[GroupAggregation[_, _]] {
+class AggregationQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[GroupAggregation[_, _]] {
   override val paramParser: FieldsParser[GroupAggregation[_, _]] = GroupAggregation.fieldsParser
   override val name: String                                      = "aggregation"
   override def checkFrom(t: ru.Type): Boolean                    = t <:< ru.typeOf[ScalliSteps[_, _, _]]
@@ -127,13 +127,9 @@ object ToListQuery extends Query {
 }
 
 trait InputQuery {
-  def apply[S <: ScalliSteps[_, _, _]](
-      publicProperties: List[PublicProperty[_ <: Element, _, _]],
-      stepType: ru.Type,
-      step: S,
-      authContext: AuthContext): S
+  def apply[S <: ScalliSteps[_, _, _]](publicProperties: List[PublicProperty[_, _]], stepType: ru.Type, step: S, authContext: AuthContext): S
 
-  def getProperty(properties: Seq[PublicProperty[_, _, _]], stepType: ru.Type, fieldName: String): PublicProperty[_, _, _] =
+  def getProperty(properties: Seq[PublicProperty[_, _]], stepType: ru.Type, fieldName: String): PublicProperty[_, _] =
     properties
       .find(p ⇒ p.stepType =:= stepType && p.propertyName == fieldName)
       .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))

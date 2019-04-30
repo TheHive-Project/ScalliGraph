@@ -3,11 +3,8 @@ package org.thp.scalligraph.services
 import scala.util.{Failure, Success, Try}
 
 import gremlin.scala.Graph
-import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.controllers.UpdateOps
+import org.thp.scalligraph.NotFoundError
 import org.thp.scalligraph.models.{Database, ElementSteps, Entity, Model}
-import org.thp.scalligraph.query.PublicProperty
-import org.thp.scalligraph.{FPath, NotFoundError}
 
 abstract class ElementSrv[E <: Product, S <: ElementSteps[E, _, S]](implicit db: Database) {
   val model: Model.Base[E]
@@ -22,15 +19,4 @@ abstract class ElementSrv[E <: Product, S <: ElementSteps[E, _, S]](implicit db:
     get(id).headOption().fold[Try[E with Entity]](Failure(NotFoundError(s"${model.label} $id not found")))(Success.apply)
 
   def count(implicit graph: Graph): Long = initSteps.count
-
-  def update(id: String, path: String, value: Any)(implicit graph: Graph, authContext: AuthContext): Unit =
-    update(id, Map(FPath(path) → UpdateOps.SetAttribute(value)))
-
-  def update(id: String, fields: Map[FPath, UpdateOps.Type])(implicit graph: Graph, authContext: AuthContext): Unit =
-    db.update(graph, authContext, model, id, fields)
-
-  def update(id: String, properties: Seq[PublicProperty[_, _, _]], fields: Map[FPath, UpdateOps.Type])(
-      implicit graph: Graph,
-      authContext: AuthContext): Unit =
-    db.update(graph, authContext, this, id, properties, fields)
 }

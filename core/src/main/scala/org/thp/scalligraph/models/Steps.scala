@@ -1,6 +1,6 @@
 package org.thp.scalligraph.models
 
-import java.util.{UUID, Collection ⇒ JCollection, List ⇒ JList, Map ⇒ JMap, Set ⇒ JSet}
+import java.util.{Date, UUID, Collection ⇒ JCollection, List ⇒ JList, Map ⇒ JMap, Set ⇒ JSet}
 
 import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
@@ -13,7 +13,7 @@ import gremlin.scala._
 import gremlin.scala.dsl._
 import org.apache.tinkerpop.gremlin.process.traversal.Scope
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.query.PublicProperty
+import org.thp.scalligraph.query.PropertyUpdater
 import org.thp.scalligraph.services.RichElement
 import org.thp.scalligraph.{AuthorizationError, InternalError, NotFoundError}
 import shapeless._
@@ -24,7 +24,8 @@ final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])
     extends Steps[T, T, HNil](raw)(SingleMapping[T, T](null.asInstanceOf[T]))
     with ScalliSteps[T, T, ScalarSteps[T]] {
 
-  lazy val logger = Logger(getClass)
+  lazy val logger           = Logger(getClass)
+  lazy val typeName: String = /*ru.typeOf[T].toString*/ implicitly[ClassTag[T]].runtimeClass.getSimpleName
 
   override def newInstance(raw: GremlinScala[T]): ScalarSteps[T] =
     new ScalarSteps[T](raw)
@@ -62,13 +63,6 @@ final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])
     logger.debug(s"Execution of $raw")
     super.headOption()
   }
-
-  override def getOrFail(): Try[T] =
-    headOption()
-      .fold[Try[T]] {
-        val typeName = implicitly[ClassTag[T]].runtimeClass.getSimpleName
-        Failure(NotFoundError(s"$typeName not found"))
-      }(Success.apply)
 }
 
 object ScalarSteps {
@@ -78,6 +72,7 @@ object ScalarSteps {
 
 trait ScalliSteps[EndDomain, EndGraph, ThisStep <: AnyRef] { _: ThisStep ⇒
   val logger: Logger
+  def typeName: String
   override def clone(): ThisStep = newInstance(raw.clone())
   def newInstance(raw: GremlinScala[EndGraph]): ThisStep
   val raw: GremlinScala[EndGraph]
@@ -92,10 +87,13 @@ trait ScalliSteps[EndDomain, EndGraph, ThisStep <: AnyRef] { _: ThisStep ⇒
   }
   def existsOrFail(): Try[Unit] = if (exists()) Success(()) else Failure(AuthorizationError("Unauthorized action"))
 
-  def getOrFail(): Try[EndDomain]
+  def getOrFail(): Try[EndDomain] =
+    headOption()
+      .fold[Try[EndDomain]](Failure(NotFoundError(s"$typeName not found")))(Success.apply)
+
   def orFail(ex: Exception): Try[EndDomain] = headOption().fold[Try[EndDomain]](Failure(ex))(Success.apply)
   def count(): Long
-  def sort(orderBys: OrderBy[_]*): ThisStep = newInstance(raw.order(orderBys: _*))
+  def sort(orderBys: OrderBy[_]*): ThisStep                                             = newInstance(raw.order(orderBys: _*))
   def where(f: GremlinScala[EndGraph] ⇒ GremlinScala[_]): ThisStep                      = newInstance(raw.filter(f))
   def has[A](key: Key[A], predicate: P[A])(implicit ev: EndGraph <:< Element): ThisStep = newInstance(raw.has(key, predicate))
   def map[NewEndDomain: ClassTag](f: EndDomain ⇒ NewEndDomain): ScalarSteps[NewEndDomain]
@@ -118,26 +116,18 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
     extends Steps[E with Entity, EndGraph, HNil](raw)(db.getModel[E].converter(db, graph).asInstanceOf[Converter.Aux[E with Entity, EndGraph]])
     with ScalliSteps[E with Entity, EndGraph, ThisStep] { _: ThisStep ⇒
 
-  lazy val logger = Logger(getClass)
+  lazy val logger           = Logger(getClass)
+  lazy val typeName: String = ru.typeOf[E].toString
 
   override def headOption(): Option[E with Entity] = {
     logger.debug(s"Execution of $raw")
     super.headOption()
   }
 
-  def get[A](authContext: AuthContext, property: PublicProperty[EndGraph, _, A]): ScalarSteps[A] = {
-    val fn = property.get(raw, authContext).asInstanceOf[Seq[GremlinScala[EndGraph] ⇒ GremlinScala[A]]]
-    if (fn.size == 1)
-      ScalarSteps(fn.head.apply(raw))(ClassTag(property.mapping.graphTypeClass))
-    else
-      ScalarSteps(raw.coalesce(fn: _*))(ClassTag(property.mapping.graphTypeClass))
-  }
-
   def get(id: String): ThisStep = newInstance(raw.has(Key("_id") of id))
 
-  override def getOrFail(): Try[E with Entity] =
-    headOption()
-      .fold[Try[E with Entity]](Failure(NotFoundError(s"${ru.typeOf[E]} not found")))(Success.apply)
+  def update(fields: (String, Any)*)(implicit authContext: AuthContext): Try[Unit] =
+    db.update(raw, fields, db.getModel[E], graph, authContext)
 
   override def map[T: ClassTag](f: E with Entity ⇒ T): ScalarSteps[T] = {
     implicit val const: Constructor.Aux[T, HNil, T, ScalarSteps[T]] =
@@ -213,6 +203,20 @@ abstract class BaseVertexSteps[E <: Product: ru.TypeTag, ThisStep <: BaseVertexS
     implicit db: Database,
     val graph: Graph)
     extends ElementSteps[E, Vertex, ThisStep](raw) { _: ThisStep ⇒
+
+  def get(vertex: Vertex): ThisStep = newInstance(raw.V(vertex))
+
+  def updateProperties(propertyUpdaters: Seq[PropertyUpdater])(implicit authContext: AuthContext): Try[Unit] =
+    raw.headOption().fold[Try[Unit]](Failure(NotFoundError(s"$typeName not found"))) { vertex ⇒
+      logger.trace(s"Update ${vertex.id()} by ${authContext.userId}")
+      propertyUpdaters
+        .toTry(u ⇒ u(vertex, db, graph, authContext))
+        .map { _ ⇒
+          db.setOptionProperty(vertex, "_updatedAt", Some(new Date), db.updatedAtMapping)
+          db.setOptionProperty(vertex, "_updatedBy", Some(authContext.userId), db.updatedByMapping)
+          ()
+        }
+    }
 }
 
 final class VertexSteps[E <: Product: ru.TypeTag](raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph)

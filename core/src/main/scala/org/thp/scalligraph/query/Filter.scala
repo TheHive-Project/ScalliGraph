@@ -13,16 +13,12 @@ import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.ScalliSteps
 
 trait InputFilter extends InputQuery {
-  def apply[S <: ScalliSteps[_, _, _]](
-      publicProperties: List[PublicProperty[_ <: Element, _, _]],
-      stepType: ru.Type,
-      step: S,
-      authContext: AuthContext): S
+  def apply[S <: ScalliSteps[_, _, _]](publicProperties: List[PublicProperty[_, _]], stepType: ru.Type, step: S, authContext: AuthContext): S
 }
 
 case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilter {
   override def apply[S <: ScalliSteps[_, _, _]](
-      publicProperties: List[PublicProperty[_ <: Element, _, _]],
+      publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
       authContext: AuthContext): S = {
@@ -39,7 +35,7 @@ case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilt
 
 case class OrFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
   override def apply[S <: ScalliSteps[_, _, _]](
-      publicProperties: List[PublicProperty[_ <: Element, _, _]],
+      publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
       authContext: AuthContext): S =
@@ -57,7 +53,7 @@ case class OrFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
 
 case class AndFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
   override def apply[S <: ScalliSteps[_, _, _]](
-      publicProperties: List[PublicProperty[_ <: Element, _, _]],
+      publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
       authContext: AuthContext): S =
@@ -76,7 +72,7 @@ case class AndFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
 
 case class NotFilter(inputFilter: InputFilter) extends InputFilter {
   override def apply[S <: ScalliSteps[_, _, _]](
-      publicProperties: List[PublicProperty[_ <: Element, _, _]],
+      publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
       authContext: AuthContext): S =
@@ -90,7 +86,7 @@ case class NotFilter(inputFilter: InputFilter) extends InputFilter {
 
 object YesFilter extends InputFilter {
   override def apply[S <: ScalliSteps[_, _, _]](
-      publicProperties: List[PublicProperty[_ <: Element, _, _]],
+      publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
       authContext: AuthContext): S = step
@@ -101,7 +97,7 @@ object InputFilter {
 
   def apply[S0 <: ScalliSteps[_, _, _]](f: S0 ⇒ S0): InputFilter = new InputFilter {
     override def apply[S <: ScalliSteps[_, _, _]](
-        publicProperties: List[PublicProperty[_ <: Element, _, _]],
+        publicProperties: List[PublicProperty[_, _]],
         stepType: ru.Type,
         step: S,
         authContext: AuthContext): S = f(step.asInstanceOf[S0]).asInstanceOf[S]
@@ -132,9 +128,11 @@ object InputFilter {
 //  def in(field: String, values: Seq[Any]) = OrFilter(values.map(v ⇒ PredicateFilter(field, P.is(v))))
 
   implicit val fieldsParser: FieldsParser[InputFilter] = FieldsParser("query") {
-    case (path, FObjOne("_and", FSeq(fields)))                     ⇒ fields.validatedBy(field ⇒ fieldsParser((path / "_and").toSeq, field)).map(and)
-    case (path, FObjOne("_or", FSeq(fields)))                      ⇒ fields.validatedBy(field ⇒ fieldsParser((path / "_or").toSeq, field)).map(or)
-    case (path, FObjOne("_not", field))                            ⇒ fieldsParser(path / "_not", field).map(not)
+    case (path, FObjOne("_and", FSeq(fields))) ⇒
+      fields.zipWithIndex.validatedBy { case (field, index) ⇒ fieldsParser((path :/ "_and").toSeq(index), field) }.map(and)
+    case (path, FObjOne("_or", FSeq(fields))) ⇒
+      fields.zipWithIndex.validatedBy { case (field, index) ⇒ fieldsParser((path :/ "_or").toSeq(index), field) }.map(or)
+    case (path, FObjOne("_not", field))                            ⇒ fieldsParser(path :/ "_not", field).map(not)
     case (_, FObjOne("_any", _))                                   ⇒ Good(yes)
     case (_, FObjOne("_lt", FObjOne(key, FNative(value))))         ⇒ Good(lt(key, value))
     case (_, FObjOne("_gt", FObjOne(key, FNative(value))))         ⇒ Good(gt(key, value))
