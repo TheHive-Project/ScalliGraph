@@ -19,6 +19,7 @@ import org.thp.scalligraph.models._
 import org.thp.scalligraph.{Config, Retry}
 
 object Neo4jDatabase {
+
   def defaultConfiguration = Configuration(
     Neo4jGraph.CONFIG_DIRECTORY → {
       val dbDir      = s"db-${math.random}"

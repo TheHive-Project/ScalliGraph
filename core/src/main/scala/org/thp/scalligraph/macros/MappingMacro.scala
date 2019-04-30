@@ -11,6 +11,7 @@ trait MappingMacro extends MacroUtil with MacroLogger {
   import c.universe._
 
   case class MappingSymbol(name: String, valName: TermName, definition: Tree)
+
   def getEntityMappings[E: WeakTypeTag]: Seq[MappingSymbol] = {
 
     val eType = weakTypeOf[E]

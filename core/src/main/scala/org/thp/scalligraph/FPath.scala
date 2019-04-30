@@ -71,6 +71,7 @@ object FPath {
   private val seqRegex       = "(\\w+)\\[\\]".r
   private val elemRegex      = "(\\w+)".r
   val empty: FPath           = FPathEmpty
+
   def apply(path: String): FPath =
     path.split("\\.").foldRight[FPath](FPathEmpty) {
       case (elemRegex(p), pathElem) ⇒ FPathElem(p, pathElem)
@@ -79,6 +80,7 @@ object FPath {
         FPathElemInSeq(p, index.toInt, pathElem)
       case (other, pathElem) ⇒ sys.error(s"ERROR: FPath($other) / $pathElem")
     }
+
   def unapplySeq(path: FPath): Option[Seq[String]] =
     path match {
       case FPathEmpty                                ⇒ Some(Nil)

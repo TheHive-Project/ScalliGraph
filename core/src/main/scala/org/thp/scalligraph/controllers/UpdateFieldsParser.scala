@@ -14,27 +14,27 @@ case class UpdateFieldsParser[T](formatName: String, parsers: Seq[(FPath, Fields
 
   def forType[A](newFormatName: String) = new UpdateFieldsParser[A](newFormatName, parsers)
 
-  def apply(field: FObject): Seq[(FPath, Any)] Or Every[AttributeError] = {
-    println(s"parsing $formatName \n$field\n with ${parsers.map(p ⇒ "\n - " + p.toString)}")
-    field.fields.toSeq.flatMap {
-      case (key, value) ⇒
-        val path = FPath(key)
-        parsers.collectFirst {
-          case (p, parser) if p.matches(path) ⇒
-            parser(value)
-              .map(path → _)
-              .badMap(x ⇒ x.map(_.withName(path.toString)))
-        }
-    }.combined
-  }
+  def apply(field: FObject): Seq[(FPath, Any)] Or Every[AttributeError] =
+    field
+      .fields
+      .toSeq
+      .flatMap {
+        case (key, value) ⇒
+          val path = FPath(key)
+          parsers.collectFirst {
+            case (p, parser) if p.matches(path) ⇒
+              parser(value)
+                .map(path → _)
+                .badMap(x ⇒ x.map(_.withName(path.toString)))
+          }
+      }
+      .combined
 
   def on(pathStr: String): UpdateFieldsParser[T] =
     new UpdateFieldsParser[T](formatName, parsers.map { case (path, parser) ⇒ FPathElem(pathStr, path) → parser })
 
-  def seq(pathStr: String): UpdateFieldsParser[T] = {
-    println(s"[$formatName] seq($pathStr) => ${parsers.map(_._1.toString)}")
+  def seq(pathStr: String): UpdateFieldsParser[T] =
     new UpdateFieldsParser[T](formatName, parsers.map { case (path, parser) ⇒ FPathSeq(pathStr, path) → parser })
-  }
 }
 
 object UpdateFieldsParser {

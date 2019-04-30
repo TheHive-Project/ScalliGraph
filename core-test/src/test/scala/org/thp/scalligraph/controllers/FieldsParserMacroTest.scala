@@ -46,7 +46,8 @@ class FieldsParserMacroTest extends Specification with TestUtils {
       val complexClass = ComplexClassForFieldsParserMacroTest(
         "complexClass",
         42,
-        Seq(SubClassForFieldsParserMacroTest("sc1", Some(12)), SubClassForFieldsParserMacroTest("sc2", None)))
+        Seq(SubClassForFieldsParserMacroTest("sc1", Some(12)), SubClassForFieldsParserMacroTest("sc2", None))
+      )
       fieldsParser(fields) must_=== Good(complexClass)
     }
 
@@ -68,7 +69,8 @@ class FieldsParserMacroTest extends Specification with TestUtils {
       val complexClass = ComplexClassForFieldsParserMacroTest(
         "complexClass",
         42,
-        Seq(SubClassForFieldsParserMacroTest("sc1", Some(12)), SubClassForFieldsParserMacroTest("sc2", None)))
+        Seq(SubClassForFieldsParserMacroTest("sc1", Some(12)), SubClassForFieldsParserMacroTest("sc2", None))
+      )
       fieldsParser(fields) must_=== Good(complexClass)
     }
 
@@ -149,14 +151,18 @@ class FieldsParserMacroTest extends Specification with TestUtils {
       val fieldsParser = FieldsParser.build[TestEnumeration.Value]
       fieldsParser(FString("a")) must_=== Good(TestEnumeration.a)
       fieldsParser(FString("d")) must_=== Bad(
-        One(InvalidFormatAttributeError("", "org.thp.scalligraph.controllers.TestEnumeration.Value", Set("a", "b", "c"), FString("d"))))
+        One(InvalidFormatAttributeError("", "org.thp.scalligraph.controllers.TestEnumeration.Value", Set("a", "b", "c"), FString("d")))
+      )
     }
 
     "parse an sealed type" in {
       val fieldsParser = FieldsParser.build[TestSealedClassEnumeration]
       fieldsParser(FString("EnumA")) must_=== Good(EnumA)
-      fieldsParser(FString("d")) must_=== Bad(One(
-        InvalidFormatAttributeError("", "org.thp.scalligraph.controllers.TestSealedClassEnumeration", Set("EnumA", "EnumB", "EnumC"), FString("d"))))
+      fieldsParser(FString("d")) must_=== Bad(
+        One(
+          InvalidFormatAttributeError("", "org.thp.scalligraph.controllers.TestSealedClassEnumeration", Set("EnumA", "EnumB", "EnumC"), FString("d"))
+        )
+      )
     }
   }
 

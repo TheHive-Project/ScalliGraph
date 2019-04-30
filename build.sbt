@@ -42,7 +42,7 @@ lazy val scalligraph = (project in file("."))
         fork in Test := true,
         javaOptions += "-Xmx1G",
         addCompilerPlugin(macroParadise),
-        scalafmtConfig := Some(file(".scalafmt.conf"))
+        scalafmtConfig := file(".scalafmt.conf")
       )),
     name := "scalligraph"
   )

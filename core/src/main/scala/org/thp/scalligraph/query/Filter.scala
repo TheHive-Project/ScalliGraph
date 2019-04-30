@@ -21,9 +21,11 @@ case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilt
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
-      authContext: AuthContext): S = {
+      authContext: AuthContext
+  ): S = {
     val scalliStep = step.asInstanceOf[ScalliSteps[_, _, S]]
-    getProperty(publicProperties, stepType, fieldName).definition
+    getProperty(publicProperties, stepType, fieldName)
+      .definition
       .map(f ⇒ f.andThen(_.is(predicate)))
       .asInstanceOf[Seq[GremlinScala[_] ⇒ GremlinScala[_]]] match {
       case Seq()  ⇒ scalliStep.where(_.is(null)) // TODO need checks
@@ -38,7 +40,8 @@ case class OrFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
-      authContext: AuthContext): S =
+      authContext: AuthContext
+  ): S =
     step match {
       case s: ScalliSteps[_, gt, S] ⇒
         inputFilters.map { ff ⇒ (g: GremlinScala[gt]) ⇒
@@ -56,7 +59,8 @@ case class AndFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
-      authContext: AuthContext): S =
+      authContext: AuthContext
+  ): S =
     step match {
       case s: ScalliSteps[_, gt, S] ⇒
         inputFilters.filterNot(_ == YesFilter).map { ff ⇒ (g: GremlinScala[gt]) ⇒
@@ -75,7 +79,8 @@ case class NotFilter(inputFilter: InputFilter) extends InputFilter {
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
-      authContext: AuthContext): S =
+      authContext: AuthContext
+  ): S =
     step match {
       case s: ScalliSteps[_, gt, S] ⇒
         val filter = (g: GremlinScala[gt]) ⇒ inputFilter[S](publicProperties, stepType, s.newInstance(g), authContext).raw
@@ -89,7 +94,8 @@ object YesFilter extends InputFilter {
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
-      authContext: AuthContext): S = step
+      authContext: AuthContext
+  ): S = step
 }
 
 object InputFilter {
@@ -100,7 +106,8 @@ object InputFilter {
         publicProperties: List[PublicProperty[_, _]],
         stepType: ru.Type,
         step: S,
-        authContext: AuthContext): S = f(step.asInstanceOf[S0]).asInstanceOf[S]
+        authContext: AuthContext
+    ): S = f(step.asInstanceOf[S0]).asInstanceOf[S]
   }
 
   def stringContains(value: String): P[String]   = P.fromPredicate[String]((v, r) ⇒ v contains r, value)
@@ -123,6 +130,7 @@ object InputFilter {
   def and(filters: Seq[InputFilter]): AndFilter                   = AndFilter(filters)
   def not(filter: InputFilter): NotFilter                         = NotFilter(filter)
   def yes: YesFilter.type                                         = YesFilter
+
   def withId(id: String): InputFilter =
     InputFilter[ScalliSteps[_, Element, _]](s ⇒ s.where(_.has(Key("_id") of id)).asInstanceOf[ScalliSteps[_, Element, _]])
 //  def in(field: String, values: Seq[Any]) = OrFilter(values.map(v ⇒ PredicateFilter(field, P.is(v))))

@@ -11,8 +11,8 @@ case class DummyUserSrv(
     userName: String = "default admin user",
     organisation: String = "default",
     permissions: Set[Permission] = Set.empty,
-    requestId: String = "testRequest")
-    extends UserSrv { userSrv ⇒
+    requestId: String = "testRequest"
+) extends UserSrv { userSrv ⇒
 
   val authContext: AuthContext                                                     = AuthContextImpl(userSrv.userId, userSrv.userName, userSrv.organisation, userSrv.requestId, userSrv.permissions)
   override def getFromId(request: RequestHeader, userId: String): Try[AuthContext] = Success(authContext)

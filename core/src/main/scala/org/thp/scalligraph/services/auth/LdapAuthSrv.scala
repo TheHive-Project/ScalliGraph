@@ -78,6 +78,7 @@ case class LdapConnection(serverNames: Seq[String], useSSL: Boolean, bindDN: Str
 }
 
 object LdapConnection {
+
   def apply(configuration: Configuration): LdapConnection =
     (for {
       bindDN ← configuration.getOptional[String]("auth.ldap.bindDN")

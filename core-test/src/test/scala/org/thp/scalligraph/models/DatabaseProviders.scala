@@ -13,7 +13,8 @@ class DatabaseProviders @Inject()(config: Configuration) {
   def this() =
     this(
       Configuration.load(Environment.simple()) ++
-        Configuration(ConfigFactory.parseString(s"db.janusgraph.storage.directory = target/janusgraph-test-database-${math.random}.db")))
+        Configuration(ConfigFactory.parseString(s"db.janusgraph.storage.directory = target/janusgraph-test-database-${math.random}.db"))
+    )
 
   lazy val logger = Logger(getClass)
 

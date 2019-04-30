@@ -147,7 +147,8 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
       elementClass: Class[_ <: Element],
       elementLabel: JanusGraphSchemaType,
       indexType: IndexType.Value,
-      properties: Seq[String]): Unit = {
+      properties: Seq[String]
+  ): Unit = {
     val indexName = elementLabel.name + "_" + properties.mkString("_")
     val index     = mgmt.buildIndex(indexName, elementClass).indexOnly(elementLabel)
     val propertyKeys = (properties :+ "_label").map { p ⇒
@@ -241,7 +242,8 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
       model: Model.Edge[E, FROM, TO],
       e: E,
       from: FROM with Entity,
-      to: TO with Entity): E with Entity = {
+      to: TO with Entity
+  ): E with Entity = {
     val edgeMaybe = for {
       f ← graph.V().has(Key("_id") of from._id).headOption()
       t ← graph.V().has(Key("_id") of to._id).headOption()

@@ -10,11 +10,13 @@ import org.thp.scalligraph.controllers.FieldsParser
 import org.thp.scalligraph.query._
 
 case class OutputPerson(createdBy: String, label: String, name: String, age: Int)
+
 object OutputPerson {
   implicit val writes: OWrites[OutputPerson] = Json.writes[OutputPerson]
 }
 
 case class OutputSoftware(createdBy: String, name: String, lang: String)
+
 object OutputSoftware {
   implicit val writes: OWrites[OutputSoftware] = Json.writes[OutputSoftware]
 }
@@ -50,11 +52,11 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
       .property[Int]("age")(_.simple.updatable)
       .build :::
       PublicPropertyListBuilder[SoftwareSteps]
-      .property[String]("createdBy")(_.rename("_createdBy").readonly)
-      .property[String]("name")(_.simple.updatable)
-      .property[String]("lang")(_.simple.updatable)
-      .property[String]("any")(_.derived(_.value[String]("_createdBy"), _.value[String]("name"), _.value[String]("lang")).readonly)
-      .build
+        .property[String]("createdBy")(_.rename("_createdBy").readonly)
+        .property[String]("name")(_.simple.updatable)
+        .property[String]("lang")(_.simple.updatable)
+        .property[String]("any")(_.derived(_.value[String]("_createdBy"), _.value[String]("name"), _.value[String]("lang")).readonly)
+        .build
   }
 
   override val queries: Seq[ParamQuery[_]] = Seq(
@@ -70,7 +72,8 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
     Query.withParam[FriendLevel, PersonSteps, PersonSteps](
       "friends",
       FieldsParser[FriendLevel],
-      (friendLevel, personSteps, _) ⇒ personSteps.friends(friendLevel.level)),
+      (friendLevel, personSteps, _) ⇒ personSteps.friends(friendLevel.level)
+    ),
     Query[Person with Entity, Output[OutputPerson]]("output", (person, _) ⇒ person),
     Query[Software with Entity, Output[OutputSoftware]]("output", (software, _) ⇒ software)
   )

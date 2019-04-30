@@ -26,6 +26,7 @@ class AttachmentTest extends Specification {
   val storageDirectory: Path = Paths.get(s"target/AttachmentTest-${math.random()}")
   Files.createDirectory(storageDirectory)
   val dbProviders = new DatabaseProviders()
+
   val dbProvStorageSrv: Seq[(DatabaseProvider, StorageSrv)] = dbProviders.list.map {
     case db if db.name == "orientdb" ⇒ db → new OrientDatabaseStorageSrv(db.get().asInstanceOf[OrientDatabase], 32 * 1024)
     case db                          ⇒ db → new DatabaseStorageSrv(db.get(), 32 * 1024)

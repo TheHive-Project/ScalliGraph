@@ -17,7 +17,8 @@ import org.thp.scalligraph.query.{PropertyUpdater, PublicProperty}
 class FieldsParser[T](
     val formatName: String,
     val acceptedInput: Set[String],
-    val parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]]) {
+    val parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]]
+) {
 
   def apply(path: FPath, field: Field): T Or Every[AttributeError] =
     parse.lift((path, field)).getOrElse {
@@ -65,7 +66,8 @@ class FieldsParser[T](
         case (path, field) ⇒
           field match {
             case FSeq(subFields) ⇒
-              subFields.zipWithIndex
+              subFields
+                .zipWithIndex
                 .validatedBy { case (f, i) ⇒ apply(path.toSeq(i), f) }
             case FNull | FUndefined ⇒ Good(Nil)
             case other ⇒

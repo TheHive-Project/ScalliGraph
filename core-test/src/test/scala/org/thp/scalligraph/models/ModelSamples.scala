@@ -6,6 +6,7 @@ import org.scalactic.Good
 import org.thp.scalligraph.controllers.{FString, FieldsParser}
 
 object ModelSamples {
+
   val hobbiesParser: FieldsParser[Seq[String]] = FieldsParser("hobbies") {
     case (_, FString(s)) ⇒ Good(s.split(",").toSeq)
   }

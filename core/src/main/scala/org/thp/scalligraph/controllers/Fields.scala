@@ -13,10 +13,12 @@ import org.thp.scalligraph.{FPath, FPathElem, FPathElemInSeq, FPathEmpty, FPathS
 
 sealed trait Field {
   def get(pathElement: String): Field = FUndefined
+
   def get(path: FPath): Field = path match {
     case FPathEmpty ⇒ this
     case _          ⇒ FUndefined
   }
+
   def set(path: FPath, field: Field): Field =
     if (path.isEmpty) field else sys.error(s"$this.set($path, $field)")
   def toJson: JsValue
@@ -24,6 +26,7 @@ sealed trait Field {
 
 object Field {
   private[Field] lazy val logger = Logger(getClass)
+
   def apply(json: JsValue): Field = json match {
     case JsString(s)  ⇒ FString(s)
     case JsNumber(n)  ⇒ FNumber(n.toLong)
@@ -32,12 +35,15 @@ object Field {
     case JsArray(a)   ⇒ FSeq(a.map(Field.apply).toList)
     case JsNull       ⇒ FNull
   }
+
   def apply(request: Request[AnyContent]): Field = {
     def queryFields: FObject =
       FObject(
-        request.queryString
+        request
+          .queryString
           .filterNot(_._1.isEmpty())
-          .mapValues(FAny.apply))
+          .mapValues(FAny.apply)
+      )
 
     request.body match {
       case AnyContentAsFormUrlEncoded(data) ⇒
@@ -88,6 +94,7 @@ object Field {
 case class FString(value: String) extends Field {
   override def toJson: JsValue = JsString(value)
 }
+
 object FString {
   implicit val parser: FieldsParser[FString] = FieldsParser[FString]("FString") {
     case (_, field: FString) ⇒ Good(field)
@@ -97,6 +104,7 @@ object FString {
 case class FNumber(value: Long) extends Field {
   override def toJson: JsValue = JsNumber(value)
 }
+
 object FNumber {
   implicit val parser: FieldsParser[FNumber] = FieldsParser[FNumber]("FNumber") {
     case (_, field: FNumber) ⇒ Good(field)

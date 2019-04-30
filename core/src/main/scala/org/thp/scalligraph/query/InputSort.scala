@@ -13,6 +13,7 @@ import org.thp.scalligraph.controllers.{FSeq, FString, FieldsParser}
 import org.thp.scalligraph.models.ScalliSteps
 
 case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
+
   def orderby[A, F, T](f: GremlinScala[F] ⇒ GremlinScala[T], order: Order): OrderBy[A] = new OrderBy[A] {
     override def apply[End](traversal: GraphTraversal[_, End]): GraphTraversal[_, End] =
       traversal.by(f(__[F]).traversal, order)
@@ -21,11 +22,13 @@ case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
-      authContext: AuthContext): S = {
+      authContext: AuthContext
+  ): S = {
     val orderBys = fieldOrder.flatMap {
       case (fieldName, order) ⇒
         val property = getProperty(publicProperties, stepType, fieldName)
-        property.definition
+        property
+          .definition
           .map {
             case f: (GremlinScala[a] ⇒ GremlinScala[b]) ⇒
               orderby[Any, a, b](_.coalesce(f, _.constant(property.mapping.noValue.asInstanceOf[b])), order)
