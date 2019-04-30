@@ -46,7 +46,7 @@ class EntryPoint @Inject()(
     * @return empty entry point
     */
   def apply(name: String): EntryPointBuilder[HNil, Request] =
-    EntryPointBuilder[HNil, Request](name, BaseFieldsParser.good(HNil), Success.apply)
+    EntryPointBuilder[HNil, Request](name, FieldsParser.good(HNil), Success.apply)
 
   /**
     * An entry point is defined by its name, a fields parser which transform request into a record V and the type of request (
@@ -60,7 +60,7 @@ class EntryPoint @Inject()(
     */
   case class EntryPointBuilder[V <: HList, R[_] <: Request[_]](
       name: String,
-      fieldsParser: BaseFieldsParser[V],
+      fieldsParser: FieldsParser[V],
       req: Request[AnyContent] ⇒ Try[R[AnyContent]]) {
 
     /**
@@ -70,7 +70,7 @@ class EntryPoint @Inject()(
       * @tparam T type of extracted field
       * @return a new entry point with added fields parser
       */
-    def extract[N, T](fieldName: Witness.Aux[N], fp: BaseFieldsParser[T]): EntryPointBuilder[FieldType[N, T] :: V, R] =
+    def extract[N, T](fieldName: Witness.Aux[N], fp: FieldsParser[T]): EntryPointBuilder[FieldType[N, T] :: V, R] =
       EntryPointBuilder(name, fieldsParser.andThen(fieldName.toString)(fp)(labelled.field[N](_) :: _), req)
 
     /**

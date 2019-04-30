@@ -2,81 +2,70 @@ package org.thp.scalligraph
 
 trait FPath {
   val isEmpty: Boolean = false
-  def /(elem: FPath): FPath
-  def /(elem: String): FPath = this / FPath(elem)
-  def toSeq: FPath
+  def :/(elem: FPath): FPath
+  def :/(elem: String): FPath = this :/ FPath(elem)
+  def /:(elem: String): FPath = FPath(elem) :/ this
   def toSeq(index: Int): FPath
-  def toBare: FPath
+  def startsWith(elem: FPath): Option[FPath]
+  def matches(elem: FPath): Boolean = startsWith(elem).filter(_.isEmpty).isDefined
+//  def startsWith(elem: String): Boolean
 }
 
 object FPathEmpty extends FPath {
-  override val isEmpty: Boolean = true
-  def /(elem: FPath): FPath     = elem
-  override def toString: String = ""
-  def toSeq: FPath              = sys.error("ERROR: empty.toSeq")
-  def toSeq(index: Int): FPath  = this // sys.error(s"ERROR: empty.toSeq($index)")
-  def toBare: FPath             = this
+  override val isEmpty: Boolean         = true
+  override def :/(elem: FPath): FPath   = elem
+  override def toString: String         = ""
+  override def toSeq(index: Int): FPath = this // sys.error(s"ERROR: empty.toSeq($index)")
+//  override def startsWith(elem: String): Boolean = false
+  override def startsWith(elem: FPath): Option[FPath] = if (elem.isEmpty) Some(this) else None
 }
-case class FPathElem(head: String, tail: FPath) extends FPath {
-  def /(elem: FPath): FPath = elem match {
-    case FPathNonameSeq(t) ⇒ FPathSeq(head, t)
-    case _                 ⇒ copy(tail = tail / elem)
-  }
-  override def toString: String = if (tail.isEmpty) s"$head" else s"$head.$tail"
-  def toSeq: FPath =
-    if (tail.isEmpty) FPathSeq(head, tail) else copy(tail = tail.toSeq)
-  def toSeq(index: Int): FPath =
+
+case class FPathElem(head: String, tail: FPath = FPathEmpty) extends FPath {
+  override def :/(elem: FPath): FPath = copy(tail = tail :/ elem)
+  override def toString: String       = if (tail.isEmpty) s"$head" else s"$head.$tail"
+  override def toSeq(index: Int): FPath =
     if (tail.isEmpty) FPathElemInSeq(head, index, tail)
-    else copy(tail = tail.toSeq)
-  def toBare: FPath = copy(tail = tail.toBare)
+    else copy(tail = tail.toSeq(index))
+//  override def startsWith(elem: String): Boolean = head == elem
+  override def startsWith(elem: FPath): Option[FPath] = elem match {
+    case FPathEmpty                   ⇒ Some(this)
+    case FPathElem(h, t) if h == head ⇒ tail.startsWith(t)
+    case _                            ⇒ None
+  }
 }
 
 case class FPathSeq(head: String, tail: FPath) extends FPath {
-  def /(elem: FPath): FPath = elem match {
-    case _: FPathNonameSeq ⇒ sys.error(s"ERROR: $this / $elem")
-    case _                 ⇒ copy(tail = tail / elem)
-  }
+  override def :/(elem: FPath): FPath = copy(tail = tail :/ elem)
   override def toString: String =
     if (tail.isEmpty) s"$head[]" else s"$head[].$tail"
-  def toSeq: FPath =
-    if (tail.isEmpty) sys.error(s"ERROR: $this.toSeq")
-    else copy(tail = tail.toSeq)
-  def toSeq(index: Int): FPath =
+  override def toSeq(index: Int): FPath =
     if (tail.isEmpty) sys.error(s"ERROR: $this.toSeq($index)")
-    else copy(tail = tail.toSeq)
-  def toBare: FPath = copy(tail = tail.toBare)
+    else copy(tail = tail.toSeq(index))
+//  override def startsWith(elem: String): Boolean = head == elem
+  override def startsWith(elem: FPath): Option[FPath] = elem match {
+    case FPathEmpty                           ⇒ Some(this)
+    case FPathSeq(h, t) if h == head          ⇒ tail.startsWith(t)
+    case FPathElemInSeq(h, _, t) if h == head ⇒ tail.startsWith(t)
+    case _                                    ⇒ None
+  }
 }
 
 case class FPathElemInSeq(head: String, index: Int, tail: FPath) extends FPath {
-  def /(elem: FPath): FPath = elem match {
-    case _: FPathNonameSeq ⇒ sys.error(s"ERROR: $this / $elem")
-    case _                 ⇒ copy(tail = tail / elem)
-  }
+  override def :/(elem: FPath): FPath = copy(tail = tail :/ elem)
   override def toString: String =
     if (tail.isEmpty) s"$head[$index]" else s"$head[$index].$tail"
-  def toSeq: FPath =
-    if (tail.isEmpty) sys.error(s"ERROR: $this.toSeq")
-    else copy(tail = tail.toSeq)
-  def toSeq(index: Int): FPath =
+  override def toSeq(index: Int): FPath =
     if (tail.isEmpty) sys.error(s"ERROR: $this.toSeq($index)")
-    else copy(tail = tail.toSeq)
-  def toBare: FPath = FPathSeq(head, tail.toBare)
+    else copy(tail = tail.toSeq(index))
+//  override def startsWith(elem: String): Boolean = head == elem
+  override def startsWith(elem: FPath): Option[FPath] = elem match {
+    case FPathEmpty                           ⇒ Some(this)
+    case FPathSeq(h, t) if h == head          ⇒ tail.startsWith(t)
+    case FPathElemInSeq(h, _, t) if h == head ⇒ tail.startsWith(t)
+    case _                                    ⇒ None
+  }
 }
 
-case class FPathNonameSeq(tail: FPath) extends FPath {
-  def /(elem: FPath): FPath = elem match {
-    case _: FPathNonameSeq ⇒ sys.error(s"ERROR: $this / $elem")
-    case _                 ⇒ copy(tail = tail / elem)
-  }
-  override def toString: String = if (tail.isEmpty) s"[]" else s"[].$tail"
-  def toSeq: FPath =
-    if (tail.isEmpty) sys.error(s"ERROR: $this.toSeq")
-    else copy(tail = tail.toSeq)
-  def toSeq(index: Int): FPath =
-    if (tail.isEmpty) sys.error(s"ERROR: $this.toSeq($index)")
-    else copy(tail = tail.toSeq)
-  def toBare: FPath = sys.error(s"$this.toBare")
-}
 object FPath {
   private val elemInSeqRegex = "(\\w+)\\[(\\d+)\\]".r
   private val seqRegex       = "(\\w+)\\[\\]".r
@@ -92,11 +81,9 @@ object FPath {
     }
   def unapplySeq(path: FPath): Option[Seq[String]] =
     path match {
-      case FPathEmpty                                    ⇒ Some(Nil)
-      case FPathElem(head, FPath(tail @ _*))             ⇒ Some(head +: tail)
-      case FPathNonameSeq(FPath(tail @ _*))              ⇒ Some(tail)
-      case FPathElemInSeq(head, index, FPath(tail @ _*)) ⇒ Some(head +: tail) // TODO add index ?
-      case FPathSeq(head, FPath(tail @ _*))              ⇒ Some(head +: tail) // TODO add [] ?
+      case FPathEmpty                                ⇒ Some(Nil)
+      case FPathElem(head, FPath(tail @ _*))         ⇒ Some(head +: tail)
+      case FPathElemInSeq(head, _, FPath(tail @ _*)) ⇒ Some(head +: tail) // TODO add index ?
+      case FPathSeq(head, FPath(tail @ _*))          ⇒ Some(head +: tail) // TODO add [] ?
     }
-  def seq: FPath = FPathNonameSeq(FPathEmpty)
 }

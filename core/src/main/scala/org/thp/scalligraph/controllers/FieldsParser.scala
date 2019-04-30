@@ -12,75 +12,12 @@ import org.scalactic._
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.Permission
 import org.thp.scalligraph.macros.FieldsParserMacro
+import org.thp.scalligraph.query.{PropertyUpdater, PublicProperty}
 
-abstract class BaseFieldsParser[+T] {
-  bfp ⇒
-
-  val formatName: String
-
-  def apply(field: Field): T Or Every[AttributeError]
-
-  def andThen[U, R](nextFormatName: String)(fp: BaseFieldsParser[U])(f: (U, T) ⇒ R): BaseFieldsParser[R] =
-    new BaseFieldsParser[R] {
-      val formatName = s"${bfp.formatName}&${fp.formatName}"
-      def apply(field: Field): R Or Every[AttributeError] =
-        withGood(fp(field), bfp(field))(f)
-    }
-}
-
-object BaseFieldsParser {
-  def good[T](value: T): FieldsParser[T] = FieldsParser[T]("empty", Set.empty[String]) {
-    case _ ⇒ Good(value)
-  }
-}
-
-case class UpdateFieldsParser[T](formatName: String, parsers: Map[FPath, FieldsParser[UpdateOps.Type]])
-    extends BaseFieldsParser[Map[FPath, UpdateOps.Type]] {
-  def on(pathPrefix: FPath): UpdateFieldsParser[T] =
-    UpdateFieldsParser[T](formatName, parsers.map {
-      case (path, parser) ⇒ (pathPrefix / path) → parser
-    })
-
-  def on(pathPrefix: String): UpdateFieldsParser[T] = on(FPath(pathPrefix))
-
-  def sequence: UpdateFieldsParser[T] =
-    UpdateFieldsParser[T](s"seq($formatName)", parsers.map {
-      case (path, parser) ⇒ (FPath.seq / path) → parser
-    })
-
-  def +(parser: (FPath, FieldsParser[UpdateOps.Type])): UpdateFieldsParser[T] =
-    UpdateFieldsParser(formatName, parsers + parser)
-
-  def ++(updateFieldsParser: UpdateFieldsParser[_]): UpdateFieldsParser[T] =
-    UpdateFieldsParser(s"$formatName&${updateFieldsParser.formatName}", parsers ++ updateFieldsParser.parsers)
-
-  private def parse(path: FPath, field: Field): Or[UpdateOps.Type, Every[AttributeError]] =
-    parsers
-      .get(path.toBare)
-      .map(_.apply(path, field))
-      .getOrElse(Bad(One(UnknownAttributeError(path.toString, field))))
-  def apply(field: Field): Map[FPath, UpdateOps.Type] Or Every[AttributeError] =
-    field match {
-      case FObject(fields) ⇒
-        fields.foldLeft[Map[FPath, UpdateOps.Type] Or Every[AttributeError]](Good(Map.empty)) {
-          case (ops, (path, f)) ⇒
-            withGood(ops, parse(FPath(path), f))((m, v) ⇒ m + (FPath(path) → v))
-        }
-      case _ ⇒ Good(Map.empty)
-    }
-}
-
-object UpdateFieldsParser {
-  def empty[T]: UpdateFieldsParser[T] =
-    new UpdateFieldsParser[T]("empty", Map.empty)
-  def apply[T](formatName: String)(parsers: (FPath, FieldsParser[UpdateOps.Type])*): UpdateFieldsParser[T] =
-    UpdateFieldsParser[T](formatName, parsers.toMap)
-  def apply[T]: UpdateFieldsParser[T] =
-    macro FieldsParserMacro.getOrBuildUpdateFieldsParser[T]
-}
-
-class FieldsParser[T](val formatName: String, val acceptedInput: Set[String], val parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]])
-    extends BaseFieldsParser[T] {
+class FieldsParser[T](
+    val formatName: String,
+    val acceptedInput: Set[String],
+    val parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]]) {
 
   def apply(path: FPath, field: Field): T Or Every[AttributeError] =
     parse.lift((path, field)).getOrElse {
@@ -94,7 +31,7 @@ class FieldsParser[T](val formatName: String, val acceptedInput: Set[String], va
 
   def on(pathElement: String): FieldsParser[T] =
     new FieldsParser[T](formatName, acceptedInput.map(pathElement + "/" + _), {
-      case (path, field) ⇒ apply(path / pathElement, field.get(pathElement))
+      case (path, field) ⇒ apply(path :/ pathElement, field.get(pathElement))
     })
 
   def andThen[U, R](nextFormatName: String)(fp: FieldsParser[U])(f: (U, T) ⇒ R): FieldsParser[R] =
@@ -151,24 +88,46 @@ class FieldsParser[T](val formatName: String, val acceptedInput: Set[String], va
       }
     )
 
-  def toUpdate: FieldsParser[UpdateOps.Type] = map(formatName) {
-    case value: Option[_] ⇒
-      value.fold[UpdateOps.Type](UpdateOps.UnsetAttribute)(v ⇒ UpdateOps.SetAttribute(v))
-    case value ⇒ UpdateOps.SetAttribute(value)
-  }
+  def toUpdate: UpdateFieldsParser[T] = new UpdateFieldsParser[T](formatName, Seq(FPathEmpty → this))
 }
 
-object FieldsParser {
+trait FieldsParserLowPrio {
+  implicit def build[T]: FieldsParser[T] = macro FieldsParserMacro.getOrBuildFieldsParser[T]
+}
+
+object FieldsParser extends FieldsParserLowPrio {
+  def apply[T](implicit fp: FieldsParser[T]): FieldsParser[T] = fp
+
   def apply[T](formatName: String, acceptedInput: Set[String])(parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]]) =
     new FieldsParser[T](formatName, acceptedInput, parse)
+
   def apply[T](formatName: String)(parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]]) =
     new FieldsParser[T](formatName, Set(formatName), parse)
+
+  def update(name: String, properties: Seq[PublicProperty[_, _]]): FieldsParser[Seq[PropertyUpdater]] =
+    FieldsParser(name) {
+      case (_, FObject(fields)) ⇒
+        fields
+          .map {
+            case (k, v) ⇒ FPath(k) → v
+          }
+          .flatMap {
+            case (FPathElem(propertyName, path), value) ⇒
+              properties
+                .find(_.propertyName == propertyName)
+                .flatMap(_.updateFieldsParser)
+                .map(_.apply(path, value))
+            case _ ⇒ None
+          }
+          .toSeq
+          .combined
+    }
+
   def good[T](value: T): FieldsParser[T] =
     new FieldsParser[T]("good", Set.empty, {
       case _ ⇒ Good(value)
     })
   def empty[T]: FieldsParser[T] = new FieldsParser[T]("empty", Set.empty, PartialFunction.empty)
-  def apply[T]: FieldsParser[T] = macro FieldsParserMacro.getOrBuildFieldsParser[T]
 
   private def unlift[T, R](f: T ⇒ Option[R]): PartialFunction[T, R] =
     new PartialFunction[T, R] {
@@ -177,10 +136,9 @@ object FieldsParser {
       override def lift: T ⇒ Option[R] = f
     }
 
-  def file: FieldsParser[FFile] =
-    FieldsParser[FFile]("file") {
-      case (_, f: FFile) ⇒ Good(f)
-    }
+  implicit val file: FieldsParser[FFile] = FieldsParser[FFile]("file") {
+    case (_, f: FFile) ⇒ Good(f)
+  }
   implicit val string: FieldsParser[String] = FieldsParser[String]("string") {
     case (_, FString(value)) ⇒ Good(value)
     case (_, FAny(Seq(s)))   ⇒ Good(s)
@@ -219,12 +177,8 @@ object FieldsParser {
   implicit val json: FieldsParser[JsValue] = FieldsParser[JsValue]("json") {
     case (_, _field) ⇒ Good(_field.toJson)
   }
-  implicit val permission: FieldsParser[Permission] = string.asInstanceOf[FieldsParser[Permission]]
-}
-
-object UpdateOps {
-  sealed trait Type
-  sealed trait DBType
-  case class SetAttribute(value: Any) extends Type
-  object UnsetAttribute               extends Type with DBType
+  implicit def seq[A](implicit fp: FieldsParser[A]): FieldsParser[Seq[A]]       = fp.sequence
+  implicit def set[A](implicit fp: FieldsParser[A]): FieldsParser[Set[A]]       = fp.set
+  implicit def option[A](implicit fp: FieldsParser[A]): FieldsParser[Option[A]] = fp.optional
+  implicit val permission: FieldsParser[Permission]                             = FieldsParser.string.asInstanceOf[FieldsParser[Permission]]
 }

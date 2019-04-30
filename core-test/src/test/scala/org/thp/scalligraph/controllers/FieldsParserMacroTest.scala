@@ -1,8 +1,15 @@
 package org.thp.scalligraph.controllers
 
+import scala.util.Success
+
+import play.api.libs.json.Json
+
 import org.scalactic.{Bad, Good, One}
+import org.specs2.matcher.Matcher
 import org.specs2.mutable.Specification
-import org.thp.scalligraph.InvalidFormatAttributeError
+import org.thp.scalligraph.models.{MyEntity, VertexSteps}
+import org.thp.scalligraph.query.{PropertyUpdater, PublicProperty, PublicPropertyListBuilder}
+import org.thp.scalligraph.{FPath, InvalidFormatAttributeError}
 
 object TestEnumeration extends Enumeration {
   val a, b, c = Value
@@ -139,17 +146,107 @@ class FieldsParserMacroTest extends Specification with TestUtils {
     }
 
     "parse an enumeration" in {
-      val fieldsParser = FieldsParser[TestEnumeration.Value]
+      val fieldsParser = FieldsParser.build[TestEnumeration.Value]
       fieldsParser(FString("a")) must_=== Good(TestEnumeration.a)
       fieldsParser(FString("d")) must_=== Bad(
         One(InvalidFormatAttributeError("", "org.thp.scalligraph.controllers.TestEnumeration.Value", Set("a", "b", "c"), FString("d"))))
     }
 
     "parse an sealed type" in {
-      val fieldsParser = FieldsParser[TestSealedClassEnumeration]
+      val fieldsParser = FieldsParser.build[TestSealedClassEnumeration]
       fieldsParser(FString("EnumA")) must_=== Good(EnumA)
       fieldsParser(FString("d")) must_=== Bad(One(
         InvalidFormatAttributeError("", "org.thp.scalligraph.controllers.TestSealedClassEnumeration", Set("EnumA", "EnumB", "EnumC"), FString("d"))))
     }
   }
+
+  "Nothing to update" in {
+    val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
+      .property[String]("p1")(_.simple.updatable)
+      .build
+    val updateFieldsParser = FieldsParser.update("xxx", properties)
+    val r                  = updateFieldsParser(Field(Json.obj("yy" → "plop", "xxx" → "yop"))).toEither
+    r must beRight.which(_.isEmpty)
+  }
+
+  "update one field" in {
+    val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
+      .property[String]("p1")(_.simple.updatable)
+      .build
+    val updateFieldsParser = FieldsParser.update("xxx", properties)
+    val r                  = updateFieldsParser(Field(Json.obj("yy" → "plop", "p1" → "yop"))).toEither
+    r must beRight.which { updaters ⇒
+      val p1Updater: Matcher[PropertyUpdater] = beLike {
+        case PropertyUpdater(prop, FPath.empty, "yop", _) if prop == properties.head ⇒ ok
+      }
+      updaters must contain(exactly(p1Updater))
+    }
+  }
+
+  "update using custom function" in {
+    val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
+      .property[String]("p1")(_.rename("p2").custom[String] { (prop, path, value, _, _, _, _) ⇒
+        prop.propertyName must_=== "p1"
+        path must_=== FPath("sp2")
+        value must_== "yop"
+        Success(())
+      })
+      .build
+    val updateFieldsParser = FieldsParser.update("xxx", properties)
+    val r                  = updateFieldsParser(Field(Json.obj("yy" → "plop", "p1.sp2" → "yop"))).toEither
+    r must beRight.which { updaters ⇒
+      val p1Updater: Matcher[PropertyUpdater] = beLike {
+        case PropertyUpdater(prop, FPath("sp2"), "yop", f) if prop == properties.head ⇒
+          f(null, null, null, null) must beSuccessfulTry
+      }
+      updaters must contain(exactly(p1Updater))
+    }
+  }
+
+  "fail if contains an invalid field format" in {
+    val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
+      .property[String]("p1")(_.simple.updatable)
+      .property[String]("p2")(_.simple.updatable)
+      .build
+    val updateFieldsParser = FieldsParser.update("xxx", properties)
+    val r                  = updateFieldsParser(Field(Json.obj("yy" → "plop", "p1" → 10))).toEither
+    r must beLeft.like {
+      case One(InvalidFormatAttributeError("string", "string", _, FNumber(10))) ⇒ ok
+    }
+  }
+
+  "update several fields" in {
+    val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
+      .property[String]("p1")(_.simple.updatable)
+      .property[String]("p2")(_.simple.updatable)
+      .build
+    val p1Prop             = properties.find(_.propertyName == "p1").get
+    val p2Prop             = properties.find(_.propertyName == "p2").get
+    val updateFieldsParser = FieldsParser.update("xxx", properties)
+    val r                  = updateFieldsParser(Field(Json.obj("p2" → "plop", "p1" → "a"))).toEither
+    r must beRight.which { updaters ⇒
+      val p1Updater: Matcher[PropertyUpdater] = beLike {
+        case PropertyUpdater(prop, FPath(), "a", _) if prop == p1Prop ⇒ ok
+      }
+      val p2Updater: Matcher[PropertyUpdater] = beLike {
+        case PropertyUpdater(prop, FPath(), "plop", _) if prop == p2Prop ⇒ ok
+      }
+      updaters must contain(exactly(p1Updater, p2Updater))
+    }
+  }
+
+  "update subfield" in {
+    val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
+      .property[String]("p1")(_.simple.updatable)
+      .build
+    val updateFieldsParser = FieldsParser.update("xxx", properties)
+    val r                  = updateFieldsParser(Field(Json.obj("yy" → "plop", "p1.sp1.sp2" → "yop"))).toEither
+    r must beRight.which { updaters ⇒
+      val p1Updater: Matcher[PropertyUpdater] = beLike {
+        case PropertyUpdater(prop, FPath("sp1", "sp2"), "yop", _) if prop == properties.head ⇒ ok
+      }
+      updaters must contain(exactly(p1Updater))
+    }
+  }
+
 }

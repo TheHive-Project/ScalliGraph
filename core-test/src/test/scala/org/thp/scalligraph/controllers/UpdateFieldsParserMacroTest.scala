@@ -1,8 +1,6 @@
 package org.thp.scalligraph.controllers
 
-import scala.util.Try
-
-import org.scalactic.{Bad, Good, One, Or}
+import org.scalactic.{Bad, Good, One}
 import org.specs2.mutable.Specification
 import org.thp.scalligraph.{FPath, InvalidFormatAttributeError}
 
@@ -13,42 +11,38 @@ class UpdateFieldsParserMacroTest extends Specification with TestUtils {
     "parse a simple class" in {
       val fieldsParser = getUpdateFieldsParser[SimpleClassForFieldsParserMacroTest]
       val fields       = FObject("name" → FString("simpleClass"))
-      val updates      = Map(FPath("name") → UpdateOps.SetAttribute("simpleClass"))
+      val updates      = Seq(FPath("name") → "simpleClass")
       fieldsParser(fields) must_=== Good(updates)
     }
 
     "make all fields of complex class updatable" in {
       val fieldsParser = getUpdateFieldsParser[ComplexClassForFieldsParserMacroTest]
-      fieldsParser.parsers.keys.map(_.toString) must contain(
-        exactly("", "name", "value", "subClasses", "subClasses[]", "subClasses[].name", "subClasses[].option"))
+      fieldsParser.parsers.map(_._1.toString) must contain(exactly("", "name", "value", "subClasses[]", "subClasses[].name", "subClasses[].option"))
     }
 
     "parse complex class" in {
       val fieldsParser = getUpdateFieldsParser[ComplexClassForFieldsParserMacroTest]
       val fields       = FObject("subClasses[0].name" → FString("sc1"), "subClasses[1].option" → FNull)
-      val updates      = Map(FPath("subClasses[0].name") → UpdateOps.SetAttribute("sc1"), FPath("subClasses[1].option") → UpdateOps.UnsetAttribute)
+      val updates      = Seq(FPath("subClasses[0].name") → "sc1", FPath("subClasses[1].option") → None)
       fieldsParser(fields) must_=== Good(updates)
     }
 
     "parse class with annotation" in {
       val fieldsParser = getUpdateFieldsParser[ClassWithAnnotation]
       val fields       = FObject("valueFr" → FString("un"), "valueEn" → FString("three"))
-      val updates      = Map(FPath("valueFr") → UpdateOps.SetAttribute(LocaleInt(1)), FPath("valueEn") → UpdateOps.SetAttribute(LocaleInt(3)))
+      val updates      = Seq(FPath("valueFr") → LocaleInt(1), FPath("valueEn") → LocaleInt(3))
       fieldsParser(fields) must_=== Good(updates)
     }
 
     "parse class with implicit" in {
-      implicit val subClassFieldsParser: UpdateFieldsParser[SubClassForFieldsParserMacroTest] = UpdateFieldsParser[SubClassForFieldsParserMacroTest](
-        "SubClassForFieldsParserMacroTest")(FPath("option") → FieldsParser[UpdateOps.Type]("Optional Int") {
-        case (_, FString(intStr)) ⇒
-          Or.from(Try(intStr.toInt)) match {
-            case Good(i) ⇒ Good(UpdateOps.SetAttribute(i))
-            case Bad(_)  ⇒ Good(UpdateOps.UnsetAttribute)
-          }
-      })
+      implicit val subClassFieldsParser: UpdateFieldsParser[SubClassForFieldsParserMacroTest] =
+        UpdateFieldsParser[SubClassForFieldsParserMacroTest](
+          "SubClassForFieldsParserMacroTest",
+          Seq(FPath("option") → FieldsParser.build[Option[Int]], FPath("name") → FieldsParser.build[String]))
       val fieldsParser = getUpdateFieldsParser[ComplexClassForFieldsParserMacroTest]
-      val fields       = FObject("subClasses[0].option" → FString("3"), "subClasses[1].option" → FString("invalid ⇒ unset attribute"))
-      val updates      = Map(FPath("subClasses[0].option") → UpdateOps.SetAttribute(3), FPath("subClasses[1].option") → UpdateOps.UnsetAttribute)
+
+      val fields  = FObject("subClasses[0].option"    → FNumber(3), "subClasses[1].option"     → FNull)
+      val updates = Seq(FPath("subClasses[0].option") → Some(3), FPath("subClasses[1].option") → None)
       fieldsParser(fields) must_=== Good(updates)
     }
 

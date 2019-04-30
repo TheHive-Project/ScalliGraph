@@ -10,6 +10,7 @@ import play.api.mvc.{AnyContentAsMultipartFormData, Headers, MultipartFormData}
 import play.api.test.{FakeRequest, NoTemporaryFileCreator, PlaySpecification}
 
 import org.specs2.mock.Mockito
+import org.thp.scalligraph.FPath
 
 case class FakeTemporaryFile(name: String) extends Files.TemporaryFile {
   def file                                       = new File(name)
@@ -75,6 +76,21 @@ class FieldsTest extends PlaySpecification with Mockito {
 
       Field(request) must_=== FObject(
         "f1" → FObject("a" → FString("v1"), "b" → FSeq(List(FString("a"), FFile("myfile.txt", file.path, "text/plain"), FString("c")))))
+    }
+
+    "extract subfields in an object" in {
+      val obj = FObject("a" → FString("a"))
+      obj.get(FPath("a")) must_=== FString("a")
+    }
+
+    "extract subfields in an object of path" in {
+      val obj = FObject("c" → FString("c"), "a.b" → FSeq(FString("b"), FNumber(3)))
+      obj.get(FPath("a.b")) must_=== FSeq(FString("b"), FNumber(3))
+    }
+
+    "extract subfields in an object of path" in {
+      val obj = FObject("c" → FString("c"), "a.b.c" → FSeq(FString("b"), FNumber(3)))
+      obj.get(FPath("a.b")) must_=== FObject("c" → FSeq(FString("b"), FNumber(3)))
     }
   }
 }

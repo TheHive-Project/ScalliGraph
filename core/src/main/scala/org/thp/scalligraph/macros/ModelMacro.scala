@@ -37,7 +37,6 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacro with IndexMacro w
       import gremlin.scala.{ Graph, Vertex }
       import scala.util.{ Failure, Try }
       import org.thp.scalligraph.{ FPath, InternalError }
-      import org.thp.scalligraph.controllers.UpdateOps
       import org.thp.scalligraph.models.{ Database, Entity, IndexType, Mapping, Model, UniMapping, VertexModel }
 
       new VertexModel { thisModel ⇒
@@ -98,7 +97,6 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacro with IndexMacro w
       import scala.util.Try
       import gremlin.scala.{ Edge, Graph, Vertex }
       import org.thp.scalligraph.{ FPath, InternalError }
-      import org.thp.scalligraph.controllers.UpdateOps
       import org.thp.scalligraph.models.{ Database, EdgeModel, Entity, IndexType, Mapping, Model, UniMapping }
 
       new EdgeModel[$fromType, $toType] { thisModel ⇒

@@ -2,10 +2,7 @@ package org.thp.scalligraph.controllers
 
 import org.scalactic.Good
 import org.specs2.mutable.Specification
-import org.thp.scalligraph.{ LogGeneratedCode, TraceLogLevel }
 
-@TraceLogLevel
-@LogGeneratedCode
 object TestEnumeration extends Enumeration {
   val a, b, c = Value
 }

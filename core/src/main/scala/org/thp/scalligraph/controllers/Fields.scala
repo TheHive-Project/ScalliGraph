@@ -13,6 +13,10 @@ import org.thp.scalligraph.{FPath, FPathElem, FPathElemInSeq, FPathEmpty, FPathS
 
 sealed trait Field {
   def get(pathElement: String): Field = FUndefined
+  def get(path: FPath): Field = path match {
+    case FPathEmpty ⇒ this
+    case _          ⇒ FUndefined
+  }
   def set(path: FPath, field: Field): Field =
     if (path.isEmpty) field else sys.error(s"$this.set($path, $field)")
   def toJson: JsValue
@@ -109,7 +113,6 @@ case class FSeq(values: List[Field]) extends Field {
     case FPathElemInSeq(_, index, tail) ⇒
       FSeq(values.patch(index, Seq(values.applyOrElse(index, (_: Int) ⇒ FUndefined).set(tail, field)), 1))
   }
-
   override def toJson: JsValue = JsArray(values.map(_.toJson))
 }
 
@@ -146,7 +149,7 @@ object FObject {
   }
 }
 case class FObject(fields: immutable.Map[String, Field]) extends Field {
-  def empty: FObject = FObject.empty
+  lazy val pathFields: Seq[(FPath, Field)] = fields.toSeq.map { case (k, v) ⇒ FPath(k) → v }
 
   def iterator: Iterator[(String, Field)] = fields.iterator
 
@@ -183,6 +186,15 @@ case class FObject(fields: immutable.Map[String, Field]) extends Field {
     }
 
   override def get(path: String): Field = fields.getOrElse(path, FUndefined)
+
+  override def get(path: FPath): Field = {
+    val selectedFields = pathFields
+      .flatMap {
+        case (p, f) ⇒ p.startsWith(path).map(_.toString → f)
+      }
+    if (selectedFields.size == 1 && selectedFields.head._1.isEmpty) selectedFields.head._2
+    else FObject(selectedFields.toMap)
+  }
 
   def getString(path: String): Option[String] = fields.get(path).collect {
     case FString(s)     ⇒ s
