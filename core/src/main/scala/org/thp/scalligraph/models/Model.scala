@@ -63,7 +63,7 @@ object Model {
       e.keys()
         .asScala
         .map(key ⇒
-          s"\n - $key = ${e.properties[Any](key).asScala.map(_.value()).mkString("-,-")} (${e.properties[Any](key).asScala.toSeq.headOption.fold("empty")(_.value.getClass.toString)})")
+          s"\n - $key = ${e.properties[Any](key).asScala.map(_.value()).mkString(",")} (${e.properties[Any](key).asScala.toSeq.headOption.fold("empty")(_.value.getClass.toString)})")
         .mkString
 }
 
@@ -81,7 +81,12 @@ abstract class Model {
   val fields: Map[String, Mapping[_, _, _]]
   def toDomain(element: ElementType)(implicit db: Database): EEntity
 
-  def converter(db: Database, graph: Graph): Converter.Aux[EEntity, ElementType]
+  def converter(db: Database, graph: Graph): Converter.Aux[EEntity, ElementType] =
+    new Converter[EEntity] {
+      override type GraphType = ElementType
+      override def toDomain(v: ElementType): E with Entity = thisModel.toDomain(v)(db)
+      override def toGraph(e: EEntity): GraphType          = thisModel.get(e._id)(db, graph)
+    }
 }
 
 abstract class VertexModel extends Model { thisModel ⇒
@@ -91,13 +96,6 @@ abstract class VertexModel extends Model { thisModel ⇒
 
   override def get(id: String)(implicit db: Database, graph: Graph): Vertex =
     graph.V().has(Key("_id") of id).headOption().getOrElse(throw NotFoundError(s"Vertex $id not found"))
-
-  override def converter(db: Database, graph: Graph): Converter.Aux[EEntity, Vertex] =
-    new Converter[EEntity] {
-      override type GraphType = Vertex
-      override def toDomain(v: Vertex): E with Entity = thisModel.toDomain(v)(db)
-      override def toGraph(e: EEntity): Vertex        = thisModel.get(e._id)(db, graph)
-    }
 }
 
 abstract class EdgeModel[FROM <: Product, TO <: Product] extends Model { thisModel ⇒
@@ -110,11 +108,4 @@ abstract class EdgeModel[FROM <: Product, TO <: Product] extends Model { thisMod
 
   override def get(id: String)(implicit db: Database, graph: Graph): Edge =
     graph.E().has(Key("_id") of id).headOption().getOrElse(throw NotFoundError(s"Edge $id not found"))
-
-  override def converter(db: Database, graph: Graph): Converter.Aux[EEntity, Edge] =
-    new Converter[EEntity] {
-      override type GraphType = Edge
-      override def toDomain(e: Edge): E with Entity = thisModel.toDomain(e)(db)
-      override def toGraph(e: EEntity): Edge        = get(e._id)(db, graph)
-    }
 }

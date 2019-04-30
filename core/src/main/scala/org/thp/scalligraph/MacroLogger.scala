@@ -81,12 +81,17 @@ trait MacroLogger {
   def fatal(msg: ⇒ String): Nothing                       = c.abort(c.enclosingPosition, s"[ERROR] $msg")
   def fatal(msg: ⇒ String, throwable: Throwable): Nothing = c.abort(c.enclosingPosition, s"[ERROR] $msg\n${printStackTrace(throwable)}")
 
+  def cleanupCode(code: String): String =
+    code
+      .replaceAllLiterally("/" + "*{<null>}*/", "")
+      .replaceAll(";\n", "\n")
+
   def ret(msg: ⇒ String, tree: Tree): Tree = {
-    if (logGeneratedCode) println(s"[CODE]  $msg\n${showCode(tree)}")
+    if (logGeneratedCode) println(s"[CODE]  $msg\n${cleanupCode(showCode(tree))}")
     tree
   }
   def ret[T](msg: ⇒ String, expr: Expr[T]): Expr[T] = {
-    if (logGeneratedCode) println(s"[CODE]  $msg\n${showCode(expr.tree, printOwners = false)}")
+    if (logGeneratedCode) println(s"[CODE]  $msg\n${cleanupCode(showCode(expr.tree, printOwners = false))}")
     expr
   }
 }

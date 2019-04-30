@@ -65,46 +65,35 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
         }
     }
 
-  def convertToJava(c: Class[_]): Class[_] =
-    if (classOf[Int] == c) classOf[java.lang.Integer]
-    else if (classOf[Double]== c) classOf[java.lang.Double]
-    else if (classOf[Float]== c) classOf[java.lang.Float]
-    else if (classOf[Char]== c) classOf[java.lang.Character]
-    else if (classOf[Long]== c) classOf[java.lang.Long]
-    else if (classOf[Short]== c) classOf[java.lang.Short]
-    else if (classOf[Byte]== c) classOf[java.lang.Byte]
-    else if (classOf[Boolean]== c) classOf[java.lang.Boolean]
-    else c
-
   private def createEntityProperties(mgmt: JanusGraphManagement): Unit = {
     mgmt
       .makePropertyKey("_id")
-      .dataType(convertToJava(classOf[String]))
+      .dataType(classOf[String])
       .cardinality(Cardinality.SINGLE)
       .make()
     mgmt
       .makePropertyKey("_label")
-      .dataType(convertToJava(classOf[String]))
+      .dataType(classOf[String])
       .cardinality(Cardinality.SINGLE)
       .make()
     mgmt
       .makePropertyKey("_createdBy")
-      .dataType(convertToJava(classOf[String]))
+      .dataType(classOf[String])
       .cardinality(Cardinality.SINGLE)
       .make()
     mgmt
       .makePropertyKey("_createdAt")
-      .dataType(convertToJava(classOf[Date]))
+      .dataType(classOf[Date])
       .cardinality(Cardinality.SINGLE)
       .make()
     mgmt
       .makePropertyKey("_updatedBy")
-      .dataType(convertToJava(classOf[String]))
+      .dataType(classOf[String])
       .cardinality(Cardinality.SINGLE)
       .make()
     mgmt
       .makePropertyKey("_updatedAt")
-      .dataType(convertToJava(classOf[Date]))
+      .dataType(classOf[Date])
       .cardinality(Cardinality.SINGLE)
       .make()
     ()
@@ -144,11 +133,10 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
             case MappingCardinality.list   ⇒ Cardinality.LIST
             case MappingCardinality.set    ⇒ Cardinality.SET
           }
-          logger.trace(
-            s"mgmt.makePropertyKey($fieldName).dataType(${convertToJava(mapping.graphTypeClass).getSimpleName}.class).cardinality($cardinality).make()")
+          logger.trace(s"mgmt.makePropertyKey($fieldName).dataType(${mapping.graphTypeClass.getSimpleName}.class).cardinality($cardinality).make()")
           mgmt
             .makePropertyKey(fieldName)
-            .dataType(convertToJava(mapping.graphTypeClass))
+            .dataType(mapping.graphTypeClass)
             .cardinality(cardinality)
             .make()
 

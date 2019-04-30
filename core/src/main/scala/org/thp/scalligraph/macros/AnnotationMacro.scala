@@ -14,7 +14,6 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
       case (modelClass @ ClassDef(classMods, className, Nil, _)) :: tail if classMods.hasFlag(Flag.CASE) ⇒
         val modelDef = Seq(
           q"val model = org.thp.scalligraph.models.Model.vertex[$className]"
-//          q"def unapply(e: gremlin.scala.Element): Option[$className] = scala.util.Try(model.toDomain(e.asInstanceOf[gremlin.scala.Vertex])).toOption"
         )
 
         val modelModule = tail match {
@@ -49,7 +48,6 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
       case (modelClass @ ClassDef(classMods, className, Nil, _)) :: tail if classMods.hasFlag(Flag.CASE) ⇒
         val modelDef = Seq(
           q"val model = org.thp.scalligraph.models.Model.edge[$className, $fromType, $toType]"
-//          q"def unapply(e: gremlin.scala.Element): Option[$className] = scala.util.Try(model.toDomain(e.asInstanceOf[gremlin.scala.Edge])).toOption"
         )
         val modelModule = tail match {
           case ModuleDef(moduleMods, moduleName, moduleTemplate) :: Nil ⇒

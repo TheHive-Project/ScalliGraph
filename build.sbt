@@ -29,6 +29,7 @@ lazy val scalligraph = (project in file("."))
           "-Ywarn-nullary-override", // Warn when non-nullary overrides nullary, e.g. def foo() over def foo.
           "-Ywarn-numeric-widen",    // Warn when numerics are widened.
           "-Ywarn-value-discard",    // Warn when non-Unit expression results are unused
+          "-Ywarn-unused:_,-explicits,-implicits",
           //"-Ylog-classpath",
           //"-Xlog-implicits",
           //"-Yshow-trees-compact",

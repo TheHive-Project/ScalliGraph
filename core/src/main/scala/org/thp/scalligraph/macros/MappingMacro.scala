@@ -46,16 +46,7 @@ trait MappingMacro extends MacroUtil with MacroLogger {
   }
 
   private def buildMapping(symbol: Symbol, eType: Type): Option[Tree] =
-    symbol.typeSignature match { // TODO add setType
-//      case SeqType(subType) ⇒
-//        val subMapping = getMapping(subType.typeSymbol, subType)
-//        Some(q"$subMapping.sequence")
-//      case SetType(subType) ⇒
-//        val subMapping = getMapping(subType.typeSymbol, subType)
-//        Some(q"$subMapping.set")
-//      case OptionType(subType) ⇒
-//        val subMapping = getMapping(subType.typeSymbol, subType)
-//        Some(q"$subMapping.optional")
+    symbol.typeSignature match {
       case EnumerationType(members @ _*) ⇒
         val valueCases = members.map {
           case (name, value) ⇒ cq"$name ⇒ $value"
