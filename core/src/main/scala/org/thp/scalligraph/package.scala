@@ -20,6 +20,7 @@ package object scalligraph {
 //    }
 //  }
   implicit class RichSeq[A](s: Seq[A]) {
+
     def toTry[B](f: A ⇒ Try[B]): Try[Seq[B]] = s.foldLeft[Try[Seq[B]]](Success(Nil)) {
       case (Success(l), a) ⇒ f(a).map(l :+ _)
       case (f, _)          ⇒ f

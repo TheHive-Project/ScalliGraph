@@ -13,6 +13,7 @@ import play.api.mvc.{RequestHeader, ResponseHeader, Result}
   */
 class ErrorHandler extends HttpErrorHandler {
   lazy val logger = Logger(getClass)
+
   def onClientError(request: RequestHeader, statusCode: Int, message: String): Future[Result] = {
     val tpe = statusCode match {
       case BAD_REQUEST ⇒ "BadRequest"
@@ -32,11 +33,13 @@ class ErrorHandler extends HttpErrorHandler {
       case UpdateError(_, message, attributes) ⇒
         Some(
           Status.INTERNAL_SERVER_ERROR → Json
-            .obj("type" → "UpdateError", "message" → message, "object" → attributes))
+            .obj("type" → "UpdateError", "message" → message, "object" → attributes)
+        )
       case nfe: NumberFormatException ⇒
         Some(
           Status.BAD_REQUEST → Json
-            .obj("type" → "NumberFormatException", "message" → ("Invalid format " + nfe.getMessage)))
+            .obj("type" → "NumberFormatException", "message" → ("Invalid format " + nfe.getMessage))
+        )
       case NotFoundError(message) ⇒
         Some(Status.NOT_FOUND → Json.obj("type" → "NotFoundError", "message" → message))
       case BadRequestError(message) ⇒
@@ -44,7 +47,8 @@ class ErrorHandler extends HttpErrorHandler {
       case SearchError(message, cause) ⇒
         Some(
           Status.BAD_REQUEST → Json
-            .obj("type" → "SearchError", "message" → s"$message (${cause.getMessage})"))
+            .obj("type" → "SearchError", "message" → s"$message (${cause.getMessage})")
+        )
       case ace: AttributeCheckingError ⇒
         Some(Status.BAD_REQUEST → Json.toJson(ace))
       case iae: IllegalArgumentException ⇒
@@ -52,7 +56,8 @@ class ErrorHandler extends HttpErrorHandler {
       case CreateError(_, message, attributes) ⇒
         Some(
           Status.INTERNAL_SERVER_ERROR → Json
-            .obj("type" → "CreateError", "message" → message, "object" → attributes))
+            .obj("type" → "CreateError", "message" → message, "object" → attributes)
+        )
       case GetError(message) ⇒
         Some(Status.INTERNAL_SERVER_ERROR → Json.obj("type" → "GetError", "message" → message))
       case MultiError(message, exceptions) ⇒
@@ -61,7 +66,8 @@ class ErrorHandler extends HttpErrorHandler {
         }
         Some(
           Status.MULTI_STATUS → Json
-            .obj("type" → "MultiError", "error" → message, "suberrors" → suberrors))
+            .obj("type" → "MultiError", "error" → message, "suberrors" → suberrors)
+        )
       case t: Throwable ⇒ Option(t.getCause).flatMap(toErrorResult)
     }
 

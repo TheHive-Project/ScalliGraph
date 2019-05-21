@@ -117,7 +117,11 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
               q"""
                 def ${TermName(field.name.toString)} = {
                   val $mappingName = $mapping
-                  org.thp.scalligraph.models.ScalarSteps(raw.properties(${field.name.decodedName.toString.trim}).map(_.value.asInstanceOf[$mappingName.GraphType]))
+                  org.thp.scalligraph.models.ScalarSteps(raw.properties(${field
+                .name
+                .decodedName
+                .toString
+                .trim}).map(_.value.asInstanceOf[$mappingName.GraphType]))
                 }
               """
             }

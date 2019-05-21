@@ -78,6 +78,7 @@ case class ADConnection(domainFQDN: String, domainName: String, serverNames: Seq
 }
 
 object ADConnection {
+
   def apply(configuration: Configuration): ADConnection =
     (for {
       domainFQDN ← configuration.getOptional[String]("auth.ad.domainFQDN")

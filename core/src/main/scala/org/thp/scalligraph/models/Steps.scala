@@ -47,8 +47,10 @@ final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])
     val query = raw
       .aggregate(label)
       .cap(label)
-      .project(_.apply(byValues)
-        .and(By(__.count(Scope.local))))
+      .project(
+        _.apply(byValues)
+          .and(By(__.count(Scope.local)))
+      )
     logger.debug(s"Execution of $query")
     val (l, s) = query.head()
     ResultWithTotalSize(l.asScala.toSeq, s)
@@ -66,6 +68,7 @@ final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])
 }
 
 object ScalarSteps {
+
   def apply[T: ClassTag](raw: GremlinScala[T]): ScalarSteps[T] =
     new ScalarSteps[T](raw)
 }
@@ -81,6 +84,7 @@ trait ScalliSteps[EndDomain, EndGraph, ThisStep <: AnyRef] { _: ThisStep ⇒
   def page(from: Long, to: Long): ResultWithTotalSize[EndDomain]
   def head(): EndDomain
   def headOption(): Option[EndDomain]
+
   def exists(): Boolean = {
     logger.debug(s"Execution of $raw")
     raw.limit(1).traversal.hasNext
@@ -97,13 +101,16 @@ trait ScalliSteps[EndDomain, EndGraph, ThisStep <: AnyRef] { _: ThisStep ⇒
   def where(f: GremlinScala[EndGraph] ⇒ GremlinScala[_]): ThisStep                      = newInstance(raw.filter(f))
   def has[A](key: Key[A], predicate: P[A])(implicit ev: EndGraph <:< Element): ThisStep = newInstance(raw.has(key, predicate))
   def map[NewEndDomain: ClassTag](f: EndDomain ⇒ NewEndDomain): ScalarSteps[NewEndDomain]
+
   def groupBy[K, V](k: By[K], v: By[V]): ScalarSteps[JMap[K, JCollection[V]]] =
     new ScalarSteps(raw.group(k, v))
+
   def groupBy[K](k: GremlinScala[K]): ScalarSteps[JMap[K, JCollection[EndGraph]]] =
     new ScalarSteps(raw.group(By(k)))
   def fold: ScalarSteps[JList[EndGraph]]                                                           = new ScalarSteps(raw.fold)
   def unfold[A: ClassTag]                                                                          = new ScalarSteps(raw.unfold[A]())
   def project[T <: Product: ClassTag](builder: ProjectionBuilder[Nil.type] ⇒ ProjectionBuilder[T]) = new ScalarSteps(raw.project(builder))
+
   def project[A](bys: By[_ <: A]*): ScalarSteps[JCollection[A]] = {
     val labels    = bys.map(_ ⇒ UUID.randomUUID().toString)
     val traversal = bys.foldLeft(raw.project[A](labels.head, labels.tail: _*))((t, b) ⇒ GremlinScala(b.apply(t.traversal)))
@@ -112,7 +119,8 @@ trait ScalliSteps[EndDomain, EndGraph, ThisStep <: AnyRef] { _: ThisStep ⇒
 }
 
 abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisStep <: ElementSteps[E, EndGraph, ThisStep]](
-    raw: GremlinScala[EndGraph])(implicit val db: Database, graph: Graph)
+    raw: GremlinScala[EndGraph]
+)(implicit val db: Database, graph: Graph)
     extends Steps[E with Entity, EndGraph, HNil](raw)(db.getModel[E].converter(db, graph).asInstanceOf[Converter.Aux[E with Entity, EndGraph]])
     with ScalliSteps[E with Entity, EndGraph, ThisStep] { _: ThisStep ⇒
 
@@ -201,8 +209,8 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
 
 abstract class BaseVertexSteps[E <: Product: ru.TypeTag, ThisStep <: BaseVertexSteps[E, ThisStep]](raw: GremlinScala[Vertex])(
     implicit db: Database,
-    val graph: Graph)
-    extends ElementSteps[E, Vertex, ThisStep](raw) { _: ThisStep ⇒
+    val graph: Graph
+) extends ElementSteps[E, Vertex, ThisStep](raw) { _: ThisStep ⇒
 
   def get(vertex: Vertex): ThisStep = newInstance(raw.V(vertex))
 
@@ -225,7 +233,8 @@ final class VertexSteps[E <: Product: ru.TypeTag](raw: GremlinScala[Vertex])(imp
 }
 
 abstract class BaseEdgeSteps[E <: Product: ru.TypeTag, FROM <: Product, TO <: Product, ThisStep <: BaseEdgeSteps[E, FROM, TO, ThisStep]](
-    raw: GremlinScala[Edge])(implicit db: Database, val graph: Graph)
+    raw: GremlinScala[Edge]
+)(implicit db: Database, val graph: Graph)
     extends ElementSteps[E, Edge, ThisStep](raw) { _: ThisStep ⇒
 }
 

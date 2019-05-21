@@ -35,7 +35,8 @@ trait MacroLogger {
   var logGeneratedCode: Boolean = false
 
   def initLogger(s: Symbol): Unit = {
-    level = s.annotations
+    level = s
+      .annotations
       .map(_.tree)
       .collect {
         case a if a.tpe <:< typeOf[TraceLogLevel] ⇒ LogLevel.trace
@@ -75,6 +76,7 @@ trait MacroLogger {
 
   def isErrorEnabled: Boolean    = level >= LogLevel.error
   def error(msg: ⇒ String): Unit = if (isErrorEnabled) println(s"[ERROR] $msg")
+
   def error(msg: ⇒ String, throwable: Throwable): Unit =
     if (isErrorEnabled) c.error(c.enclosingPosition, s"[ERROR] $msg\n${getCauseMessages(throwable)}")
 
@@ -90,6 +92,7 @@ trait MacroLogger {
     if (logGeneratedCode) println(s"[CODE]  $msg\n${cleanupCode(showCode(tree))}")
     tree
   }
+
   def ret[T](msg: ⇒ String, expr: Expr[T]): Expr[T] = {
     if (logGeneratedCode) println(s"[CODE]  $msg\n${cleanupCode(showCode(expr.tree, printOwners = false))}")
     expr

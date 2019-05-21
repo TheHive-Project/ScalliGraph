@@ -20,6 +20,7 @@ object Selector {
 
 case class Record[C <: HList](list: C) {
   type FSL[K] = Selector[C, K]
+
   def apply(key: Witness)(implicit selector: Selector[C, key.T]): selector.Out =
     selector(list)
 }

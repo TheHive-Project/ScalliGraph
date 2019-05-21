@@ -18,6 +18,7 @@ import akka.util.ByteString
 case class Hasher(algorithms: String*) {
 
   val bufferSize = 4096
+
   def fromPath(path: Path): Seq[Hash] =
     fromInputStream(Files.newInputStream(path))
 
@@ -44,11 +45,13 @@ case class Hasher(algorithms: String*) {
 
 class MultiHash(algorithms: String)(implicit mat: Materializer, ec: ExecutionContext) {
   private val md = MessageDigest.getInstance(algorithms)
+
   def addValue(value: String): Unit = {
     md.update(0.asInstanceOf[Byte])
     md.update(value.getBytes)
   }
   def addFile(filename: String): Future[Unit] = addFile(Paths.get(filename))
+
   def addFile(file: Path): Future[Unit] = {
     md.update(0.asInstanceOf[Byte])
     FileIO
@@ -56,6 +59,7 @@ class MultiHash(algorithms: String)(implicit mat: Materializer, ec: ExecutionCon
       .runForeach(bs ⇒ md.update(bs.toByteBuffer))
       .map(_ ⇒ ())
   }
+
   def addSource(source: Source[ByteString, _]): Future[Unit] =
     source
       .runForeach { bs ⇒
@@ -73,7 +77,9 @@ case class Hash(data: Array[Byte]) {
     case _       ⇒ false
   }
 }
+
 object Hash {
+
   def apply(s: String): Hash = Hash {
     s.grouped(2)
       .map { cc ⇒

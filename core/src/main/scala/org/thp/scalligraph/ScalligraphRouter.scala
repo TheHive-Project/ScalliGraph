@@ -20,8 +20,9 @@ class ScalligraphRouter @Inject()(
     routers: immutable.Set[Router],
     entryPoint: EntryPoint,
     db: Database,
-    queryExecutors: immutable.Set[QueryExecutor])
-    extends Provider[Router] {
+    queryExecutors: immutable.Set[QueryExecutor]
+) extends Provider[Router] {
+
   val queryRoutes: Routes = {
     case POST(p"/api/v${int(version)}/query") ⇒
       val queryExecutor = queryExecutors

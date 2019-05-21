@@ -19,18 +19,25 @@ trait AuthSrv {
 
   def authenticate(username: String, password: String)(implicit request: RequestHeader): Try[AuthContext] =
     Failure(AuthenticationError("Operation not supported"))
+
   def authenticate(key: String)(implicit request: RequestHeader): Try[AuthContext] =
     Failure(AuthenticationError("Operation not supported"))
+
   def authenticate()(implicit request: RequestHeader): Try[AuthContext] =
     Failure(AuthenticationError("Operation not supported"))
+
   def changePassword(username: String, oldPassword: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] =
     Failure(AuthorizationError("Operation not supported"))
+
   def setPassword(username: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] =
     Failure(AuthorizationError("Operation not supported"))
+
   def renewKey(username: String)(implicit request: RequestHeader): Try[String] =
     Failure(AuthorizationError("Operation not supported"))
+
   def getKey(username: String)(implicit request: RequestHeader): Try[String] =
     Failure(AuthorizationError("Operation not supported"))
+
   def removeKey(username: String)(implicit request: RequestHeader): Try[Unit] =
     Failure(AuthorizationError("Operation not supported"))
 }

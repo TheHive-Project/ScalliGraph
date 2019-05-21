@@ -88,7 +88,8 @@ abstract class QueryExecutor { executor ⇒
   def parser: FieldsParser[Query] = FieldsParser[Query]("query") {
     case (_, FSeq(fields)) ⇒
       val initQuery = getQuery(ru.typeOf[Graph], fields.head)
-      fields.tail
+      fields
+        .tail
         .foldLeft(initQuery.map(q ⇒ q.toType(ru.typeOf[Graph]) → q)) {
           case (Good((tpe, query)), field) ⇒ getQuery(tpe, field).map(q ⇒ q.toType(tpe) → query.andThen(q))
           case (b: Bad[_], _)              ⇒ b

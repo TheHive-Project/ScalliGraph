@@ -26,6 +26,7 @@ trait MacroUtil extends MacroLogger {
       tpe <:< typeOf[Boolean]
 
   object CaseClassType {
+
     def unapplySeq(tpe: Type): Option[Seq[Symbol]] =
       unapplySeq(tpe.typeSymbol)
 
@@ -39,6 +40,7 @@ trait MacroUtil extends MacroLogger {
   }
 
   object SeqType {
+
     def unapply(s: Symbol): Option[Type] =
       s match {
         case _: TypeSymbol ⇒ unapply(s.asType.toType)
@@ -53,6 +55,7 @@ trait MacroUtil extends MacroLogger {
   }
 
   object SetType {
+
     def unapply(s: Symbol): Option[Type] =
       s match {
         case _: TypeSymbol ⇒ unapply(s.asType.toType)
@@ -67,6 +70,7 @@ trait MacroUtil extends MacroLogger {
   }
 
   object OptionType {
+
     def unapply(s: Symbol): Option[Type] =
       s match {
         case _: TypeSymbol ⇒ unapply(s.asType.toType)
@@ -105,6 +109,7 @@ trait MacroUtil extends MacroLogger {
   }
 
   object EnumerationType {
+
     def unapplySeq(tpe: Type): Option[Seq[(Tree, Tree)]] =
       extractEnum(tpe, tpe.typeSymbol)
 

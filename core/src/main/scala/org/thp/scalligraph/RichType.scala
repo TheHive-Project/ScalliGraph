@@ -3,11 +3,13 @@ package org.thp.scalligraph
 import scala.reflect.runtime.universe._
 
 object RichType {
+
   def getTypeArgs(t: Type, fromType: Type): List[Type] =
     t.baseType(fromType.typeSymbol).typeArgs
 }
 
 object CaseClassType {
+
   def unapplySeq(tpe: Type): Option[Seq[Symbol]] =
     unapplySeq(tpe.typeSymbol)
 

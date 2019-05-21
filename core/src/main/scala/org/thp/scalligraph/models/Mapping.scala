@@ -10,6 +10,7 @@ import org.thp.scalligraph.auth.Permission
 
 object MappingCardinality extends Enumeration {
   val option, single, list, set = Value
+
   def isCompatible(c1: Value, c2: Value): Boolean =
     c1 == c2 ||
       (c1 == single && c2 == option) ||
@@ -56,6 +57,7 @@ sealed abstract class Mapping[D, SD: ClassTag, G: ClassTag] extends UniMapping[D
   def set: Mapping[Set[D], D, G]         = throw InternalError(s"Set of $this is not supported")
   def optional: Mapping[Option[D], D, G] = throw InternalError(s"Option of $this is not supported")
   def readonly: Mapping[D, SD, G]
+
   def isCompatibleWith(m: Mapping[_, _, _]): Boolean =
     graphTypeClass.equals(m.graphTypeClass) && MappingCardinality.isCompatible(cardinality, m.cardinality)
 }

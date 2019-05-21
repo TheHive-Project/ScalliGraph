@@ -42,12 +42,15 @@ trait Entity extends DomainRoot {
 }
 
 object Model {
+
   type Base[E0 <: Product] = Model {
     type E = E0
   }
+
   type Vertex[E0 <: Product] = VertexModel {
     type E = E0
   }
+
   type Edge[E0 <: Product, FROM <: Product, TO <: Product] =
     EdgeModel[FROM, TO] {
       type E = E0
@@ -62,8 +65,10 @@ object Model {
     e +
       e.keys()
         .asScala
-        .map(key ⇒
-          s"\n - $key = ${e.properties[Any](key).asScala.map(_.value()).mkString(",")} (${e.properties[Any](key).asScala.toSeq.headOption.fold("empty")(_.value.getClass.toString)})")
+        .map(
+          key ⇒
+            s"\n - $key = ${e.properties[Any](key).asScala.map(_.value()).mkString(",")} (${e.properties[Any](key).asScala.toSeq.headOption.fold("empty")(_.value.getClass.toString)})"
+        )
         .mkString
 }
 

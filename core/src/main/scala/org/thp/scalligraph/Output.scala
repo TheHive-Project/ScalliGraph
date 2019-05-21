@@ -13,6 +13,7 @@ class Output[O](_toOutput: ⇒ O, _toJson: ⇒ JsValue) {
 //}
 
 object Output {
+
   val valWrites: Writes[AnyVal] = Writes[AnyVal] {
     case d: Double  ⇒ JsNumber(d)
     case f: Float   ⇒ JsNumber(f.toDouble)

@@ -44,13 +44,15 @@ trait Database {
   def drop(): Unit
 
   def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity
+
   def createEdge[E <: Product, FROM <: Product, TO <: Product](
       graph: Graph,
       authContext: AuthContext,
       model: Model.Edge[E, FROM, TO],
       e: E,
       from: FROM with Entity,
-      to: TO with Entity): E with Entity
+      to: TO with Entity
+  ): E with Entity
 
   def update(
       elementTraversal: GremlinScala[_ <: Element],
@@ -64,6 +66,7 @@ trait Database {
   def getOptionProperty[D, G](element: Element, key: String, mapping: OptionMapping[D, G]): Option[D]
   def getListProperty[D, G](element: Element, key: String, mapping: ListMapping[D, G]): Seq[D]
   def getSetProperty[D, G](element: Element, key: String, mapping: SetMapping[D, G]): Set[D]
+
   def getProperty[D](element: Element, key: String, mapping: Mapping[D, _, _]): D =
     mapping match {
       case m: SingleMapping[_, _] ⇒ getSingleProperty(element, key, m).asInstanceOf[D]
@@ -76,6 +79,7 @@ trait Database {
   def setOptionProperty[D, G](element: Element, key: String, value: Option[D], mapping: OptionMapping[D, _]): Unit
   def setListProperty[D, G](element: Element, key: String, values: Seq[D], mapping: ListMapping[D, _]): Unit
   def setSetProperty[D, G](element: Element, key: String, values: Set[D], mapping: SetMapping[D, _]): Unit
+
   def setProperty[D](element: Element, key: String, value: D, mapping: Mapping[D, _, _]): Unit = {
     logger.trace(s"update ${element.id()}, $key = $value")
     mapping match {
@@ -98,6 +102,7 @@ abstract class BaseDatabase extends Database {
   val createdByMapping: SingleMapping[String, String] = UniMapping.stringMapping
   val updatedAtMapping: OptionMapping[Date, Date]     = UniMapping.dateMapping.optional
   val updatedByMapping: OptionMapping[String, String] = UniMapping.stringMapping.optional
+
   val binaryMapping: SingleMapping[Array[Byte], String] =
     SingleMapping[Array[Byte], String]("", data ⇒ Some(Base64.getEncoder.encodeToString(data)), Base64.getDecoder.decode)
 
@@ -159,7 +164,8 @@ abstract class BaseDatabase extends Database {
       model: Model.Edge[E, FROM, TO],
       e: E,
       from: FROM with Entity,
-      to: TO with Entity): E with Entity = {
+      to: TO with Entity
+  ): E with Entity = {
     val edgeMaybe = for {
       f ← graph.V().has(Key("_id") of from._id).headOption()
       t ← graph.V().has(Key("_id") of to._id).headOption()
@@ -185,13 +191,15 @@ abstract class BaseDatabase extends Database {
       graph: Graph,
       authContext: AuthContext
   ): Try[Unit] =
-    elementTraversal.getOrFail
+    elementTraversal
+      .getOrFail
       .flatMap { element ⇒
         logger.trace(s"Update ${element.id()} by ${authContext.userId}")
         fields
           .toTry {
             case (key, value) ⇒
-              model.fields
+              model
+                .fields
                 .get(key)
                 .fold[Try[Mapping[_, _, _]]](Failure(UnknownAttributeError(key, FAny(Seq(value.toString)))))(Success.apply)
                 .flatMap { mapping ⇒

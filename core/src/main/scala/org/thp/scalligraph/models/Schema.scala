@@ -7,6 +7,7 @@ import javax.inject.{Inject, Named, Singleton}
 import org.thp.scalligraph.auth.{AuthContext, UserSrv}
 
 case class InitialValue[V <: Product](model: Model.Vertex[V], value: V) {
+
   def create()(implicit db: Database, graph: Graph, authContext: AuthContext): V with Entity =
     db.createVertex[V](graph, authContext, model, value)
 }

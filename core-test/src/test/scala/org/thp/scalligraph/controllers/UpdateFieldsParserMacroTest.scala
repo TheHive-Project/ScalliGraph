@@ -38,7 +38,8 @@ class UpdateFieldsParserMacroTest extends Specification with TestUtils {
       implicit val subClassFieldsParser: UpdateFieldsParser[SubClassForFieldsParserMacroTest] =
         UpdateFieldsParser[SubClassForFieldsParserMacroTest](
           "SubClassForFieldsParserMacroTest",
-          Seq(FPath("option") → FieldsParser.build[Option[Int]], FPath("name") → FieldsParser.build[String]))
+          Seq(FPath("option") → FieldsParser.build[Option[Int]], FPath("name") → FieldsParser.build[String])
+        )
       val fieldsParser = getUpdateFieldsParser[ComplexClassForFieldsParserMacroTest]
 
       val fields  = FObject("subClasses[0].option"    → FNumber(3), "subClasses[1].option"     → FNull)

@@ -12,6 +12,7 @@ import akka.actor.ActorSystem
 import org.scalactic.{Bad, Good, Or}
 
 class RichFuture[T](future: Future[T]) {
+
   def withTimeout(after: FiniteDuration, default: T)(implicit system: ActorSystem, ec: ExecutionContext): Future[T] = {
     val prom = Promise[T]()
     val timeout = system.scheduler.scheduleOnce(after) {
@@ -38,6 +39,7 @@ class RichFuture[T](future: Future[T]) {
 }
 
 class RichJson(obj: JsObject) {
+
   def setIfAbsent[T](name: String, value: T)(implicit writes: Writes[T]): JsObject =
     if (obj.keys.contains(name))
       obj
@@ -50,7 +52,8 @@ class RichJson(obj: JsObject) {
     })
 
   def map(f: (String, JsValue) ⇒ (String, JsValue)): JsObject =
-    obj.fields
+    obj
+      .fields
       .map(kv ⇒ JsObject(Seq(f.tupled(kv))))
       .reduceOption(_ deepMerge _)
       .getOrElse(JsObject(Nil))
@@ -65,11 +68,13 @@ class RichJson(obj: JsObject) {
 }
 
 class RichOr[G, B](or: Or[G, B]) {
+
   def toFuture(implicit evidence: B <:< Throwable): Future[G] =
     or.fold(g ⇒ Future.successful(g), b ⇒ Future.failed(b))
 }
 
 class RichTryIterable[A, Repr](xs: TraversableLike[Try[A], Repr]) {
+
   def partitionTry[ThatA, ThatB](implicit cbfa: CanBuildFrom[Repr, A, ThatA], cbfb: CanBuildFrom[Repr, Throwable, ThatB]): (ThatA, ThatB) = {
     val aBuilder = cbfa()
     val bBuilder = cbfb()
@@ -81,7 +86,9 @@ class RichTryIterable[A, Repr](xs: TraversableLike[Try[A], Repr]) {
   }
 
 }
+
 class RichOrIterable[A, B, Repr](xs: TraversableLike[A Or B, Repr]) {
+
   def partitionOr[ThatA, ThatB](implicit cbfa: CanBuildFrom[Repr, A, ThatA], cbfb: CanBuildFrom[Repr, B, ThatB]): (ThatA, ThatB) = {
     val aBuilder = cbfa()
     val bBuilder = cbfb()

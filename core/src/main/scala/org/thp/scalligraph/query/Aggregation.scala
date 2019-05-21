@@ -17,7 +17,9 @@ import org.thp.scalligraph.models.{ScalarSteps, ScalliSteps}
 import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError, Output}
 
 object GroupAggregation {
+
   object AggObj {
+
     def unapply(field: Field): Option[(String, FObject)] = field match {
       case f: FObject ⇒
         f.get("_agg") match {
@@ -77,7 +79,7 @@ object GroupAggregation {
           (name: String) ⇒
             FieldsParser[Aggregation[_, _]]("aggregation") {
               case _ ⇒ Bad(One(InvalidFormatAttributeError("_agg", "aggregation name", Set("avg", "min", "max", "count", "top"), FString(name))))
-          }
+            }
         )
     FieldsParser("aggregation") {
       case (_, AggObj(name, field)) ⇒ fp(name)(field)
@@ -92,11 +94,13 @@ object GroupAggregation {
 }
 
 abstract class GroupAggregation[T, R](name: String) extends Aggregation[T, R](name) {
+
   def get(properties: List[PublicProperty[_, _]], stepType: ru.Type, fromStep: ScalliSteps[_, _, _], authContext: AuthContext): Output[R] =
     output(apply(properties, stepType, fromStep, authContext).head())
 }
 
 abstract class Aggregation[T, R](val name: String) {
+
   def getProperty(properties: Seq[PublicProperty[_, _]], stepType: ru.Type, fieldName: String): PublicProperty[_, _] =
     properties
       .find(p ⇒ p.stepType =:= stepType && p.propertyName == fieldName)
@@ -119,7 +123,8 @@ case class AggSum(fieldName: String) extends AggFunction[Number, Number](s"sum_$
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       fromStep: ScalliSteps[_, _, _],
-      authContext: AuthContext): ScalarSteps[Number] = {
+      authContext: AuthContext
+  ): ScalarSteps[Number] = {
     val publicProperty = getProperty(publicProperties, stepType, fieldName)
     val raw            = fromStep.raw.asInstanceOf[GremlinScala[Vertex]]
 
@@ -140,7 +145,8 @@ case class AggAvg(aggName: Option[String], fieldName: String) extends AggFunctio
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       fromStep: ScalliSteps[_, _, _],
-      authContext: AuthContext): ScalarSteps[JDouble] = {
+      authContext: AuthContext
+  ): ScalarSteps[JDouble] = {
     val publicProperty = getProperty(publicProperties, stepType, fieldName)
     val raw            = fromStep.raw.asInstanceOf[GremlinScala[Vertex]]
 
@@ -161,7 +167,8 @@ case class AggMin(aggName: Option[String], fieldName: String) extends AggFunctio
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       fromStep: ScalliSteps[_, _, _],
-      authContext: AuthContext): ScalarSteps[AnyVal] = {
+      authContext: AuthContext
+  ): ScalarSteps[AnyVal] = {
     val publicProperty = getProperty(publicProperties, stepType, fieldName)
     val raw            = fromStep.raw.asInstanceOf[GremlinScala[Vertex]]
 
@@ -182,7 +189,8 @@ case class AggMax(fieldName: String) extends AggFunction[AnyVal, AnyVal](s"max_$
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       fromStep: ScalliSteps[_, _, _],
-      authContext: AuthContext): ScalarSteps[AnyVal] = {
+      authContext: AuthContext
+  ): ScalarSteps[AnyVal] = {
     val publicProperty = getProperty(publicProperties, stepType, fieldName)
     val raw            = fromStep.raw.asInstanceOf[GremlinScala[Vertex]]
 
@@ -203,7 +211,8 @@ case class AggCount(aggName: Option[String]) extends GroupAggregation[JLong, Lon
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       fromStep: ScalliSteps[_, _, _],
-      authContext: AuthContext): ScalarSteps[JLong] =
+      authContext: AuthContext
+  ): ScalarSteps[JLong] =
     ScalarSteps(fromStep.raw.count())
   override def output(t: JLong): Output[Long] = Output(t.toLong, Json.obj(name → t.toLong))
 
@@ -217,18 +226,22 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs:
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       fromStep: ScalliSteps[_, _, _],
-      authContext: AuthContext): ScalarSteps[JList[JCollection[Any]]] = {
+      authContext: AuthContext
+  ): ScalarSteps[JList[JCollection[Any]]] = {
     val property = getProperty(publicProperties, stepType, fieldName).asInstanceOf[PublicProperty[_, Any]]
     fromStep
       .groupBy(__[Vertex].coalesce(property.get(_, authContext), _.constant(property.mapping.noValue))) // Map[K, List[V]]
-      .unfold[JMap.Entry[Any, JCollection[Any]]] // Map.Entry[K, List[V]]
-      .project[Any](By(__[JMap.Entry[Any, Any]].selectKeys) +: subAggs.map(a ⇒
-        By(a.apply(publicProperties, stepType, ScalarSteps(__[JMap[Any, Any]].selectValues.unfold()), authContext).raw)): _*)
+      .unfold[JMap.Entry[Any, JCollection[Any]]]                                                        // Map.Entry[K, List[V]]
+      .project[Any](
+        By(__[JMap.Entry[Any, Any]].selectKeys) +: subAggs
+          .map(a ⇒ By(a.apply(publicProperties, stepType, ScalarSteps(__[JMap[Any, Any]].selectValues.unfold()), authContext).raw)): _*
+      )
       .fold
   }
 
   override def output(l: JList[JCollection[Any]]): Output[Map[Any, Map[String, Any]]] = {
-    val subMap: Map[Any, Output[Map[String, Any]]] = l.asScala
+    val subMap: Map[Any, Output[Map[String, Any]]] = l
+      .asScala
       .map(_.asScala)
       .map { e ⇒
         val key = e.head
@@ -260,4 +273,4 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs:
 }
 
 case class CategoryAggregation() // Map[String,
-case class TimeAggregation() // Map[Date,
+case class TimeAggregation()     // Map[Date,

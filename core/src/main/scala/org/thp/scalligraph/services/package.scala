@@ -9,6 +9,7 @@ import org.thp.scalligraph.models.{Database, Entity, Schema}
 
 package object services {
   implicit class RichElement(e: Element)(implicit db: Database) {
+
     def as[E <: Product: ru.TypeTag]: E with Entity = {
       val model = db.getModel[E]
       model.toDomain(e.asInstanceOf[model.ElementType])

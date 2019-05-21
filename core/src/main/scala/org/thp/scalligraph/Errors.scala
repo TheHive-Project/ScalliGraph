@@ -20,6 +20,7 @@ case class MultiError(message: String, exceptions: Seq[Exception])
 case class AttributeCheckingError(errors: Seq[AttributeError] = Nil) extends Exception(errors.mkString("[", "][", "]")) {
   override def toString: String = errors.mkString("[", "][", "]")
 }
+
 object AttributeCheckingError {
   implicit val invalidFormatAttributeErrorWrites: OWrites[InvalidFormatAttributeError] =
     Json.writes[InvalidFormatAttributeError]

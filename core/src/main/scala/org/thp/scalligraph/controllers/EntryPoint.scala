@@ -35,7 +35,8 @@ class EntryPoint @Inject()(
     actionBuilder: DefaultActionBuilder,
     errorHandler: HttpErrorHandler,
     implicit val ec: ExecutionContext,
-    implicit val mat: Materializer) {
+    implicit val mat: Materializer
+) {
 
   lazy val logger = Logger(getClass)
 
@@ -61,7 +62,8 @@ class EntryPoint @Inject()(
   case class EntryPointBuilder[V <: HList, R[_] <: Request[_]](
       name: String,
       fieldsParser: FieldsParser[V],
-      req: Request[AnyContent] ⇒ Try[R[AnyContent]]) {
+      req: Request[AnyContent] ⇒ Try[R[AnyContent]]
+  ) {
 
     /**
       * Extract a field from request.
@@ -85,7 +87,7 @@ class EntryPoint @Inject()(
         request ⇒
           authenticateSrv.getAuthContext(request).map { authContext ⇒
             new AuthenticatedRequest(authContext, request)
-        }
+          }
       )
 
     /**
@@ -104,7 +106,8 @@ class EntryPoint @Inject()(
           .toMat(Sink.asPublisher(false))(Keep.both)
           .run()
 
-        Results.Ok
+        Results
+          .Ok
           .chunked {
             Source.fromPublisher(publisher)
           }
@@ -156,8 +159,9 @@ class EntryPoint @Inject()(
         block(r).fold[Future[Result]](errorHandler.onServerError(r.asInstanceOf[RequestHeader], _), Future.successful)
       }
 
-    def authTransaction(db: Database)(block: AuthenticatedRequest[Record[V]] ⇒ Graph ⇒ Try[Result])(
-        implicit ev: R[Record[V]] =:= Request[Record[V]]): Action[AnyContent] =
+    def authTransaction(
+        db: Database
+    )(block: AuthenticatedRequest[Record[V]] ⇒ Graph ⇒ Try[Result])(implicit ev: R[Record[V]] =:= Request[Record[V]]): Action[AnyContent] =
       apply { request ⇒
         MDC.put("request", f"${request.id}%08x")
         authenticateSrv.getAuthContext(ev(request)).flatMap { authContext ⇒

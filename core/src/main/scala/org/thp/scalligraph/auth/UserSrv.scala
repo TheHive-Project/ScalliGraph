@@ -9,6 +9,7 @@ import play.api.mvc.RequestHeader
 import org.thp.scalligraph.Instance
 
 trait PermissionTag
+
 object Permission {
   def apply(name: String): Permission            = shapeless.tag[PermissionTag][String](name)
   def apply(names: Set[String]): Set[Permission] = names.map(apply)
@@ -26,6 +27,7 @@ case class AuthContextImpl(userId: String, userName: String, organisation: Strin
     extends AuthContext
 
 object AuthContext {
+
   def fromJson(request: RequestHeader, json: String): Try[AuthContext] =
     Try {
       Json.parse(json).as(reads(Instance.getRequestId(request)))

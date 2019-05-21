@@ -1,21 +1,21 @@
 package org.thp.scalligraph.controllers
 
 import java.io.ByteArrayInputStream
-
-import scala.collection.JavaConverters._
-import scala.concurrent.duration.{DurationLong, FiniteDuration}
-import scala.util.{Failure, Success, Try}
-
-import play.api.http.HeaderNames
-import play.api.libs.json.Json
-import play.api.mvc._
-import play.api.{Configuration, Logger}
+import java.util.{List ⇒ JList}
 
 import javax.inject.{Inject, Singleton}
 import javax.naming.ldap.LdapName
 import org.bouncycastle.asn1._
 import org.thp.scalligraph.auth._
 import org.thp.scalligraph.{AuthenticationError, Instance}
+import play.api.http.HeaderNames
+import play.api.libs.json.Json
+import play.api.mvc._
+import play.api.{Configuration, Logger}
+
+import scala.collection.JavaConverters._
+import scala.concurrent.duration.{DurationLong, FiniteDuration}
+import scala.util.{Failure, Success, Try}
 
 /**
   * A request with authentication information
@@ -78,7 +78,8 @@ class DefaultAuthenticateSrv @Inject()(configuration: Configuration, userSrv: Us
     * Retrieve authentication information form cookie
     */
   def getFromSession(request: RequestHeader): Try[AuthContext] =
-    request.session
+    request
+      .session
       .get(authContextSession)
       .fold[Try[AuthContext]](Failure(AuthenticationError("User session not found"))) {
         case authContextJson if expirationStatus(request) != ExpirationStatus.Error ⇒
@@ -93,7 +94,8 @@ class DefaultAuthenticateSrv @Inject()(configuration: Configuration, userSrv: Us
       }
 
   def expirationStatus(request: RequestHeader): ExpirationStatus.Type =
-    request.session
+    request
+      .session
       .get("expire")
       .flatMap { expireStr ⇒
         Try(expireStr.toLong).toOption
@@ -114,7 +116,8 @@ class DefaultAuthenticateSrv @Inject()(configuration: Configuration, userSrv: Us
     */
   def getFromApiKey(request: RequestHeader): Try[AuthContext] =
     for {
-      auth ← request.headers
+      auth ← request
+        .headers
         .get(HeaderNames.AUTHORIZATION)
         .fold[Try[String]](Failure(AuthenticationError("Authentication header not found")))(Success.apply)
       _ ← if (!auth.startsWith("Bearer ")) Failure(AuthenticationError("Only bearer authentication is supported")) else Success(())
@@ -124,7 +127,8 @@ class DefaultAuthenticateSrv @Inject()(configuration: Configuration, userSrv: Us
 
   def getFromBasicAuth(request: RequestHeader): Try[AuthContext] =
     for {
-      auth ← request.headers
+      auth ← request
+        .headers
         .get(HeaderNames.AUTHORIZATION)
         .fold[Try[String]](Failure(AuthenticationError("Authentication header not found")))(Success.apply)
       _ ← if (!auth.startsWith("Basic ")) Failure(AuthenticationError("Only basic authentication is supported")) else Success(())
@@ -144,7 +148,8 @@ class DefaultAuthenticateSrv @Inject()(configuration: Configuration, userSrv: Us
   }
 
   private object CertificateSAN {
-    def unapply(l: java.util.List[_]): Option[(String, String)] = {
+
+    def unapply(l: JList[_]): Option[(String, String)] = {
       val typeValue = for {
         t ← Option(l.get(0))
         v ← Option(l.get(1))
@@ -178,12 +183,15 @@ class DefaultAuthenticateSrv @Inject()(configuration: Configuration, userSrv: Us
   def getFromClientCertificate(request: RequestHeader): Try[AuthContext] =
     certificateField
       .fold[Try[AuthContext]](Failure(AuthenticationError("Certificate authentication is not configured"))) { cf ⇒
-        request.clientCertificateChain
+        request
+          .clientCertificateChain
           .flatMap(_.headOption)
           .flatMap { cert ⇒
             val dn       = cert.getSubjectX500Principal.getName
             val ldapName = new LdapName(dn)
-            ldapName.getRdns.asScala
+            ldapName
+              .getRdns
+              .asScala
               .collectFirst {
                 case rdn if rdn.getType == cf ⇒ userSrv.getFromId(request, rdn.getValue.toString)
               }

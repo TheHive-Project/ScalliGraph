@@ -27,6 +27,7 @@ class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
 
   def loadBinary(id: String)(implicit graph: Graph): InputStream =
     Files.newInputStream(directory.resolve(id))
+
   def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex = {
     val id = UUID.randomUUID().toString
     Files.copy(is, directory.resolve(id))
@@ -35,6 +36,7 @@ class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
 }
 
 object HadoopStorageSrv {
+
   def loadConfiguration(conf: Configuration): HadoopConfig = {
     val hadoopConfig = new HadoopConfig()
     conf.entrySet.foreach {
@@ -55,7 +57,8 @@ class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
     this(
       HDFileSystem.get(
         URI.create(configuration.get[String]("storage.hdfs.root")),
-        HadoopStorageSrv.loadConfiguration(configuration.get[Configuration]("storage.hdfs"))),
+        HadoopStorageSrv.loadConfiguration(configuration.get[Configuration]("storage.hdfs"))
+      ),
       new HDPath(configuration.get[String]("storage.hdfs.location"))
     )
 

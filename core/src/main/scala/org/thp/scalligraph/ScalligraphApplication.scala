@@ -1,10 +1,6 @@
 package org.thp.scalligraph
 
-import scala.collection.JavaConverters._
-
-import play.api.inject.guice._
-import play.api.routing.Router
-import play.api.{ApplicationLoader, Configuration, Environment, Logger}
+import java.util.{Set ⇒ JSet}
 
 import com.google.inject.internal.{BindingImpl, Scoping}
 import com.google.inject.spi._
@@ -13,6 +9,11 @@ import com.google.inject.{Binder, Module ⇒ GuiceModule, _}
 import javax.inject.Inject
 import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
 import org.thp.scalligraph.controllers.{AuthenticateSrv, DefaultAuthenticateSrv}
+import play.api.inject.guice._
+import play.api.routing.Router
+import play.api.{ApplicationLoader, Configuration, Environment, Logger}
+
+import scala.collection.JavaConverters._
 
 class ScalligraphGuiceableModule(modules: Seq[GuiceableModule]) extends GuiceableModule {
   override def guiced(env: Environment, conf: Configuration, binderOptions: Set[BinderOption]): Seq[GuiceModule] = {
@@ -58,6 +59,7 @@ class ScalligraphGuiceableModule(modules: Seq[GuiceableModule]) extends Guiceabl
 }
 
 object ScalligraphApplicationLoader {
+
   def loadModules(origLoadModules: (Environment, Configuration) ⇒ Seq[GuiceableModule]): (Environment, Configuration) ⇒ Seq[GuiceableModule] = {
     (env, conf) ⇒
       Seq(new ScalligraphGuiceableModule(origLoadModules(env, conf) :+ GuiceableModule.guiceable(new ScalligraphModule)))
@@ -90,11 +92,12 @@ class ScalligraphModule extends ScalaModule {
   }
 }
 
-class ParentProvider[T] @Inject()(instances: Provider[java.util.Set[T]]) extends Provider[Option[T]] {
+class ParentProvider[T] @Inject()(instances: Provider[JSet[T]]) extends Provider[Option[T]] {
 
   def get(): Option[T] = {
     val callerClassName = new Exception().getStackTrace.tail.head.getClassName
-    instances.get
+    instances
+      .get
       .iterator()
       .asScala
       .toList

@@ -1,16 +1,19 @@
 package org.thp.scalligraph
 
-import play.api.inject.guice.GuiceApplicationBuilder
-import play.api.libs.logback.LogbackLoggerConfigurator
-import play.api.test.PlaySpecification
-import play.api.{Configuration, Environment}
-
 import com.google.inject.Inject
 import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
 import org.specs2.mock.Mockito
 import org.thp.scalligraph.auth.{AuthSrv, UserSrv}
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.query.QueryExecutor
+import play.api.i18n.{I18nModule ⇒ PlayI18nModule}
+import play.api.inject.guice.GuiceApplicationBuilder
+import play.api.inject.{BuiltinModule ⇒ PlayBuiltinModule}
+import play.api.libs.logback.LogbackLoggerConfigurator
+import play.api.mvc.{CookiesModule ⇒ PlayCookiesModule}
+import play.api.routing.{Router ⇒ PlayRouter}
+import play.api.test.PlaySpecification
+import play.api.{Configuration, Environment}
 
 trait TestService {
   def id: String
@@ -44,19 +47,20 @@ object TestModule extends ScalaModule with Mockito {
     bind[UserSrv].toInstance(mock[UserSrv])
     bind[Database].toInstance(mock[Database])
     ScalaMultibinder.newSetBinder[QueryExecutor](binder)
-    ScalaMultibinder.newSetBinder[play.api.routing.Router](binder)
+    ScalaMultibinder.newSetBinder[PlayRouter](binder)
     ()
   }
 }
+
 class ScalligraphApplicationTest extends PlaySpecification with Mockito {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
   "create an application with overridden module" in {
     val applicationBuilder = GuiceApplicationBuilder()
       .load(
-        new play.api.inject.BuiltinModule,
-        new play.api.i18n.I18nModule,
-        new play.api.mvc.CookiesModule,
+        new PlayBuiltinModule,
+        new PlayI18nModule,
+        new PlayCookiesModule,
         new TestServiceModule[TestService1],
         new TestServiceModule[TestService2],
         new TestServiceModule[TestService3],

@@ -12,6 +12,7 @@ import org.thp.scalligraph.models.{BaseVertexSteps, Database, Mapping, UniMappin
 class PropertyBuilder[S <: BaseVertexSteps[_, S]: ru.TypeTag, D](propertyName: String, mapping: UniMapping[D]) {
 
   def simple[G] = new SimpleUpdatePropertyBuilder[S, D, G](propertyName, propertyName, mapping, Seq((_: GremlinScala[Vertex]).value[G](propertyName)))
+
   def rename[G](newName: String) =
     new SimpleUpdatePropertyBuilder[S, D, G](propertyName, newName, mapping, Seq((_: GremlinScala[Vertex]).value[G](newName)))
   def derived[G](definition: (GremlinScala[Vertex] ⇒ GremlinScala[G])*) = new UpdatePropertyBuilder[S, D, G](propertyName, mapping, definition)
@@ -21,8 +22,8 @@ class SimpleUpdatePropertyBuilder[S <: BaseVertexSteps[_, S]: ru.TypeTag, D, G](
     propertyName: String,
     fieldName: String,
     mapping: UniMapping[D],
-    definition: Seq[GremlinScala[Vertex] ⇒ GremlinScala[G]])
-    extends UpdatePropertyBuilder[S, D, G](propertyName, mapping, definition) {
+    definition: Seq[GremlinScala[Vertex] ⇒ GremlinScala[G]]
+) extends UpdatePropertyBuilder[S, D, G](propertyName, mapping, definition) {
 
   def updatable(implicit fieldsParser: FieldsParser[D]): PublicProperty[D, G] =
     new PublicProperty[D, G](
@@ -42,7 +43,8 @@ class SimpleUpdatePropertyBuilder[S <: BaseVertexSteps[_, S]: ru.TypeTag, D, G](
 class UpdatePropertyBuilder[S <: BaseVertexSteps[_, S]: ru.TypeTag, D, G](
     propertyName: String,
     mapping: UniMapping[D],
-    definition: Seq[GremlinScala[Vertex] ⇒ GremlinScala[G]]) {
+    definition: Seq[GremlinScala[Vertex] ⇒ GremlinScala[G]]
+) {
 
   def readonly: PublicProperty[D, G] =
     new PublicProperty[D, G](
@@ -53,8 +55,9 @@ class UpdatePropertyBuilder[S <: BaseVertexSteps[_, S]: ru.TypeTag, D, G](
       _ ⇒ None
     )
 
-  def custom[V](f: (PublicProperty[D, _], FPath, V, Vertex, Database, Graph, AuthContext) ⇒ Try[Unit])(
-      implicit fieldsParser: FieldsParser[V]): PublicProperty[D, G] =
+  def custom[V](
+      f: (PublicProperty[D, _], FPath, V, Vertex, Database, Graph, AuthContext) ⇒ Try[Unit]
+  )(implicit fieldsParser: FieldsParser[V]): PublicProperty[D, G] =
     new PublicProperty[D, G](
       ru.typeOf[S],
       propertyName,

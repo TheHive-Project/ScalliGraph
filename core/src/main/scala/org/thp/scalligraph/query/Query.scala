@@ -17,6 +17,7 @@ abstract class ParamQuery[P: ru.TypeTag] { q ⇒
   val name: String
   def checkFrom(t: ru.Type): Boolean
   def toType(t: ru.Type): ru.Type
+
   def toQuery(param: P): Query = new Query {
     override val name: String                                                     = q.name
     override def checkFrom(t: ru.Type): Boolean                                   = q.checkFrom(t)
@@ -28,6 +29,7 @@ abstract class ParamQuery[P: ru.TypeTag] { q ⇒
 
 abstract class Query extends ParamQuery[Unit] { q ⇒
   override val paramParser: FieldsParser[Unit] = FieldsParser[Unit]("unit") { case _ ⇒ Good(()) }
+
   def andThen(query: Query): Query = new Query {
     override val name: String                                                 = q.name + "/" + query.name
     override def checkFrom(t: ru.Type): Boolean                               = q.checkFrom(t)
@@ -37,6 +39,7 @@ abstract class Query extends ParamQuery[Unit] { q ⇒
 }
 
 object Query {
+
   def init[T: ru.TypeTag](queryName: String, f: (Graph, AuthContext) ⇒ T): Query = new Query {
     override val name: String                                                 = queryName
     override def checkFrom(t: ru.Type): Boolean                               = t <:< ru.typeOf[Graph]

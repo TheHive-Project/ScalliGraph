@@ -77,6 +77,7 @@ class ModernSchema @Inject()(implicit db: Database) extends Schema {
 }
 
 object DatabaseBuilder {
+
   def build(schema: ModernSchema)(implicit db: Database, authContext: AuthContext): Try[Unit] =
     for {
       _ ← db.createSchemaFrom(schema)

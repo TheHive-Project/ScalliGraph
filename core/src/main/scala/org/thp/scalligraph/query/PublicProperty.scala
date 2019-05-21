@@ -14,7 +14,8 @@ class PublicProperty[D, G](
     val propertyName: String,
     val mapping: Mapping[D, _, G],
     val definition: Seq[GremlinScala[Vertex] ⇒ GremlinScala[G]],
-    updateFieldsParserBuilder: PublicProperty[D, G] ⇒ Option[FieldsParser[PropertyUpdater]]) /*(implicit val updateFieldsParser: FieldsParser[D])*/ {
+    updateFieldsParserBuilder: PublicProperty[D, G] ⇒ Option[FieldsParser[PropertyUpdater]]
+) /*(implicit val updateFieldsParser: FieldsParser[D])*/ {
 
   def updateFieldsParser: Option[FieldsParser[PropertyUpdater]] = updateFieldsParserBuilder(this)
 
@@ -29,17 +30,21 @@ class PublicProperty[D, G](
 }
 
 object PropertyUpdater {
+
   def apply[D, V](fieldsParser: FieldsParser[V], publicProperty: PublicProperty[D, _])(
-      f: (PublicProperty[D, _], FPath, V, Vertex, Database, Graph, AuthContext) ⇒ Try[Unit]): FieldsParser[PropertyUpdater] =
+      f: (PublicProperty[D, _], FPath, V, Vertex, Database, Graph, AuthContext) ⇒ Try[Unit]
+  ): FieldsParser[PropertyUpdater] =
     new FieldsParser(
       fieldsParser.formatName,
       fieldsParser.acceptedInput.map(publicProperty.propertyName + "/" + _), {
         case (path, field) ⇒
-          fieldsParser(FPath(fieldsParser.formatName) :/ path, field).map(fieldValue ⇒
-            new PropertyUpdater(publicProperty, path, fieldValue) {
-              override def apply(vertex: Vertex, db: Database, graph: Graph, authContext: AuthContext): Try[Unit] =
-                f(publicProperty, path, fieldValue, vertex, db, graph, authContext)
-          })
+          fieldsParser(FPath(fieldsParser.formatName) :/ path, field).map(
+            fieldValue ⇒
+              new PropertyUpdater(publicProperty, path, fieldValue) {
+                override def apply(vertex: Vertex, db: Database, graph: Graph, authContext: AuthContext): Try[Unit] =
+                  f(publicProperty, path, fieldValue, vertex, db, graph, authContext)
+              }
+          )
       }
     )
 

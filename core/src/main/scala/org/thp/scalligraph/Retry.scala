@@ -5,6 +5,7 @@ import scala.util.{Failure, Try}
 import play.api.Logger
 
 object Retry {
+
   def exceptionCheck(exceptions: Seq[Class[_]])(t: Throwable): Boolean =
     exceptions.contains(t.getClass) || Option(t.getCause).exists(exceptionCheck(exceptions))
 

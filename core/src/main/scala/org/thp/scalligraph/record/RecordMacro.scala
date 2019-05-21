@@ -1,9 +1,13 @@
 package org.thp.scalligraph.record
 
-import scala.reflect.macros.whitebox
-
 import shapeless.labelled.KeyTag
+import shapeless.tag.Tagged
 import shapeless.{::, HList, HNil}
+
+import scala.annotation.tailrec
+import scala.reflect.macros.whitebox
+import scala.tools.nsc.Global
+import scala.{Symbol ⇒ ScalaSymbol}
 
 class UnsafeSelector[L <: HList, K, O](i: Int) extends Selector[L, K] {
   type Out = O
@@ -15,7 +19,7 @@ class RecordMacro(val c: whitebox.Context) {
   import c.universe._
 
   def prefix(tpe: Type): Type = {
-    val global = c.universe.asInstanceOf[scala.tools.nsc.Global]
+    val global = c.universe.asInstanceOf[Global]
     val gTpe   = tpe.asInstanceOf[global.Type]
     gTpe.prefix.asInstanceOf[Type]
   }
@@ -44,10 +48,10 @@ class RecordMacro(val c: whitebox.Context) {
   }
 
   private lazy val hconsTpe  = typeOf[::[_, _]]
-  private lazy val tagTpe    = typeOf[shapeless.tag.Tagged[_]]
+  private lazy val tagTpe    = typeOf[Tagged[_]]
   private lazy val hconsPre  = prefix(hconsTpe)
   private lazy val hnilTpe   = typeOf[HNil]
-  private lazy val symbolTpe = typeOf[scala.Symbol]
+  private lazy val symbolTpe = typeOf[ScalaSymbol]
   private lazy val tagPre    = prefix(tagTpe)
   private lazy val tagSym    = tagTpe.typeSymbol
 
@@ -70,6 +74,7 @@ class RecordMacro(val c: whitebox.Context) {
   }
 
   object KeyTag {
+
     def unapply(tTpe: Type): Option[String] =
       tTpe.dealias match {
         case RefinedType(List(`symbolTpe`, TypeRef(tPre, `tagSym`, List(ConstantType(Constant(name: String))))), _) if tPre =:= tagPre ⇒
@@ -79,7 +84,7 @@ class RecordMacro(val c: whitebox.Context) {
   }
 
   def extractHlistTypes(hl: Type): List[(String, Type)] = {
-    @scala.annotation.tailrec
+    @tailrec
     def unfold(l: Type, acc: List[(String, Type)]): List[(String, Type)] =
       if (l <:< hnilTpe) acc
       else

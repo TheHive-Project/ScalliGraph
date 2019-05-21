@@ -19,9 +19,10 @@ class AccessLogFilter @Inject()(implicit val mat: Materializer, ec: ExecutionCon
       val endTime     = System.currentTimeMillis
       val requestTime = endTime - startTime
 
-      Logger.info(
-        s"${requestHeader.method} ${requestHeader.uri} took ${requestTime}ms and returned ${result.header.status} ${result.body.contentLength
-          .fold("")(_ + " bytes")}")
+      Logger.info(s"${requestHeader.method} ${requestHeader.uri} took ${requestTime}ms and returned ${result.header.status} ${result
+        .body
+        .contentLength
+        .fold("")(_ + " bytes")}")
 
       result.withHeaders("Request-Time" → requestTime.toString)
     }
