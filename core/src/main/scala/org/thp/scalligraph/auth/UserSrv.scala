@@ -38,7 +38,7 @@ object AuthContext {
       (JsPath \ "userName").read[String] and
       (JsPath \ "organisation").read[String] and
       Reads.pure(requestId) and
-      (JsPath \ "premissions").read[Set[String]].map(Permission.apply))(AuthContextImpl.apply _)
+      (JsPath \ "permissions").read[Set[String]].map(Permission.apply))(AuthContextImpl.apply _)
 
   implicit val writes: Writes[AuthContext] = Writes[AuthContext] { authContext ⇒
     Json.obj(

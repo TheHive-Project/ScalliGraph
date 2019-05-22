@@ -31,14 +31,12 @@ class ScalligraphRouter @Inject()(
         .getOrElse(???)
       entryPoint("query")
         .extract('query, queryExecutor.parser.on("query"))
-        .authenticated { implicit request ⇒
-          db.tryTransaction { implicit graph ⇒
-            val authGraph = AuthGraph(request, graph)
-            // macro can't be used because it is in the same module
-            // val query: Query = request.body('query
-            val query: Query = request.body.list.head
-            Success(Results.Ok(queryExecutor.execute(query)(authGraph).toJson))
-          }
+        .authTransaction(db) { implicit request ⇒ implicit graph ⇒
+          val authGraph = AuthGraph(request, graph)
+          // macro can't be used because it is in the same module
+          // val query: Query = request.body('query
+          val query: Query = request.body.list.head
+          Success(Results.Ok(queryExecutor.execute(query)(authGraph).toJson))
         }
   }
 
