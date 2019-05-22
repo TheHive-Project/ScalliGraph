@@ -86,8 +86,8 @@ class ScalligraphApplicationLoader extends GuiceApplicationLoader {
 class ScalligraphModule extends ScalaModule {
   override def configure(): Unit = {
     Logger(getClass).info("Loading scalligraph module")
-    bind[AuthenticateSrv].to[DefaultAuthenticateSrv]
-    bind[Router].toProvider[ScalligraphRouter]
+    bind(classOf[AuthenticateSrv]).to(classOf[DefaultAuthenticateSrv])
+    bind(classOf[Router]).toProvider(classOf[ScalligraphRouter])
     ()
   }
 }
