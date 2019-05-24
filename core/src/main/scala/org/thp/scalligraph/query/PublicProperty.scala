@@ -38,7 +38,7 @@ object PropertyUpdater {
       fieldsParser.formatName,
       fieldsParser.acceptedInput.map(publicProperty.propertyName + "/" + _), {
         case (path, field) ⇒
-          fieldsParser(FPath(fieldsParser.formatName) :/ path, field).map(
+          fieldsParser(path, field).map(
             fieldValue ⇒
               new PropertyUpdater(publicProperty, path, fieldValue) {
                 override def apply(vertex: Vertex, db: Database, graph: Graph, authContext: AuthContext): Try[Unit] =
