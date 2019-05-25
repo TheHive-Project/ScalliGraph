@@ -243,25 +243,28 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs:
     val subMap: Map[Any, Output[Map[String, Any]]] = l
       .asScala
       .map(_.asScala)
-      .map { e ⇒
+      .flatMap { e ⇒
         val key = e.head
-        val values = subAggs
-          .asInstanceOf[Seq[Aggregation[Any, Any]]]
-          .zip(e.tail)
-          .map { case (a, r) ⇒ a.name → a.output(r).toOutput }
-          .toMap
-        val jsValues =
-          subAggs
+        if (key != "") { // maybe should be compared with property.mapping.noValue but property is not accessible here
+          val values = subAggs
             .asInstanceOf[Seq[Aggregation[Any, Any]]]
             .zip(e.tail)
-            .foldLeft(JsObject.empty) {
-              case (acc, (ar, r)) ⇒
-                ar.output(r).toJson match {
-                  case o: JsObject ⇒ acc ++ o
-                  case v           ⇒ acc + (ar.name → v)
-                }
-            }
-        key → Output(values, jsValues)
+            .map { case (a, r) ⇒ a.name → a.output(r).toOutput }
+            .toMap
+          val jsValues =
+            subAggs
+              .asInstanceOf[Seq[Aggregation[Any, Any]]]
+              .zip(e.tail)
+              .foldLeft(JsObject.empty) {
+                case (acc, (ar, r)) ⇒
+                  ar.output(r).toJson match {
+                    case o: JsObject ⇒ acc ++ o
+                    case v ⇒ acc + (ar.name → v)
+                  }
+              }
+          Some(key → Output(values, jsValues))
+        }
+        else None
       }
       .toMap
 
