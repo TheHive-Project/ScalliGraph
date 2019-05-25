@@ -1,15 +1,14 @@
 package org.thp.scalligraph.query
 
-import scala.reflect.runtime.{universe ⇒ ru}
-
-import play.api.libs.json.{JsNull, Json}
-
 import gremlin.scala.Graph
 import org.scalactic._
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
-import org.thp.scalligraph.models.ResultWithTotalSize
+import org.thp.scalligraph.models.PagedResult
+import play.api.libs.json.{JsNull, Json}
+
+import scala.reflect.runtime.{universe ⇒ ru}
 
 abstract class QueryExecutor { executor ⇒
   val version: (Int, Int)                          = 1 → 1
@@ -44,8 +43,8 @@ abstract class QueryExecutor { executor ⇒
           val subType = RichType.getTypeArgs(tpe, ru.typeOf[Option[_]]).head
           toOutput(v, subType, authContext)
         }
-      case ResultWithTotalSize(result, _) ⇒
-        val subType = RichType.getTypeArgs(tpe, ru.typeOf[ResultWithTotalSize[_]]).head
+      case PagedResult(result, _) ⇒
+        val subType = RichType.getTypeArgs(tpe, ru.typeOf[PagedResult[_]]).head
         val seqType = ru.appliedType(ru.typeOf[Seq[_]].typeConstructor, subType)
         val lOutput = toOutput(result, seqType, authContext)
         Output(value, lOutput.toJson)
