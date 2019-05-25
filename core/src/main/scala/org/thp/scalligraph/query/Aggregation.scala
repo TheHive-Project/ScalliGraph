@@ -259,12 +259,11 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs:
                 case (acc, (ar, r)) ⇒
                   ar.output(r).toJson match {
                     case o: JsObject ⇒ acc ++ o
-                    case v ⇒ acc + (ar.name → v)
+                    case v           ⇒ acc + (ar.name → v)
                   }
               }
           Some(key → Output(values, jsValues))
-        }
-        else None
+        } else None
       }
       .toMap
 
