@@ -118,7 +118,7 @@ object FieldsParser extends FieldsParserLowPrio {
               properties
                 .find(_.propertyName == propertyName)
                 .flatMap(_.updateFieldsParser)
-                .map(_.apply(path, value))
+                .map(_.apply(path, value).badMap(_.map(_.withName(propertyName))))
             case _ ⇒ None
           }
           .toSeq

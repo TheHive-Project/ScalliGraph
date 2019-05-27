@@ -215,10 +215,9 @@ class FieldsParserMacroTest extends Specification with TestUtils {
       .property[String]("p2")(_.simple.updatable)
       .build
     val updateFieldsParser = FieldsParser.update("xxx", properties)
-    val r                  = updateFieldsParser(Field(Json.obj("yy" → "plop", "p1" → 10))).toEither
-    r must beLeft.like {
-      case One(InvalidFormatAttributeError("string", "string", _, FNumber(10))) ⇒ ok
-    }
+    val r                  = updateFieldsParser(Field(Json.obj("yy" → "plop", "p1" → 10)))
+    val expected = Bad(One(InvalidFormatAttributeError("p1", "string", Set("string"), FNumber(10))))
+    r must_=== expected
   }
 
   "update several fields" in {
