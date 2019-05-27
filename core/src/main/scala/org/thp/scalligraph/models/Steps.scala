@@ -1,24 +1,21 @@
 package org.thp.scalligraph.models
 
-import java.util.{Date, UUID, Collection ⇒ JCollection, List ⇒ JList, Map ⇒ JMap, Set ⇒ JSet}
-
-import scala.collection.JavaConverters._
-import scala.reflect.ClassTag
-import scala.reflect.runtime.{universe ⇒ ru}
-import scala.util.{Failure, Success, Try}
-
-import play.api.Logger
+import java.util.{Date, UUID, Collection ⇒ JCollection, List ⇒ JList, Map ⇒ JMap}
 
 import gremlin.scala._
 import gremlin.scala.dsl._
-import org.apache.tinkerpop.gremlin.process.traversal.Scope
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.query.PropertyUpdater
 import org.thp.scalligraph.services.RichElement
 import org.thp.scalligraph.{AuthorizationError, InternalError, NotFoundError}
+import play.api.Logger
 import shapeless._
 
-case class ResultWithTotalSize[R](result: Seq[R], totalSize: Long)
+import scala.reflect.ClassTag
+import scala.reflect.runtime.{universe ⇒ ru}
+import scala.util.{Failure, Success, Try}
+
+case class PagedResult[R](result: Seq[R], totalSize: Option[Long])
 
 final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])
     extends Steps[T, T, HNil](raw)(SingleMapping[T, T](null.asInstanceOf[T]))
@@ -37,23 +34,31 @@ final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])
     super.toList()
   }
 
-  override def range(from: Long, to: Long): ScalarSteps[T] = new ScalarSteps(raw.range(from, to))
+  override def range(from: Long, to: Long): ScalarSteps[T] =
+    if (from == 0 && to == Long.MaxValue) this
+    else new ScalarSteps(raw.range(from, to))
 
-  override def page(from: Long, to: Long): ResultWithTotalSize[T] = {
-    val byValues =
-      if (to == Long.MaxValue) By(__[JSet[T]])
-      else By(__[JSet[T]].range(Scope.local, from, to))
-    val label = StepLabel[JSet[T]]()
-    val query = raw
-      .aggregate(label)
-      .cap(label)
-      .project(
-        _.apply(byValues)
-          .and(By(__.count(Scope.local)))
-      )
-    logger.debug(s"Execution of $query")
-    val (l, s) = query.head()
-    ResultWithTotalSize(l.asScala.toSeq, s)
+  override def page(from: Long, to: Long, withTotal: Boolean): PagedResult[T] = {
+    logger.debug(s"Execution of $raw")
+    val size   = if (withTotal) Some(raw.clone().count().head.toLong) else None
+    val values = range(from, to).toList
+    PagedResult(values, size)
+//
+//
+//    val byValues =
+//      if (to == Long.MaxValue) By(__[JSet[T]])
+//      else By(__[JSet[T]].range(Scope.local, from, to))
+//    val label = StepLabel[JSet[T]]()
+//    val query = raw
+//      .aggregate(label)
+//      .cap(label)
+//      .project(
+//        _.apply(byValues)
+//          .and(By(__.count(Scope.local)))
+//      )
+//    logger.debug(s"Execution of $query")
+//    val (l, s) = query.head()
+//    ResultWithTotalSize(l.asScala.toSeq, s)
   }
 
   override def head(): T = {
@@ -81,7 +86,7 @@ trait ScalliSteps[EndDomain, EndGraph, ThisStep <: AnyRef] { _: ThisStep ⇒
   val raw: GremlinScala[EndGraph]
   def toList(): Seq[EndDomain]
   def range(from: Long, to: Long): ThisStep
-  def page(from: Long, to: Long): ResultWithTotalSize[EndDomain]
+  def page(from: Long, to: Long, withTotal: Boolean): PagedResult[EndDomain]
   def head(): EndDomain
   def headOption(): Option[EndDomain]
 
@@ -150,12 +155,15 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
 
 //  def filter(f: EntityFilter): ThisStep = newInstance(f(raw))
 
-  override def range(from: Long, to: Long): ThisStep = newInstance(raw.range(from, to))
+  override def range(from: Long, to: Long): ThisStep =
+    if (from == 0 && to == Long.MaxValue) this
+    else newInstance(raw.range(from, to))
 
-  override def page(from: Long, to: Long): ResultWithTotalSize[E with Entity] = {
-    val size   = raw.clone.count().head()
-    val result = range(from, to).toList()
-    ResultWithTotalSize(result, size)
+  override def page(from: Long, to: Long, withTotal: Boolean): PagedResult[E with Entity] = {
+    logger.debug(s"Execution of $raw")
+    val size   = if (withTotal) Some(raw.clone().count().head.toLong) else None
+    val values = range(from, to).toList
+    PagedResult(values, size)
 //    val byValues = if (to == Long.MaxValue) By(__[JSet[EndGraph]])
 //    else By(__[JSet[EndGraph]].range(Scope.local, from, to))
 //    val label = StepLabel[JSet[EndGraph]]()
