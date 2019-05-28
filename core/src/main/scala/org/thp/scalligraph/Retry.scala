@@ -17,7 +17,7 @@ object Retry {
         logger.warn(s"An error occurs (${e.getMessage}), retrying ($n)")
         apply(n - 1, exceptions: _*)(fn)
       case e: Throwable if n > 0 ⇒
-        logger.error(s"uncatch error, not retrying", e)
+        logger.error(s"uncaught error, not retrying", e)
         Failure(e)
     }
 }
