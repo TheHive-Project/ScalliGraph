@@ -17,6 +17,8 @@ abstract class VertexSrv[V <: Product: ru.TypeTag, S <: BaseVertexSteps[V, S]](i
 
   def initSteps(implicit graph: Graph): S = steps(db.vertexStep(graph, model))
 
+  def get(vertex: Vertex)(implicit graph: Graph): S = initSteps.get(vertex)
+
   def create(e: V)(implicit graph: Graph, authContext: AuthContext): V with Entity =
     db.createVertex[V](graph, authContext, model, e)
 
