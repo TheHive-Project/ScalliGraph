@@ -2,12 +2,12 @@ package org.thp.scalligraph.query
 
 import scala.reflect.runtime.{universe ⇒ ru}
 import scala.util.{Success, Try}
-
 import gremlin.scala.{Graph, GremlinScala, Vertex}
 import org.thp.scalligraph.FPath
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.FieldsParser
 import org.thp.scalligraph.models.{BaseVertexSteps, Database, Mapping, UniMapping}
+import play.api.libs.json.{JsObject, Json}
 
 class PropertyBuilder[S <: BaseVertexSteps[_, S]: ru.TypeTag, D](propertyName: String, mapping: UniMapping[D]) {
 
@@ -35,7 +35,7 @@ class SimpleUpdatePropertyBuilder[S <: BaseVertexSteps[_, S]: ru.TypeTag, D, G](
         Some(PropertyUpdater(fieldsParser, property) {
           (property: PublicProperty[D, _], _: FPath, value: D, vertex: Vertex, db: Database, _: Graph, _: AuthContext) ⇒
             db.setProperty(vertex, fieldName, value, property.mapping)
-            Success(())
+            Success(Json.obj(fieldName → value.toString))
         })
     )
 }
@@ -56,7 +56,7 @@ class UpdatePropertyBuilder[S <: BaseVertexSteps[_, S]: ru.TypeTag, D, G](
     )
 
   def custom[V](
-      f: (PublicProperty[D, _], FPath, V, Vertex, Database, Graph, AuthContext) ⇒ Try[Unit]
+      f: (PublicProperty[D, _], FPath, V, Vertex, Database, Graph, AuthContext) ⇒ Try[JsObject]
   )(implicit fieldsParser: FieldsParser[V]): PublicProperty[D, G] =
     new PublicProperty[D, G](
       ru.typeOf[S],

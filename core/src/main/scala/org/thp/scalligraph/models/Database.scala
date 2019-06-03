@@ -30,6 +30,9 @@ trait Database {
   def tryTransaction[A](body: Graph ⇒ Try[A]): Try[A]
   def transaction[A](body: Graph ⇒ A): A = tryTransaction(graph ⇒ Try(body(graph))).get
 
+  def onSuccessTransaction(graph: Graph)(body: () ⇒ Unit): Unit
+  def executeTransactionCallbacks(graph: Graph): Unit
+
   def version: Int
   def setVersion(v: Int): Unit
 
@@ -54,13 +57,13 @@ trait Database {
       to: TO with Entity
   ): E with Entity
 
-  def update(
+  def update[E <: Product](
       elementTraversal: GremlinScala[_ <: Element],
       fields: Seq[(String, Any)],
-      model: Model,
+      model: Model.Base[E],
       graph: Graph,
       authContext: AuthContext
-  ): Try[Unit]
+  ): Try[E with Entity]
 
   def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D
   def getOptionProperty[D, G](element: Element, key: String, mapping: OptionMapping[D, G]): Option[D]
@@ -105,6 +108,22 @@ abstract class BaseDatabase extends Database {
 
   val binaryMapping: SingleMapping[Array[Byte], String] =
     SingleMapping[Array[Byte], String]("", data ⇒ Some(Base64.getEncoder.encodeToString(data)), Base64.getDecoder.decode)
+
+  protected var transactionSuccessCallback: List[(Graph, () ⇒ Unit)] = Nil
+  protected val transactionSuccessCallbackLock                       = new Object
+
+  override def onSuccessTransaction(graph: Graph)(body: () ⇒ Unit): Unit = transactionSuccessCallbackLock.synchronized {
+    transactionSuccessCallback = (graph → body) :: transactionSuccessCallback
+  }
+
+  override def executeTransactionCallbacks(graph: Graph): Unit = transactionSuccessCallbackLock.synchronized {
+    transactionSuccessCallback = transactionSuccessCallback.filter {
+      case (`graph`, callback) ⇒
+        callback()
+        false
+      case _ ⇒ true
+    }
+  }
 
   override def version: Int = transaction(graph ⇒ graph.variables.get[Int]("version").orElse(0))
 
@@ -184,13 +203,13 @@ abstract class BaseDatabase extends Database {
     }
   }
 
-  def update(
+  override def update[E <: Product](
       elementTraversal: GremlinScala[_ <: Element],
       fields: Seq[(String, Any)],
-      model: Model,
+      model: Model.Base[E],
       graph: Graph,
       authContext: AuthContext
-  ): Try[Unit] =
+  ): Try[E with Entity] =
     elementTraversal
       .getOrFail
       .flatMap { element ⇒
@@ -216,7 +235,7 @@ abstract class BaseDatabase extends Database {
           .map { _ ⇒
             setOptionProperty(element, "_updatedAt", Some(new Date), updatedAtMapping)
             setOptionProperty(element, "_updatedBy", Some(authContext.userId), updatedByMapping)
-            ()
+            model.toDomain(element.asInstanceOf[model.ElementType])(this)
           }
       }
 

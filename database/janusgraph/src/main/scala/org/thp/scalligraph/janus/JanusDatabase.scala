@@ -54,15 +54,20 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
         MDC.remove("tx")
         a
       }.flatten
-        .recoverWith {
-          case t: PermanentLockingException ⇒ Failure(new DatabaseException(cause = t))
-          case t: SchemaViolationException  ⇒ Failure(new DatabaseException(cause = t))
-          case e: Throwable ⇒
-            logger.error(s"Exception raised, rollback (${e.getMessage})")
-            Try(tx.rollback())
-            MDC.remove("tx")
-            Failure(e)
-        }
+        .transform(
+          { r ⇒
+            executeTransactionCallbacks(tx)
+            Success(r)
+          }, {
+            case t: PermanentLockingException ⇒ Failure(new DatabaseException(cause = t))
+            case t: SchemaViolationException  ⇒ Failure(new DatabaseException(cause = t))
+            case e: Throwable ⇒
+              logger.error(s"Exception raised, rollback (${e.getMessage})")
+              Try(tx.rollback())
+              MDC.remove("tx")
+              Failure(e)
+          }
+        )
     }
 
   private def createEntityProperties(mgmt: JanusGraphManagement): Unit = {

@@ -195,7 +195,7 @@ class FieldsParserMacroTest extends Specification with TestUtils {
         prop.propertyName must_=== "p1"
         path must_=== FPath("sp2")
         value must_== "yop"
-        Success(())
+        Success(Json.obj("p2" → "yop"))
       })
       .build
     val updateFieldsParser = FieldsParser.update("xxx", properties)
@@ -216,7 +216,7 @@ class FieldsParserMacroTest extends Specification with TestUtils {
       .build
     val updateFieldsParser = FieldsParser.update("xxx", properties)
     val r                  = updateFieldsParser(Field(Json.obj("yy" → "plop", "p1" → 10)))
-    val expected = Bad(One(InvalidFormatAttributeError("p1", "string", Set("string"), FNumber(10))))
+    val expected           = Bad(One(InvalidFormatAttributeError("p1", "string", Set("string"), FNumber(10))))
     r must_=== expected
   }
 

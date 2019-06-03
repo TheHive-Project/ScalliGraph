@@ -9,6 +9,7 @@ import org.thp.scalligraph.query.PropertyUpdater
 import org.thp.scalligraph.services.RichElement
 import org.thp.scalligraph.{AuthorizationError, InternalError, NotFoundError}
 import play.api.Logger
+import play.api.libs.json.JsObject
 import shapeless._
 
 import scala.reflect.ClassTag
@@ -139,7 +140,7 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
 
   def get(id: String): ThisStep = newInstance(raw.has(Key("_id") of id))
 
-  def update(fields: (String, Any)*)(implicit authContext: AuthContext): Try[Unit] =
+  def update(fields: (String, Any)*)(implicit authContext: AuthContext): Try[E with Entity] =
     db.update(raw, fields, db.getModel[E], graph, authContext)
 
   override def map[T: ClassTag](f: E with Entity ⇒ T): ScalarSteps[T] = {
@@ -222,17 +223,19 @@ abstract class BaseVertexSteps[E <: Product: ru.TypeTag, ThisStep <: BaseVertexS
 
   def get(vertex: Vertex): ThisStep = newInstance(raw.V(vertex))
 
-  def updateProperties(propertyUpdaters: Seq[PropertyUpdater])(implicit authContext: AuthContext): Try[Unit] =
-    raw.headOption().fold[Try[Unit]](Failure(NotFoundError(s"$typeName not found"))) { vertex ⇒
+  private[scalligraph] def updateProperties(propertyUpdaters: Seq[PropertyUpdater])(implicit authContext: AuthContext): Try[(ThisStep, JsObject)] = {
+    val myClone = clone()
+    raw.headOption().fold[Try[(ThisStep, JsObject)]](Failure(NotFoundError(s"$typeName not found"))) { vertex ⇒
       logger.trace(s"Update ${vertex.id()} by ${authContext.userId}")
       propertyUpdaters
         .toTry(u ⇒ u(vertex, db, graph, authContext))
-        .map { _ ⇒
+        .map { o ⇒
           db.setOptionProperty(vertex, "_updatedAt", Some(new Date), db.updatedAtMapping)
           db.setOptionProperty(vertex, "_updatedBy", Some(authContext.userId), db.updatedByMapping)
-          ()
+          myClone → o.reduce(_ ++ _)
         }
     }
+  }
 }
 
 final class VertexSteps[E <: Product: ru.TypeTag](raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph)

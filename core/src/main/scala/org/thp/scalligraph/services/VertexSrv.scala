@@ -1,10 +1,13 @@
 package org.thp.scalligraph.services
 
 import scala.reflect.runtime.{universe ⇒ ru}
-
 import gremlin.scala._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
+import org.thp.scalligraph.query.PropertyUpdater
+import play.api.libs.json.JsObject
+
+import scala.util.Try
 
 abstract class VertexSrv[V <: Product: ru.TypeTag, S <: BaseVertexSteps[V, S]](implicit db: Database) extends ElementSrv[V, S] {
 
@@ -22,4 +25,10 @@ abstract class VertexSrv[V <: Product: ru.TypeTag, S <: BaseVertexSteps[V, S]](i
   def getInitialValues: Seq[InitialValue[V]] = initialValues.map(v ⇒ InitialValue(model, v))
 
   def createInitialValues()(implicit graph: Graph, authContext: AuthContext): Unit = initialValues.foreach(create)
+
+  def update(steps: S ⇒ S, propertyUpdaters: Seq[PropertyUpdater])(implicit graph: Graph, authContext: AuthContext): Try[(S, JsObject)] =
+    update(steps(initSteps), propertyUpdaters)
+
+  def update(steps: S, propertyUpdaters: Seq[PropertyUpdater])(implicit graph: Graph, authContext: AuthContext): Try[(S, JsObject)] =
+    steps.updateProperties(propertyUpdaters)
 }
