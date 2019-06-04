@@ -232,7 +232,7 @@ abstract class BaseVertexSteps[E <: Product: ru.TypeTag, ThisStep <: BaseVertexS
         .map { o ⇒
           db.setOptionProperty(vertex, "_updatedAt", Some(new Date), db.updatedAtMapping)
           db.setOptionProperty(vertex, "_updatedBy", Some(authContext.userId), db.updatedByMapping)
-          myClone → o.reduce(_ ++ _)
+          myClone → o.reduceOption(_ ++ _).getOrElse(JsObject.empty)
         }
     }
   }
