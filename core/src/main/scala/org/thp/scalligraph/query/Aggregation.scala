@@ -8,13 +8,14 @@ import scala.reflect.runtime.{universe ⇒ ru}
 
 import play.api.libs.json.{JsNumber, JsObject, Json, Writes}
 
-import gremlin.scala.{__, By, GremlinScala, Vertex}
+import gremlin.scala.{__, By, GremlinScala, StepLabel, Vertex}
 import org.scalactic.Accumulation.withGood
 import org.scalactic.{Bad, One}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FObject, FString, Field, FieldsParser}
 import org.thp.scalligraph.models.{ScalarSteps, ScalliSteps}
 import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError, Output}
+import shapeless.HNil
 
 object GroupAggregation {
 
@@ -228,10 +229,14 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs:
       fromStep: ScalliSteps[_, _, _],
       authContext: AuthContext
   ): ScalarSteps[JList[JCollection[Any]]] = {
-    val property = getProperty(publicProperties, stepType, fieldName).asInstanceOf[PublicProperty[_, Any]]
-    fromStep
-      .groupBy(__[Vertex].coalesce(property.get(_, authContext), _.constant(property.mapping.noValue))) // Map[K, List[V]]
-      .unfold[JMap.Entry[Any, JCollection[Any]]]                                                        // Map.Entry[K, List[V]]
+    val property     = getProperty(publicProperties, stepType, fieldName).asInstanceOf[PublicProperty[_, Any]]
+    val elementLabel = StepLabel[Vertex]()
+    val groupedVertices: GremlinScala[JMap.Entry[Any, JCollection[Any]]] = property
+      .get(fromStep.raw.asInstanceOf[GremlinScala.Aux[Vertex, HNil]].as(elementLabel), authContext)
+      .group(By(), By(__.select(elementLabel).fold()))
+      .unfold[JMap.Entry[Any, JCollection[Any]]] // Map.Entry[K, List[V]]
+
+    ScalarSteps(groupedVertices)
       .project[Any](
         By(__[JMap.Entry[Any, Any]].selectKeys) +: subAggs
           .map(a ⇒ By(a.apply(publicProperties, stepType, ScalarSteps(__[JMap[Any, Any]].selectValues.unfold()), authContext).raw)): _*
