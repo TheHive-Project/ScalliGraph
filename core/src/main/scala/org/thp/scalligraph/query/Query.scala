@@ -134,6 +134,6 @@ trait InputQuery {
 
   def getProperty(properties: Seq[PublicProperty[_, _]], stepType: ru.Type, fieldName: String): PublicProperty[_, _] =
     properties
-      .find(p ⇒ p.stepType =:= stepType && p.propertyName == fieldName)
+      .find(p ⇒ p.stepType =:= stepType && p.propertyName == fieldName.takeWhile(_ != '.'))
       .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))
 }
