@@ -212,8 +212,7 @@ class DefaultAuthenticateSrv @Inject()(configuration: Configuration, userSrv: Us
     (if (authBySessionCookie) Seq("session" → getFromSession _) else Nil) ++
       (if (authByPki) Seq("pki"             → getFromClientCertificate _) else Nil) ++
       (if (authByKey) Seq("key"             → getFromApiKey _) else Nil) ++
-      (if (authByBasicAuth) Seq("basic"     → getFromBasicAuth _) else Nil) ++
-      (if (authByInitialUser) Seq("init"    → userSrv.getInitialUser _) else Nil)
+      (if (authByBasicAuth) Seq("basic"     → getFromBasicAuth _) else Nil)
 
   override def getAuthContext(request: RequestHeader): Try[AuthContext] =
     authenticationMethods
