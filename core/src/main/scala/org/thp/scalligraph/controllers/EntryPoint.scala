@@ -3,7 +3,6 @@ package org.thp.scalligraph.controllers
 import akka.stream.Materializer
 import gremlin.scala.Graph
 import javax.inject.{Inject, Singleton}
-import org.slf4j.MDC
 import org.thp.scalligraph.AttributeCheckingError
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.record.Record
@@ -75,7 +74,6 @@ class EntryPoint @Inject()(
       */
     def auth(block: AuthenticatedRequest[Record[V]] ⇒ Try[Result]): Action[AnyContent] =
       actionBuilder.async { request ⇒
-        MDC.put("request", f"${request.id}%08x")
         val result = for {
           authContext ← authenticateSrv.getAuthContext(request)
           values      ← fieldsParser(Field(request)).badMap(errors ⇒ AttributeCheckingError(errors.toSeq)).toTry
@@ -83,7 +81,6 @@ class EntryPoint @Inject()(
           result ← block(authRequest)
           authResult = authenticateSrv.setSessingUser(result, authContext)(request)
         } yield authResult
-        MDC.remove("request")
         result.fold[Future[Result]](errorHandler.onServerError(request, _), Future.successful)
       }
 
@@ -95,13 +92,11 @@ class EntryPoint @Inject()(
       */
     def async(block: Request[Record[V]] ⇒ Future[Result]): Action[AnyContent] =
       actionBuilder.async { request ⇒
-        MDC.put("request", f"${request.id}%08x")
         fieldsParser(Field(request))
           .fold[Future[Result]](
             values ⇒ block(request.map(_ ⇒ Record(values))),
             errors ⇒ Future.successful(BadRequest(Json.toJson(AttributeCheckingError(errors.toSeq))))
           )
-          .andThen { case _ ⇒ MDC.remove("request") }
       }
 
     /**
@@ -120,13 +115,11 @@ class EntryPoint @Inject()(
         db: Database
     )(block: AuthenticatedRequest[Record[V]] ⇒ Graph ⇒ Try[Result]): Action[AnyContent] =
       apply { request ⇒
-        MDC.put("request", f"${request.id}%08x")
         val result = authenticateSrv.getAuthContext(request).flatMap { authContext ⇒
           val authReq = new AuthenticatedRequest(authContext, request)
           db.tryTransaction(graph ⇒ block(authReq)(graph))
             .map(result ⇒ authenticateSrv.setSessingUser(result, authContext)(request))
         }
-        MDC.remove("request")
         result
       }
   }

@@ -8,10 +8,12 @@ import play.api.mvc._
 
 import akka.stream.Materializer
 import javax.inject.Inject
+import org.slf4j.MDC
 
 class AccessLogFilter @Inject()(implicit val mat: Materializer, ec: ExecutionContext) extends Filter {
 
   def apply(nextFilter: RequestHeader ⇒ Future[Result])(requestHeader: RequestHeader): Future[Result] = {
+    MDC.put("request", f"${requestHeader.id}%08x")
 
     val startTime = System.currentTimeMillis
 
@@ -24,6 +26,7 @@ class AccessLogFilter @Inject()(implicit val mat: Materializer, ec: ExecutionCon
         .contentLength
         .fold("")(_ + " bytes")}")
 
+      MDC.remove("request")
       result.withHeaders("Request-Time" → requestTime.toString)
     }
   }
