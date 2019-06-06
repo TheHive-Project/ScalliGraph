@@ -10,7 +10,7 @@ import javax.inject.{Inject, Provider, Singleton}
 import org.thp.scalligraph.{AuthenticationError, AuthorizationError, OAuth2Redirect}
 
 object AuthCapability extends Enumeration {
-  val changePassword, setPassword = Value
+  val changePassword, setPassword, authByKey = Value
 }
 
 trait AuthSrv {
@@ -32,13 +32,13 @@ trait AuthSrv {
   def setPassword(username: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] =
     Failure(AuthorizationError("Operation not supported"))
 
-  def renewKey(username: String)(implicit request: RequestHeader): Try[String] =
+  def renewKey(username: String)(implicit authContext: AuthContext): Try[String] =
     Failure(AuthorizationError("Operation not supported"))
 
-  def getKey(username: String)(implicit request: RequestHeader): Try[String] =
+  def getKey(username: String)(implicit authContext: AuthContext): Try[String] =
     Failure(AuthorizationError("Operation not supported"))
 
-  def removeKey(username: String)(implicit request: RequestHeader): Try[Unit] =
+  def removeKey(username: String)(implicit authContext: AuthContext): Try[Unit] =
     Failure(AuthorizationError("Operation not supported"))
 }
 
@@ -96,12 +96,12 @@ class MultiAuthSrv(val authProviders: immutable.Set[AuthSrv]) extends AuthSrv {
   override def setPassword(username: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] =
     forAllAuthProvider(_.setPassword(username, newPassword))
 
-  override def renewKey(username: String)(implicit request: RequestHeader): Try[String] =
+  override def renewKey(username: String)(implicit authContext: AuthContext): Try[String] =
     forAllAuthProvider(_.renewKey(username))
 
-  override def getKey(username: String)(implicit request: RequestHeader): Try[String] =
+  override def getKey(username: String)(implicit authContext: AuthContext): Try[String] =
     forAllAuthProvider(_.getKey(username))
 
-  override def removeKey(username: String)(implicit request: RequestHeader): Try[Unit] =
+  override def removeKey(username: String)(implicit authContext: AuthContext): Try[Unit] =
     forAllAuthProvider(_.removeKey(username))
 }
