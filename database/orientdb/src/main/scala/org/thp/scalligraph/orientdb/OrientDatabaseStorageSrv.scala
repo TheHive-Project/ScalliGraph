@@ -3,13 +3,14 @@ import java.io.InputStream
 import java.util.{List ⇒ JList}
 
 import scala.collection.JavaConverters._
+import scala.util.{Success, Try}
 
 import play.api.Configuration
 
 import com.orientechnologies.orient.core.db.record.OIdentifiable
 import com.orientechnologies.orient.core.intent.OIntentMassiveInsert
 import com.orientechnologies.orient.core.record.impl.ORecordBytes
-import gremlin.scala.{Graph, Key, Vertex, _}
+import gremlin.scala.{Graph, Key, _}
 import javax.inject.{Inject, Singleton}
 import org.apache.tinkerpop.gremlin.orientdb.OrientGraph
 import org.thp.scalligraph.services.StorageSrv
@@ -47,7 +48,7 @@ class OrientDatabaseStorageSrv(db: OrientDatabase, chunkSize: Int) extends Stora
         }
     }
 
-  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex = {
+  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit] = {
     val odb = graph.asInstanceOf[OrientGraph].database()
 
     odb.declareIntent(new OIntentMassiveInsert)
@@ -65,6 +66,6 @@ class OrientDatabaseStorageSrv(db: OrientDatabase, chunkSize: Int) extends Stora
     val v = graph.addVertex(db.attachmentVertexLabel)
     v.property("_id", id)
     v.property(db.attachmentPropertyName, chunkIds.asJava)
-    v
+    Success(())
   }
 }

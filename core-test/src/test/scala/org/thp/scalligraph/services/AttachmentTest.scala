@@ -42,12 +42,14 @@ class AttachmentTest extends Specification {
     s"[$dbName] attachment" should {
 
       "save and read stored data" in db.transaction { implicit graph ⇒
-        val filePath = Paths.get("../build.sbt")
+        val f1       = Paths.get("../build.sbt")
+        lazy val f2  = Paths.get("build.sbt")
+        val filePath = if (Files.exists(f1)) f1 else f2
         val is       = Files.newInputStream(filePath)
-        val v        = storageSrv.saveBinary("build.sbt-custom-id", is)
+        storageSrv.saveBinary("build.sbt-custom-id", is) must beSuccessfulTry(())
         is.close()
 
-        val is1 = storageSrv.loadBinary(v.value("_id"))
+        val is1 = storageSrv.loadBinary("build.sbt-custom-id")
         val is2 = Files.newInputStream(filePath)
         try {
           streamCompare(is1, is2) must beTrue

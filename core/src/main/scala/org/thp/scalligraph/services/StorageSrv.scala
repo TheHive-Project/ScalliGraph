@@ -1,8 +1,11 @@
 package org.thp.scalligraph.services
+
 import java.io.InputStream
 import java.net.URI
 import java.nio.file.{Files, Path, Paths}
 import java.util.{Base64, UUID}
+
+import scala.util.{Success, Try}
 
 import play.api.{Configuration, Logger}
 
@@ -11,12 +14,11 @@ import javax.inject.{Inject, Singleton}
 import org.apache.hadoop.conf.{Configuration ⇒ HadoopConfig}
 import org.apache.hadoop.fs.{FileSystem ⇒ HDFileSystem, Path ⇒ HDPath}
 import org.apache.hadoop.io.IOUtils
-import org.apache.tinkerpop.gremlin.structure.T
 import org.thp.scalligraph.models.{Database, UniMapping}
 
 trait StorageSrv {
   def loadBinary(id: String)(implicit graph: Graph): InputStream
-  def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex
+  def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit]
 }
 
 @Singleton
@@ -28,11 +30,11 @@ class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
   def loadBinary(id: String)(implicit graph: Graph): InputStream =
     Files.newInputStream(directory.resolve(id))
 
-  def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex = {
-    val id = UUID.randomUUID().toString
-    Files.copy(is, directory.resolve(id))
-    graph.addVertex(T.label, "binaryData", "_id", id)
-  }
+  def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit] =
+    Try {
+      Files.copy(is, directory.resolve(id))
+      ()
+    }
 }
 
 object HadoopStorageSrv {
@@ -65,12 +67,11 @@ class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
   override def loadBinary(id: String)(implicit graph: Graph): InputStream =
     fs.open(new HDPath(id)).getWrappedStream
 
-  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex = {
-//    val id = UUID.randomUUID().toString
-    val os = fs.create(new HDPath(location, id), false)
-    IOUtils.copyBytes(is, os, 4096)
-    graph.addVertex(T.label, "binaryData", "_id", id)
-  }
+  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit] =
+    Try {
+      val os = fs.create(new HDPath(location, id), false)
+      IOUtils.copyBytes(is, os, 4096)
+    }
 }
 
 @Singleton
@@ -81,7 +82,7 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
 
   override def loadBinary(id: String)(implicit graph: Graph): InputStream =
     new InputStream {
-      var vertex: GremlinScala[Vertex] = graph.V().has(Key("_id") of id)
+      var vertex: GremlinScala[Vertex] = graph.V().has(Key("attachmentId") of id)
       var buffer: Option[Array[Byte]]  = vertex.clone.value[String]("binary").map(Base64.getDecoder.decode).headOption()
       var index                        = 0
 
@@ -100,7 +101,7 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
         }
     }
 
-  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Vertex = {
+  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit] = {
 
     lazy val logger = Logger(getClass)
     def readNextChunk: String = {
@@ -128,16 +129,17 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
       logger.debug("Saving empty file")
       val v = graph.addVertex("binary")
       db.setSingleProperty(v, "binary", "", UniMapping.stringMapping)
+      db.setSingleProperty(v, "attachmentId", id, UniMapping.stringMapping)
       db.setSingleProperty(v, "_id", UUID.randomUUID, db.idMapping)
-      v
     } else {
       val firstVertex = chunks.next
+      db.setSingleProperty(firstVertex, "attachmentId", id, UniMapping.stringMapping)
       chunks.foldLeft(firstVertex) {
         case (previousVertex, currentVertex) ⇒
           previousVertex.addEdge("nextChunk", currentVertex)
           currentVertex
       }
-      firstVertex
     }
+    Success(())
   }
 }
