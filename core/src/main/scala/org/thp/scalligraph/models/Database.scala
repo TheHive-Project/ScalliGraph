@@ -278,7 +278,10 @@ abstract class BaseDatabase extends Database {
     mapping.toGraphOpt(value).foreach(element.property(key, _))
 
   override def setOptionProperty[D, G](element: Element, key: String, value: Option[D], mapping: OptionMapping[D, _]): Unit =
-    value.flatMap(mapping.toGraphOpt).foreach(element.property(key, _))
+    value.flatMap(mapping.toGraphOpt) match {
+      case Some(v) ⇒ element.property(key, v)
+      case None    ⇒ element.property(key).remove()
+    }
 
   override def setListProperty[D, G](element: Element, key: String, values: Seq[D], mapping: ListMapping[D, _]): Unit = {
     element.properties(key).asScala.foreach(_.remove)
