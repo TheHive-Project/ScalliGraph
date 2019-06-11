@@ -1,13 +1,14 @@
 package org.thp.scalligraph
 
 trait FPath {
-  val isEmpty: Boolean = false
+  val isEmpty: Boolean  = false
+  def nonEmpty: Boolean = !isEmpty
   def :/(elem: FPath): FPath
   def :/(elem: String): FPath = this :/ FPath(elem)
   def /:(elem: String): FPath = FPath(elem) :/ this
   def toSeq(index: Int): FPath
   def startsWith(elem: FPath): Option[FPath]
-  def matches(elem: FPath): Boolean = startsWith(elem).filter(_.isEmpty).isDefined
+  def matches(elem: FPath): Boolean = startsWith(elem).exists(_.isEmpty)
 //  def startsWith(elem: String): Boolean
 }
 
