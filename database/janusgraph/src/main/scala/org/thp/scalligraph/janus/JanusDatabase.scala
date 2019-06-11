@@ -11,6 +11,7 @@ import javax.inject.{Inject, Singleton}
 import org.apache.tinkerpop.gremlin.structure.{Edge ⇒ _, Element ⇒ _, Graph ⇒ _, Vertex ⇒ _}
 import org.janusgraph.core._
 import org.janusgraph.core.schema.{ConsistencyModifier, JanusGraphManagement, JanusGraphSchemaType, Mapping}
+import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
 import org.slf4j.MDC
 import org.thp.scalligraph._
@@ -39,36 +40,39 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
     a
   }
 
-  override def tryTransaction[A](body: Graph ⇒ Try[A]): Try[A] =
-    Retry(maxRetryOnConflict, classOf[PermanentLockingException], classOf[SchemaViolationException]) {
-      //    val tx = graph.tx()
-      //    tx.open() /*.createThreadedTx[JanusGraphTransaction]()*/
-      // Transaction is automatically open at the first operation.
-      val tx = graph.tx.createThreadedTx[JanusGraphTransaction]()
-      MDC.put("tx", f"${tx.hashCode()}%08x")
-      logger.debug("Begin of transaction")
-      Try {
-        val a = body(tx)
-        tx.commit()
-        logger.debug("End of transaction")
-        MDC.remove("tx")
-        a
-      }.flatten
-        .transform(
-          { r ⇒
-            executeTransactionCallbacks(tx)
-            Success(r)
-          }, {
-            case t: PermanentLockingException ⇒ Failure(new DatabaseException(cause = t))
-            case t: SchemaViolationException  ⇒ Failure(new DatabaseException(cause = t))
-            case e: Throwable ⇒
-              logger.error(s"Exception raised, rollback (${e.getMessage})")
-              Try(tx.rollback())
-              MDC.remove("tx")
-              Failure(e)
-          }
-        )
-    }
+  override def tryTransaction[A](body: Graph ⇒ Try[A]): Try[A] = {
+    val result =
+      Retry(maxRetryOnConflict, classOf[PermanentLockingException], classOf[SchemaViolationException], classOf[PermanentBackendException]) {
+        //    val tx = graph.tx()
+        //    tx.open() /*.createThreadedTx[JanusGraphTransaction]()*/
+        // Transaction is automatically open at the first operation.
+        val tx = graph.tx.createThreadedTx[JanusGraphTransaction]()
+        MDC.put("tx", f"${tx.hashCode()}%08x")
+        logger.debug("Begin of transaction")
+        Try {
+          val a = body(tx)
+          tx.commit()
+          logger.debug("End of transaction")
+          a
+        }.flatten
+          .transform(
+            { r ⇒
+              executeTransactionCallbacks(tx)
+              Success(r)
+            }, {
+              case t: PermanentLockingException ⇒ Failure(new DatabaseException(cause = t))
+              case t: SchemaViolationException  ⇒ Failure(new DatabaseException(cause = t))
+              case t: PermanentBackendException ⇒ Failure(new DatabaseException(cause = t))
+              case e: Throwable ⇒
+                logger.error(s"Exception raised, rollback (${e.getMessage})")
+                Try(tx.rollback())
+                Failure(e)
+            }
+          )
+      }
+    MDC.remove("tx")
+    result
+  }
 
   private def createEntityProperties(mgmt: JanusGraphManagement): Unit = {
     mgmt
