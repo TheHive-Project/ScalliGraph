@@ -11,7 +11,7 @@ import com.google.inject.name.Names
 import com.google.inject.util.Providers
 import com.typesafe.config.ConfigFactory
 import javax.inject.Provider
-import net.codingwell.scalaguice.ScalaModule
+import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
 
 class AppBuilder extends ScalaModule {
 
@@ -38,6 +38,15 @@ class AppBuilder extends ScalaModule {
     this
   }
 
+  def multiBind[T: Manifest](implementations: Class[_ <: T]*): AppBuilder = {
+    if (initialized) throw InternalError("Bind is not permitted after app use")
+    init = init.andThen { _ ⇒
+      val multiBindings = ScalaMultibinder.newSetBinder[T](binder)
+      implementations.foreach(i ⇒ multiBindings.addBinding.to(i))
+    }
+    this
+  }
+
   def bindInstance[T: Manifest](instance: T): AppBuilder = {
     if (initialized) throw InternalError("Bind is not permitted after app use")
     init = init.andThen(_ ⇒ bind[T].toInstance(instance))
@@ -53,6 +62,12 @@ class AppBuilder extends ScalaModule {
   def bindToProvider[T: Manifest](provider: Provider[T]): AppBuilder = {
     if (initialized) throw InternalError("Bind is not permitted after app use")
     init = init.andThen(_ ⇒ bind[T].toProvider(provider))
+    this
+  }
+
+  def bindToProvider[T: Manifest, TImpl <: Provider[T]: Manifest]: AppBuilder = {
+    if (initialized) throw InternalError("Bind is not permitted after app use")
+    init = init.andThen(_ ⇒ bind[T].toProvider[TImpl])
     this
   }
 
