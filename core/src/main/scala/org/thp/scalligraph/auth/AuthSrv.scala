@@ -17,13 +17,13 @@ trait AuthSrv {
   val name: String
   val capabilities = Set.empty[AuthCapability.Value]
 
-  def authenticate(username: String, password: String)(implicit request: RequestHeader): Try[AuthContext] =
+  def authenticate(username: String, password: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
     Failure(AuthenticationError("Operation not supported"))
 
-  def authenticate(key: String)(implicit request: RequestHeader): Try[AuthContext] =
+  def authenticate(key: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
     Failure(AuthenticationError("Operation not supported"))
 
-  def authenticate()(implicit request: RequestHeader): Try[AuthContext] =
+  def authenticate(organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
     Failure(AuthenticationError("Operation not supported"))
 
   def changePassword(username: String, oldPassword: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] =
@@ -65,24 +65,24 @@ class MultiAuthSrv(val authProviders: immutable.Set[AuthSrv]) extends AuthSrv {
       }
     }
 
-  override def authenticate(username: String, password: String)(implicit request: RequestHeader): Try[AuthContext] =
-    forAllAuthProvider(_.authenticate(username, password))
+  override def authenticate(username: String, password: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
+    forAllAuthProvider(_.authenticate(username, password, organisation))
       .recoverWith {
         case authError ⇒
           MultiAuthSrv.logger.error("Authentication failure", authError)
           Failure(AuthenticationError("Authentication failure"))
       }
 
-  override def authenticate(key: String)(implicit request: RequestHeader): Try[AuthContext] =
-    forAllAuthProvider(_.authenticate(key))
+  override def authenticate(key: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
+    forAllAuthProvider(_.authenticate(key, organisation))
       .recoverWith {
         case authError ⇒
           MultiAuthSrv.logger.error("Authentication failure", authError)
           Failure(AuthenticationError("Authentication failure"))
       }
 
-  override def authenticate()(implicit request: RequestHeader): Try[AuthContext] =
-    forAllAuthProvider(_.authenticate)
+  override def authenticate(organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
+    forAllAuthProvider(_.authenticate(organisation: Option[String]))
       .recoverWith {
         case e: OAuth2Redirect ⇒ Failure(e)
         case authError ⇒

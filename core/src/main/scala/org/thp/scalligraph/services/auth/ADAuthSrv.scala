@@ -98,10 +98,10 @@ class ADAuthSrv(adConnection: ADConnection, userSrv: UserSrv) extends AuthSrv {
   val name: String                                     = "ad"
   override val capabilities: Set[AuthCapability.Value] = Set(AuthCapability.changePassword)
 
-  override def authenticate(username: String, password: String)(implicit request: RequestHeader): Try[AuthContext] =
+  override def authenticate(username: String, password: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
     (for {
       _           ← adConnection.authenticate(username, password)
-      authContext ← userSrv.getFromId(request, username)
+      authContext ← userSrv.getFromId(request, username, organisation)
     } yield authContext)
       .recoverWith {
         case t ⇒

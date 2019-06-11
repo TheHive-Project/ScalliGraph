@@ -3,20 +3,20 @@ package org.thp.scalligraph.controllers
 import java.io.ByteArrayInputStream
 import java.util.{List ⇒ JList}
 
-import javax.inject.{Inject, Singleton}
-import javax.naming.ldap.LdapName
-import org.bouncycastle.asn1._
-import org.thp.scalligraph.auth._
-import org.thp.scalligraph.{AuthenticationError, Instance}
+import scala.collection.JavaConverters._
+import scala.concurrent.duration.{DurationLong, FiniteDuration}
+import scala.util.{Failure, Success, Try}
+
 import play.api.http.HeaderNames
 import play.api.libs.json.Json
 import play.api.mvc._
 import play.api.{Configuration, Logger}
 
-import scala.collection.JavaConverters._
-
-import scala.concurrent.duration.{DurationLong, FiniteDuration}
-import scala.util.{Failure, Success, Try}
+import javax.inject.{Inject, Singleton}
+import javax.naming.ldap.LdapName
+import org.bouncycastle.asn1._
+import org.thp.scalligraph.auth._
+import org.thp.scalligraph.{AuthenticationError, Instance}
 
 /**
   * A request with authentication information
@@ -62,11 +62,14 @@ class DefaultAuthenticateSrv @Inject()(configuration: Configuration, userSrv: Us
   val authByBasicAuth: Boolean             = configuration.get[Boolean]("auth.method.basic")
   val authByInitialUser: Boolean           = configuration.get[Boolean]("auth.method.init")
   val authByPki: Boolean                   = configuration.get[Boolean]("auth.method.pki")
+  val organisationHeader: String           = configuration.get[String]("auth.organisationHeader")
   val authContextSession: String           = "authContext"
 
   lazy val logger = Logger(getClass)
 
   private def now: Long = System.currentTimeMillis()
+
+  private def requestOrganisation(request: RequestHeader): Option[String] = request.headers.get(organisationHeader)
 
   /**
     * Insert or update session cookie containing user name and session expiration timestamp
@@ -123,7 +126,7 @@ class DefaultAuthenticateSrv @Inject()(configuration: Configuration, userSrv: Us
         .fold[Try[String]](Failure(AuthenticationError("Authentication header not found")))(Success.apply)
       _ ← if (!auth.startsWith("Bearer ")) Failure(AuthenticationError("Only bearer authentication is supported")) else Success(())
       key = auth.substring(7)
-      authContext ← authSrv.authenticate(key)(request)
+      authContext ← authSrv.authenticate(key, requestOrganisation(request))(request)
     } yield authContext
 
   def getFromBasicAuth(request: RequestHeader): Try[AuthContext] =
@@ -136,7 +139,7 @@ class DefaultAuthenticateSrv @Inject()(configuration: Configuration, userSrv: Us
       authWithoutBasic = auth.substring(6)
       decodedAuth      = new String(java.util.Base64.getDecoder.decode(authWithoutBasic), "UTF-8")
       authContext ← decodedAuth.split(":") match {
-        case Array(username, password) ⇒ authSrv.authenticate(username, password)(request)
+        case Array(username, password) ⇒ authSrv.authenticate(username, password, requestOrganisation(request))(request)
         case _                         ⇒ Failure(AuthenticationError("Can't decode authentication header"))
       }
     } yield authContext
@@ -194,13 +197,13 @@ class DefaultAuthenticateSrv @Inject()(configuration: Configuration, userSrv: Us
               .getRdns
               .asScala
               .collectFirst {
-                case rdn if rdn.getType == cf ⇒ userSrv.getFromId(request, rdn.getValue.toString)
+                case rdn if rdn.getType == cf ⇒ userSrv.getFromId(request, rdn.getValue.toString, requestOrganisation(request))
               }
               .orElse {
                 for {
                   san ← Option(cert.getSubjectAlternativeNames)
                   fieldValue ← san.asScala.collectFirst {
-                    case CertificateSAN(`cf`, value) ⇒ userSrv.getFromId(request, value)
+                    case CertificateSAN(`cf`, value) ⇒ userSrv.getFromId(request, value, requestOrganisation(request))
                   }
                 } yield fieldValue
               }

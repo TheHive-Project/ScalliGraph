@@ -103,10 +103,10 @@ class LdapAuthSrv(ldapConnection: LdapConnection, userSrv: UserSrv, implicit val
   val name                                             = "ldap"
   override val capabilities: Set[AuthCapability.Value] = Set(AuthCapability.changePassword)
 
-  override def authenticate(username: String, password: String)(implicit request: RequestHeader): Try[AuthContext] =
+  override def authenticate(username: String, password: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
     ldapConnection
       .authenticate(username, password)
-      .flatMap(_ ⇒ userSrv.getFromId(request, username))
+      .flatMap(_ ⇒ userSrv.getFromId(request, username, organisation))
       .recoverWith {
         case t ⇒
           logger.error("LDAP authentication failure", t)
