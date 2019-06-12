@@ -199,12 +199,12 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
           createElementLabels(mgmt, models)
           createEntityProperties(mgmt)
           createProperties(mgmt, models)
-          logger.debug("Creating unique index on fields _id")
-          mgmt
-            .buildIndex("_id_vertex_index", classOf[Vertex])
-            .addKey(mgmt.getPropertyKey("_id"))
-            .unique()
-            .buildCompositeIndex()
+//          logger.debug("Creating unique index on fields _id")
+//          mgmt
+//            .buildIndex("_id_vertex_index", classOf[Vertex])
+//            .addKey(mgmt.getPropertyKey("_id"))
+//            .unique()
+//            .buildCompositeIndex()
 //            mgmt
 //              .buildIndex("_id_edge_index", classOf[Edge])
 //              .addKey(mgmt.getPropertyKey("_id"))
@@ -214,21 +214,32 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
             .buildIndex("_label_vertex_index", classOf[Vertex])
             .addKey(mgmt.getPropertyKey("_label"))
             .buildCompositeIndex()
-          mgmt
-            .buildIndex("_label_edge_index", classOf[Edge])
-            .addKey(mgmt.getPropertyKey("_label"))
-            .buildCompositeIndex()
+//          mgmt
+//            .buildIndex("_label_edge_index", classOf[Edge])
+//            .addKey(mgmt.getPropertyKey("_label"))
+//            .buildCompositeIndex()
 
-          for {
-            model                   ← models
-            (indexType, properties) ← model.indexes
-          } model match {
-            case _: VertexModel     ⇒ createIndex(mgmt, classOf[Vertex], mgmt.getVertexLabel(model.label), indexType, properties)
-            case _: EdgeModel[_, _] ⇒ createIndex(mgmt, classOf[Edge], mgmt.getEdgeLabel(model.label), indexType, properties)
+          models.foreach {
+            case model: VertexModel ⇒
+              val vertexLabel = mgmt.getVertexLabel(model.label)
+              mgmt
+                .buildIndex(s"_id_${model.label}_index", classOf[Vertex])
+                .indexOnly(vertexLabel)
+                .addKey(mgmt.getPropertyKey("_id"))
+                .unique()
+                .buildCompositeIndex()
+              model.indexes.foreach {
+                case (indexType, properties) ⇒ createIndex(mgmt, classOf[Vertex], vertexLabel, indexType, properties)
+              }
+            case model: EdgeModel[_, _] ⇒
+              val edgeLabel = mgmt.getEdgeLabel(model.label)
+              model.indexes.foreach {
+                case (indexType, properties) ⇒ createIndex(mgmt, classOf[Edge], edgeLabel, indexType, properties)
+              }
           }
+
           // TODO add index for labels when it will be possible
           // cf. https://github.com/JanusGraph/janusgraph/issues/283
-          ()
           mgmt.commit()
         }
         Success(())
