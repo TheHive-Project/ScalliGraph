@@ -1,10 +1,15 @@
 package org.thp.scalligraph.models
 
+import scala.collection.JavaConverters._
+import scala.reflect.runtime.{universe ⇒ ru}
+
 import play.api.Logger
 
 import gremlin.scala.Graph
-import javax.inject.{Inject, Named, Singleton}
-import org.thp.scalligraph.auth.{AuthContext, UserSrv}
+import org.reflections.Reflections
+import org.reflections.scanners.SubTypesScanner
+import org.reflections.util.ConfigurationBuilder
+import org.thp.scalligraph.auth.AuthContext
 
 case class InitialValue[V <: Product](model: Model.Vertex[V], value: V) {
 
@@ -19,12 +24,30 @@ trait Schema {
   def init(implicit graph: Graph, authContext: AuthContext): Unit = ()
 }
 
-@Singleton
-class SchemaChecker @Inject()(@Named("schemaVersion") version: Int, schema: Schema, db: Database, userSrv: UserSrv) {
-  val currentVersion: Int = db.version
-  if (currentVersion < version) {
-    Logger(getClass).info(s"Database schema version is outdated ($currentVersion). Upgrading to $version ...")
-    db.createSchemaFrom(schema)(userSrv.initialAuthContext)
-    db.setVersion(version)
-  }
+class ReflectionSchema(classLoader: ClassLoader, packages: String*) extends Schema {
+
+  lazy val logger   = Logger(getClass)
+  val rm: ru.Mirror = ru.runtimeMirror(getClass.getClassLoader)
+
+  lazy val reflectionClasses = new Reflections(
+    new ConfigurationBuilder()
+      .forPackages(packages: _*)
+      .addClassLoader(getClass.getClassLoader)
+      .setExpandSuperTypes(true)
+      .setScanners(new SubTypesScanner(false))
+  )
+
+  override lazy val modelList: Seq[Model] =
+    reflectionClasses
+      .getSubTypesOf(classOf[HasModel[_]])
+      .asScala
+      .filterNot(c ⇒ java.lang.reflect.Modifier.isAbstract(c.getModifiers))
+      .map { modelClass ⇒
+        val hasModel = rm.reflectModule(rm.classSymbol(modelClass).companion.companion.asModule).instance.asInstanceOf[HasModel[_]]
+        logger.info(s"Loading model ${hasModel.model.label}")
+        hasModel.model
+      }
+      .toSeq
+
+  override lazy val initialValues: Seq[InitialValue[_]] = Nil
 }

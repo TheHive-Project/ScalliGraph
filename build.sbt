@@ -59,6 +59,7 @@ lazy val core = (project in file("core"))
       hadoopClient,
       playCore,
       apacheConfiguration,
+      reflections,
       bouncyCastle,
       shapeless,
       scalaCompiler(scalaVersion.value),

@@ -33,8 +33,8 @@ trait Database {
   def onSuccessTransaction(graph: Graph)(body: () ⇒ Unit): Unit
   def executeTransactionCallbacks(graph: Graph): Unit
 
-  def version: Int
-  def setVersion(v: Int): Unit
+  def version(module: String): Int
+  def setVersion(module: String, v: Int): Unit
 
   def getModel[E <: Product: ru.TypeTag]: Model.Base[E]
   def getVertexModel[E <: Product: ru.TypeTag]: Model.Vertex[E]
@@ -125,9 +125,9 @@ abstract class BaseDatabase extends Database {
     }
   }
 
-  override def version: Int = transaction(graph ⇒ graph.variables.get[Int]("version").orElse(0))
+  override def version(module: String): Int = transaction(graph ⇒ graph.variables.get[Int](s"${module}_version").orElse(0))
 
-  override def setVersion(v: Int): Unit = transaction(graph ⇒ graph.variables.set("version", v))
+  override def setVersion(module: String, v: Int): Unit = transaction(graph ⇒ graph.variables.set(s"${module}_version", v))
 
   override def getModel[E <: Product: ru.TypeTag]: Model.Base[E] = {
     val rm = ru.runtimeMirror(getClass.getClassLoader)
