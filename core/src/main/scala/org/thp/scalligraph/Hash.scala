@@ -13,8 +13,6 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{FileIO, Source}
 import akka.util.ByteString
 
-// TODO use play.api.libs.Codecs
-
 case class Hasher(algorithms: String*) {
 
   val bufferSize = 4096
@@ -37,9 +35,11 @@ case class Hasher(algorithms: String*) {
     mds.map(md ⇒ Hash(md.digest()))
   }
 
-  def fromString(data: String): Seq[Hash] = {
+  def fromString(data: String): Seq[Hash] = fromBinary(data.getBytes(Charset.forName("UTF8")))
+
+  def fromBinary(data: Array[Byte]): Seq[Hash] = {
     val mds = algorithms.map(algo ⇒ MessageDigest.getInstance(algo))
-    mds.map(md ⇒ Hash(md.digest(data.getBytes(Charset.forName("UTF8")))))
+    mds.map(md ⇒ Hash(md.digest(data)))
   }
 }
 
