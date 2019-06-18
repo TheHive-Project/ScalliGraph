@@ -12,10 +12,10 @@ import play.api.libs.json.Json
 import play.api.mvc.Results.BadRequest
 import play.api.mvc._
 import shapeless.labelled.FieldType
-import shapeless.{::, HList, HNil, Witness, labelled}
+import shapeless.{::, labelled, HList, HNil, Witness}
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success, Try}
+import scala.util.Try
 
 /**
   * API entry point. This class create a controller action which parse request and check authentication
@@ -85,7 +85,8 @@ class EntryPoint @Inject()(
       }
 
     /**
-    * Add async auth check to this entry point
+      * Add async auth check to this entry point
+      *
       * @param block the action body block returning a future
       * @return
       */
@@ -102,19 +103,16 @@ class EntryPoint @Inject()(
         result
       }
 
-    /**
-      * Materialize action using a function that transform request into future response
-      *
-      * @param block business login function that transform request into future response
-      * @return Action
-      */
-    def async(block: Request[Record[V]] ⇒ Future[Result]): Action[AnyContent] =
-      actionBuilder.async { request ⇒
-        fieldsParser(Field(request))
-          .fold[Future[Result]](
-            values ⇒ block(request.map(_ ⇒ Record(values))),
-            errors ⇒ Future.successful(BadRequest(Json.toJson(AttributeCheckingError(errors.toSeq))))
-          )
+    def authTransaction(
+        db: Database
+    )(block: AuthenticatedRequest[Record[V]] ⇒ Graph ⇒ Try[Result]): Action[AnyContent] =
+      apply { request ⇒
+        val result = authenticateSrv.getAuthContext(request).flatMap { authContext ⇒
+          val authReq = new AuthenticatedRequest(authContext, request)
+          db.tryTransaction(graph ⇒ block(authReq)(graph))
+            .map(result ⇒ authenticateSrv.setSessingUser(result, authContext)(request))
+        }
+        result
       }
 
     /**
@@ -129,16 +127,19 @@ class EntryPoint @Inject()(
           .fold[Future[Result]](errorHandler.onServerError(r, _), Future.successful)
       }
 
-    def authTransaction(
-        db: Database
-    )(block: AuthenticatedRequest[Record[V]] ⇒ Graph ⇒ Try[Result]): Action[AnyContent] =
-      apply { request ⇒
-        val result = authenticateSrv.getAuthContext(request).flatMap { authContext ⇒
-          val authReq = new AuthenticatedRequest(authContext, request)
-          db.tryTransaction(graph ⇒ block(authReq)(graph))
-            .map(result ⇒ authenticateSrv.setSessingUser(result, authContext)(request))
-        }
-        result
+    /**
+      * Materialize action using a function that transform request into future response
+      *
+      * @param block business login function that transform request into future response
+      * @return Action
+      */
+    def async(block: Request[Record[V]] ⇒ Future[Result]): Action[AnyContent] =
+      actionBuilder.async { request ⇒
+        fieldsParser(Field(request))
+          .fold[Future[Result]](
+            values ⇒ block(request.map(_ ⇒ Record(values))),
+            errors ⇒ Future.successful(BadRequest(Json.toJson(AttributeCheckingError(errors.toSeq))))
+          )
       }
   }
 }
