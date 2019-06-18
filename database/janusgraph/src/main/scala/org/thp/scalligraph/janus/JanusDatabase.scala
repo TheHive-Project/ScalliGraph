@@ -50,10 +50,12 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
         MDC.put("tx", f"${tx.hashCode()}%08x")
         logger.debug("Begin of transaction")
         Try {
-          val a = body(tx)
-          tx.commit()
-          logger.debug("End of transaction")
-          a
+          body(tx)
+            .map { a ⇒
+              tx.commit()
+              logger.debug("End of transaction")
+              a
+            }
         }.flatten
           .transform(
             { r ⇒
