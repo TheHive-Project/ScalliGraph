@@ -12,10 +12,10 @@ import play.api.libs.json.Json
 import play.api.mvc.Results.BadRequest
 import play.api.mvc._
 import shapeless.labelled.FieldType
-import shapeless.{::, labelled, HList, HNil, Witness}
+import shapeless.{::, HList, HNil, Witness, labelled}
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 /**
   * API entry point. This class create a controller action which parse request and check authentication
@@ -82,6 +82,24 @@ class EntryPoint @Inject()(
           authResult = authenticateSrv.setSessingUser(result, authContext)(request)
         } yield authResult
         result.fold[Future[Result]](errorHandler.onServerError(request, _), Future.successful)
+      }
+
+    /**
+    * Add async auth check to this entry point
+      * @param block the action body block returning a future
+      * @return
+      */
+    def asyncAuth(block: AuthenticatedRequest[Record[V]] ⇒ Future[Result]): Action[AnyContent] =
+      actionBuilder.async { request ⇒
+        val result = for {
+          authContext ← Future.fromTry(authenticateSrv.getAuthContext(request))
+          values      ← Future.fromTry(fieldsParser(Field(request)).badMap(errors ⇒ AttributeCheckingError(errors.toSeq)).toTry)
+          authRequest = new AuthenticatedRequest(authContext, request.map(_ ⇒ Record(values)))
+          result ← block(authRequest)
+          authResult = authenticateSrv.setSessingUser(result, authContext)(request)
+        } yield authResult
+
+        result
       }
 
     /**
