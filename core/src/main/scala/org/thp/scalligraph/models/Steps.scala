@@ -2,19 +2,21 @@ package org.thp.scalligraph.models
 
 import java.util.{Date, UUID, Collection ⇒ JCollection, List ⇒ JList, Map ⇒ JMap}
 
+import scala.collection.JavaConverters._
+import scala.reflect.ClassTag
+import scala.reflect.runtime.{universe ⇒ ru}
+import scala.util.{Failure, Success, Try}
+
+import play.api.Logger
+import play.api.libs.json.JsObject
+
 import gremlin.scala._
 import gremlin.scala.dsl._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.query.PropertyUpdater
 import org.thp.scalligraph.services.RichElement
 import org.thp.scalligraph.{AuthorizationError, InternalError, NotFoundError}
-import play.api.Logger
-import play.api.libs.json.JsObject
 import shapeless._
-
-import scala.reflect.ClassTag
-import scala.reflect.runtime.{universe ⇒ ru}
-import scala.util.{Failure, Success, Try}
 
 case class PagedResult[R](result: Seq[R], totalSize: Option[Long]) {
   def map[T](f: R ⇒ T): PagedResult[T] = PagedResult(result.map(f), totalSize)

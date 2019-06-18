@@ -3,10 +3,12 @@ package org.thp.scalligraph.models
 import java.util.Date
 
 import scala.reflect.{classTag, ClassTag}
+
 import play.api.libs.json.{JsObject, Json}
+
 import gremlin.scala.dsl.Converter
-import org.thp.scalligraph.{Hash, InternalError, Utils}
 import org.thp.scalligraph.auth.Permission
+import org.thp.scalligraph.{Hash, InternalError, Utils}
 
 object MappingCardinality extends Enumeration {
   val option, single, list, set = Value

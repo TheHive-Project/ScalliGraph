@@ -1,5 +1,9 @@
 package org.thp.scalligraph.query
 
+import scala.reflect.runtime.{universe ⇒ ru}
+
+import play.api.Logger
+
 import gremlin.scala.{Element, GremlinScala, Key, P, Vertex}
 import org.scalactic.Accumulation._
 import org.scalactic.{Bad, Good, One}
@@ -7,9 +11,6 @@ import org.thp.scalligraph.InvalidFormatAttributeError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.ScalliSteps
-import play.api.Logger
-
-import scala.reflect.runtime.{universe ⇒ ru}
 
 trait InputFilter extends InputQuery {
   def apply[S <: ScalliSteps[_, _, _]](publicProperties: List[PublicProperty[_, _]], stepType: ru.Type, step: S, authContext: AuthContext): S

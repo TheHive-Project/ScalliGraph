@@ -1,11 +1,5 @@
 package org.thp.scalligraph
 
-import com.google.inject.Inject
-import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
-import org.specs2.mock.Mockito
-import org.thp.scalligraph.auth.{AuthSrv, UserSrv}
-import org.thp.scalligraph.models.Database
-import org.thp.scalligraph.query.QueryExecutor
 import play.api.i18n.{I18nModule ⇒ PlayI18nModule}
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.inject.{BuiltinModule ⇒ PlayBuiltinModule}
@@ -14,6 +8,13 @@ import play.api.mvc.{CookiesModule ⇒ PlayCookiesModule}
 import play.api.routing.{Router ⇒ PlayRouter}
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
+
+import com.google.inject.Inject
+import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
+import org.specs2.mock.Mockito
+import org.thp.scalligraph.auth.{AuthSrv, UserSrv}
+import org.thp.scalligraph.models.Database
+import org.thp.scalligraph.query.QueryExecutor
 
 trait TestService {
   def id: String

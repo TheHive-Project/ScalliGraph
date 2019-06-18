@@ -2,9 +2,8 @@ package org.thp.scalligraph.controllers
 
 import scala.util.Try
 
-import org.scalactic.{Bad, Good, One, Or}
-import org.specs2.mutable.Specification
-import org.thp.scalligraph.{FPath, InvalidFormatAttributeError}
+import org.scalactic.{ Bad, Good, One, Or }
+import org.thp.scalligraph.FPath
 
 class UpdateFieldsParserMacroTest extends Specification with TestUtils {
 

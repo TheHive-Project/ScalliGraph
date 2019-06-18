@@ -2,12 +2,14 @@ package org.thp.scalligraph.query
 
 import scala.reflect.runtime.{universe ⇒ ru}
 import scala.util.{Success, Try}
+
+import play.api.libs.json.{JsObject, Json}
+
 import gremlin.scala.{Graph, GremlinScala, Vertex}
 import org.thp.scalligraph.FPath
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.FieldsParser
 import org.thp.scalligraph.models.{BaseVertexSteps, Database, Mapping, UniMapping}
-import play.api.libs.json.{JsObject, Json}
 
 class PropertyBuilder[S <: BaseVertexSteps[_, S]: ru.TypeTag, D](propertyName: String, mapping: UniMapping[D]) {
 

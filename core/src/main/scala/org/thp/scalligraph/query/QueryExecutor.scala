@@ -1,14 +1,15 @@
 package org.thp.scalligraph.query
 
+import scala.reflect.runtime.{universe ⇒ ru}
+
+import play.api.libs.json.{JsNull, Json}
+
 import gremlin.scala.Graph
 import org.scalactic._
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.PagedResult
-import play.api.libs.json.{JsNull, Json}
-
-import scala.reflect.runtime.{universe ⇒ ru}
 
 abstract class QueryExecutor { executor ⇒
   val version: (Int, Int)                          = 1 → 1

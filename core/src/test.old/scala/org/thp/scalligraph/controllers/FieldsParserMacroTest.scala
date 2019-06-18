@@ -1,7 +1,6 @@
 package org.thp.scalligraph.controllers
 
 import org.scalactic.Good
-import org.specs2.mutable.Specification
 
 object TestEnumeration extends Enumeration {
   val a, b, c = Value

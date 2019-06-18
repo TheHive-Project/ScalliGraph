@@ -1,13 +1,14 @@
 package org.thp.scalligraph.services
 
 import scala.reflect.runtime.{universe ⇒ ru}
+import scala.util.Try
+
+import play.api.libs.json.JsObject
+
 import gremlin.scala._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.query.PropertyUpdater
-import play.api.libs.json.JsObject
-
-import scala.util.Try
 
 abstract class VertexSrv[V <: Product: ru.TypeTag, S <: BaseVertexSteps[V, S]](implicit db: Database) extends ElementSrv[V, S] {
 

@@ -1,8 +1,8 @@
 package org.thp.scalligraph.services
 
-import java.io.InputStream
+import java.io.{ByteArrayInputStream, InputStream}
 import java.net.URI
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
 import java.util.{Base64, UUID}
 
 import scala.util.{Success, Try}
@@ -19,6 +19,7 @@ import org.thp.scalligraph.models.{Database, UniMapping}
 trait StorageSrv {
   def loadBinary(id: String)(implicit graph: Graph): InputStream
   def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit]
+  def saveBinary(id: String, data: Array[Byte])(implicit graph: Graph): Try[Unit] = saveBinary(id, new ByteArrayInputStream(data))
 }
 
 @Singleton
@@ -34,6 +35,8 @@ class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
     Try {
       Files.copy(is, directory.resolve(id))
       ()
+    }.recover {
+      case _: FileAlreadyExistsException ⇒ ()
     }
 }
 
