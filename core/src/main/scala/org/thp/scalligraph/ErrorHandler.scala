@@ -87,9 +87,9 @@ class ErrorHandler extends HttpErrorHandler {
       }
     exception match {
       case AuthenticationError(message) ⇒
-        Logger.info(s"${request.method} ${request.uri} returned $status: $message")
+        logger.info(s"${request.method} ${request.uri} returned $status: $message")
       case ex ⇒
-        Logger.info(s"${request.method} ${request.uri} returned $status", ex)
+        logger.info(s"${request.method} ${request.uri} returned $status", ex)
     }
     Future.successful(toResult(status, body))
   }

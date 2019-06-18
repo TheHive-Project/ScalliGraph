@@ -19,11 +19,11 @@ package object scalligraph {
 //      case (f, _) ⇒ f
 //    }
 //  }
-  implicit class RichSeq[A](s: Seq[A]) {
+  implicit class RichSeq[A](s: TraversableOnce[A]) {
 
     def toTry[B](f: A ⇒ Try[B]): Try[Seq[B]] = s.foldLeft[Try[Seq[B]]](Success(Nil)) {
       case (Success(l), a) ⇒ f(a).map(l :+ _)
-      case (f, _)          ⇒ f
+      case (failure, _)    ⇒ failure
     }
   }
 

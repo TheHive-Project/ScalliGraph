@@ -12,6 +12,8 @@ import org.slf4j.MDC
 
 class AccessLogFilter @Inject()(implicit val mat: Materializer, ec: ExecutionContext) extends Filter {
 
+  val logger = Logger(getClass)
+
   def apply(nextFilter: RequestHeader ⇒ Future[Result])(requestHeader: RequestHeader): Future[Result] = {
     MDC.put("request", f"${requestHeader.id}%08x")
 
@@ -21,7 +23,7 @@ class AccessLogFilter @Inject()(implicit val mat: Materializer, ec: ExecutionCon
       val endTime     = System.currentTimeMillis
       val requestTime = endTime - startTime
 
-      Logger.info(s"${requestHeader.method} ${requestHeader.uri} took ${requestTime}ms and returned ${result.header.status} ${result
+      logger.info(s"${requestHeader.method} ${requestHeader.uri} took ${requestTime}ms and returned ${result.header.status} ${result
         .body
         .contentLength
         .fold("")(_ + " bytes")}")
