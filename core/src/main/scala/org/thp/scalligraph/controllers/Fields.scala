@@ -72,7 +72,7 @@ object Field {
           }
           .getOrElse(Map.empty)
         files.foldLeft(queryFields ++ FObject(dataFields)) {
-          case (obj, MultipartFormData.FilePart(key, filename, contentType, file)) ⇒
+          case (obj, MultipartFormData.FilePart(key, filename, contentType, file, _, _)) ⇒
             obj.set(FPath(key), FFile(filename.split("[/\\\\]").last, file, contentType.getOrElse("application/octet-stream")))
         }
       case AnyContentAsRaw(raw) ⇒
