@@ -16,7 +16,9 @@ import scala.reflect.ClassTag
 import scala.reflect.runtime.{universe ⇒ ru}
 import scala.util.{Failure, Success, Try}
 
-case class PagedResult[R](result: Seq[R], totalSize: Option[Long])
+case class PagedResult[R](result: Seq[R], totalSize: Option[Long]) {
+  def map[T](f: R ⇒ T): PagedResult[T] = PagedResult(result.map(f), totalSize)
+}
 
 final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])
     extends Steps[T, T, HNil](raw)(SingleMapping[T, T](null.asInstanceOf[T]))
@@ -35,6 +37,11 @@ final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])
     super.toList()
   }
 
+  override def toIterator: Iterator[T] = {
+    logger.debug(s"Execution of $raw")
+    raw.traversal.asScala
+  }
+
   override def range(from: Long, to: Long): ScalarSteps[T] =
     if (from == 0 && to == Long.MaxValue) this
     else new ScalarSteps(raw.range(from, to))
@@ -42,7 +49,7 @@ final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])
   override def page(from: Long, to: Long, withTotal: Boolean): PagedResult[T] = {
     logger.debug(s"Execution of $raw")
     val size   = if (withTotal) Some(raw.clone().count().head.toLong) else None
-    val values = range(from, to).toList
+    val values = range(from, to).toList()
     PagedResult(values, size)
 //
 //
@@ -86,6 +93,7 @@ trait ScalliSteps[EndDomain, EndGraph, ThisStep <: AnyRef] { _: ThisStep ⇒
   def newInstance(raw: GremlinScala[EndGraph]): ThisStep
   val raw: GremlinScala[EndGraph]
   def toList(): Seq[EndDomain]
+  def toIterator: Iterator[EndDomain]
   def range(from: Long, to: Long): ThisStep
   def page(from: Long, to: Long, withTotal: Boolean): PagedResult[EndDomain]
   def head(): EndDomain
@@ -163,7 +171,7 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
   override def page(from: Long, to: Long, withTotal: Boolean): PagedResult[E with Entity] = {
     logger.debug(s"Execution of $raw")
     val size   = if (withTotal) Some(raw.clone().count().head.toLong) else None
-    val values = range(from, to).toList
+    val values = range(from, to).toList()
     PagedResult(values, size)
 //    val byValues = if (to == Long.MaxValue) By(__[JSet[EndGraph]])
 //    else By(__[JSet[EndGraph]].range(Scope.local, from, to))
@@ -213,6 +221,11 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
   override def toList(): List[E with Entity] = {
     logger.debug(s"Execution of $raw")
     super.toList
+  }
+
+  override def toIterator: Iterator[E with Entity] = {
+    logger.debug(s"Execution of $raw")
+    raw.traversal.asScala.map(converter.toDomain)
   }
 }
 
