@@ -12,7 +12,7 @@ import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.PagedResult
 
 abstract class QueryExecutor { executor ⇒
-  val version: (Int, Int)                          = 1 → 1
+  val version: (Int, Int)
   val publicProperties: List[PublicProperty[_, _]] = Nil
   val queries: Seq[ParamQuery[_]]                  = Nil
 

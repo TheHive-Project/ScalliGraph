@@ -36,6 +36,8 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
   val personSrv   = new PersonSrv
   val softwareSrv = new SoftwareSrv
 
+  override val version: (Int, Int) = 1 → 1
+
   override val publicProperties: List[PublicProperty[_, _]] = {
     val labelMapping = SingleMapping[String, String](
       "",
