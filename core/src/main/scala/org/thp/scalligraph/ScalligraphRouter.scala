@@ -3,8 +3,9 @@ package org.thp.scalligraph
 import scala.collection.immutable
 import scala.util.Success
 
+import play.api.Logger
 import play.api.http.HttpConfiguration
-import play.api.mvc.Results
+import play.api.mvc.{Handler, RequestHeader, Results}
 import play.api.routing.Router.Routes
 import play.api.routing.sird._
 import play.api.routing.{Router, SimpleRouter}
@@ -15,6 +16,24 @@ import org.thp.scalligraph.controllers.EntryPoint
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.query.{AuthGraph, Query, QueryExecutor}
 
+object DebugRouter {
+  lazy val logger = Logger(getClass)
+
+  def apply(name: String, router: Router): Router = new Router {
+    override def routes: Routes = new Routes {
+      override def isDefinedAt(x: RequestHeader): Boolean = {
+        val result = router.routes.isDefinedAt(x)
+        logger.info(s"ROUTER $name $x => $result")
+        result
+      }
+      override def apply(v1: RequestHeader): Handler = router.routes.apply(v1)
+    }
+    override def documentation: Seq[(String, String, String)] = router.documentation
+    override def withPrefix(prefix: String): Router           = DebugRouter(s"$name.in($prefix)", router.withPrefix(prefix))
+    override def toString: String                             = s"router($name)@$hashCode"
+  }
+}
+
 class ScalligraphRouter @Inject()(
     httpConfig: HttpConfiguration,
     routers: immutable.Set[Router],
@@ -22,6 +41,7 @@ class ScalligraphRouter @Inject()(
     db: Database,
     queryExecutors: immutable.Set[QueryExecutor]
 ) extends Provider[Router] {
+  lazy val logger = Logger(getClass)
 
   val queryRoutes: Routes = {
     case POST(p"/api/v${int(version)}/query") ⇒
@@ -44,15 +64,10 @@ class ScalligraphRouter @Inject()(
   override lazy val get: Router = {
     val prefix = httpConfig.context
 
-    val router = new SimpleRouter {
-      override def routes: Routes =
-        routerList
-          .map(_.routes)
-          .reduceOption(_ orElse _)
-          .getOrElse(PartialFunction.empty)
-          .orElse(queryRoutes)
-      override def documentation: Seq[(String, String, String)] = routerList.flatMap(_.documentation)
-    }
-    router.withPrefix(prefix)
+    routerList
+      .reduceOption(_ orElse _)
+      .getOrElse(Router.empty)
+      .orElse(SimpleRouter(queryRoutes))
+      .withPrefix(prefix)
   }
 }
