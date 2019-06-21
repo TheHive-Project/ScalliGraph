@@ -42,29 +42,32 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
   override def noTransaction[A](body: Graph ⇒ A): A = body(graphFactory.getNoTx)
 
   override def tryTransaction[A](body: Graph ⇒ Try[A]): Try[A] =
-    Retry(maxRetryOnConflict, classOf[OConcurrentModificationException], classOf[ORecordDuplicatedException]) {
-      val tx = graphFactory.getTx
-      MDC.put("tx", f"${tx.hashCode()}%08x")
-      logger.debug(s"[$tx] Begin of transaction")
-      val r = Try {
-        val a = body(tx)
-        tx.commit()
-        logger.debug(s"[$tx] End of transaction")
-        MDC.remove("tx")
-        a
-      }.flatten
-        .recoverWith {
-          case t: OConcurrentModificationException ⇒ Failure(new DatabaseException(cause = t))
-          case t: ORecordDuplicatedException       ⇒ Failure(new DatabaseException(cause = t))
-          case e: Throwable ⇒
-            logger.error(s"Exception raised, rollback (${e.getMessage})")
-            Try(tx.rollback())
-            MDC.remove("tx")
-            Failure(e)
-        }
-      tx.close()
-      r
-    }
+    Retry(maxRetryOnConflict)
+      .on[OConcurrentModificationException]
+      .on[ORecordDuplicatedException]
+      .withTry {
+        val tx = graphFactory.getTx
+        MDC.put("tx", f"${tx.hashCode()}%08x")
+        logger.debug(s"[$tx] Begin of transaction")
+        val r = Try {
+          val a = body(tx)
+          tx.commit()
+          logger.debug(s"[$tx] End of transaction")
+          MDC.remove("tx")
+          a
+        }.flatten
+          .recoverWith {
+            case t: OConcurrentModificationException ⇒ Failure(new DatabaseException(cause = t))
+            case t: ORecordDuplicatedException       ⇒ Failure(new DatabaseException(cause = t))
+            case e: Throwable ⇒
+              logger.error(s"Exception raised, rollback (${e.getMessage})")
+              Try(tx.rollback())
+              MDC.remove("tx")
+              Failure(e)
+          }
+        tx.close()
+        r
+      }
 
   private def getVariablesVertex(implicit graph: Graph): Option[Vertex] = graph.traversal().V().hasLabel("variables").headOption()
 

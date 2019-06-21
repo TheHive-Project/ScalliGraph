@@ -53,34 +53,36 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
   }
 
   override def tryTransaction[A](body: Graph ⇒ Try[A]): Try[A] =
-    Retry(maxRetryOnConflict, classOf[ConstraintViolationException]) {
-      val tx = graph.tx
-      val r =
-        if (tx.isOpen) Try(body(graph)).flatten
-        else
-          graph.synchronized {
-            logger.debug(s"[$tx] Begin of transaction")
-            tx.open()
-            val r2 = Try {
-              val a = body(graph)
-              tx.commit()
-              a
-            }.flatten
-              .recoverWith {
-                case e: Throwable ⇒
-                  Try(tx.rollback())
-                  Failure(e)
-              }
-            logger.debug(s"[$tx] End of transaction")
-            tx.close()
-            r2
-          }
-      r.recoverWith {
-        case t: ConstraintViolationException ⇒ Failure(new DatabaseException(cause = t))
-        case t                               ⇒ Failure(t)
+    Retry(maxRetryOnConflict)
+      .on[ConstraintViolationException]
+      .withTry {
+        val tx = graph.tx
+        val r =
+          if (tx.isOpen) Try(body(graph)).flatten
+          else
+            graph.synchronized {
+              logger.debug(s"[$tx] Begin of transaction")
+              tx.open()
+              val r2 = Try {
+                val a = body(graph)
+                tx.commit()
+                a
+              }.flatten
+                .recoverWith {
+                  case e: Throwable ⇒
+                    Try(tx.rollback())
+                    Failure(e)
+                }
+              logger.debug(s"[$tx] End of transaction")
+              tx.close()
+              r2
+            }
+        r.recoverWith {
+          case t: ConstraintViolationException ⇒ Failure(new DatabaseException(cause = t))
+          case t                               ⇒ Failure(t)
 
+        }
       }
-    }
 
   override def createSchema(models: Seq[Model]): Try[Unit] =
     // Cypher can't be used here to create schema as it is not compatible with scala 2.12

@@ -42,36 +42,40 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
 
   override def tryTransaction[A](body: Graph ⇒ Try[A]): Try[A] = {
     val result =
-      Retry(maxRetryOnConflict, classOf[PermanentLockingException], classOf[SchemaViolationException], classOf[PermanentBackendException]) {
-        //    val tx = graph.tx()
-        //    tx.open() /*.createThreadedTx[JanusGraphTransaction]()*/
-        // Transaction is automatically open at the first operation.
-        val tx = graph.tx.createThreadedTx[JanusGraphTransaction]()
-        MDC.put("tx", f"${tx.hashCode()}%08x")
-        logger.debug("Begin of transaction")
-        Try {
-          body(tx)
-            .map { a ⇒
-              tx.commit()
-              logger.debug("End of transaction")
-              a
-            }
-        }.flatten
-          .transform(
-            { r ⇒
-              executeTransactionCallbacks(tx)
-              Success(r)
-            }, {
-              case t: PermanentLockingException ⇒ Failure(new DatabaseException(cause = t))
-              case t: SchemaViolationException  ⇒ Failure(new DatabaseException(cause = t))
-              case t: PermanentBackendException ⇒ Failure(new DatabaseException(cause = t))
-              case e: Throwable ⇒
-                logger.error(s"Exception raised, rollback (${e.getMessage})")
-                Try(tx.rollback())
-                Failure(e)
-            }
-          )
-      }
+      Retry(maxRetryOnConflict)
+        .on[PermanentLockingException]
+        .on[SchemaViolationException]
+        .on[PermanentBackendException]
+        .withTry {
+          //    val tx = graph.tx()
+          //    tx.open() /*.createThreadedTx[JanusGraphTransaction]()*/
+          // Transaction is automatically open at the first operation.
+          val tx = graph.tx.createThreadedTx[JanusGraphTransaction]()
+          MDC.put("tx", f"${tx.hashCode()}%08x")
+          logger.debug("Begin of transaction")
+          Try {
+            body(tx)
+              .map { a ⇒
+                tx.commit()
+                logger.debug("End of transaction")
+                a
+              }
+          }.flatten
+            .transform(
+              { r ⇒
+                executeTransactionCallbacks(tx)
+                Success(r)
+              }, {
+                case t: PermanentLockingException ⇒ Failure(new DatabaseException(cause = t))
+                case t: SchemaViolationException  ⇒ Failure(new DatabaseException(cause = t))
+                case t: PermanentBackendException ⇒ Failure(new DatabaseException(cause = t))
+                case e: Throwable ⇒
+                  logger.error(s"Exception raised, rollback (${e.getMessage})")
+                  Try(tx.rollback())
+                  Failure(e)
+              }
+            )
+        }
     MDC.remove("tx")
     result
   }
@@ -185,22 +189,24 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
   }
 
   override def createSchema(models: Seq[Model]): Try[Unit] =
-    Retry(maxRetryOnConflict, classOf[PermanentLockingException]) {
-      logger.info("Creating database schema")
-      graph.synchronized {
-        val mgmt = graph.openManagement()
-        val alreadyExists = models
-          .map(_.label)
-          .flatMap(l ⇒ Option(mgmt.getVertexLabel(l)).orElse(Option(mgmt.getEdgeLabel(l))))
-          .map(_.toString)
-        if (alreadyExists.nonEmpty) {
-          logger.info(s"Models already exists. Skipping schema creation (existing labels: ${alreadyExists.mkString(",")})")
+    Retry(maxRetryOnConflict)
+      .on[PermanentLockingException]
+      .withTry {
+        logger.info("Creating database schema")
+        graph.synchronized {
+          val mgmt = graph.openManagement()
+          val alreadyExists = models
+            .map(_.label)
+            .flatMap(l ⇒ Option(mgmt.getVertexLabel(l)).orElse(Option(mgmt.getEdgeLabel(l))))
+            .map(_.toString)
+          if (alreadyExists.nonEmpty) {
+            logger.info(s"Models already exists. Skipping schema creation (existing labels: ${alreadyExists.mkString(",")})")
 //          mgmt.rollback()
-        } else {
-          //    mgmt.setConsistency(leadidCUniqueIndex, ConsistencyModifier.LOCK)
-          createElementLabels(mgmt, models)
-          createEntityProperties(mgmt)
-          createProperties(mgmt, models)
+          } else {
+            //    mgmt.setConsistency(leadidCUniqueIndex, ConsistencyModifier.LOCK)
+            createElementLabels(mgmt, models)
+            createEntityProperties(mgmt)
+            createProperties(mgmt, models)
 //          logger.debug("Creating unique index on fields _id")
 //          mgmt
 //            .buildIndex("_id_vertex_index", classOf[Vertex])
@@ -212,41 +218,41 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
 //              .addKey(mgmt.getPropertyKey("_id"))
 //              .unique()
 //              .buildCompositeIndex()
-          mgmt
-            .buildIndex("_label_vertex_index", classOf[Vertex])
-            .addKey(mgmt.getPropertyKey("_label"))
-            .buildCompositeIndex()
+            mgmt
+              .buildIndex("_label_vertex_index", classOf[Vertex])
+              .addKey(mgmt.getPropertyKey("_label"))
+              .buildCompositeIndex()
 //          mgmt
 //            .buildIndex("_label_edge_index", classOf[Edge])
 //            .addKey(mgmt.getPropertyKey("_label"))
 //            .buildCompositeIndex()
 
-          models.foreach {
-            case model: VertexModel ⇒
-              val vertexLabel = mgmt.getVertexLabel(model.label)
-              mgmt
-                .buildIndex(s"_id_${model.label}_index", classOf[Vertex])
-                .indexOnly(vertexLabel)
-                .addKey(mgmt.getPropertyKey("_id"))
-                .unique()
-                .buildCompositeIndex()
-              model.indexes.foreach {
-                case (indexType, properties) ⇒ createIndex(mgmt, classOf[Vertex], vertexLabel, indexType, properties)
-              }
-            case model: EdgeModel[_, _] ⇒
-              val edgeLabel = mgmt.getEdgeLabel(model.label)
-              model.indexes.foreach {
-                case (indexType, properties) ⇒ createIndex(mgmt, classOf[Edge], edgeLabel, indexType, properties)
-              }
-          }
+            models.foreach {
+              case model: VertexModel ⇒
+                val vertexLabel = mgmt.getVertexLabel(model.label)
+                mgmt
+                  .buildIndex(s"_id_${model.label}_index", classOf[Vertex])
+                  .indexOnly(vertexLabel)
+                  .addKey(mgmt.getPropertyKey("_id"))
+                  .unique()
+                  .buildCompositeIndex()
+                model.indexes.foreach {
+                  case (indexType, properties) ⇒ createIndex(mgmt, classOf[Vertex], vertexLabel, indexType, properties)
+                }
+              case model: EdgeModel[_, _] ⇒
+                val edgeLabel = mgmt.getEdgeLabel(model.label)
+                model.indexes.foreach {
+                  case (indexType, properties) ⇒ createIndex(mgmt, classOf[Edge], edgeLabel, indexType, properties)
+                }
+            }
 
-          // TODO add index for labels when it will be possible
-          // cf. https://github.com/JanusGraph/janusgraph/issues/283
-          mgmt.commit()
+            // TODO add index for labels when it will be possible
+            // cf. https://github.com/JanusGraph/janusgraph/issues/283
+            mgmt.commit()
+          }
+          Success(())
         }
-        Success(())
       }
-    }
 
   override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
     val createdVertex = model.create(v)(this, graph)
