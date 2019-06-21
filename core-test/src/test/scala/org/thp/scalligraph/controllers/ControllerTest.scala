@@ -9,15 +9,13 @@ import play.api.mvc.{AnyContentAsJson, DefaultActionBuilder, Results}
 import play.api.test.{FakeRequest, Helpers, PlaySpecification}
 import play.api.{Application, Configuration, Environment}
 
-import akka.stream.Materializer
 import org.specs2.concurrent.ExecutionEnv
 import org.specs2.mock.Mockito
 import org.thp.scalligraph.ErrorHandler
 
 class ControllerTest extends PlaySpecification with Mockito {
-  lazy val app: Application           = new GuiceApplicationBuilder().build()
-  implicit lazy val mat: Materializer = app.materializer
-  implicit val ee: ExecutionEnv       = ExecutionEnv.fromGlobalExecutionContext
+  lazy val app: Application     = new GuiceApplicationBuilder().build()
+  implicit val ee: ExecutionEnv = ExecutionEnv.fromGlobalExecutionContext
 
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
@@ -26,7 +24,7 @@ class ControllerTest extends PlaySpecification with Mockito {
     "extract simple class from HTTP request" in {
 
       val actionBuilder = DefaultActionBuilder(Helpers.stubBodyParser())
-      val entryPoint    = new EntryPoint(mock[AuthenticateSrv], actionBuilder, new ErrorHandler, ee.ec, mat)
+      val entryPoint    = new EntryPoint(mock[AuthenticateSrv], actionBuilder, new ErrorHandler, ee.ec)
 
       val action = entryPoint("model extraction")
         .extract("simpleClass", FieldsParser[SimpleClassForFieldsParserMacroTest]) { req ⇒

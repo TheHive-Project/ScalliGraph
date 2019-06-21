@@ -9,7 +9,6 @@ import play.api.libs.json.Json
 import play.api.mvc.Results.BadRequest
 import play.api.mvc._
 
-import akka.stream.Materializer
 import gremlin.scala.Graph
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.AttributeCheckingError
@@ -30,8 +29,7 @@ class EntryPoint @Inject()(
     authenticateSrv: AuthenticateSrv,
     actionBuilder: DefaultActionBuilder,
     errorHandler: HttpErrorHandler,
-    implicit val ec: ExecutionContext,
-    implicit val mat: Materializer
+    implicit val ec: ExecutionContext
 ) {
 
   lazy val logger = Logger(getClass)
