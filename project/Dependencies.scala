@@ -9,7 +9,7 @@ object Dependencies {
   lazy val hbaseClient                    = "org.apache.hbase"         % "hbase-shaded-client"      % "1.4.9" exclude ("org.slf4j", "slf4j-log4j12")
   lazy val scalactic                      = "org.scalactic"            %% "scalactic"               % "3.0.8"
   lazy val specs                          = "com.typesafe.play"        %% "play-specs2"             % play.core.PlayVersion.current
-  lazy val scalaGuice                     = "net.codingwell"           %% "scala-guice"             % "4.2.2"
+  lazy val scalaGuice                     = "net.codingwell"           %% "scala-guice"             % "4.2.4"
   lazy val sangria                        = "org.sangria-graphql"      %% "sangria"                 % "1.4.2"
   lazy val sangriaPlay                    = "org.sangria-graphql"      %% "sangria-play-json"       % "1.0.5"
   lazy val shapeless                      = "com.chuusai"              %% "shapeless"               % "2.3.3"
@@ -20,6 +20,7 @@ object Dependencies {
   lazy val macroParadise                  = "org.scalamacros"          % "paradise"                 % "2.1.1" cross CrossVersion.full
   lazy val playLogback                    = "com.typesafe.play"        %% "play-logback"            % play.core.PlayVersion.current
   lazy val playGuice                      = "com.typesafe.play"        %% "play-guice"              % play.core.PlayVersion.current
+  lazy val playFilters                    = "com.typesafe.play"        %% "filters-helpers"         % play.core.PlayVersion.current
   lazy val akkaCluster                    = "com.typesafe.akka"        %% "akka-cluster"            % "2.5.22"
   lazy val akkaClusterTools               = "com.typesafe.akka"        %% "akka-cluster-tools"      % "2.5.22"
   lazy val chimney                        = "io.scalaland"             %% "chimney"                 % "0.3.0"
