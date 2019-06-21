@@ -20,7 +20,7 @@ package object services {
         .getModel(e.label())
         .getOrElse(
           throw InternalError(
-            s"No model found in ${schema.getClass.getSimpleName} for element $e with label ${e.label} (available models are ${schema.modelList.map(_.label).mkString(",")}"
+            s"No model found in ${schema.getClass.getSimpleName} for element $e with label ${e.label} (available models are ${schema.modelList.map(_.label).mkString(",")})"
           )
         )
       model
