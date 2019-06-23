@@ -183,4 +183,5 @@ object FieldsParser extends FieldsParserLowPrio {
   implicit def set[A](implicit fp: FieldsParser[A]): FieldsParser[Set[A]]       = fp.set
   implicit def option[A](implicit fp: FieldsParser[A]): FieldsParser[Option[A]] = fp.optional
   implicit val permission: FieldsParser[Permission]                             = FieldsParser.string.asInstanceOf[FieldsParser[Permission]]
+  implicit val hash: FieldsParser[Hash]                                         = string.map("Hash")(Hash.apply)
 }
