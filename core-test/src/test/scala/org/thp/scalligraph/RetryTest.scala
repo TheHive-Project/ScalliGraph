@@ -39,7 +39,7 @@ class RetryTest extends PlaySpecification {
           count += 1
           Success(12 / (count - count))
         } must beFailedTry
-      count must_=== 5
+      count must_=== 4
     }
   }
 
