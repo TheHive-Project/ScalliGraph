@@ -151,18 +151,22 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
   override def getOptionProperty[D, G](element: Element, key: String, mapping: OptionMapping[D, G]): Option[D] =
     super.getOptionProperty(element, key, fixMapping(mapping))
 
-  override def getListProperty[D, G](element: Element, key: String, mapping: ListMapping[D, G]): Seq[D] =
+  override def getListProperty[D, G](element: Element, key: String, mapping: ListMapping[D, G]): Seq[D] = {
+    implicit val dClassTag: ClassTag[D] = ClassTag(mapping.domainTypeClass)
     element
       .value[Array[G]](key)
       .map(fixMapping(mapping).toDomain)
+  }
 
   // super.getListProperty(element, key, fixMapping(mapping))
 
-  override def getSetProperty[D, G](element: Element, key: String, mapping: SetMapping[D, G]): Set[D] =
+  override def getSetProperty[D, G](element: Element, key: String, mapping: SetMapping[D, G]): Set[D] = {
+    implicit val dClassTag: ClassTag[D] = ClassTag(mapping.domainTypeClass)
     element
       .value[Array[G]](key)
       .map(fixMapping(mapping).toDomain)
       .toSet
+  }
 
   // super.getSetProperty(element, key, fixMapping(mapping))
 

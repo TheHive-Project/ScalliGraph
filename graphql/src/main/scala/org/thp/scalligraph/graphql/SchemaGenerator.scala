@@ -205,7 +205,7 @@ object SchemaGenerator {
               ObjectType(
                 objectName,
                 fieldsFn = CacheFunction.sequence(fields).andThen { l =>
-                  val x = Collection.distinctBy(l.flatten.toList)(_.name)
+                  val x = l.flatten.toList.groupBy(_.name).map(_._2.head)
                   logger.debug(s"fields of $objectName are: ${x.map(_.name).mkString(",")}")
                   x
                 }

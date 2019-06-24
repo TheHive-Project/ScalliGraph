@@ -16,7 +16,7 @@ trait IndexMacro {
         val args      = annotation.tree.children.tail
         val indexType = args.head
         val fields    = args.tail
-        q"$indexType → $fields"
+        q"$indexType -> $fields"
     }
     q"Seq(..$indexes)"
   }

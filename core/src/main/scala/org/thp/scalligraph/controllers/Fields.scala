@@ -31,7 +31,7 @@ object Field {
     case JsString(s)  => FString(s)
     case JsNumber(n)  => FNumber(n.toLong)
     case JsBoolean(b) => FBoolean(b)
-    case JsObject(o)  => FObject(o.mapValues(Field.apply).toMap)
+    case JsObject(o)  => FObject(o.map { case (k, v) => k -> Field(v) }.toMap)
     case JsArray(a)   => FSeq(a.map(Field.apply).toList)
     case JsNull       => FNull
   }
@@ -41,13 +41,15 @@ object Field {
       FObject(
         request
           .queryString
-          .filterNot(_._1.isEmpty())
-          .mapValues(FAny.apply)
+          .collect {
+            case (k, v) if k.nonEmpty => k -> FAny(v)
+          }
+          .toMap
       )
 
     request.body match {
       case AnyContentAsFormUrlEncoded(data) =>
-        FObject(data.mapValues(v => FAny(v))) ++ queryFields
+        FObject(data.map { case (k, v) => k -> FAny(v) }.toMap) ++ queryFields
       case AnyContentAsText(txt) =>
         logger.warn(s"Request body has unrecognized format (text), it is ignored:\n$txt")
         queryFields
@@ -67,8 +69,10 @@ object Field {
               .parse(s)
               .as[JsObject]
               .value
+              .map {
+                case (k, v) => k -> Field(v)
+              }
               .toMap
-              .mapValues(Field.apply)
           }
           .getOrElse(Map.empty)
         files.foldLeft(queryFields ++ FObject(dataFields)) {
@@ -209,5 +213,5 @@ case class FObject(fields: immutable.Map[String, Field]) extends Field {
     case FAny(s :: Nil) => s
   }
 
-  override def toJson: JsValue = JsObject(fields.mapValues(_.toJson))
+  override def toJson: JsValue = JsObject(fields.map { case (k, v) => k -> v.toJson })
 }

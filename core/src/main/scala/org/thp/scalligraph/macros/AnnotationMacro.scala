@@ -85,12 +85,12 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
         val toEntityJsonDef =
           q"""
             def toJson(e: org.thp.scalligraph.models.Entity): play.api.libs.json.JsObject = toJson +
-              ("_id"        → play.api.libs.json.JsString(e._id.asInstanceOf[String])) +
-              ("_createdAt" → play.api.libs.json.JsNumber(e._createdAt.getTime())) +
-              ("_createdBy" → play.api.libs.json.JsString(e._createdBy)) +
-              ("_updatedAt" → e._updatedAt.fold[play.api.libs.json.JsValue](play.api.libs.json.JsNull)(d ⇒ play.api.libs.json.JsNumber(d.getTime()))) +
-              ("_updatedBy" → e._updatedBy.fold[play.api.libs.json.JsValue](play.api.libs.json.JsNull)(play.api.libs.json.JsString.apply)) +
-              ("_type"      → play.api.libs.json.JsString(${className.toTermName.toString}))
+              ("_id"        -> play.api.libs.json.JsString(e._id.asInstanceOf[String])) +
+              ("_createdAt" -> play.api.libs.json.JsNumber(e._createdAt.getTime())) +
+              ("_createdBy" -> play.api.libs.json.JsString(e._createdBy)) +
+              ("_updatedAt" -> e._updatedAt.fold[play.api.libs.json.JsValue](play.api.libs.json.JsNull)(d ⇒ play.api.libs.json.JsNumber(d.getTime()))) +
+              ("_updatedBy" -> e._updatedBy.fold[play.api.libs.json.JsValue](play.api.libs.json.JsNull)(play.api.libs.json.JsString.apply)) +
+              ("_type"      -> play.api.libs.json.JsString(${className.toTermName.toString}))
           """
         val classDef =
           ClassDef(classMods, className, Nil, Template(template.parents, template.self, template.body :+ writesDef :+ toJsonDef :+ toEntityJsonDef))

@@ -73,7 +73,7 @@ case class Hash(data: Array[Byte]) {
   override def toString: String = data.map(b => f"$b%02x").mkString
 
   override def equals(obj: scala.Any): Boolean = obj match {
-    case Hash(d) => d.deep == data.deep
+    case Hash(d) => d.sameElements(data)
     case _       => false
   }
 }

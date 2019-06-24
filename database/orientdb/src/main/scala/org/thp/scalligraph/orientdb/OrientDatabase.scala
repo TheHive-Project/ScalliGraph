@@ -159,6 +159,7 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
       .value[JList[G]](key)
       .asScala
       .map(mapping.toDomain)
+      .toSeq
 
   override def getSetProperty[D, G](element: Element, key: String, mapping: SetMapping[D, G]): Set[D] =
     element

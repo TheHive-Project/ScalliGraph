@@ -1,8 +1,7 @@
 package org.thp.scalligraph.services
 
+import java.io.InputStream
 import java.nio.file.{Files, Path, Paths}
-
-import scala.tools.nsc.interpreter.InputStream
 
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.{Configuration, Environment}

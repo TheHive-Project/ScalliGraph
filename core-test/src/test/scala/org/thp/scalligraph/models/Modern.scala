@@ -73,7 +73,7 @@ class ModernSchema @Inject()(implicit db: Database) extends Schema {
   val createdSrv                                   = new EdgeSrv[Created, Person, Software]
   val vertexServices: Seq[VertexSrv[_, _]]         = Seq(personSrv, softwareSrv)
   override def modelList: Seq[Model]               = (vertexServices :+ knowsSrv :+ createdSrv).map(_.model)
-  override def initialValues: Seq[InitialValue[_]] = vertexServices.flatMap[InitialValue[_], Seq[InitialValue[_]]](_.getInitialValues)
+  override def initialValues: Seq[InitialValue[_]] = vertexServices.map(_.getInitialValues).flatten
 }
 
 object DatabaseBuilder {

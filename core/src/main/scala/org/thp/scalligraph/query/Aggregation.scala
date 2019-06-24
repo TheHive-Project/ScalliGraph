@@ -272,9 +272,9 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs:
       }
       .toMap
 
-    val native: Map[Any, Map[String, Any]] = subMap.mapValues(_.toOutput)
-    val json: JsObject                     = JsObject(subMap.map { case (k, v) => k.toString -> v.toJson })
-    //Json.obj(name -> JsObject(subMap.map { case (k, v) ⇒ k.toString → v.toJson }))
+    val native: Map[Any, Map[String, Any]] = subMap.map { case (k, v) => k -> v.toOutput }
+    val json: JsObject                     = JsObject(subMap.map { case (k, v) => k.toString -> v.toJson }.toMap)
+    //Json.obj(name -> JsObject(subMap.map { case (k, v) ⇒ k.toString -> v.toJson }))
     Output(native, json)
   }
 }

@@ -61,7 +61,7 @@ class OrientDatabaseStorageSrv(db: OrientDatabase, chunkSize: Int) extends Stora
       }
       .takeWhile(_._1 > 0)
       .map(_._2)
-      .to[Seq]
+      .toSeq
     odb.declareIntent(null)
     val v = graph.addVertex(db.attachmentVertexLabel)
     v.property("_id", id)
