@@ -71,6 +71,15 @@ final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])
 //    ResultWithTotalSize(l.asScala.toSeq, s)
   }
 
+  def richPage[U](from: Long, to: Long, withTotal: Boolean)(
+      f: GremlinScala[T] ⇒ GremlinScala[U]
+  ): PagedResult[U] = {
+    logger.debug(s"Execution of $raw (size)")
+    val size   = if (withTotal) Some(raw.clone().count().head.toLong) else None
+    val values = f(raw.range(from, to)).toList()
+    PagedResult(values, size)
+  }
+
   override def head(): T = {
     logger.debug(s"Execution of $raw")
     super.head()
@@ -98,6 +107,10 @@ trait ScalliSteps[EndDomain, EndGraph, ThisStep <: AnyRef] { _: ThisStep ⇒
   def toIterator: Iterator[EndDomain]
   def range(from: Long, to: Long): ThisStep
   def page(from: Long, to: Long, withTotal: Boolean): PagedResult[EndDomain]
+
+  def richPage[NewEndDomain](from: Long, to: Long, withTotal: Boolean)(
+      f: GremlinScala[EndGraph] ⇒ GremlinScala[NewEndDomain]
+  ): PagedResult[NewEndDomain]
   def head(): EndDomain
   def headOption(): Option[EndDomain]
 
@@ -187,6 +200,15 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
 //    logger.debug(s"Execution of $query")
 //    val (l, s) = query.head()
 //    ResultWithTotalSize(l.asScala.toSeq.map(converter.toDomain), s)
+  }
+
+  def richPage[NewEndDomain](from: Long, to: Long, withTotal: Boolean)(
+      f: GremlinScala[EndGraph] ⇒ GremlinScala[NewEndDomain]
+  ): PagedResult[NewEndDomain] = {
+    logger.debug(s"Execution of $raw (size)")
+    val size   = if (withTotal) Some(raw.clone().count().head.toLong) else None
+    val values = f(range(from, to).raw).toList()
+    PagedResult(values, size)
   }
 
   def order(orderBys: List[OrderBy[_]]): ThisStep = newInstance(raw.order(orderBys: _*))
