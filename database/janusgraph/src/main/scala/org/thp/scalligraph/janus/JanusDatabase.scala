@@ -8,7 +8,7 @@ import play.api.{Configuration, Environment}
 
 import gremlin.scala._
 import javax.inject.{Inject, Singleton}
-import org.apache.tinkerpop.gremlin.structure.{Edge ⇒ _, Element ⇒ _, Graph ⇒ _, Vertex ⇒ _}
+import org.apache.tinkerpop.gremlin.structure.{Edge => _, Element => _, Graph => _, Vertex => _}
 import org.janusgraph.core._
 import org.janusgraph.core.schema.{ConsistencyModifier, JanusGraphManagement, JanusGraphSchemaType, Mapping}
 import org.janusgraph.diskstorage.PermanentBackendException
@@ -33,14 +33,14 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
 
   def this() = this(Configuration.load(Environment.simple()))
 
-  override def noTransaction[A](body: Graph ⇒ A): A = {
+  override def noTransaction[A](body: Graph => A): A = {
     logger.debug(s"Begin of no-transaction")
     val a = body(graph)
     logger.debug(s"End of no-transaction")
     a
   }
 
-  override def tryTransaction[A](body: Graph ⇒ Try[A]): Try[A] = {
+  override def tryTransaction[A](body: Graph => Try[A]): Try[A] = {
     val result =
       Retry(maxRetryOnConflict)
         .on[PermanentLockingException]
@@ -55,21 +55,21 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
           logger.debug("Begin of transaction")
           Try {
             body(tx)
-              .map { a ⇒
+              .map { a =>
                 tx.commit()
                 logger.debug("End of transaction")
                 a
               }
           }.flatten
             .transform(
-              { r ⇒
+              { r =>
                 executeTransactionCallbacks(tx)
                 Success(r)
               }, {
-                case t: PermanentLockingException ⇒ Failure(new DatabaseException(cause = t))
-                case t: SchemaViolationException  ⇒ Failure(new DatabaseException(cause = t))
-                case t: PermanentBackendException ⇒ Failure(new DatabaseException(cause = t))
-                case e: Throwable ⇒
+                case t: PermanentLockingException => Failure(new DatabaseException(cause = t))
+                case t: SchemaViolationException  => Failure(new DatabaseException(cause = t))
+                case t: PermanentBackendException => Failure(new DatabaseException(cause = t))
+                case e: Throwable =>
                   logger.error(s"Exception raised, rollback (${e.getMessage})")
                   Try(tx.rollback())
                   Failure(e)
@@ -116,37 +116,37 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
 
   private def createElementLabels(mgmt: JanusGraphManagement, models: Seq[Model]): Unit =
     models.foreach {
-      case m: VertexModel ⇒
+      case m: VertexModel =>
         logger.trace(s"mgmt.getOrCreateVertexLabel(${m.label})")
         mgmt.getOrCreateVertexLabel(m.label)
-      case m: EdgeModel[_, _] ⇒
+      case m: EdgeModel[_, _] =>
         logger.trace(s"mgmt.getOrCreateEdgeLabel(${m.label})")
         mgmt.getOrCreateEdgeLabel(m.label)
     }
 
   private def createProperties(mgmt: JanusGraphManagement, models: Seq[Model]): Unit =
     models
-      .flatMap(model ⇒ model.fields.map(f ⇒ (f._1, model, f._2)))
+      .flatMap(model => model.fields.map(f => (f._1, model, f._2)))
       .groupBy(_._1)
       .map {
-        case (fieldName, mappings) ⇒
+        case (fieldName, mappings) =>
           val firstMapping = mappings.head._3
           if (!mappings.tail.forall(_._3 isCompatibleWith firstMapping)) {
             val msg = mappings.map {
-              case (_, model, mapping) ⇒ s"  in model ${model.label}: ${mapping.graphTypeClass} (${mapping.cardinality})"
+              case (_, model, mapping) => s"  in model ${model.label}: ${mapping.graphTypeClass} (${mapping.cardinality})"
             }
             throw InternalError(s"Mapping of `$fieldName` has incompatible types:\n${msg.mkString("\n")}")
           }
-          fieldName → firstMapping
+          fieldName -> firstMapping
       }
       .foreach {
-        case (fieldName, mapping) ⇒
+        case (fieldName, mapping) =>
           logger.debug(s"Create property $fieldName of type ${mapping.graphTypeClass} (${mapping.cardinality})")
           val cardinality = mapping.cardinality match {
-            case MappingCardinality.single ⇒ Cardinality.SINGLE
-            case MappingCardinality.option ⇒ Cardinality.SINGLE
-            case MappingCardinality.list   ⇒ Cardinality.LIST
-            case MappingCardinality.set    ⇒ Cardinality.SET
+            case MappingCardinality.single => Cardinality.SINGLE
+            case MappingCardinality.option => Cardinality.SINGLE
+            case MappingCardinality.list   => Cardinality.LIST
+            case MappingCardinality.set    => Cardinality.SET
           }
           logger.trace(s"mgmt.makePropertyKey($fieldName).dataType(${mapping.graphTypeClass.getSimpleName}.class).cardinality($cardinality).make()")
           mgmt
@@ -166,23 +166,23 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
   ): Unit = {
     val indexName = elementLabel.name + "_" + properties.mkString("_")
     val index     = mgmt.buildIndex(indexName, elementClass).indexOnly(elementLabel)
-    val propertyKeys = (properties :+ "_label").map { p ⇒
+    val propertyKeys = (properties :+ "_label").map { p =>
       Option(mgmt.getPropertyKey(p)).getOrElse(throw InternalError(s"Property $p in ${elementLabel.name} not found"))
     }
     indexType match {
-      case IndexType.unique ⇒
+      case IndexType.unique =>
         logger.debug(s"Creating unique index on fields $elementLabel:${propertyKeys.mkString(",")}")
         propertyKeys.foreach(index.addKey)
         index.unique()
         val i = index.buildCompositeIndex()
         mgmt.setConsistency(i, ConsistencyModifier.LOCK)
-      case IndexType.standard ⇒
+      case IndexType.standard =>
         logger.debug(s"Creating index on fields $elementLabel:${propertyKeys.mkString(",")}")
         propertyKeys.foreach(index.addKey)
         index.buildCompositeIndex()
-      case IndexType.fulltext ⇒
+      case IndexType.fulltext =>
         logger.debug(s"Creating fulltext index on fields $elementLabel:${propertyKeys.mkString(",")}")
-        propertyKeys.foreach(k ⇒ index.addKey(k, Mapping.TEXT.asParameter()))
+        propertyKeys.foreach(k => index.addKey(k, Mapping.TEXT.asParameter()))
         index.buildMixedIndex("search")
     }
     ()
@@ -197,7 +197,7 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
           val mgmt = graph.openManagement()
           val alreadyExists = models
             .map(_.label)
-            .flatMap(l ⇒ Option(mgmt.getVertexLabel(l)).orElse(Option(mgmt.getEdgeLabel(l))))
+            .flatMap(l => Option(mgmt.getVertexLabel(l)).orElse(Option(mgmt.getEdgeLabel(l))))
             .map(_.toString)
           if (alreadyExists.nonEmpty) {
             logger.info(s"Models already exists. Skipping schema creation (existing labels: ${alreadyExists.mkString(",")})")
@@ -228,7 +228,7 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
 //            .buildCompositeIndex()
 
             models.foreach {
-              case model: VertexModel ⇒
+              case model: VertexModel =>
                 val vertexLabel = mgmt.getVertexLabel(model.label)
                 mgmt
                   .buildIndex(s"_id_${model.label}_index", classOf[Vertex])
@@ -237,12 +237,12 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
                   .unique()
                   .buildCompositeIndex()
                 model.indexes.foreach {
-                  case (indexType, properties) ⇒ createIndex(mgmt, classOf[Vertex], vertexLabel, indexType, properties)
+                  case (indexType, properties) => createIndex(mgmt, classOf[Vertex], vertexLabel, indexType, properties)
                 }
-              case model: EdgeModel[_, _] ⇒
+              case model: EdgeModel[_, _] =>
                 val edgeLabel = mgmt.getEdgeLabel(model.label)
                 model.indexes.foreach {
-                  case (indexType, properties) ⇒ createIndex(mgmt, classOf[Edge], edgeLabel, indexType, properties)
+                  case (indexType, properties) => createIndex(mgmt, classOf[Edge], edgeLabel, indexType, properties)
                 }
             }
 
@@ -273,8 +273,8 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
       to: TO with Entity
   ): E with Entity = {
     val edgeMaybe = for {
-      f ← graph.V().has(Key("_id") of from._id).headOption()
-      t ← graph.V().has(Key("_id") of to._id).headOption()
+      f <- graph.V().has(Key("_id") of from._id).headOption()
+      t <- graph.V().has(Key("_id") of to._id).headOption()
     } yield {
       val createdEdge = model.create(e, f, t)(this, graph)
       setSingleProperty(createdEdge, "_id", UUID.randomUUID, idMapping)
@@ -285,8 +285,8 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
       model.toDomain(createdEdge)(this)
     }
     edgeMaybe.getOrElse {
-      val error = graph.V().has(Key("_id") of from._id).headOption().map(_ ⇒ "").getOrElse(s"${from._model.label}:${from._id} not found ") +
-        graph.V().has(Key("_id") of to._id).headOption().map(_ ⇒ "").getOrElse(s"${to._model.label}:${to._id} not found")
+      val error = graph.V().has(Key("_id") of from._id).headOption().map(_ => "").getOrElse(s"${from._model.label}:${from._id} not found ") +
+        graph.V().has(Key("_id") of to._id).headOption().map(_ => "").getOrElse(s"${to._model.label}:${to._id} not found")
       sys.error(s"Fail to create edge between ${from._model.label}:${from._id} and ${to._model.label}:${to._id}, $error")
     }
   }

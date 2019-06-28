@@ -1,7 +1,7 @@
 package org.thp.scalligraph.controllers
 
 import java.io.ByteArrayInputStream
-import java.util.{List ⇒ JList}
+import java.util.{List => JList}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.{DurationLong, FiniteDuration}
@@ -31,7 +31,7 @@ class AuthenticatedRequest[A](val authContext: AuthContext, request: Request[A])
   override def organisation: String         = authContext.organisation
   override def requestId: String            = Instance.getRequestId(request)
   override def permissions: Set[Permission] = authContext.permissions
-  override def map[B](f: A ⇒ B): AuthenticatedRequest[B] =
+  override def map[B](f: A => B): AuthenticatedRequest[B] =
     new AuthenticatedRequest(authContext, request.map(f))
 }
 
@@ -76,7 +76,7 @@ class DefaultAuthenticateSrv @Inject()(configuration: Configuration, userSrv: Us
     * Cookie is signed by Play framework (it cannot be modified by user)
     */
   override def setSessingUser(result: Result, authContext: AuthContext)(implicit request: RequestHeader): Result =
-    result.addingToSession(authContextSession → Json.toJson(authContext).toString, "expire" → (now + maxSessionInactivity.toMillis).toString)
+    result.addingToSession(authContextSession -> Json.toJson(authContext).toString, "expire" -> (now + maxSessionInactivity.toMillis).toString)
 
   /**
     * Retrieve authentication information form cookie
@@ -86,32 +86,32 @@ class DefaultAuthenticateSrv @Inject()(configuration: Configuration, userSrv: Us
       .session
       .get(authContextSession)
       .fold[Try[AuthContext]](Failure(AuthenticationError("User session not found"))) {
-        case authContextJson if expirationStatus(request) != ExpirationStatus.Error ⇒
+        case authContextJson if expirationStatus(request) != ExpirationStatus.Error =>
           AuthContext
             .fromJson(request, authContextJson)
             .recoverWith {
-              case error ⇒
+              case error =>
                 logger.error("Authentication context can't be decoded from user session", error)
                 Failure(AuthenticationError("Invalid user session"))
             }
-        case _ ⇒ Failure(AuthenticationError("User session has expired"))
+        case _ => Failure(AuthenticationError("User session has expired"))
       }
 
   def expirationStatus(request: RequestHeader): ExpirationStatus.Type =
     request
       .session
       .get("expire")
-      .flatMap { expireStr ⇒
+      .flatMap { expireStr =>
         Try(expireStr.toLong).toOption
       }
-      .map { expire ⇒
+      .map { expire =>
         (expire - now).millis
       }
       .map {
-        case duration if duration.length < 0 ⇒ ExpirationStatus.Error
-        case duration if duration < sessionWarning ⇒
+        case duration if duration.length < 0 => ExpirationStatus.Error
+        case duration if duration < sessionWarning =>
           ExpirationStatus.Warning(duration)
-        case duration ⇒ ExpirationStatus.Ok(duration)
+        case duration => ExpirationStatus.Ok(duration)
       }
       .getOrElse(ExpirationStatus.Error)
 
@@ -120,90 +120,90 @@ class DefaultAuthenticateSrv @Inject()(configuration: Configuration, userSrv: Us
     */
   def getFromApiKey(request: RequestHeader): Try[AuthContext] =
     for {
-      auth ← request
+      auth <- request
         .headers
         .get(HeaderNames.AUTHORIZATION)
         .fold[Try[String]](Failure(AuthenticationError("Authentication header not found")))(Success.apply)
-      _ ← if (!auth.startsWith("Bearer ")) Failure(AuthenticationError("Only bearer authentication is supported")) else Success(())
+      _ <- if (!auth.startsWith("Bearer ")) Failure(AuthenticationError("Only bearer authentication is supported")) else Success(())
       key = auth.substring(7)
-      authContext ← authSrv.authenticate(key, requestOrganisation(request))(request)
+      authContext <- authSrv.authenticate(key, requestOrganisation(request))(request)
     } yield authContext
 
   def getFromBasicAuth(request: RequestHeader): Try[AuthContext] =
     for {
-      auth ← request
+      auth <- request
         .headers
         .get(HeaderNames.AUTHORIZATION)
         .fold[Try[String]](Failure(AuthenticationError("Authentication header not found")))(Success.apply)
-      _ ← if (!auth.startsWith("Basic ")) Failure(AuthenticationError("Only basic authentication is supported")) else Success(())
+      _ <- if (!auth.startsWith("Basic ")) Failure(AuthenticationError("Only basic authentication is supported")) else Success(())
       authWithoutBasic = auth.substring(6)
       decodedAuth      = new String(java.util.Base64.getDecoder.decode(authWithoutBasic), "UTF-8")
-      authContext ← decodedAuth.split(":") match {
-        case Array(username, password) ⇒ authSrv.authenticate(username, password, requestOrganisation(request))(request)
-        case _                         ⇒ Failure(AuthenticationError("Can't decode authentication header"))
+      authContext <- decodedAuth.split(":") match {
+        case Array(username, password) => authSrv.authenticate(username, password, requestOrganisation(request))(request)
+        case _                         => Failure(AuthenticationError("Can't decode authentication header"))
       }
     } yield authContext
 
   private def asn1String(obj: ASN1Primitive): String = obj match {
-    case ds: DERUTF8String    ⇒ DERUTF8String.getInstance(ds).getString
-    case to: ASN1TaggedObject ⇒ asn1String(ASN1TaggedObject.getInstance(to).getObject)
-    case os: ASN1OctetString  ⇒ new String(os.getOctets)
-    case as: ASN1String       ⇒ as.getString
+    case ds: DERUTF8String    => DERUTF8String.getInstance(ds).getString
+    case to: ASN1TaggedObject => asn1String(ASN1TaggedObject.getInstance(to).getObject)
+    case os: ASN1OctetString  => new String(os.getOctets)
+    case as: ASN1String       => as.getString
   }
 
   private object CertificateSAN {
 
     def unapply(l: JList[_]): Option[(String, String)] = {
       val typeValue = for {
-        t ← Option(l.get(0))
-        v ← Option(l.get(1))
-      } yield t → v
+        t <- Option(l.get(0))
+        v <- Option(l.get(1))
+      } yield t -> v
       typeValue
-        .collect { case (t: Integer, v) ⇒ t.toInt → v }
+        .collect { case (t: Integer, v) => t.toInt -> v }
         .collect {
-          case (0, value: Array[Byte]) ⇒
+          case (0, value: Array[Byte]) =>
             val asn1     = new ASN1InputStream(new ByteArrayInputStream(value)).readObject()
             val asn1Seq  = ASN1Sequence.getInstance(asn1)
             val id       = ASN1ObjectIdentifier.getInstance(asn1Seq.getObjectAt(0)).getId
             val valueStr = asn1String(asn1Seq.getObjectAt(1).toASN1Primitive)
 
             id match {
-              case "1.3.6.1.4.1.311.20.2.3" ⇒ "upn" → valueStr
+              case "1.3.6.1.4.1.311.20.2.3" => "upn" -> valueStr
               // Add other object id
-              case other ⇒ other → valueStr
+              case other => other -> valueStr
             }
-          case (1, value: String) ⇒ "rfc822Name"                → value
-          case (2, value: String) ⇒ "dNSName"                   → value
-          case (3, value: String) ⇒ "x400Address"               → value
-          case (4, value: String) ⇒ "directoryName"             → value
-          case (5, value: String) ⇒ "ediPartyName"              → value
-          case (6, value: String) ⇒ "uniformResourceIdentifier" → value
-          case (7, value: String) ⇒ "iPAddress"                 → value
-          case (8, value: String) ⇒ "registeredID"              → value
+          case (1, value: String) => "rfc822Name"                -> value
+          case (2, value: String) => "dNSName"                   -> value
+          case (3, value: String) => "x400Address"               -> value
+          case (4, value: String) => "directoryName"             -> value
+          case (5, value: String) => "ediPartyName"              -> value
+          case (6, value: String) => "uniformResourceIdentifier" -> value
+          case (7, value: String) => "iPAddress"                 -> value
+          case (8, value: String) => "registeredID"              -> value
         }
     }
   }
 
   def getFromClientCertificate(request: RequestHeader): Try[AuthContext] =
     certificateField
-      .fold[Try[AuthContext]](Failure(AuthenticationError("Certificate authentication is not configured"))) { cf ⇒
+      .fold[Try[AuthContext]](Failure(AuthenticationError("Certificate authentication is not configured"))) { cf =>
         request
           .clientCertificateChain
           .flatMap(_.headOption)
-          .flatMap { cert ⇒
+          .flatMap { cert =>
             val dn       = cert.getSubjectX500Principal.getName
             val ldapName = new LdapName(dn)
             ldapName
               .getRdns
               .asScala
               .collectFirst {
-                case rdn if rdn.getType == cf ⇒ userSrv.getFromId(request, rdn.getValue.toString, requestOrganisation(request))
+                case rdn if rdn.getType == cf => userSrv.getFromId(request, rdn.getValue.toString, requestOrganisation(request))
               }
               .orElse {
                 for {
-                  san ← Option(cert.getSubjectAlternativeNames)
-                  fieldValue ← san.asScala.collectFirst {
-                    case CertificateSAN(`cf`, value) ⇒ userSrv.getFromId(request, value, requestOrganisation(request))
+                  san <- Option(cert.getSubjectAlternativeNames)
+                  fieldValue <- san.asScala.collectFirst {
+                    case CertificateSAN(`cf`, value) => userSrv.getFromId(request, value, requestOrganisation(request))
                   }
                 } yield fieldValue
               }
@@ -211,29 +211,29 @@ class DefaultAuthenticateSrv @Inject()(configuration: Configuration, userSrv: Us
           .getOrElse(Failure(AuthenticationError("Certificate doesn't contain user information")))
       }
 
-  val authenticationMethods: Seq[(String, RequestHeader ⇒ Try[AuthContext])] =
-    (if (authBySessionCookie) Seq("session" → getFromSession _) else Nil) ++
-      (if (authByPki) Seq("pki"             → getFromClientCertificate _) else Nil) ++
-      (if (authByKey) Seq("key"             → getFromApiKey _) else Nil) ++
-      (if (authByBasicAuth) Seq("basic"     → getFromBasicAuth _) else Nil)
+  val authenticationMethods: Seq[(String, RequestHeader => Try[AuthContext])] =
+    (if (authBySessionCookie) Seq("session" -> getFromSession _) else Nil) ++
+      (if (authByPki) Seq("pki"             -> getFromClientCertificate _) else Nil) ++
+      (if (authByKey) Seq("key"             -> getFromApiKey _) else Nil) ++
+      (if (authByBasicAuth) Seq("basic"     -> getFromBasicAuth _) else Nil)
 
   override def getAuthContext(request: RequestHeader): Try[AuthContext] =
     authenticationMethods
       .foldLeft[Try[Either[Seq[(String, Throwable)], AuthContext]]](Success(Left(Nil))) {
-        case (acc, (authMethodName, authMethod)) ⇒
+        case (acc, (authMethodName, authMethod)) =>
           acc.flatMap {
-            case authContext if authContext.isRight ⇒ Success(authContext)
-            case Left(errors) ⇒
+            case authContext if authContext.isRight => Success(authContext)
+            case Left(errors) =>
               authMethod(request)
-                .map(authContext ⇒ Right(authContext))
-                .recover { case error ⇒ Left(errors :+ (authMethodName → error)) }
+                .map(authContext => Right(authContext))
+                .recover { case error => Left(errors :+ (authMethodName -> error)) }
           }
       }
       .flatMap {
-        case Right(authContext) ⇒ Success(authContext)
-        case Left(errors) ⇒
+        case Right(authContext) => Success(authContext)
+        case Left(errors) =>
           val errorDetails = errors
-            .map { case (authMethodName, error) ⇒ s"\t$authMethodName: ${error.getClass.getSimpleName} ${error.getMessage}" }
+            .map { case (authMethodName, error) => s"\t$authMethodName: ${error.getClass.getSimpleName} ${error.getMessage}" }
             .mkString("\n")
           logger.error(s"Authentication failure:\n$errorDetails")
           Failure(AuthenticationError("Authentication failure"))

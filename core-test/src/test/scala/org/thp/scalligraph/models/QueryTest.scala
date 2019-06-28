@@ -18,7 +18,7 @@ class QueryTest extends PlaySpecification with Mockito {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
   val userSrv: UserSrv = new DummyUserSrv
 
-  Fragments.foreach(new DatabaseProviders().list) { dbProvider ⇒
+  Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
     val app: AppBuilder = AppBuilder()
       .bindToProvider(dbProvider)
       .addConfiguration("play.modules.disabled = [org.thp.scalligraph.ScalligraphModule]")
@@ -37,28 +37,28 @@ class QueryTest extends PlaySpecification with Mockito {
 
     s"[$name] Query executor" should {
       "execute simple query from Json" in {
-        db.transaction { implicit graph ⇒
+        db.transaction { implicit graph =>
           val authGraph = AuthGraph(userSrv.initialAuthContext, graph)
           val input =
             Field(
               Json.arr(
-                Json.obj("_name" → "allPeople"),
-                Json.obj("_name" → "sort", "_fields" → Json.arr(Json.obj("age" → "incr"))),
-                Json.obj("_name" → "toList")
+                Json.obj("_name" -> "allPeople"),
+                Json.obj("_name" -> "sort", "_fields" -> Json.arr(Json.obj("age" -> "incr"))),
+                Json.obj("_name" -> "toList")
               )
             )
-          val result = queryExecutor.parser(input).map { query ⇒
+          val result = queryExecutor.parser(input).map { query =>
             queryExecutor.execute(query)(authGraph).toJson
           }
           result must_=== Good(
             Json.obj(
-              "result" → Json.arr(
-                Json.obj("createdBy" → "admin", "label" → "Mister vadas", "name"  → "vadas", "age"  → 27),
-                Json.obj("createdBy" → "admin", "label" → "Mister franck", "name" → "franck", "age" → 28),
-                Json.obj("createdBy" → "admin", "label" → "Mister marko", "name"  → "marko", "age"  → 29),
-                Json.obj("createdBy" → "admin", "label" → "Mister josh", "name"   → "josh", "age"   → 32),
-                Json.obj("createdBy" → "admin", "label" → "Mister marc", "name"   → "marc", "age"   → 34),
-                Json.obj("createdBy" → "admin", "label" → "Mister peter", "name"  → "peter", "age"  → 35)
+              "result" -> Json.arr(
+                Json.obj("createdBy" -> "admin", "label" -> "Mister vadas", "name"  -> "vadas", "age"  -> 27),
+                Json.obj("createdBy" -> "admin", "label" -> "Mister franck", "name" -> "franck", "age" -> 28),
+                Json.obj("createdBy" -> "admin", "label" -> "Mister marko", "name"  -> "marko", "age"  -> 29),
+                Json.obj("createdBy" -> "admin", "label" -> "Mister josh", "name"   -> "josh", "age"   -> 32),
+                Json.obj("createdBy" -> "admin", "label" -> "Mister marc", "name"   -> "marc", "age"   -> 34),
+                Json.obj("createdBy" -> "admin", "label" -> "Mister peter", "name"  -> "peter", "age"  -> 35)
               )
             )
           )
@@ -66,45 +66,45 @@ class QueryTest extends PlaySpecification with Mockito {
       }
 
       "execute aggregation query" in {
-        db.transaction { implicit graph ⇒
+        db.transaction { implicit graph =>
           val authGraph = AuthGraph(userSrv.initialAuthContext, graph)
           val input = Field(
             Json.arr(
-              Json.obj("_name" → "allPeople"),
-              Json.obj("_name" → "aggregation", "_agg" → "field", "_field" → "age", "_select" → Json.arr(Json.obj("_agg" → "count")))
+              Json.obj("_name" -> "allPeople"),
+              Json.obj("_name" -> "aggregation", "_agg" -> "field", "_field" -> "age", "_select" -> Json.arr(Json.obj("_agg" -> "count")))
             )
           )
-          val result = queryExecutor.parser(input).map { query ⇒
+          val result = queryExecutor.parser(input).map { query =>
             queryExecutor.execute(query)(authGraph).toJson
           }
           result must_== Good(
             Json.obj(
-              "32" → Json.obj("count" → 1),
-              "27" → Json.obj("count" → 1),
-              "34" → Json.obj("count" → 1),
-              "35" → Json.obj("count" → 1),
-              "28" → Json.obj("count" → 1),
-              "29" → Json.obj("count" → 1)
+              "32" -> Json.obj("count" -> 1),
+              "27" -> Json.obj("count" -> 1),
+              "34" -> Json.obj("count" -> 1),
+              "35" -> Json.obj("count" -> 1),
+              "28" -> Json.obj("count" -> 1),
+              "29" -> Json.obj("count" -> 1)
             )
           )
         }
       }
 
       "execute aggregation query 2" in {
-        db.transaction { implicit graph ⇒
+        db.transaction { implicit graph =>
           val authGraph = AuthGraph(userSrv.initialAuthContext, graph)
           val input = Field(
             Json.arr(
-              Json.obj("_name" → "allSoftware"),
-              Json.obj("_name" → "aggregation", "_agg" → "field", "_field" → "lang", "_select" → Json.arr(Json.obj("_agg" → "count")))
+              Json.obj("_name" -> "allSoftware"),
+              Json.obj("_name" -> "aggregation", "_agg" -> "field", "_field" -> "lang", "_select" -> Json.arr(Json.obj("_agg" -> "count")))
             )
           )
-          val result = queryExecutor.parser(input).map { query ⇒
+          val result = queryExecutor.parser(input).map { query =>
             queryExecutor.execute(query)(authGraph).toJson
           }
           result must_== Good(
             Json.obj(
-              "java" → Json.obj("count" → 2)
+              "java" -> Json.obj("count" -> 2)
             )
           )
         }

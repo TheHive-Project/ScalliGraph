@@ -2,14 +2,14 @@ package org.thp.scalligraph.graphql
 
 import java.util.Date
 
-import scala.reflect.runtime.{currentMirror ⇒ rm, universe ⇒ ru}
+import scala.reflect.runtime.{currentMirror => rm, universe => ru}
 
 import play.api.Logger
 
 import gremlin.scala.{Element, Graph, GremlinScala, P}
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.models.{Schema ⇒ _, _}
+import org.thp.scalligraph.models.{Schema => _, _}
 import org.thp.scalligraph.query._
 import org.thp.scalligraph._
 import sangria.marshalling.{CoercedScalaResultMarshaller, FromInput, ResultMarshaller}
@@ -34,16 +34,16 @@ object SchemaGenerator {
       property: PublicProperty[Element, _, _],
       fieldSuffix: String,
       inputType: InputType[V],
-      filter: V ⇒ GremlinScala[_] ⇒ GremlinScala[_]) {
+      filter: V => GremlinScala[_] => GremlinScala[_]) {
     lazy val fieldName: String = property.propertyName + fieldSuffix
 
     def inputField: InputField[Option[V]] = InputField(fieldName, OptionInputType(inputType))
 
     def getEntityFilter(value: V): EntityFilter = {
-      val f: GremlinScala[_] ⇒ GremlinScala[_] = filter(value)
+      val f: GremlinScala[_] => GremlinScala[_] = filter(value)
       new EntityFilter {
         override def apply[G](authContext: AuthContext)(raw: GremlinScala[G]): GremlinScala[G] = {
-          val x: Seq[GremlinScala[G] ⇒ GremlinScala[_]] = property.definition.map(_.andThen(f)).asInstanceOf[Seq[GremlinScala[G] ⇒ GremlinScala[_]]]
+          val x: Seq[GremlinScala[G] => GremlinScala[_]] = property.definition.map(_.andThen(f)).asInstanceOf[Seq[GremlinScala[G] => GremlinScala[_]]]
           raw.or(x: _*)
         }
       }
@@ -52,45 +52,45 @@ object SchemaGenerator {
 
   def stringFilters(p: PublicProperty[Element, _, _]) =
     List(
-      FieldFilter[String](p, "", StringType, value ⇒ _.is(P.eq[String](value))),
-      FieldFilter[String](p, "_not", StringType, value ⇒ _.is(P.neq(value))),
-      FieldFilter[Seq[String]](p, "_in", ListInputType(StringType), value ⇒ _.is(P.within(value))),
-      FieldFilter[Seq[String]](p, "_not_in", ListInputType(StringType), value ⇒ _.is(P.without(value))),
-      FieldFilter[String](p, "_lt", StringType, value ⇒ _.is(P.lt(value))),
-      FieldFilter[String](p, "_lte", StringType, value ⇒ _.is(P.lte(value))),
-      FieldFilter[String](p, "_gt", StringType, value ⇒ _.is(P.gt(value))),
-      FieldFilter[String](p, "_gte", StringType, value ⇒ _.is(P.gte(value))),
-      FieldFilter[String](p, "_contains", StringType, value ⇒ _.is(InputFilter.stringContains(value))),
-      FieldFilter[String](p, "_starts_with", StringType, value ⇒ _.is(InputFilter.stringStartsWith(value))),
-      FieldFilter[String](p, "_ends_with", StringType, value ⇒ _.is(InputFilter.stringEndsWith(value).negate)),
-      FieldFilter[String](p, "_not_starts_with", StringType, value ⇒ _.is(InputFilter.stringStartsWith(value))),
-      FieldFilter[String](p, "_no_ends_with", StringType, value ⇒ _.is(InputFilter.stringEndsWith(value).negate))
+      FieldFilter[String](p, "", StringType, value => _.is(P.eq[String](value))),
+      FieldFilter[String](p, "_not", StringType, value => _.is(P.neq(value))),
+      FieldFilter[Seq[String]](p, "_in", ListInputType(StringType), value => _.is(P.within(value))),
+      FieldFilter[Seq[String]](p, "_not_in", ListInputType(StringType), value => _.is(P.without(value))),
+      FieldFilter[String](p, "_lt", StringType, value => _.is(P.lt(value))),
+      FieldFilter[String](p, "_lte", StringType, value => _.is(P.lte(value))),
+      FieldFilter[String](p, "_gt", StringType, value => _.is(P.gt(value))),
+      FieldFilter[String](p, "_gte", StringType, value => _.is(P.gte(value))),
+      FieldFilter[String](p, "_contains", StringType, value => _.is(InputFilter.stringContains(value))),
+      FieldFilter[String](p, "_starts_with", StringType, value => _.is(InputFilter.stringStartsWith(value))),
+      FieldFilter[String](p, "_ends_with", StringType, value => _.is(InputFilter.stringEndsWith(value).negate)),
+      FieldFilter[String](p, "_not_starts_with", StringType, value => _.is(InputFilter.stringStartsWith(value))),
+      FieldFilter[String](p, "_no_ends_with", StringType, value => _.is(InputFilter.stringEndsWith(value).negate))
     )
 
   def intFilters(p: PublicProperty[Element, _, _]) =
     List(
-      FieldFilter[Int](p, "", IntType, value ⇒ _.is(P.eq[Int](value))),
-      FieldFilter[Int](p, s"_not", IntType, value ⇒ _.is(P.neq(value))),
-      FieldFilter[Seq[Int]](p, s"_in", ListInputType(IntType), value ⇒ _.is(P.within(value))),
-      FieldFilter[Seq[Int]](p, s"_not_in", ListInputType(IntType), value ⇒ _.is(P.without(value))),
-      FieldFilter[Int](p, s"_lt", IntType, value ⇒ _.is(P.lt(value))),
-      FieldFilter[Int](p, s"_lte", IntType, value ⇒ _.is(P.lte(value))),
-      FieldFilter[Int](p, s"_gt", IntType, value ⇒ _.is(P.gt(value))),
-      FieldFilter[Int](p, s"_gte", IntType, value ⇒ _.is(P.gte(value)))
+      FieldFilter[Int](p, "", IntType, value => _.is(P.eq[Int](value))),
+      FieldFilter[Int](p, s"_not", IntType, value => _.is(P.neq(value))),
+      FieldFilter[Seq[Int]](p, s"_in", ListInputType(IntType), value => _.is(P.within(value))),
+      FieldFilter[Seq[Int]](p, s"_not_in", ListInputType(IntType), value => _.is(P.without(value))),
+      FieldFilter[Int](p, s"_lt", IntType, value => _.is(P.lt(value))),
+      FieldFilter[Int](p, s"_lte", IntType, value => _.is(P.lte(value))),
+      FieldFilter[Int](p, s"_gt", IntType, value => _.is(P.gt(value))),
+      FieldFilter[Int](p, s"_gte", IntType, value => _.is(P.gte(value)))
     )
 
-  abstract class CacheFunction[T] extends (() ⇒ T) { lf ⇒
+  abstract class CacheFunction[T] extends (() => T) { lf =>
     def fn: T
     private lazy val value                     = fn
     override def apply(): T                    = value
-    def andThen[U](f: T ⇒ U): CacheFunction[U] = CacheFunction[U](f(lf.value))
+    def andThen[U](f: T => U): CacheFunction[U] = CacheFunction[U](f(lf.value))
   }
 
   object CacheFunction {
     def sequence[T](s: Seq[CacheFunction[T]]): CacheFunction[Seq[T]] = new CacheFunction[Seq[T]] {
       override def fn: Seq[T] = s.map(_.apply())
     }
-    def apply[T](f: ⇒ T): CacheFunction[T] = new CacheFunction[T] {
+    def apply[T](f: => T): CacheFunction[T] = new CacheFunction[T] {
       override def fn: T = f
     }
   }
@@ -102,7 +102,7 @@ object SchemaGenerator {
         .find(_._1 =:= tpe)
         .map(_._2)
         .getOrElse {
-          content ::= tpe → value
+          content ::= tpe -> value
           value
         }
     def +(entry: (ru.Type, T)): TypeCatalog[T] = {
@@ -112,8 +112,8 @@ object SchemaGenerator {
   }
 
   def duplicate[A](value: A): A = value match {
-    case step: ScalliSteps[_, _, _] ⇒ step.clone().asInstanceOf[A]
-    case _                          ⇒ value
+    case step: ScalliSteps[_, _, _] => step.clone().asInstanceOf[A]
+    case _                          => value
   }
 
   def getScalarField(name: String, tpe: ru.Type): InputField[_] =
@@ -131,11 +131,11 @@ object SchemaGenerator {
       objectCatalog: TypeCatalog[CacheFunction[Option[OutputType[_]]]]): CacheFunction[Option[Field[AuthGraph, Any]]] = {
     val pq = query.asInstanceOf[ParamQuery[Any]]
     logger.debug(s"$tpe : query ${query.name} found, no param")
-    getObject(query.toType(tpe)).andThen(_.map { o ⇒
+    getObject(query.toType(tpe)).andThen(_.map { o =>
       if (tpe =:= ru.typeOf[Graph])
-        Field[AuthGraph, Any, Any, Any](query.name, o, resolve = ctx ⇒ pq((), ctx.ctx.graph, ctx.ctx.auth))
+        Field[AuthGraph, Any, Any, Any](query.name, o, resolve = ctx => pq((), ctx.ctx.graph, ctx.ctx.auth))
       else
-        Field[AuthGraph, Any, Any, Any](query.name, o, resolve = ctx ⇒ pq((), duplicate(ctx.value), ctx.ctx.auth))
+        Field[AuthGraph, Any, Any, Any](query.name, o, resolve = ctx => pq((), duplicate(ctx.value), ctx.ctx.auth))
     })
   }
 
@@ -144,14 +144,14 @@ object SchemaGenerator {
       objectCatalog: TypeCatalog[CacheFunction[Option[OutputType[_]]]]): CacheFunction[Option[Field[AuthGraph, Any]]] = {
     val pq = query.asInstanceOf[ParamQuery[Any]]
     logger.debug(s"$tpe : query ${query.name} found, with param ${query.paramType}")
-    val inputFields = symbols.map(s ⇒ getScalarField(s.name.decodedName.toString.trim, s.typeSignature)).toList
+    val inputFields = symbols.map(s => getScalarField(s.name.decodedName.toString.trim, s.typeSignature)).toList
     val argName     = query.paramType.typeSymbol.name.decodedName.toString.trim
     val arg         = Argument(argName, InputObjectType(argName, inputFields)) // FIXME must build a case class of type tpe
-    getObject(query.toType(tpe)).andThen(_.map({ o ⇒
+    getObject(query.toType(tpe)).andThen(_.map({ o =>
       if (tpe =:= ru.typeOf[Graph])
-        Field[AuthGraph, Any, Any, Any](query.name, o, arguments = List(arg), resolve = ctx ⇒ pq(ctx.arg(arg), ctx.ctx.graph, ctx.ctx.auth))
+        Field[AuthGraph, Any, Any, Any](query.name, o, arguments = List(arg), resolve = ctx => pq(ctx.arg(arg), ctx.ctx.graph, ctx.ctx.auth))
       else
-        Field[AuthGraph, Any, Any, Any](query.name, o, arguments = List(arg), resolve = ctx ⇒ pq(ctx.arg(arg), duplicate(ctx.value), ctx.ctx.auth))
+        Field[AuthGraph, Any, Any, Any](query.name, o, arguments = List(arg), resolve = ctx => pq(ctx.arg(arg), duplicate(ctx.value), ctx.ctx.auth))
     }))
   }
 
@@ -161,16 +161,16 @@ object SchemaGenerator {
     executor.queries
       .find(_.checkFrom(tpe))
       .collectFirst {
-        case q if q.toType(tpe) <:< outputType ⇒
+        case q if q.toType(tpe) <:< outputType =>
           RichType.getTypeArgs(q.toType(tpe), outputType).head match {
-            case CaseClassType(symbols @ _*) ⇒
-              symbols.map { s ⇒
+            case CaseClassType(symbols @ _*) =>
+              symbols.map { s =>
                 getObject(s.typeSignature)
-                  .andThen(_.map(o ⇒
+                  .andThen(_.map(o =>
                     Field[AuthGraph, Any, Any, Any](
                       s.name.toString,
                       o,
-                      resolve = { ctx ⇒
+                      resolve = { ctx =>
                         val output = q
                           .asInstanceOf[Query]((), duplicate(ctx.value), ctx.ctx.auth) // TODO check if q requires param
                           .asInstanceOf[Output[_]]
@@ -193,18 +193,18 @@ object SchemaGenerator {
       else if (tpe <:< ru.typeOf[Option[_]])
         getObject(RichType.getTypeArgs(tpe, ru.typeOf[Option[_]]).head).andThen(_.map(OptionType(_)))
       else {
-        new CacheFunction[Option[OutputType[_]]] { current ⇒
+        new CacheFunction[Option[OutputType[_]]] { current =>
           override def fn: Some[ObjectType[AuthGraph, Any]] = {
             val fields: Seq[CacheFunction[Option[Field[AuthGraph, Any]]]] = getQueryFields(tpe, current) ++
               executor.publicProperties.filter(_.stepType =:= tpe).map(getPropertyFields(_)) ++
               getOutputFields(tpe) :+
-              CacheFunction[Option[Field[AuthGraph, Any]]](Some(Field("_", OptionType(StringType), resolve = _ ⇒ None)))
+              CacheFunction[Option[Field[AuthGraph, Any]]](Some(Field("_", OptionType(StringType), resolve = _ => None)))
 
             val objectName = tpe.typeArgs.map(typeName).mkString + typeName(tpe)
             Some(
               ObjectType(
                 objectName,
-                fieldsFn = CacheFunction.sequence(fields).andThen { l ⇒
+                fieldsFn = CacheFunction.sequence(fields).andThen { l =>
                   val x = Collection.distinctBy(l.flatten.toList)(_.name)
                   logger.debug(s"fields of $objectName are: ${x.map(_.name).mkString(",")}")
                   x
@@ -220,7 +220,7 @@ object SchemaGenerator {
     val objectName = tpe.typeSymbol.name.decodedName.toString.trim
     val inputFields = executor.publicProperties
       .filter(_.stepType =:= tpe)
-      .map(prop ⇒ InputField(prop.propertyName, OptionInputType(orderEnumeration)))
+      .map(prop => InputField(prop.propertyName, OptionInputType(orderEnumeration)))
     if (inputFields.isEmpty) None
     else {
       val fromInput: FromInput[InputSort] = new FromInput[InputSort] {
@@ -229,7 +229,7 @@ object SchemaGenerator {
           val input = node
             .asInstanceOf[Map[String, Option[Any]]]
             .collect {
-              case (name, Some(order)) ⇒ name → org.apache.tinkerpop.gremlin.process.traversal.Order.valueOf(order.toString)
+              case (name, Some(order)) => name -> org.apache.tinkerpop.gremlin.process.traversal.Order.valueOf(order.toString)
             }
             .toSeq
           InputSort(input: _*)
@@ -244,7 +244,7 @@ object SchemaGenerator {
           "sort",
           stepObjectType,
           arguments = List(arg),
-          resolve = ctx ⇒
+          resolve = ctx =>
             Value(
               ctx
                 .arg(arg)
@@ -262,9 +262,9 @@ object SchemaGenerator {
     val fieldFilters: List[FieldFilter[_]] = executor.publicProperties
       .filter(_.stepType =:= tpe)
       .flatMap {
-        case prop if prop.mapping.domainTypeClass == classOf[String] ⇒ stringFilters(prop.asInstanceOf[PublicProperty[Element, _, _]])
-        case prop if prop.mapping.domainTypeClass == classOf[Int]    ⇒ intFilters(prop.asInstanceOf[PublicProperty[Element, _, _]])
-        case _                                                       ⇒ Nil
+        case prop if prop.mapping.domainTypeClass == classOf[String] => stringFilters(prop.asInstanceOf[PublicProperty[Element, _, _]])
+        case prop if prop.mapping.domainTypeClass == classOf[Int]    => intFilters(prop.asInstanceOf[PublicProperty[Element, _, _]])
+        case _                                                       => Nil
       }
     if (fieldFilters.isEmpty) None
     else {
@@ -276,11 +276,11 @@ object SchemaGenerator {
           node
             .asInstanceOf[Map[String, Option[Any]]]
             .flatMap {
-              case (name, Some(value)) ⇒
+              case (name, Some(value)) =>
                 fieldFilters.find(_.fieldName == name).map {
-                  case ff: FieldFilter[v] ⇒ ff.getEntityFilter(value.asInstanceOf[v])
+                  case ff: FieldFilter[v] => ff.getEntityFilter(value.asInstanceOf[v])
                 }
-              case _ ⇒ None
+              case _ => None
             }
             .toSeq
             .reduce(_ and _)
@@ -294,7 +294,7 @@ object SchemaGenerator {
           "filter",
           stepObjectType,
           arguments = List(arg),
-          resolve = ctx ⇒
+          resolve = ctx =>
             Value(
               ctx
                 .arg(arg)
@@ -309,20 +309,20 @@ object SchemaGenerator {
     executor.allQueries
       .filter(_.checkFrom(tpe))
       .flatMap {
-        case q if q.toType(tpe) <:< outputType ⇒ Seq.empty
-        case _: SortQuery ⇒
+        case q if q.toType(tpe) <:< outputType => Seq.empty
+        case _: SortQuery =>
           logger.debug(s"$tpe : add field sort")
-          Seq(currentObject.andThen(_.flatMap(o ⇒ getSortField(tpe, o))))
-        case _: FilterQuery ⇒
+          Seq(currentObject.andThen(_.flatMap(o => getSortField(tpe, o))))
+        case _: FilterQuery =>
           logger.debug(s"$tpe : add field filter")
-          Seq(currentObject.andThen(_.flatMap(o ⇒ getFilterField(tpe, o))))
-        case _: AggregationQuery ⇒ // TODO add support of aggregation query
+          Seq(currentObject.andThen(_.flatMap(o => getFilterField(tpe, o))))
+        case _: AggregationQuery => // TODO add support of aggregation query
           Seq.empty
-        case q ⇒
+        case q =>
           logger.debug(s"$tpe : add field ${q.name}")
           q.paramType match {
-            case t if t =:= ru.typeOf[Unit]  ⇒ Seq(getField(tpe, q))
-            case CaseClassType(symbols @ _*) ⇒ Seq(getParamField(tpe, q, symbols))
+            case t if t =:= ru.typeOf[Unit]  => Seq(getField(tpe, q))
+            case CaseClassType(symbols @ _*) => Seq(getParamField(tpe, q, symbols))
           }
       }
 
@@ -333,10 +333,10 @@ object SchemaGenerator {
     val optionType = ru.typeOf[Option[_]].typeConstructor
     val seqType    = ru.typeOf[Seq[_]].typeConstructor
     val propertyType = property.mapping.cardinality match {
-      case MappingCardinality.single ⇒ t
-      case MappingCardinality.option ⇒ ru.appliedType(optionType, t)
-      case MappingCardinality.list   ⇒ ru.appliedType(seqType, t)
-      case MappingCardinality.set    ⇒ ru.appliedType(seqType, t)
+      case MappingCardinality.single => t
+      case MappingCardinality.option => ru.appliedType(optionType, t)
+      case MappingCardinality.list   => ru.appliedType(seqType, t)
+      case MappingCardinality.set    => ru.appliedType(seqType, t)
     }
     val stepType   = ru.appliedType(ru.typeOf[ScalarSteps[Any]].typeConstructor, propertyType)
     val objectType = getObject(stepType).apply().get
@@ -345,7 +345,7 @@ object SchemaGenerator {
         Field[AuthGraph, ScalliSteps[A, _, _ <: AnyRef], ScalarSteps[B], Any]( // FIXME should be ElementStep instead of ScalliSteps. Property can be applied only on element step.
           property.propertyName,
           objectType,
-          resolve = ctx ⇒
+          resolve = ctx =>
             Value(duplicate(ctx.value) // ScalliSteps[EndDomain, EndGraph => B, ThisStep <: AnyRef]
               .asInstanceOf[ElementSteps[_, A, _]] // ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisStep <: ElementSteps[E, EndGraph, ThisStep]] ScalliSteps[E with Entity, EndGraph, ThisStep]
               .get[B](ctx.ctx.auth, property))
@@ -356,8 +356,8 @@ object SchemaGenerator {
   def typeName(tpe: ru.Type): String = {
     import ru._
     tpe match {
-      case RefinedType(cl :: _, _) ⇒ symbolName(cl.typeSymbol)
-      case cl                      ⇒ symbolName(cl.typeSymbol)
+      case RefinedType(cl :: _, _) => symbolName(cl.typeSymbol)
+      case cl                      => symbolName(cl.typeSymbol)
     }
   }
 
@@ -367,13 +367,13 @@ object SchemaGenerator {
     logger.info(s"Generate GraphQL schema from ${executor.getClass}")
 
     val objectCatalog = new TypeCatalog[CacheFunction[Option[OutputType[_]]]] +
-      (ru.typeOf[String]  → CacheFunction(Some(StringType))) +
-      (ru.typeOf[Int]     → CacheFunction(Some(IntType))) +
-      (ru.typeOf[Long]    → CacheFunction(Some(LongType))) +
-      (ru.typeOf[Float]   → CacheFunction(Some(FloatType))) +
-      (ru.typeOf[Double]  → CacheFunction(Some(FloatType))) +
-      (ru.typeOf[Boolean] → CacheFunction(Some(BooleanType))) +
-      (ru.typeOf[Date]    → CacheFunction(Some(DateType)))
+      (ru.typeOf[String]  -> CacheFunction(Some(StringType))) +
+      (ru.typeOf[Int]     -> CacheFunction(Some(IntType))) +
+      (ru.typeOf[Long]    -> CacheFunction(Some(LongType))) +
+      (ru.typeOf[Float]   -> CacheFunction(Some(FloatType))) +
+      (ru.typeOf[Double]  -> CacheFunction(Some(FloatType))) +
+      (ru.typeOf[Boolean] -> CacheFunction(Some(BooleanType))) +
+      (ru.typeOf[Date]    -> CacheFunction(Some(DateType)))
     val schemaObjectType = getObject(ru.typeOf[Graph])(executor, objectCatalog).apply().get.asInstanceOf[ObjectType[AuthGraph, Unit]]
     Schema(schemaObjectType)
   }

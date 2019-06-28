@@ -52,7 +52,7 @@ trait FieldsParserUtil extends MacroLogger with MacroUtil {
     val withParserType = appliedType(typeOf[WithParser[_]], eType)
     (symbol.annotations ::: eType.typeSymbol.annotations)
       .find(_.tree.tpe <:< withParserType)
-      .map(annotation ⇒ annotation.tree.children.tail.head)
+      .map(annotation => annotation.tree.children.tail.head)
   }
 
   protected def getParserFromImplicit(eType: Type, withMacrosDisabled: Boolean): Option[Tree] = {
@@ -66,21 +66,21 @@ trait FieldsParserUtil extends MacroLogger with MacroUtil {
 
   protected def buildParser(eType: Type): Option[Tree] =
     eType match {
-      case CaseClassType(paramSymbols @ _*) ⇒
+      case CaseClassType(paramSymbols @ _*) =>
         trace(s"build FieldsParser case class $eType")
         val companion = eType.typeSymbol.companion
         val initialBuilder = paramSymbols.length match {
-          case 0 ⇒ q"$companion.apply()"
-          case 1 ⇒ q"($companion.apply _)"
-          case _ ⇒ q"($companion.apply _).curried"
+          case 0 => q"$companion.apply()"
+          case 1 => q"($companion.apply _)"
+          case _ => q"($companion.apply _).curried"
         }
         val entityBuilder = paramSymbols
           .foldLeft[Option[Tree]](Some(q"org.scalactic.Good($initialBuilder).orBad[org.scalactic.Every[org.thp.scalligraph.AttributeError]]")) {
-            case (maybeBuilder, s) ⇒
+            case (maybeBuilder, s) =>
               val symbolName = s.name.toString
               for {
-                builder ← maybeBuilder
-                parser  ← getOrBuildParser(s, s.typeSignature)
+                builder <- maybeBuilder
+                parser  <- getOrBuildParser(s, s.typeSignature)
               } yield {
                 val builderName = TermName(c.freshName())
                 q"""
@@ -98,7 +98,7 @@ trait FieldsParserUtil extends MacroLogger with MacroUtil {
               }
           }
 
-        entityBuilder.map { builder ⇒
+        entityBuilder.map { builder =>
           val className: String = eType.toString.split("\\.").last
           q"""
             import org.thp.scalligraph.controllers.FieldsParser
@@ -106,14 +106,14 @@ trait FieldsParserUtil extends MacroLogger with MacroUtil {
             FieldsParser[$eType]($className) { case (path, field) ⇒ $builder }
           """
         }
-      case EnumerationType(values @ _*) ⇒
+      case EnumerationType(values @ _*) =>
         trace(s"build FieldsParser enumeration of ${values.map(_._1).mkString("[", ",", "]")}")
         val caseValues = values
           .map {
-            case (name, value) ⇒ cq"(_, org.thp.scalligraph.controllers.FString($name)) ⇒ org.scalactic.Good($value)"
+            case (name, value) => cq"(_, org.thp.scalligraph.controllers.FString($name)) ⇒ org.scalactic.Good($value)"
           }
         Some(q"org.thp.scalligraph.controllers.FieldsParser(${eType.toString}, Set(..${values.map(_._1)})) { case ..$caseValues }")
-      case _ ⇒
+      case _ =>
         None
     }
 }
@@ -141,7 +141,7 @@ trait UpdateFieldsParserUtil extends FieldsParserUtil {
       appliedType(weakTypeOf[WithUpdateParser[_]], eType)
     val parser = (symbol.annotations ::: eType.typeSymbol.annotations)
       .find(_.tree.tpe <:< withUpdateParserType)
-      .map(annotation ⇒ annotation.tree.children.tail.head)
+      .map(annotation => annotation.tree.children.tail.head)
     trace(s"getUpdateParserFromAnnotation($symbol, $eType) => $parser")
     parser
   }
@@ -157,26 +157,26 @@ trait UpdateFieldsParserUtil extends FieldsParserUtil {
 
   def buildUpdateParser(symbol: Symbol, eType: Type): Option[Tree] = {
     val updateParser = eType match {
-      case CaseClassType(symbols @ _*) ⇒
+      case CaseClassType(symbols @ _*) =>
         symbols
-          .map { s ⇒
+          .map { s =>
             val sName = s.name.toString
             s.typeSignature match {
-              case SeqType(subType) ⇒
+              case SeqType(subType) =>
                 val parser = getOrBuildUpdateParser(subType.typeSymbol, subType)
                 q"$parser.seq($sName)"
-              case t ⇒
+              case t =>
                 val parser = getOrBuildUpdateParser(s, t)
                 q"$parser.on($sName)"
             }
           }
-          .reduceOption((p1, p2) ⇒ q"$p1 ++ $p2")
-      case _ ⇒ None
+          .reduceOption((p1, p2) => q"$p1 ++ $p2")
+      case _ => None
     }
-    val parser = getOrBuildParser(symbol, eType).map(p ⇒ q"$p.toUpdate")
+    val parser = getOrBuildParser(symbol, eType).map(p => q"$p.toUpdate")
     val combinedParser = for {
-      p1 ← updateParser
-      p2 ← parser
+      p1 <- updateParser
+      p2 <- parser
     } yield q"$p1 ++ $p2"
     combinedParser.orElse(updateParser).orElse(parser)
   }

@@ -28,12 +28,12 @@ class AttachmentTest extends Specification {
   val dbProviders = new DatabaseProviders()
 
   val dbProvStorageSrv: Seq[(DatabaseProvider, StorageSrv)] = dbProviders.list.map {
-    case db if db.name == "orientdb" ⇒ db → new OrientDatabaseStorageSrv(db.get().asInstanceOf[OrientDatabase], 32 * 1024)
-    case db                          ⇒ db → new DatabaseStorageSrv(db.get(), 32 * 1024)
-  } :+ (new DatabaseProvider("janus", new JanusDatabase()) → new LocalFileSystemStorageSrv(storageDirectory))
+    case db if db.name == "orientdb" => db -> new OrientDatabaseStorageSrv(db.get().asInstanceOf[OrientDatabase], 32 * 1024)
+    case db                          => db -> new DatabaseStorageSrv(db.get(), 32 * 1024)
+  } :+ (new DatabaseProvider("janus", new JanusDatabase()) -> new LocalFileSystemStorageSrv(storageDirectory))
 
   Fragments.foreach(dbProvStorageSrv) {
-    case (dbProvider, storageSrv) ⇒
+    case (dbProvider, storageSrv) =>
       val db = dbProvider.get()
       step(db.createSchema(Nil)) ^ specs(dbProvider.name, db, storageSrv) ^ step(db.drop())
   }
@@ -41,7 +41,7 @@ class AttachmentTest extends Specification {
   def specs(dbName: String, db: Database, storageSrv: StorageSrv): Fragment =
     s"[$dbName] attachment" should {
 
-      "save and read stored data" in db.transaction { implicit graph ⇒
+      "save and read stored data" in db.transaction { implicit graph =>
         val f1       = Paths.get("../build.sbt")
         lazy val f2  = Paths.get("build.sbt")
         val filePath = if (Files.exists(f1)) f1 else f2

@@ -20,13 +20,13 @@ object MappingCardinality extends Enumeration {
 }
 
 trait UniMapping[D] {
-  _: Mapping[D, _, _] ⇒
+  _: Mapping[D, _, _] =>
   type GraphType
 }
 
 object UniMapping {
   implicit val jsonMapping: SingleMapping[JsObject, String] =
-    SingleMapping[JsObject, String]("", toGraphOptFn = j ⇒ Some(j.toString), toDomainFn = s ⇒ Json.parse(s).as[JsObject])
+    SingleMapping[JsObject, String]("", toGraphOptFn = j => Some(j.toString), toDomainFn = s => Json.parse(s).as[JsObject])
   implicit val stringMapping: SingleMapping[String, String]         = SingleMapping[String, String]("")
   implicit val longMapping: SingleMapping[Long, Long]               = SingleMapping[Long, Long](0)
   implicit val intMapping: SingleMapping[Int, Int]                  = SingleMapping[Int, Int](0)
@@ -37,7 +37,7 @@ object UniMapping {
   implicit val permissionMapping: SingleMapping[Permission, String] = SingleMapping[Permission, String]("")
   implicit val hashMapping: SingleMapping[Hash, String] = SingleMapping[Hash, String](
     "",
-    toGraphOptFn = h ⇒ Some(h.toString),
+    toGraphOptFn = h => Some(h.toString),
     toDomainFn = Hash(_)
   )
   implicit def optionMapping[D, G](implicit subMapping: SingleMapping[D, G]): OptionMapping[D, G] = subMapping.optional
@@ -66,8 +66,8 @@ sealed abstract class Mapping[D, SD: ClassTag, G: ClassTag] extends UniMapping[D
 
 case class OptionMapping[D: ClassTag, G: ClassTag](
     noValue: G,
-    toGraphOptFn: D ⇒ Option[G] = (d: D) ⇒ Some(d.asInstanceOf[G]),
-    toDomainFn: G ⇒ D = (g: G) ⇒ g.asInstanceOf[D],
+    toGraphOptFn: D => Option[G] = (d: D) => Some(d.asInstanceOf[G]),
+    toDomainFn: G => D = (g: G) => g.asInstanceOf[D],
     isReadonly: Boolean = false
 ) extends Mapping[Option[D], D, G] {
   override val cardinality: MappingCardinality.Value = MappingCardinality.option
@@ -78,8 +78,8 @@ case class OptionMapping[D: ClassTag, G: ClassTag](
 
 case class SingleMapping[D: ClassTag, G: ClassTag](
     noValue: G,
-    toGraphOptFn: D ⇒ Option[G] = (d: D) ⇒ Some(d.asInstanceOf[G]),
-    toDomainFn: G ⇒ D = (g: G) ⇒ g.asInstanceOf[D],
+    toGraphOptFn: D => Option[G] = (d: D) => Some(d.asInstanceOf[G]),
+    toDomainFn: G => D = (g: G) => g.asInstanceOf[D],
     isReadonly: Boolean = false
 ) extends Mapping[D, D, G] {
   override val cardinality: MappingCardinality.Value = MappingCardinality.single
@@ -93,8 +93,8 @@ case class SingleMapping[D: ClassTag, G: ClassTag](
 
 case class ListMapping[D: ClassTag, G: ClassTag](
     noValue: G,
-    toGraphOptFn: D ⇒ Option[G] = (d: D) ⇒ Some(d.asInstanceOf[G]),
-    toDomainFn: G ⇒ D = (g: G) ⇒ g.asInstanceOf[D],
+    toGraphOptFn: D => Option[G] = (d: D) => Some(d.asInstanceOf[G]),
+    toDomainFn: G => D = (g: G) => g.asInstanceOf[D],
     isReadonly: Boolean = false
 ) extends Mapping[Seq[D], D, G] {
   override val cardinality: MappingCardinality.Value = MappingCardinality.list
@@ -105,8 +105,8 @@ case class ListMapping[D: ClassTag, G: ClassTag](
 
 case class SetMapping[D: ClassTag, G: ClassTag](
     noValue: G,
-    toGraphOptFn: D ⇒ Option[G] = (d: D) ⇒ Some(d.asInstanceOf[G]),
-    toDomainFn: G ⇒ D = (g: G) ⇒ g.asInstanceOf[D],
+    toGraphOptFn: D => Option[G] = (d: D) => Some(d.asInstanceOf[G]),
+    toDomainFn: G => D = (g: G) => g.asInstanceOf[D],
     isReadonly: Boolean = false
 ) extends Mapping[Set[D], D, G] {
   override val cardinality: MappingCardinality.Value = MappingCardinality.set

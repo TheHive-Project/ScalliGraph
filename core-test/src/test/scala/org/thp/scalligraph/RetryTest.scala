@@ -26,7 +26,7 @@ class RetryTest extends PlaySpecification {
           count += 1
           try {
             Success(12 / (count - 1))
-          } catch { case t: Throwable ⇒ throw new RuntimeException("wrap", t) }
+          } catch { case t: Throwable => throw new RuntimeException("wrap", t) }
         }
       count must_=== 2
     }

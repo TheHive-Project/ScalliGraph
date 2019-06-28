@@ -29,9 +29,9 @@ case class FPathElem(head: String, tail: FPath = FPathEmpty) extends FPath {
     else copy(tail = tail.toSeq(index))
 //  override def startsWith(elem: String): Boolean = head == elem
   override def startsWith(elem: FPath): Option[FPath] = elem match {
-    case FPathEmpty                   ⇒ Some(this)
-    case FPathElem(h, t) if h == head ⇒ tail.startsWith(t)
-    case _                            ⇒ None
+    case FPathEmpty                   => Some(this)
+    case FPathElem(h, t) if h == head => tail.startsWith(t)
+    case _                            => None
   }
 }
 
@@ -44,10 +44,10 @@ case class FPathSeq(head: String, tail: FPath) extends FPath {
     else copy(tail = tail.toSeq(index))
 //  override def startsWith(elem: String): Boolean = head == elem
   override def startsWith(elem: FPath): Option[FPath] = elem match {
-    case FPathEmpty                           ⇒ Some(this)
-    case FPathSeq(h, t) if h == head          ⇒ tail.startsWith(t)
-    case FPathElemInSeq(h, _, t) if h == head ⇒ tail.startsWith(t)
-    case _                                    ⇒ None
+    case FPathEmpty                           => Some(this)
+    case FPathSeq(h, t) if h == head          => tail.startsWith(t)
+    case FPathElemInSeq(h, _, t) if h == head => tail.startsWith(t)
+    case _                                    => None
   }
 }
 
@@ -60,10 +60,10 @@ case class FPathElemInSeq(head: String, index: Int, tail: FPath) extends FPath {
     else copy(tail = tail.toSeq(index))
 //  override def startsWith(elem: String): Boolean = head == elem
   override def startsWith(elem: FPath): Option[FPath] = elem match {
-    case FPathEmpty                           ⇒ Some(this)
-    case FPathSeq(h, t) if h == head          ⇒ tail.startsWith(t)
-    case FPathElemInSeq(h, _, t) if h == head ⇒ tail.startsWith(t)
-    case _                                    ⇒ None
+    case FPathEmpty                           => Some(this)
+    case FPathSeq(h, t) if h == head          => tail.startsWith(t)
+    case FPathElemInSeq(h, _, t) if h == head => tail.startsWith(t)
+    case _                                    => None
   }
 }
 
@@ -75,18 +75,18 @@ object FPath {
 
   def apply(path: String): FPath =
     path.split("\\.").foldRight[FPath](FPathEmpty) {
-      case (elemRegex(p), pathElem) ⇒ FPathElem(p, pathElem)
-      case (seqRegex(p), pathElem)  ⇒ FPathSeq(p, pathElem)
-      case (elemInSeqRegex(p, index), pathElem) ⇒
+      case (elemRegex(p), pathElem) => FPathElem(p, pathElem)
+      case (seqRegex(p), pathElem)  => FPathSeq(p, pathElem)
+      case (elemInSeqRegex(p, index), pathElem) =>
         FPathElemInSeq(p, index.toInt, pathElem)
-      case (other, pathElem) ⇒ sys.error(s"ERROR: FPath($other) / $pathElem")
+      case (other, pathElem) => sys.error(s"ERROR: FPath($other) / $pathElem")
     }
 
   def unapplySeq(path: FPath): Option[Seq[String]] =
     path match {
-      case FPathEmpty                                ⇒ Some(Nil)
-      case FPathElem(head, FPath(tail @ _*))         ⇒ Some(head +: tail)
-      case FPathElemInSeq(head, _, FPath(tail @ _*)) ⇒ Some(head +: tail) // TODO add index ?
-      case FPathSeq(head, FPath(tail @ _*))          ⇒ Some(head +: tail) // TODO add [] ?
+      case FPathEmpty                                => Some(Nil)
+      case FPathElem(head, FPath(tail @ _*))         => Some(head +: tail)
+      case FPathElemInSeq(head, _, FPath(tail @ _*)) => Some(head +: tail) // TODO add index ?
+      case FPathSeq(head, FPath(tail @ _*))          => Some(head +: tail) // TODO add [] ?
     }
 }

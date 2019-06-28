@@ -1,7 +1,7 @@
 package org.thp.scalligraph.macros
 
 import scala.reflect.macros.whitebox
-import scala.util.{Try ⇒ UTry}
+import scala.util.{Try => UTry}
 
 import org.thp.scalligraph.{MacroLogger, MacroUtil}
 
@@ -11,16 +11,16 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
 
   def buildVertexModel(annottees: Tree*): Tree =
     annottees.toList match {
-      case (modelClass @ ClassDef(classMods, className, Nil, _)) :: tail if classMods.hasFlag(Flag.CASE) ⇒
+      case (modelClass @ ClassDef(classMods, className, Nil, _)) :: tail if classMods.hasFlag(Flag.CASE) =>
         val modelDef = Seq(
           q"val model = org.thp.scalligraph.models.Model.vertex[$className]"
         )
 
         val modelModule = tail match {
-          case ModuleDef(moduleMods, moduleName, moduleTemplate) :: Nil ⇒
+          case ModuleDef(moduleMods, moduleName, moduleTemplate) :: Nil =>
             val parents = tq"org.thp.scalligraph.models.HasVertexModel[$className]" :: moduleTemplate.parents.filterNot {
-              case Select(_, TypeName("AnyRef")) ⇒ true
-              case _                             ⇒ false
+              case Select(_, TypeName("AnyRef")) => true
+              case _                             => false
             }
 
             ModuleDef(
@@ -28,7 +28,7 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
               moduleName,
               Template(parents = parents, self = moduleTemplate.self, body = moduleTemplate.body ++ modelDef)
             )
-          case Nil ⇒
+          case Nil =>
             val moduleName = className.toTermName
             q"object $moduleName extends org.thp.scalligraph.models.HasVertexModel[$className] { ..$modelDef }"
         }
@@ -38,22 +38,22 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
 
   def buildEdgeModel(annottees: Tree*): Tree = {
     val (fromType, toType) = c.macroApplication match {
-      case q"new $_[$from, $to].macroTransform(..$_)" ⇒
-        UTry(c.typecheck(q"0.asInstanceOf[$from]").tpe → c.typecheck(q"0.asInstanceOf[$to]").tpe)
+      case q"new $_[$from, $to].macroTransform(..$_)" =>
+        UTry(c.typecheck(q"0.asInstanceOf[$from]").tpe -> c.typecheck(q"0.asInstanceOf[$to]").tpe)
           .getOrElse(c.abort(c.enclosingPosition, "FIXME"))
-      case _ ⇒
+      case _ =>
         c.abort(c.enclosingPosition, s"macroApplication = ${showRaw(c.macroApplication)}")
     }
     annottees.toList match {
-      case (modelClass @ ClassDef(classMods, className, Nil, _)) :: tail if classMods.hasFlag(Flag.CASE) ⇒
+      case (modelClass @ ClassDef(classMods, className, Nil, _)) :: tail if classMods.hasFlag(Flag.CASE) =>
         val modelDef = Seq(
           q"val model = org.thp.scalligraph.models.Model.edge[$className, $fromType, $toType]"
         )
         val modelModule = tail match {
-          case ModuleDef(moduleMods, moduleName, moduleTemplate) :: Nil ⇒
+          case ModuleDef(moduleMods, moduleName, moduleTemplate) :: Nil =>
             val parents = tq"org.thp.scalligraph.models.HasEdgeModel[$className, $fromType, $toType]" :: moduleTemplate.parents.filterNot {
-              case Select(_, TypeName("AnyRef")) ⇒ true
-              case _                             ⇒ false
+              case Select(_, TypeName("AnyRef")) => true
+              case _                             => false
             }
             ModuleDef(
               moduleMods,
@@ -64,7 +64,7 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
                 body = moduleTemplate.body ++ modelDef
               )
             )
-          case Nil ⇒
+          case Nil =>
             val moduleName = className.toTermName
             q"object $moduleName extends org.thp.scalligraph.models.HasEdgeModel[$className, $fromType, $toType] { ..$modelDef }"
         }
@@ -75,7 +75,7 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
 
   def outputImpl(annottees: Tree*): Tree =
     annottees.toList match {
-      case ClassDef(classMods, className, Nil, template) :: tail if classMods.hasFlag(Flag.CASE) ⇒
+      case ClassDef(classMods, className, Nil, template) :: tail if classMods.hasFlag(Flag.CASE) =>
         val writes = TermName(c.freshName("writes"))
 
         val writesDef =
@@ -99,8 +99,8 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
 
   def entitySteps(annottees: Tree*): Tree = {
     val entityClass: Tree = c.prefix.tree match {
-      case q"new $_[$typ]" ⇒ typ.asInstanceOf[Tree]
-      case _ ⇒
+      case q"new $_[$typ]" => typ.asInstanceOf[Tree]
+      case _ =>
         fatal("Transform annotation is malformed")
     }
     val entityClassType: Type = UTry(c.typecheck(q"0.asInstanceOf[$entityClass]").tpe)
@@ -108,10 +108,10 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
     initLogger(entityClassType.typeSymbol)
 
     annottees.toList match {
-      case ClassDef(classMods, className, tparams, classTemplate) :: _ ⇒
+      case ClassDef(classMods, className, tparams, classTemplate) :: _ =>
         val entityFields = entityClassType match {
-          case CaseClassType(fields @ _*) ⇒
-            fields.map { field ⇒
+          case CaseClassType(fields @ _*) =>
+            fields.map { field =>
               val mapping     = getMapping(field, field.typeSignature)
               val mappingName = TermName(c.freshName(s"${field.name}Mapping"))
               q"""

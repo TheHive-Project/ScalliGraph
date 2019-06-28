@@ -21,7 +21,7 @@ import org.thp.scalligraph.{Config, Retry}
 object Neo4jDatabase {
 
   def defaultConfiguration = Configuration(
-    Neo4jGraph.CONFIG_DIRECTORY → {
+    Neo4jGraph.CONFIG_DIRECTORY -> {
       val dbDir      = s"db-${math.random}"
       val targetPath = Paths.get("target")
       val dbPath     = targetPath.resolve(dbDir)
@@ -30,8 +30,8 @@ object Neo4jDatabase {
       Try(Files.createDirectory(dbPath))
       s"target/$dbDir"
     },
-    Neo4jGraph.CONFIG_MULTI_PROPERTIES → true,
-    Neo4jGraph.CONFIG_META_PROPERTIES  → true
+    Neo4jGraph.CONFIG_MULTI_PROPERTIES -> true,
+    Neo4jGraph.CONFIG_META_PROPERTIES  -> true
   )
 }
 
@@ -48,11 +48,11 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
 
   def this() = this(Configuration.empty)
 
-  override def noTransaction[A](body: Graph ⇒ A): A = graph.synchronized {
+  override def noTransaction[A](body: Graph => A): A = graph.synchronized {
     body(graph)
   }
 
-  override def tryTransaction[A](body: Graph ⇒ Try[A]): Try[A] =
+  override def tryTransaction[A](body: Graph => Try[A]): Try[A] =
     Retry(maxRetryOnConflict)
       .on[ConstraintViolationException]
       .withTry {
@@ -69,7 +69,7 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
                 a
               }.flatten
                 .recoverWith {
-                  case e: Throwable ⇒
+                  case e: Throwable =>
                     Try(tx.rollback())
                     Failure(e)
                 }
@@ -78,8 +78,8 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
               r2
             }
         r.recoverWith {
-          case t: ConstraintViolationException ⇒ Failure(new DatabaseException(cause = t))
-          case t                               ⇒ Failure(t)
+          case t: ConstraintViolationException => Failure(new DatabaseException(cause = t))
+          case t                               => Failure(t)
 
         }
       }
@@ -87,29 +87,29 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
   override def createSchema(models: Seq[Model]): Try[Unit] =
     // Cypher can't be used here to create schema as it is not compatible with scala 2.12
     // https://github.com/neo4j/neo4j/issues/8832
-    tryTransaction { _ ⇒
+    tryTransaction { _ =>
       val neo4jGraph = graph.getBaseGraph.asInstanceOf[Neo4jGraphAPIImpl].getGraphDatabase
       for {
-        model ← models
+        model <- models
         _ = neo4jGraph
           .schema()
           .constraintFor(Label.label(model.label))
           .assertPropertyIsUnique("_id")
           .create()
-        (indexType, properties) ← model.indexes
+        (indexType, properties) <- model.indexes
       } {
         if (properties.size != 1)
           logger.error(s"Neo4j index can contain only one property, found ${properties.size} for ${model.label}:${properties.mkString(",")}")
-        properties.headOption.foreach { property ⇒
+        properties.headOption.foreach { property =>
           indexType match {
-            case IndexType.standard ⇒
+            case IndexType.standard =>
               neo4jGraph
                 .schema()
                 .indexFor(Label.label(model.label))
                 .on(property)
                 .create()
             // graph.cypher(s"CREATE INDEX ON: ${model.label}(${properties.mkString(",")})")
-            case IndexType.unique ⇒
+            case IndexType.unique =>
               neo4jGraph
                 .schema()
                 .constraintFor(Label.label(model.label))
@@ -117,7 +117,7 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
                 .create()
             // NodeKey constraint should be used but it is not accessible using java API
             // graph.cypher(s"CREATE CONSTRAINT ON (${model.label}:${properties.head}) ASSERT ${model.label}.${properties.head} IS UNIQUE")
-            case IndexType.fulltext ⇒
+            case IndexType.fulltext =>
               logger.error(s"Neo4j doesn't support fulltext index, fallback to standard index")
               neo4jGraph
                 .schema()
@@ -133,15 +133,15 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
 
   override def drop(): Unit = graph.getBaseGraph.shutdown() // FIXME this is not a real drop
 
-  val dateMapping: SingleMapping[Date, Long] = SingleMapping[Date, Long](0, d ⇒ Some(d.getTime), new Date(_))
+  val dateMapping: SingleMapping[Date, Long] = SingleMapping[Date, Long](0, d => Some(d.getTime), new Date(_))
 
   def fixMapping[M <: Mapping[_, _, _]](mapping: M): M =
     if (mapping.domainTypeClass == classOf[Date]) {
       mapping.cardinality match {
-        case MappingCardinality.single ⇒ dateMapping.asInstanceOf[M]
-        case MappingCardinality.option ⇒ dateMapping.optional.asInstanceOf[M]
-        case MappingCardinality.list   ⇒ dateMapping.sequence.asInstanceOf[M]
-        case MappingCardinality.set    ⇒ dateMapping.set.asInstanceOf[M]
+        case MappingCardinality.single => dateMapping.asInstanceOf[M]
+        case MappingCardinality.option => dateMapping.optional.asInstanceOf[M]
+        case MappingCardinality.list   => dateMapping.sequence.asInstanceOf[M]
+        case MappingCardinality.set    => dateMapping.set.asInstanceOf[M]
       }
     } else mapping
 

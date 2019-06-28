@@ -19,22 +19,22 @@ case class UpdateFieldsParser[T](formatName: String, parsers: Seq[(FPath, Fields
       .fields
       .toSeq
       .flatMap {
-        case (key, value) ⇒
+        case (key, value) =>
           val path = FPath(key)
           parsers.collectFirst {
-            case (p, parser) if p.matches(path) ⇒
+            case (p, parser) if p.matches(path) =>
               parser(value)
-                .map(path → _)
-                .badMap(x ⇒ x.map(_.withName(path.toString)))
+                .map(path -> _)
+                .badMap(x => x.map(_.withName(path.toString)))
           }
       }
       .combined
 
   def on(pathStr: String): UpdateFieldsParser[T] =
-    new UpdateFieldsParser[T](formatName, parsers.map { case (path, parser) ⇒ FPathElem(pathStr, path) → parser })
+    new UpdateFieldsParser[T](formatName, parsers.map { case (path, parser) => FPathElem(pathStr, path) -> parser })
 
   def seq(pathStr: String): UpdateFieldsParser[T] =
-    new UpdateFieldsParser[T](formatName, parsers.map { case (path, parser) ⇒ FPathSeq(pathStr, path) → parser })
+    new UpdateFieldsParser[T](formatName, parsers.map { case (path, parser) => FPathSeq(pathStr, path) -> parser })
 }
 
 object UpdateFieldsParser {

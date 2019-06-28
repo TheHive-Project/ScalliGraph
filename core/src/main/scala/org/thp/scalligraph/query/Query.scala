@@ -1,6 +1,6 @@
 package org.thp.scalligraph.query
 
-import scala.reflect.runtime.{currentMirror ⇒ rm, universe ⇒ ru}
+import scala.reflect.runtime.{currentMirror => rm, universe => ru}
 
 import play.api.libs.json.JsValue
 
@@ -11,7 +11,7 @@ import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.ScalliSteps
 import org.thp.scalligraph.{BadRequestError, Output, RichType}
 
-abstract class ParamQuery[P: ru.TypeTag] { q ⇒
+abstract class ParamQuery[P: ru.TypeTag] { q =>
   val paramType: ru.Type = ru.typeOf[P]
   val paramParser: FieldsParser[P]
   val name: String
@@ -27,8 +27,8 @@ abstract class ParamQuery[P: ru.TypeTag] { q ⇒
   def apply(param: P, from: Any, authContext: AuthContext): Any
 }
 
-abstract class Query extends ParamQuery[Unit] { q ⇒
-  override val paramParser: FieldsParser[Unit] = FieldsParser[Unit]("unit") { case _ ⇒ Good(()) }
+abstract class Query extends ParamQuery[Unit] { q =>
+  override val paramParser: FieldsParser[Unit] = FieldsParser[Unit]("unit") { case _ => Good(()) }
 
   def andThen(query: Query): Query = new Query {
     override val name: String                                                 = q.name + "/" + query.name
@@ -40,14 +40,14 @@ abstract class Query extends ParamQuery[Unit] { q ⇒
 
 object Query {
 
-  def init[T: ru.TypeTag](queryName: String, f: (Graph, AuthContext) ⇒ T): Query = new Query {
+  def init[T: ru.TypeTag](queryName: String, f: (Graph, AuthContext) => T): Query = new Query {
     override val name: String                                                 = queryName
     override def checkFrom(t: ru.Type): Boolean                               = t <:< ru.typeOf[Graph]
     override def toType(t: ru.Type): ru.Type                                  = ru.typeOf[T]
     override def apply(param: Unit, from: Any, authContext: AuthContext): Any = f(from.asInstanceOf[Graph], authContext)
   }
 
-  def initWithParam[P: ru.TypeTag, T: ru.TypeTag](queryName: String, parser: FieldsParser[P], f: (P, Graph, AuthContext) ⇒ T): ParamQuery[P] =
+  def initWithParam[P: ru.TypeTag, T: ru.TypeTag](queryName: String, parser: FieldsParser[P], f: (P, Graph, AuthContext) => T): ParamQuery[P] =
     new ParamQuery[P] {
       override val paramParser: FieldsParser[P]                              = parser
       override val name: String                                              = queryName
@@ -56,14 +56,14 @@ object Query {
       override def apply(param: P, from: Any, authContext: AuthContext): Any = f(param, from.asInstanceOf[Graph], authContext)
     }
 
-  def apply[F: ru.TypeTag, T: ru.TypeTag](queryName: String, f: (F, AuthContext) ⇒ T): Query = new Query {
+  def apply[F: ru.TypeTag, T: ru.TypeTag](queryName: String, f: (F, AuthContext) => T): Query = new Query {
     override val name: String                                                 = queryName
     override def checkFrom(t: ru.Type): Boolean                               = t <:< ru.typeOf[F]
     override def toType(t: ru.Type): ru.Type                                  = ru.typeOf[T]
     override def apply(param: Unit, from: Any, authContext: AuthContext): Any = f(from.asInstanceOf[F], authContext)
   }
 
-  def withParam[P: ru.TypeTag, F: ru.TypeTag, T: ru.TypeTag](queryName: String, parser: FieldsParser[P], f: (P, F, AuthContext) ⇒ T): ParamQuery[P] =
+  def withParam[P: ru.TypeTag, F: ru.TypeTag, T: ru.TypeTag](queryName: String, parser: FieldsParser[P], f: (P, F, AuthContext) => T): ParamQuery[P] =
     new ParamQuery[P] {
       override val paramParser: FieldsParser[P]                              = parser
       override val name: String                                              = queryName
@@ -72,7 +72,7 @@ object Query {
       override def apply(param: P, from: Any, authContext: AuthContext): Any = f(param, from.asInstanceOf[F], authContext)
     }
 
-  def output[F: ru.TypeTag, T: ru.TypeTag](implicit toOutput: F ⇒ Output[T]): Query = new Query {
+  def output[F: ru.TypeTag, T: ru.TypeTag](implicit toOutput: F => Output[T]): Query = new Query {
     override val name: String                                                 = "toOutput"
     override def checkFrom(t: ru.Type): Boolean                               = t <:< ru.typeOf[F]
     override def toType(t: ru.Type): ru.Type                                  = ru.appliedType(ru.typeOf[Output[_]].typeConstructor, ru.typeOf[T])
@@ -124,8 +124,8 @@ object ToListQuery extends Query {
   }
 
   override def apply(param: Unit, from: Any, authContext: AuthContext): Any = from match {
-    case f: ScalliSteps[_, _, _] ⇒ f.toList()
-    case f: GremlinScala[_]      ⇒ f.toList
+    case f: ScalliSteps[_, _, _] => f.toList()
+    case f: GremlinScala[_]      => f.toList
   }
 }
 
@@ -134,6 +134,6 @@ trait InputQuery {
 
   def getProperty(properties: Seq[PublicProperty[_, _]], stepType: ru.Type, fieldName: String): PublicProperty[_, _] =
     properties
-      .find(p ⇒ p.stepType =:= stepType && p.propertyName == fieldName.takeWhile(_ != '.'))
+      .find(p => p.stepType =:= stepType && p.propertyName == fieldName.takeWhile(_ != '.'))
       .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))
 }

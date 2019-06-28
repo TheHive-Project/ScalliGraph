@@ -26,13 +26,13 @@ class ControllerTest extends PlaySpecification with Mockito {
       val entryPoint    = new EntryPoint(mock[AuthenticateSrv], actionBuilder, new ErrorHandler, ee.ec, mat)
 
       val action = entryPoint("model extraction")
-        .extract("simpleClass", FieldsParser[SimpleClassForFieldsParserMacroTest]) { req ⇒
+        .extract("simpleClass", FieldsParser[SimpleClassForFieldsParserMacroTest]) { req =>
           val simpleClass = req.body("simpleClass")
           simpleClass must_=== SimpleClassForFieldsParserMacroTest("myName", 44)
           Success(Results.Ok("ok"))
         }
 
-      val request  = FakeRequest("POST", "/api/simple_class").withBody(AnyContentAsJson(Json.obj("name" → "myName", "value" → 44)))
+      val request  = FakeRequest("POST", "/api/simple_class").withBody(AnyContentAsJson(Json.obj("name" -> "myName", "value" -> 44)))
       val result   = action(request)
       val bodyText = contentAsString(result)
       bodyText must be equalTo "ok"
@@ -44,7 +44,7 @@ class ControllerTest extends PlaySpecification with Mockito {
       val entryPoint    = new EntryPoint(mock[AuthenticateSrv], actionBuilder, new ErrorHandler, ee.ec, mat)
 
       val action = entryPoint("find entity")
-        .chunked(_ ⇒ Source(0 to 3).mapMaterializedValue(_ ⇒ 10))
+        .chunked(_ => Source(0 to 3).mapMaterializedValue(_ => 10))
       val request = FakeRequest("GET", "/")
       val result  = Await.result(action(request), 1.second)
       result.header.headers("X-Total") must_=== "10"

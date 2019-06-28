@@ -21,7 +21,7 @@ case class Hasher(algorithms: String*) {
     fromInputStream(Files.newInputStream(path))
 
   def fromInputStream(is: InputStream): Seq[Hash] = {
-    val mds = algorithms.map(algo ⇒ MessageDigest.getInstance(algo))
+    val mds = algorithms.map(algo => MessageDigest.getInstance(algo))
     def readNextBuffer = {
       val buffer = Array.ofDim[Byte](bufferSize)
       val len    = is.read(buffer)
@@ -31,15 +31,15 @@ case class Hasher(algorithms: String*) {
     Iterator
       .continually(readNextBuffer)
       .takeWhile(_.nonEmpty)
-      .foreach(buffer ⇒ mds.foreach(md ⇒ md.update(buffer)))
-    mds.map(md ⇒ Hash(md.digest()))
+      .foreach(buffer => mds.foreach(md => md.update(buffer)))
+    mds.map(md => Hash(md.digest()))
   }
 
   def fromString(data: String): Seq[Hash] = fromBinary(data.getBytes(Charset.forName("UTF8")))
 
   def fromBinary(data: Array[Byte]): Seq[Hash] = {
-    val mds = algorithms.map(algo ⇒ MessageDigest.getInstance(algo))
-    mds.map(md ⇒ Hash(md.digest(data)))
+    val mds = algorithms.map(algo => MessageDigest.getInstance(algo))
+    mds.map(md => Hash(md.digest(data)))
   }
 }
 
@@ -56,25 +56,25 @@ class MultiHash(algorithms: String)(implicit mat: Materializer, ec: ExecutionCon
     md.update(0.asInstanceOf[Byte])
     FileIO
       .fromPath(file)
-      .runForeach(bs ⇒ md.update(bs.toByteBuffer))
-      .map(_ ⇒ ())
+      .runForeach(bs => md.update(bs.toByteBuffer))
+      .map(_ => ())
   }
 
   def addSource(source: Source[ByteString, _]): Future[Unit] =
     source
-      .runForeach { bs ⇒
+      .runForeach { bs =>
         md.update(bs.toByteBuffer)
       }
-      .map(_ ⇒ ())
+      .map(_ => ())
   def digest: Hash = Hash(md.digest())
 }
 
 case class Hash(data: Array[Byte]) {
-  override def toString: String = data.map(b ⇒ f"$b%02x").mkString
+  override def toString: String = data.map(b => f"$b%02x").mkString
 
   override def equals(obj: scala.Any): Boolean = obj match {
-    case Hash(d) ⇒ d.deep == data.deep
-    case _       ⇒ false
+    case Hash(d) => d.deep == data.deep
+    case _       => false
   }
 }
 
@@ -82,13 +82,13 @@ object Hash {
 
   def apply(s: String): Hash = Hash {
     s.grouped(2)
-      .map { cc ⇒
+      .map { cc =>
         (Character.digit(cc(0), 16) << 4 | Character.digit(cc(1), 16)).toByte
       }
       .toArray
   }
 
-  val hashReads                         = Reads(json ⇒ json.validate[String].map(h ⇒ Hash(h)))
-  val hashWrites: Writes[Hash]          = Writes[Hash](h ⇒ JsString(h.toString()))
+  val hashReads                         = Reads(json => json.validate[String].map(h => Hash(h)))
+  val hashWrites: Writes[Hash]          = Writes[Hash](h => JsString(h.toString()))
   implicit val hashFormat: Format[Hash] = Format(hashReads, hashWrites)
 }

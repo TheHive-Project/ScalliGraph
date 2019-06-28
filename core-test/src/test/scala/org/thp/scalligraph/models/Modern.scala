@@ -80,8 +80,8 @@ object DatabaseBuilder {
 
   def build(schema: ModernSchema)(implicit db: Database, authContext: AuthContext): Try[Unit] =
     for {
-      _ ← db.createSchemaFrom(schema)
-      _ ← db.tryTransaction { implicit graph ⇒
+      _ <- db.createSchemaFrom(schema)
+      _ <- db.tryTransaction { implicit graph =>
         val vadas  = schema.personSrv.create(Person("vadas", 27))
         val marko  = schema.personSrv.create(Person("marko", 29))
         val josh   = schema.personSrv.create(Person("josh", 32))

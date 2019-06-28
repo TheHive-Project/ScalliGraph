@@ -1,6 +1,6 @@
 package org.thp.scalligraph.services
 
-import scala.reflect.runtime.{universe ⇒ ru}
+import scala.reflect.runtime.{universe => ru}
 import scala.util.Try
 
 import play.api.libs.json.JsObject
@@ -25,11 +25,11 @@ abstract class VertexSrv[V <: Product: ru.TypeTag, S <: BaseVertexSteps[V, S]](i
 
   val initialValues: Seq[V] = Nil
 
-  def getInitialValues: Seq[InitialValue[V]] = initialValues.map(v ⇒ InitialValue(model, v))
+  def getInitialValues: Seq[InitialValue[V]] = initialValues.map(v => InitialValue(model, v))
 
   def createInitialValues()(implicit graph: Graph, authContext: AuthContext): Unit = initialValues.foreach(create)
 
-  def update(steps: S ⇒ S, propertyUpdaters: Seq[PropertyUpdater])(implicit graph: Graph, authContext: AuthContext): Try[(S, JsObject)] =
+  def update(steps: S => S, propertyUpdaters: Seq[PropertyUpdater])(implicit graph: Graph, authContext: AuthContext): Try[(S, JsObject)] =
     update(steps(initSteps), propertyUpdaters)
 
   def update(steps: S, propertyUpdaters: Seq[PropertyUpdater])(implicit graph: Graph, authContext: AuthContext): Try[(S, JsObject)] =

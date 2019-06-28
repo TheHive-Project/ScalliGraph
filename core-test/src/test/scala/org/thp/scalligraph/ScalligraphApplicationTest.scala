@@ -1,11 +1,11 @@
 package org.thp.scalligraph
 
-import play.api.i18n.{I18nModule ⇒ PlayI18nModule}
+import play.api.i18n.{I18nModule => PlayI18nModule}
 import play.api.inject.guice.GuiceApplicationBuilder
-import play.api.inject.{BuiltinModule ⇒ PlayBuiltinModule}
+import play.api.inject.{BuiltinModule => PlayBuiltinModule}
 import play.api.libs.logback.LogbackLoggerConfigurator
-import play.api.mvc.{CookiesModule ⇒ PlayCookiesModule}
-import play.api.routing.{Router ⇒ PlayRouter}
+import play.api.mvc.{CookiesModule => PlayCookiesModule}
+import play.api.routing.{Router => PlayRouter}
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
 

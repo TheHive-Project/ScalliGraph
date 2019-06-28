@@ -71,13 +71,13 @@ class EntryPoint @Inject()(
       *
       * @return a new entry point with added authentication check
       */
-    def auth(block: AuthenticatedRequest[Record[V]] ⇒ Try[Result]): Action[AnyContent] =
-      actionBuilder.async { request ⇒
+    def auth(block: AuthenticatedRequest[Record[V]] => Try[Result]): Action[AnyContent] =
+      actionBuilder.async { request =>
         val result = for {
-          authContext ← authenticateSrv.getAuthContext(request)
-          values      ← fieldsParser(Field(request)).badMap(errors ⇒ AttributeCheckingError(errors.toSeq)).toTry
-          authRequest = new AuthenticatedRequest(authContext, request.map(_ ⇒ Record(values)))
-          result ← block(authRequest)
+          authContext <- authenticateSrv.getAuthContext(request)
+          values      <- fieldsParser(Field(request)).badMap(errors => AttributeCheckingError(errors.toSeq)).toTry
+          authRequest = new AuthenticatedRequest(authContext, request.map(_ => Record(values)))
+          result <- block(authRequest)
           authResult = authenticateSrv.setSessingUser(result, authContext)(request)
         } yield authResult
         result.fold[Future[Result]](errorHandler.onServerError(request, _), Future.successful)
@@ -89,13 +89,13 @@ class EntryPoint @Inject()(
       * @param block the action body block returning a future
       * @return
       */
-    def asyncAuth(block: AuthenticatedRequest[Record[V]] ⇒ Future[Result]): Action[AnyContent] =
-      actionBuilder.async { request ⇒
+    def asyncAuth(block: AuthenticatedRequest[Record[V]] => Future[Result]): Action[AnyContent] =
+      actionBuilder.async { request =>
         val result = for {
-          authContext ← Future.fromTry(authenticateSrv.getAuthContext(request))
-          values      ← Future.fromTry(fieldsParser(Field(request)).badMap(errors ⇒ AttributeCheckingError(errors.toSeq)).toTry)
-          authRequest = new AuthenticatedRequest(authContext, request.map(_ ⇒ Record(values)))
-          result ← block(authRequest)
+          authContext <- Future.fromTry(authenticateSrv.getAuthContext(request))
+          values      <- Future.fromTry(fieldsParser(Field(request)).badMap(errors => AttributeCheckingError(errors.toSeq)).toTry)
+          authRequest = new AuthenticatedRequest(authContext, request.map(_ => Record(values)))
+          result <- block(authRequest)
           authResult = authenticateSrv.setSessingUser(result, authContext)(request)
         } yield authResult
 
@@ -104,12 +104,12 @@ class EntryPoint @Inject()(
 
     def authTransaction(
         db: Database
-    )(block: AuthenticatedRequest[Record[V]] ⇒ Graph ⇒ Try[Result]): Action[AnyContent] =
-      apply { request ⇒
-        val result = authenticateSrv.getAuthContext(request).flatMap { authContext ⇒
+    )(block: AuthenticatedRequest[Record[V]] => Graph => Try[Result]): Action[AnyContent] =
+      apply { request =>
+        val result = authenticateSrv.getAuthContext(request).flatMap { authContext =>
           val authReq = new AuthenticatedRequest(authContext, request)
-          db.tryTransaction(graph ⇒ block(authReq)(graph))
-            .map(result ⇒ authenticateSrv.setSessingUser(result, authContext)(request))
+          db.tryTransaction(graph => block(authReq)(graph))
+            .map(result => authenticateSrv.setSessingUser(result, authContext)(request))
         }
         result
       }
@@ -120,8 +120,8 @@ class EntryPoint @Inject()(
       * @param block business login function that transform request into response
       * @return Action
       */
-    def apply(block: Request[Record[V]] ⇒ Try[Result]): Action[AnyContent] =
-      async { r ⇒
+    def apply(block: Request[Record[V]] => Try[Result]): Action[AnyContent] =
+      async { r =>
         block(r)
           .fold[Future[Result]](errorHandler.onServerError(r, _), Future.successful)
       }
@@ -132,12 +132,12 @@ class EntryPoint @Inject()(
       * @param block business login function that transform request into future response
       * @return Action
       */
-    def async(block: Request[Record[V]] ⇒ Future[Result]): Action[AnyContent] =
-      actionBuilder.async { request ⇒
+    def async(block: Request[Record[V]] => Future[Result]): Action[AnyContent] =
+      actionBuilder.async { request =>
         fieldsParser(Field(request))
           .fold[Future[Result]](
-            values ⇒ block(request.map(_ ⇒ Record(values))),
-            errors ⇒ Future.successful(BadRequest(Json.toJson(AttributeCheckingError(errors.toSeq))))
+            values => block(request.map(_ => Record(values))),
+            errors => Future.successful(BadRequest(Json.toJson(AttributeCheckingError(errors.toSeq))))
           )
       }
   }

@@ -12,7 +12,7 @@ trait IndexMacro {
   def getIndexes[E: WeakTypeTag]: Tree = {
     val eType = weakTypeOf[E]
     val indexes = eType.typeSymbol.annotations.collect {
-      case annotation if annotation.tree.tpe <:< typeOf[DefineIndex] ⇒
+      case annotation if annotation.tree.tpe <:< typeOf[DefineIndex] =>
         val args      = annotation.tree.children.tail
         val indexType = args.head
         val fields    = args.tail

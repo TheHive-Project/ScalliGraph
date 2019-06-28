@@ -1,6 +1,6 @@
 package org.thp.scalligraph.query
 
-import scala.reflect.runtime.{universe ⇒ ru}
+import scala.reflect.runtime.{universe => ru}
 
 import play.api.libs.json.{JsNull, Json}
 
@@ -11,7 +11,7 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.PagedResult
 
-abstract class QueryExecutor { executor ⇒
+abstract class QueryExecutor { executor =>
   val version: (Int, Int)
   val publicProperties: List[PublicProperty[_, _]] = Nil
   val queries: Seq[ParamQuery[_]]                  = Nil
@@ -34,25 +34,25 @@ abstract class QueryExecutor { executor ⇒
 
   private def toOutput(value: Any, tpe: ru.Type, authContext: AuthContext): Output[_] =
     value match {
-      case o: Output[_] ⇒ o
-      case s: Seq[o] ⇒
+      case o: Output[_] => o
+      case s: Seq[o] =>
         val subType = RichType.getTypeArgs(tpe, ru.typeOf[Seq[_]]).head
-        val result  = s.map(x ⇒ toOutput(x, subType, authContext).toJson)
-        Output(s, Json.obj("result" → result))
-      case s: Option[o] ⇒
-        s.fold[Output[_]](Output(None, JsNull)) { v ⇒
+        val result  = s.map(x => toOutput(x, subType, authContext).toJson)
+        Output(s, Json.obj("result" -> result))
+      case s: Option[o] =>
+        s.fold[Output[_]](Output(None, JsNull)) { v =>
           val subType = RichType.getTypeArgs(tpe, ru.typeOf[Option[_]]).head
           toOutput(v, subType, authContext)
         }
-      case PagedResult(result, _) ⇒
+      case PagedResult(result, _) =>
         val subType = RichType.getTypeArgs(tpe, ru.typeOf[PagedResult[_]]).head
         val seqType = ru.appliedType(ru.typeOf[Seq[_]].typeConstructor, subType)
         val lOutput = toOutput(result, seqType, authContext)
         Output(value, lOutput.toJson)
-      case _ ⇒
+      case _ =>
         allQueries
-          .find(q ⇒ q.checkFrom(tpe) && q.toType(tpe) <:< ru.typeOf[Output[_]] && q.paramType == ru.typeOf[Unit])
-          .map(q ⇒ q.asInstanceOf[Query]((), value, authContext))
+          .find(q => q.checkFrom(tpe) && q.toType(tpe) <:< ru.typeOf[Output[_]] && q.paramType == ru.typeOf[Unit])
+          .map(q => q.asInstanceOf[Query]((), value, authContext))
           .getOrElse {
             throw BadRequestError(s"Value of type $tpe ($value) can't be output")
           }
@@ -64,41 +64,41 @@ abstract class QueryExecutor { executor ⇒
       if (query.checkFrom(tpe)) {
         query
           .paramParser(from)
-          .map(p ⇒ query.toQuery(p))
+          .map(p => query.toQuery(p))
       } else Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name).toSet, field)))
 
     field match {
-      case FNamedObj(name, f) ⇒
+      case FNamedObj(name, f) =>
         val potentialQueries = allQueries
           .filter(_.name == name)
-          .map(q ⇒ applyQuery(q, f))
+          .map(q => applyQuery(q, f))
         potentialQueries
           .find(_.isGood)
           .getOrElse {
             potentialQueries
-              .collect { case Bad(x) ⇒ x }
+              .collect { case Bad(x) => x }
               .reduceOption(_ ++ _)
               .map(Bad(_))
               .getOrElse(Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name).toSet, field))))
           }
-      case _ ⇒ Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name).toSet, field)))
+      case _ => Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name).toSet, field)))
     }
   }
 
   def parser: FieldsParser[Query] = FieldsParser[Query]("query") {
-    case (_, FSeq(fields)) ⇒
+    case (_, FSeq(fields)) =>
       val initQuery = getQuery(ru.typeOf[Graph], fields.head)
       fields
         .tail
-        .foldLeft(initQuery.map(q ⇒ q.toType(ru.typeOf[Graph]) → q)) {
-          case (Good((tpe, query)), field) ⇒ getQuery(tpe, field).map(q ⇒ q.toType(tpe) → query.andThen(q))
-          case (b: Bad[_], _)              ⇒ b
+        .foldLeft(initQuery.map(q => q.toType(ru.typeOf[Graph]) -> q)) {
+          case (Good((tpe, query)), field) => getQuery(tpe, field).map(q => q.toType(tpe) -> query.andThen(q))
+          case (b: Bad[_], _)              => b
         }
         .map(_._2)
   }
 
   def ++(other: QueryExecutor): QueryExecutor = new QueryExecutor {
-    override val version: (Int, Int) = math.max(executor.version._1, other.version._1) → math.min(executor.version._2, other.version._2)
+    override val version: (Int, Int) = math.max(executor.version._1, other.version._1) -> math.min(executor.version._2, other.version._2)
     override val publicProperties: List[PublicProperty[_, _]] =
       (executor.publicProperties :: other.publicProperties).asInstanceOf[List[PublicProperty[_, _]]]
     override val queries: Seq[ParamQuery[_]] = executor.queries ++ other.queries

@@ -14,9 +14,9 @@ class TestAuthenticateSrv @Inject()(configuration: Configuration, userSrv: UserS
 
   override def getAuthContext(request: RequestHeader): Try[AuthContext] =
     for {
-      user ← request.headers.get("user").fold[Try[String]](Failure(AuthenticationError("User header not found")))(Success.apply)
+      user <- request.headers.get("user").fold[Try[String]](Failure(AuthenticationError("User header not found")))(Success.apply)
       organisation = request.headers.get(organisationHeader)
-      authContext ← userSrv.getFromId(request, user, organisation)
+      authContext <- userSrv.getFromId(request, user, organisation)
     } yield authContext
 
   override def setSessingUser(result: Result, authContext: AuthContext)(implicit request: RequestHeader): Result = result

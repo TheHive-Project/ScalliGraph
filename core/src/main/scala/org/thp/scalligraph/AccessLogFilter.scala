@@ -14,12 +14,12 @@ class AccessLogFilter @Inject()(implicit val mat: Materializer, ec: ExecutionCon
 
   val logger = Logger(getClass)
 
-  def apply(nextFilter: RequestHeader ⇒ Future[Result])(requestHeader: RequestHeader): Future[Result] = {
+  def apply(nextFilter: RequestHeader => Future[Result])(requestHeader: RequestHeader): Future[Result] = {
     MDC.put("request", f"${requestHeader.id}%08x")
 
     val startTime = System.currentTimeMillis
 
-    nextFilter(requestHeader).map { result ⇒
+    nextFilter(requestHeader).map { result =>
       val endTime     = System.currentTimeMillis
       val requestTime = endTime - startTime
 
@@ -29,7 +29,7 @@ class AccessLogFilter @Inject()(implicit val mat: Materializer, ec: ExecutionCon
         .fold("")(_ + " bytes")}")
 
       MDC.remove("request")
-      result.withHeaders("Request-Time" → requestTime.toString)
+      result.withHeaders("Request-Time" -> requestTime.toString)
     }
   }
 }

@@ -3,7 +3,7 @@ package org.thp.scalligraph.models
 import java.util.{Base64, Date, UUID}
 
 import scala.collection.JavaConverters._
-import scala.reflect.runtime.{universe ⇒ ru}
+import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
 
 import play.api.Logger
@@ -26,11 +26,11 @@ trait Database {
   val updatedByMapping: OptionMapping[String, String]
   val binaryMapping: SingleMapping[Array[Byte], String]
 
-  def noTransaction[A](body: Graph ⇒ A): A
-  def tryTransaction[A](body: Graph ⇒ Try[A]): Try[A]
-  def transaction[A](body: Graph ⇒ A): A = tryTransaction(graph ⇒ Try(body(graph))).get
+  def noTransaction[A](body: Graph => A): A
+  def tryTransaction[A](body: Graph => Try[A]): Try[A]
+  def transaction[A](body: Graph => A): A = tryTransaction(graph => Try(body(graph))).get
 
-  def onSuccessTransaction(graph: Graph)(body: () ⇒ Unit): Unit
+  def onSuccessTransaction(graph: Graph)(body: () => Unit): Unit
   def executeTransactionCallbacks(graph: Graph): Unit
 
   def version(module: String): Int
@@ -72,10 +72,10 @@ trait Database {
 
   def getProperty[D](element: Element, key: String, mapping: Mapping[D, _, _]): D =
     mapping match {
-      case m: SingleMapping[_, _] ⇒ getSingleProperty(element, key, m).asInstanceOf[D]
-      case m: OptionMapping[_, _] ⇒ getOptionProperty(element, key, m).asInstanceOf[D]
-      case m: ListMapping[_, _]   ⇒ getListProperty(element, key, m).asInstanceOf[D]
-      case m: SetMapping[_, _]    ⇒ getSetProperty(element, key, m).asInstanceOf[D]
+      case m: SingleMapping[_, _] => getSingleProperty(element, key, m).asInstanceOf[D]
+      case m: OptionMapping[_, _] => getOptionProperty(element, key, m).asInstanceOf[D]
+      case m: ListMapping[_, _]   => getListProperty(element, key, m).asInstanceOf[D]
+      case m: SetMapping[_, _]    => getSetProperty(element, key, m).asInstanceOf[D]
     }
 
   def setSingleProperty[D, G](element: Element, key: String, value: D, mapping: SingleMapping[D, _]): Unit
@@ -86,10 +86,10 @@ trait Database {
   def setProperty[D](element: Element, key: String, value: D, mapping: Mapping[D, _, _]): Unit = {
     logger.trace(s"update ${element.id()}, $key = $value")
     mapping match {
-      case m: SingleMapping[d, _] ⇒ setSingleProperty(element, key, value, m)
-      case m: OptionMapping[d, _] ⇒ setOptionProperty(element, key, value.asInstanceOf[Option[d]], m)
-      case m: ListMapping[d, _]   ⇒ setListProperty(element, key, value.asInstanceOf[Seq[d]], m)
-      case m: SetMapping[d, _]    ⇒ setSetProperty(element, key, value.asInstanceOf[Set[d]], m)
+      case m: SingleMapping[d, _] => setSingleProperty(element, key, value, m)
+      case m: OptionMapping[d, _] => setOptionProperty(element, key, value.asInstanceOf[Option[d]], m)
+      case m: ListMapping[d, _]   => setListProperty(element, key, value.asInstanceOf[Seq[d]], m)
+      case m: SetMapping[d, _]    => setSetProperty(element, key, value.asInstanceOf[Set[d]], m)
     }
   }
 
@@ -100,42 +100,42 @@ trait Database {
 }
 
 abstract class BaseDatabase extends Database {
-  val idMapping: SingleMapping[UUID, String]          = SingleMapping[UUID, String]("", uuid ⇒ Some(uuid.toString), UUID.fromString)
+  val idMapping: SingleMapping[UUID, String]          = SingleMapping[UUID, String]("", uuid => Some(uuid.toString), UUID.fromString)
   val createdAtMapping: SingleMapping[Date, Date]     = UniMapping.dateMapping
   val createdByMapping: SingleMapping[String, String] = UniMapping.stringMapping
   val updatedAtMapping: OptionMapping[Date, Date]     = UniMapping.dateMapping.optional
   val updatedByMapping: OptionMapping[String, String] = UniMapping.stringMapping.optional
 
   val binaryMapping: SingleMapping[Array[Byte], String] =
-    SingleMapping[Array[Byte], String]("", data ⇒ Some(Base64.getEncoder.encodeToString(data)), Base64.getDecoder.decode)
+    SingleMapping[Array[Byte], String]("", data => Some(Base64.getEncoder.encodeToString(data)), Base64.getDecoder.decode)
 
-  protected var transactionSuccessCallback: List[(Graph, () ⇒ Unit)] = Nil
+  protected var transactionSuccessCallback: List[(Graph, () => Unit)] = Nil
   protected val transactionSuccessCallbackLock                       = new Object
 
-  override def onSuccessTransaction(graph: Graph)(body: () ⇒ Unit): Unit = transactionSuccessCallbackLock.synchronized {
-    transactionSuccessCallback = (graph → body) :: transactionSuccessCallback
+  override def onSuccessTransaction(graph: Graph)(body: () => Unit): Unit = transactionSuccessCallbackLock.synchronized {
+    transactionSuccessCallback = (graph -> body) :: transactionSuccessCallback
   }
 
   override def executeTransactionCallbacks(graph: Graph): Unit = transactionSuccessCallbackLock.synchronized {
     transactionSuccessCallback = transactionSuccessCallback.filter {
-      case (`graph`, callback) ⇒
+      case (`graph`, callback) =>
         callback()
         false
-      case _ ⇒ true
+      case _ => true
     }
   }
 
-  override def version(module: String): Int = transaction(graph ⇒ graph.variables.get[Int](s"${module}_version").orElse(0))
+  override def version(module: String): Int = transaction(graph => graph.variables.get[Int](s"${module}_version").orElse(0))
 
-  override def setVersion(module: String, v: Int): Unit = transaction(graph ⇒ graph.variables.set(s"${module}_version", v))
+  override def setVersion(module: String, v: Int): Unit = transaction(graph => graph.variables.set(s"${module}_version", v))
 
   override def getModel[E <: Product: ru.TypeTag]: Model.Base[E] = {
     val rm = ru.runtimeMirror(getClass.getClassLoader)
     val companionMirror =
       rm.reflectModule(ru.typeOf[E].typeSymbol.companion.asModule)
     companionMirror.instance match {
-      case hm: HasModel[_] ⇒ hm.model.asInstanceOf[Model.Base[E]]
-      case _               ⇒ throw InternalError(s"Class ${companionMirror.symbol} is not a model")
+      case hm: HasModel[_] => hm.model.asInstanceOf[Model.Base[E]]
+      case _               => throw InternalError(s"Class ${companionMirror.symbol} is not a model")
     }
   }
 
@@ -145,8 +145,8 @@ abstract class BaseDatabase extends Database {
     val companionSymbol = classMirror.symbol.companion
     val companionMirror = rm.reflectModule(companionSymbol.asModule)
     companionMirror.instance match {
-      case hm: HasVertexModel[_] ⇒ hm.model.asInstanceOf[Model.Vertex[E]]
-      case _                     ⇒ throw InternalError(s"Class ${companionMirror.symbol} is not a vertex model")
+      case hm: HasVertexModel[_] => hm.model.asInstanceOf[Model.Vertex[E]]
+      case _                     => throw InternalError(s"Class ${companionMirror.symbol} is not a vertex model")
     }
   }
 
@@ -155,15 +155,15 @@ abstract class BaseDatabase extends Database {
     val companionMirror =
       rm.reflectModule(ru.typeOf[E].typeSymbol.companion.asModule)
     companionMirror.instance match {
-      case hm: HasEdgeModel[_, _, _] ⇒ hm.model.asInstanceOf[Model.Edge[E, FROM, TO]]
-      case _                         ⇒ throw InternalError(s"Class ${companionMirror.symbol} is not an edge model")
+      case hm: HasEdgeModel[_, _, _] => hm.model.asInstanceOf[Model.Edge[E, FROM, TO]]
+      case _                         => throw InternalError(s"Class ${companionMirror.symbol} is not an edge model")
     }
   }
 
   override def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Try[Unit] =
-    createSchema(schemaObject.modelList ++ extraModels).map { _ ⇒
-      transaction(graph ⇒ schemaObject.initialValues.foreach(_.create()(this, graph, authContext)))
-      transaction(graph ⇒ schemaObject.init(graph, authContext))
+    createSchema(schemaObject.modelList ++ extraModels).map { _ =>
+      transaction(graph => schemaObject.initialValues.foreach(_.create()(this, graph, authContext)))
+      transaction(graph => schemaObject.init(graph, authContext))
     }
 
   override def createSchema(models: Seq[Model]): Try[Unit]
@@ -186,8 +186,8 @@ abstract class BaseDatabase extends Database {
       to: TO with Entity
   ): E with Entity = {
     val edgeMaybe = for {
-      f ← graph.V().has(Key("_id") of from._id).headOption()
-      t ← graph.V().has(Key("_id") of to._id).headOption()
+      f <- graph.V().has(Key("_id") of from._id).headOption()
+      t <- graph.V().has(Key("_id") of to._id).headOption()
     } yield {
       val createdEdge = model.create(e, f, t)(this, graph)
       setSingleProperty(createdEdge, "_id", UUID.randomUUID, idMapping)
@@ -197,8 +197,8 @@ abstract class BaseDatabase extends Database {
       model.toDomain(createdEdge)(this)
     }
     edgeMaybe.getOrElse {
-      val error = graph.V().has(Key("_id") of from._id).headOption().map(_ ⇒ "").getOrElse(s"${from._model.label}:${from._id} not found ") +
-        graph.V().has(Key("_id") of to._id).headOption().map(_ ⇒ "").getOrElse(s"${to._model.label}:${to._id} not found")
+      val error = graph.V().has(Key("_id") of from._id).headOption().map(_ => "").getOrElse(s"${from._model.label}:${from._id} not found ") +
+        graph.V().has(Key("_id") of to._id).headOption().map(_ => "").getOrElse(s"${to._model.label}:${to._id} not found")
       throw InternalError(s"Fail to create edge between ${from._model.label}:${from._id} and ${to._model.label}:${to._id}, $error")
     }
   }
@@ -212,16 +212,16 @@ abstract class BaseDatabase extends Database {
   ): Try[E with Entity] =
     elementTraversal
       .getOrFail
-      .flatMap { element ⇒
+      .flatMap { element =>
         logger.trace(s"Update ${element.id()} by ${authContext.userId}")
         fields
           .toTry {
-            case (key, value) ⇒
+            case (key, value) =>
               model
                 .fields
                 .get(key)
                 .fold[Try[Mapping[_, _, _]]](Failure(UnknownAttributeError(key, FAny(Seq(value.toString)))))(Success.apply)
-                .flatMap { mapping ⇒
+                .flatMap { mapping =>
                   // TODO check if value has the correct type
                   setProperty(element, key.toString, value, mapping.asInstanceOf[Mapping[Any, _, _]])
                   logger.trace(s" - $key = $value")
@@ -232,7 +232,7 @@ abstract class BaseDatabase extends Database {
 //                  }
                 }
           }
-          .map { _ ⇒
+          .map { _ =>
             setOptionProperty(element, "_updatedAt", Some(new Date), updatedAtMapping)
             setOptionProperty(element, "_updatedBy", Some(authContext.userId), updatedByMapping)
             model.toDomain(element.asInstanceOf[model.ElementType])(this)
@@ -264,14 +264,14 @@ abstract class BaseDatabase extends Database {
     element
       .properties[G](key)
       .asScala
-      .map(p ⇒ mapping.toDomain(p.value()))
+      .map(p => mapping.toDomain(p.value()))
       .toList
 
   override def getSetProperty[D, G](element: Element, key: String, mapping: SetMapping[D, G]): Set[D] =
     element
       .properties[G](key)
       .asScala
-      .map(p ⇒ mapping.toDomain(p.value()))
+      .map(p => mapping.toDomain(p.value()))
       .toSet
 
   override def setSingleProperty[D, G](element: Element, key: String, value: D, mapping: SingleMapping[D, _]): Unit =
@@ -279,8 +279,8 @@ abstract class BaseDatabase extends Database {
 
   override def setOptionProperty[D, G](element: Element, key: String, value: Option[D], mapping: OptionMapping[D, _]): Unit = {
     value.flatMap(mapping.toGraphOpt) match {
-      case Some(v) ⇒ element.property(key, v)
-      case None    ⇒ element.property(key).remove()
+      case Some(v) => element.property(key, v)
+      case None    => element.property(key).remove()
     }
     ()
   }
@@ -288,16 +288,16 @@ abstract class BaseDatabase extends Database {
   override def setListProperty[D, G](element: Element, key: String, values: Seq[D], mapping: ListMapping[D, _]): Unit = {
     element.properties(key).asScala.foreach(_.remove)
     element match {
-      case vertex: Vertex ⇒ values.flatMap(mapping.toGraphOpt).foreach(vertex.property(Cardinality.list, key, _))
-      case _              ⇒ throw InternalError("Edge doesn't support multi-valued properties")
+      case vertex: Vertex => values.flatMap(mapping.toGraphOpt).foreach(vertex.property(Cardinality.list, key, _))
+      case _              => throw InternalError("Edge doesn't support multi-valued properties")
     }
   }
 
   override def setSetProperty[D, G](element: Element, key: String, values: Set[D], mapping: SetMapping[D, _]): Unit = {
     element.properties(key).asScala.foreach(_.remove)
     element match {
-      case vertex: Vertex ⇒ values.flatMap(mapping.toGraphOpt).foreach(vertex.property(Cardinality.set, key, _))
-      case _              ⇒ throw InternalError("Edge doesn't support multi-valued properties")
+      case vertex: Vertex => values.flatMap(mapping.toGraphOpt).foreach(vertex.property(Cardinality.set, key, _))
+      case _              => throw InternalError("Edge doesn't support multi-valued properties")
     }
   }
 
@@ -335,7 +335,7 @@ abstract class BaseDatabase extends Database {
     override type E = Binary
     override val label: String                                = "binary"
     override val indexes: Seq[(IndexType.Value, Seq[String])] = Nil
-    override val fields: Map[String, Mapping[_, _, _]]        = Map("binary" → UniMapping.stringMapping)
+    override val fields: Map[String, Mapping[_, _, _]]        = Map("binary" -> UniMapping.stringMapping)
     override def toDomain(element: Vertex)(implicit db: Database): Binary with Entity = {
       val base64Data = getSingleProperty[String, String](element, "binary", UniMapping.stringMapping)
       val data       = Base64.getDecoder.decode(base64Data)

@@ -1,6 +1,6 @@
 package org.thp.scalligraph.orientdb
 import java.io.InputStream
-import java.util.{List ⇒ JList}
+import java.util.{List => JList}
 
 import scala.collection.JavaConverters._
 import scala.util.{Success, Try}
@@ -29,20 +29,20 @@ class OrientDatabaseStorageSrv(db: OrientDatabase, chunkSize: Int) extends Stora
       private var index                       = 0
       private def getNextChunk(): Unit =
         recordIds match {
-          case first :: tail ⇒
+          case first :: tail =>
             recordIds = tail
             buffer = Some(first.getRecord[ORecordBytes].toStream)
             index = 0
-          case _ ⇒ buffer = None
+          case _ => buffer = None
         }
       override def read(): Int =
         buffer match {
-          case Some(b) if b.length > index ⇒
+          case Some(b) if b.length > index =>
             val d = b(index)
             index += 1
             d.toInt & 0xff
-          case None ⇒ -1
-          case _ ⇒
+          case None => -1
+          case _ =>
             getNextChunk()
             read()
         }
@@ -57,7 +57,7 @@ class OrientDatabaseStorageSrv(db: OrientDatabase, chunkSize: Int) extends Stora
         val chunk = new ORecordBytes
         val len   = chunk.fromInputStream(is, chunkSize)
         odb.save[ORecordBytes](chunk)
-        len → chunk.getIdentity.asInstanceOf[OIdentifiable]
+        len -> chunk.getIdentity.asInstanceOf[OIdentifiable]
       }
       .takeWhile(_._1 > 0)
       .map(_._2)

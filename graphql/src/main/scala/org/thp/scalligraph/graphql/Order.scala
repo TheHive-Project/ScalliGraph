@@ -30,7 +30,7 @@ object Order {
       def orderBy(authContext: AuthContext): OrderBy[_] = By(property.get(__[A], authContext), order)
     }
 
-    val fields = properties.map(p ⇒ InputField(p.propertyName, OptionInputType(orderEnumeration)))
+    val fields = properties.map(p => InputField(p.propertyName, OptionInputType(orderEnumeration)))
     val inputType: InputObjectType[Seq[FieldOrder[_]]] =
       InputObjectType[Seq[FieldOrder[_]]](classTag[S].runtimeClass.getSimpleName + "Order", fields)
 
@@ -40,10 +40,10 @@ object Order {
       override def fromResult(node: marshaller.Node): Seq[FieldOrder[_]] = {
         val input = node.asInstanceOf[Map[String, Option[Any]]]
         for {
-          (key, valueMaybe) ← input.toSeq
-          value             ← valueMaybe
-          order             ← Try(org.apache.tinkerpop.gremlin.process.traversal.Order.valueOf(value.toString)).toOption
-          property          ← properties.find(_.propertyName == key)
+          (key, valueMaybe) <- input.toSeq
+          value             <- valueMaybe
+          order             <- Try(org.apache.tinkerpop.gremlin.process.traversal.Order.valueOf(value.toString)).toOption
+          property          <- properties.find(_.propertyName == key)
         } yield FieldOrder(property, order)
       }
     }
@@ -56,6 +56,6 @@ object Order {
         "order",
         stepType,
         arguments = List(arg),
-        resolve = ctx ⇒ ctx.value.sort(ctx.arg(arg).map(_.orderBy(ctx.ctx.auth)): _*)))
+        resolve = ctx => ctx.value.sort(ctx.arg(arg).map(_.orderBy(ctx.ctx.auth)): _*)))
   }
 }

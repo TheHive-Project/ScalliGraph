@@ -39,11 +39,11 @@ trait MacroLogger {
       .annotations
       .map(_.tree)
       .collect {
-        case a if a.tpe <:< typeOf[TraceLogLevel] ⇒ LogLevel.trace
-        case a if a.tpe <:< typeOf[DebugLogLevel] ⇒ LogLevel.debug
-        case a if a.tpe <:< typeOf[InfoLogLevel]  ⇒ LogLevel.info
-        case a if a.tpe <:< typeOf[WarnLogLevel]  ⇒ LogLevel.warn
-        case a if a.tpe <:< typeOf[ErrorLogLevel] ⇒ LogLevel.error
+        case a if a.tpe <:< typeOf[TraceLogLevel] => LogLevel.trace
+        case a if a.tpe <:< typeOf[DebugLogLevel] => LogLevel.debug
+        case a if a.tpe <:< typeOf[InfoLogLevel]  => LogLevel.info
+        case a if a.tpe <:< typeOf[WarnLogLevel]  => LogLevel.warn
+        case a if a.tpe <:< typeOf[ErrorLogLevel] => LogLevel.error
       }
       .reduceOption(Math.max)
       .getOrElse(LogLevel.error)
@@ -51,7 +51,7 @@ trait MacroLogger {
   }
 
   private def getCauseMessages(throwable: Throwable, causeMessages: Seq[String] = Nil): String =
-    Option(throwable).fold(causeMessages.mkString("\n")) { e ⇒
+    Option(throwable).fold(causeMessages.mkString("\n")) { e =>
       getCauseMessages(e.getCause, causeMessages :+ s"${e.getClass}: ${e.getMessage}")
     }
 
@@ -62,38 +62,38 @@ trait MacroLogger {
   }
 
   def isTraceEnabled: Boolean    = level >= LogLevel.trace
-  def trace(msg: ⇒ String): Unit = if (isTraceEnabled) println(s"[TRACE] $msg")
+  def trace(msg: => String): Unit = if (isTraceEnabled) println(s"[TRACE] $msg")
 
   def isDebugEnabled: Boolean    = level >= LogLevel.debug
-  def debug(msg: ⇒ String): Unit = if (isDebugEnabled) println(s"[DEBUG] $msg")
+  def debug(msg: => String): Unit = if (isDebugEnabled) println(s"[DEBUG] $msg")
 
   def isInfoEnabled: Boolean    = level >= LogLevel.info
-  def info(msg: ⇒ String): Unit = if (isInfoEnabled) println(s"[INFO]  $msg")
+  def info(msg: => String): Unit = if (isInfoEnabled) println(s"[INFO]  $msg")
 
   def isWarnEnabled: Boolean                          = level >= LogLevel.warn
-  def warn(msg: ⇒ String): Unit                       = if (isWarnEnabled) println(s"[WARN]  $msg")
-  def warn(msg: ⇒ String, throwable: Throwable): Unit = if (isWarnEnabled) println(s"[WARN]  $msg\n${printStackTrace(throwable)}")
+  def warn(msg: => String): Unit                       = if (isWarnEnabled) println(s"[WARN]  $msg")
+  def warn(msg: => String, throwable: Throwable): Unit = if (isWarnEnabled) println(s"[WARN]  $msg\n${printStackTrace(throwable)}")
 
   def isErrorEnabled: Boolean    = level >= LogLevel.error
-  def error(msg: ⇒ String): Unit = if (isErrorEnabled) println(s"[ERROR] $msg")
+  def error(msg: => String): Unit = if (isErrorEnabled) println(s"[ERROR] $msg")
 
-  def error(msg: ⇒ String, throwable: Throwable): Unit =
+  def error(msg: => String, throwable: Throwable): Unit =
     if (isErrorEnabled) c.error(c.enclosingPosition, s"[ERROR] $msg\n${getCauseMessages(throwable)}")
 
-  def fatal(msg: ⇒ String): Nothing                       = c.abort(c.enclosingPosition, s"[ERROR] $msg")
-  def fatal(msg: ⇒ String, throwable: Throwable): Nothing = c.abort(c.enclosingPosition, s"[ERROR] $msg\n${printStackTrace(throwable)}")
+  def fatal(msg: => String): Nothing                       = c.abort(c.enclosingPosition, s"[ERROR] $msg")
+  def fatal(msg: => String, throwable: Throwable): Nothing = c.abort(c.enclosingPosition, s"[ERROR] $msg\n${printStackTrace(throwable)}")
 
   def cleanupCode(code: String): String =
     code
       .replaceAllLiterally("/" + "*{<null>}*/", "")
       .replaceAll(";\n", "\n")
 
-  def ret(msg: ⇒ String, tree: Tree): Tree = {
+  def ret(msg: => String, tree: Tree): Tree = {
     if (logGeneratedCode) println(s"[CODE]  $msg\n${cleanupCode(showCode(tree))}")
     tree
   }
 
-  def ret[T](msg: ⇒ String, expr: Expr[T]): Expr[T] = {
+  def ret[T](msg: => String, expr: Expr[T]): Expr[T] = {
     if (logGeneratedCode) println(s"[CODE]  $msg\n${cleanupCode(showCode(expr.tree, printOwners = false))}")
     expr
   }

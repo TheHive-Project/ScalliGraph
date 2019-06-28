@@ -18,7 +18,7 @@ class RichFuture[T](future: Future[T]) {
     val timeout = system.scheduler.scheduleOnce(after) {
       prom.success(default); ()
     }
-    future onComplete { _ ⇒
+    future onComplete { _ =>
       timeout.cancel()
     }
     Future.firstCompletedOf(List(future, prom.future))
@@ -29,13 +29,13 @@ class RichFuture[T](future: Future[T]) {
 
   def toOr[E <: Throwable](implicit evidence: Manifest[E], ec: ExecutionContext): Future[T Or E] =
     future
-      .map(g ⇒ Good(g))
-      .recoverWith { case evidence(error) ⇒ Future.successful(Bad(error)) }
+      .map(g => Good(g))
+      .recoverWith { case evidence(error) => Future.successful(Bad(error)) }
 
   def toTry(implicit ec: ExecutionContext): Future[Try[T]] =
     future
-      .map(r ⇒ Success(r))
-      .recover { case t ⇒ Failure(t) }
+      .map(r => Success(r))
+      .recover { case t => Failure(t) }
 }
 
 class RichJson(obj: JsObject) {
@@ -44,23 +44,23 @@ class RichJson(obj: JsObject) {
     if (obj.keys.contains(name))
       obj
     else
-      obj + (name → writes.writes(value))
+      obj + (name -> writes.writes(value))
 
-  def mapValues(f: JsValue ⇒ JsValue) =
+  def mapValues(f: JsValue => JsValue) =
     JsObject(obj.fields.map {
-      case (key, value) ⇒ key → f(value)
+      case (key, value) => key -> f(value)
     })
 
-  def map(f: (String, JsValue) ⇒ (String, JsValue)): JsObject =
+  def map(f: (String, JsValue) => (String, JsValue)): JsObject =
     obj
       .fields
-      .map(kv ⇒ JsObject(Seq(f.tupled(kv))))
+      .map(kv => JsObject(Seq(f.tupled(kv))))
       .reduceOption(_ deepMerge _)
       .getOrElse(JsObject(Nil))
 
   def collectValues(pf: PartialFunction[JsValue, JsValue]) =
     JsObject(obj.fields.collect {
-      case (key, value) if pf.isDefinedAt(value) ⇒ key → pf(value)
+      case (key, value) if pf.isDefinedAt(value) => key -> pf(value)
     })
 
   def collect(pf: PartialFunction[(String, JsValue), (String, JsValue)]) =
@@ -70,7 +70,7 @@ class RichJson(obj: JsObject) {
 class RichOr[G, B](or: Or[G, B]) {
 
   def toFuture(implicit evidence: B <:< Throwable): Future[G] =
-    or.fold(g ⇒ Future.successful(g), b ⇒ Future.failed(b))
+    or.fold(g => Future.successful(g), b => Future.failed(b))
 }
 
 class RichTryIterable[A, Repr](xs: TraversableLike[Try[A], Repr]) {
@@ -79,8 +79,8 @@ class RichTryIterable[A, Repr](xs: TraversableLike[Try[A], Repr]) {
     val aBuilder = cbfa()
     val bBuilder = cbfb()
     xs.foreach {
-      case Success(a) ⇒ aBuilder += a
-      case Failure(b) ⇒ bBuilder += b
+      case Success(a) => aBuilder += a
+      case Failure(b) => bBuilder += b
     }
     (aBuilder.result(), bBuilder.result())
   }
@@ -93,14 +93,14 @@ class RichOrIterable[A, B, Repr](xs: TraversableLike[A Or B, Repr]) {
     val aBuilder = cbfa()
     val bBuilder = cbfb()
     xs.foreach {
-      case Good(a) ⇒ aBuilder += a
-      case Bad(b)  ⇒ bBuilder += b
+      case Good(a) => aBuilder += a
+      case Bad(b)  => bBuilder += b
     }
     (aBuilder.result(), bBuilder.result())
   }
 }
 
 class RichTuble[A, B](t: (A, B)) {
-  def map1[C](f: A ⇒ C): (C, B) = (f(t._1), t._2)
-  def map2[C](f: B ⇒ C): (A, C) = (t._1, f(t._2))
+  def map1[C](f: A => C): (C, B) = (f(t._1), t._2)
+  def map2[C](f: B => C): (A, C) = (t._1, f(t._2))
 }

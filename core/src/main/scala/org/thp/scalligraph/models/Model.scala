@@ -66,14 +66,14 @@ object Model {
       e.keys()
         .asScala
         .map(
-          key ⇒
+          key =>
             s"\n - $key = ${e.properties[Any](key).asScala.map(_.value()).mkString(",")} (${e.properties[Any](key).asScala.toSeq.headOption.fold("empty")(_.value.getClass.toString)})"
         )
         .mkString
 }
 
 abstract class Model {
-  thisModel ⇒
+  thisModel =>
   type E <: Product
   type EEntity = E with Entity
   type ElementType <: Element
@@ -94,7 +94,7 @@ abstract class Model {
     }
 }
 
-abstract class VertexModel extends Model { thisModel ⇒
+abstract class VertexModel extends Model { thisModel =>
   override type ElementType = Vertex
 
   def create(e: E)(implicit db: Database, graph: Graph): Vertex
@@ -103,7 +103,7 @@ abstract class VertexModel extends Model { thisModel ⇒
     graph.V().has(Key("_id") of id).headOption().getOrElse(throw NotFoundError(s"Vertex $id not found"))
 }
 
-abstract class EdgeModel[FROM <: Product, TO <: Product] extends Model { thisModel ⇒
+abstract class EdgeModel[FROM <: Product, TO <: Product] extends Model { thisModel =>
   override type ElementType = Edge
 
   val fromLabel: String

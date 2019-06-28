@@ -55,12 +55,12 @@ class MultiAuthSrv(val authProviders: immutable.Set[AuthSrv]) extends AuthSrv {
   val name: String                                     = "multi"
   override val capabilities: Set[AuthCapability.Value] = authProviders.flatMap(_.capabilities)
 
-  private[auth] def forAllAuthProvider[A](body: AuthSrv ⇒ Try[A]): Try[A] =
-    authProviders.foldLeft[Try[A]](Failure(new Exception("no authentication provider found"))) { (f, a) ⇒
+  private[auth] def forAllAuthProvider[A](body: AuthSrv => Try[A]): Try[A] =
+    authProviders.foldLeft[Try[A]](Failure(new Exception("no authentication provider found"))) { (f, a) =>
       f.recoverWith {
-        case _ ⇒
+        case _ =>
           val r = body(a)
-          r.failed.foreach(error ⇒ MultiAuthSrv.logger.debug(s"${a.name} ${error.getClass.getSimpleName} ${error.getMessage}"))
+          r.failed.foreach(error => MultiAuthSrv.logger.debug(s"${a.name} ${error.getClass.getSimpleName} ${error.getMessage}"))
           r
       }
     }
@@ -68,7 +68,7 @@ class MultiAuthSrv(val authProviders: immutable.Set[AuthSrv]) extends AuthSrv {
   override def authenticate(username: String, password: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
     forAllAuthProvider(_.authenticate(username, password, organisation))
       .recoverWith {
-        case authError ⇒
+        case authError =>
           MultiAuthSrv.logger.error("Authentication failure", authError)
           Failure(AuthenticationError("Authentication failure"))
       }
@@ -76,7 +76,7 @@ class MultiAuthSrv(val authProviders: immutable.Set[AuthSrv]) extends AuthSrv {
   override def authenticate(key: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
     forAllAuthProvider(_.authenticate(key, organisation))
       .recoverWith {
-        case authError ⇒
+        case authError =>
           MultiAuthSrv.logger.error("Authentication failure", authError)
           Failure(AuthenticationError("Authentication failure"))
       }
@@ -84,8 +84,8 @@ class MultiAuthSrv(val authProviders: immutable.Set[AuthSrv]) extends AuthSrv {
   override def authenticate(organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
     forAllAuthProvider(_.authenticate(organisation: Option[String]))
       .recoverWith {
-        case e: OAuth2Redirect ⇒ Failure(e)
-        case authError ⇒
+        case e: OAuth2Redirect => Failure(e)
+        case authError =>
           MultiAuthSrv.logger.error("Authentication failure", authError)
           Failure(AuthenticationError("Authentication failure"))
       }

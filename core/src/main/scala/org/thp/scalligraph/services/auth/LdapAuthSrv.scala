@@ -22,15 +22,15 @@ case class LdapConnection(serverNames: Seq[String], useSSL: Boolean, bindDN: Str
   private val noLdapServerAvailableException = AuthenticationError("No LDAP server found")
 
   private def isFatal(t: Throwable): Boolean = t match {
-    case null                             ⇒ true
-    case `noLdapServerAvailableException` ⇒ false
-    case _: ConnectException              ⇒ false
-    case _                                ⇒ isFatal(t.getCause)
+    case null                             => true
+    case `noLdapServerAvailableException` => false
+    case _: ConnectException              => false
+    case _                                => isFatal(t.getCause)
   }
 
-  private def connect[A](username: String, password: String)(f: InitialDirContext ⇒ Try[A]): Try[A] =
+  private def connect[A](username: String, password: String)(f: InitialDirContext => Try[A]): Try[A] =
     serverNames.foldLeft[Try[A]](Failure(noLdapServerAvailableException)) {
-      case (Failure(e), serverName) if !isFatal(e) ⇒
+      case (Failure(e), serverName) if !isFatal(e) =>
         val protocol = if (useSSL) "ldaps://" else "ldap://"
         val env      = new util.Hashtable[Any, Any]
         env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.ldap.LdapCtxFactory")
@@ -43,10 +43,10 @@ case class LdapConnection(serverNames: Seq[String], useSSL: Boolean, bindDN: Str
           try f(ctx)
           finally ctx.close()
         }.flatten
-      case (failure @ Failure(e), _) ⇒
+      case (failure @ Failure(e), _) =>
         logger.debug("LDAP connect error", e)
         failure
-      case (r, _) ⇒ r
+      case (r, _) => r
     }
 
   private def getUserDN(ctx: InitialDirContext, username: String): Try[String] =
@@ -60,17 +60,17 @@ case class LdapConnection(serverNames: Seq[String], useSSL: Boolean, bindDN: Str
     }
 
   def authenticate(username: String, password: String): Try[Unit] =
-    connect(bindDN, bindPW) { ctx ⇒
+    connect(bindDN, bindPW) { ctx =>
       getUserDN(ctx, username)
-    }.flatMap { userDN ⇒
-      connect(userDN, password)(_ ⇒ Success(()))
+    }.flatMap { userDN =>
+      connect(userDN, password)(_ => Success(()))
     }
 
   def changePassword(username: String, oldPassword: String, newPassword: String): Try[Unit] =
-    connect(bindDN, bindPW) { ctx ⇒
+    connect(bindDN, bindPW) { ctx =>
       getUserDN(ctx, username)
-    }.flatMap { userDN ⇒
-      connect(userDN, oldPassword) { ctx ⇒
+    }.flatMap { userDN =>
+      connect(userDN, oldPassword) { ctx =>
         val mods = Array(new ModificationItem(DirContext.REPLACE_ATTRIBUTE, new BasicAttribute("userPassword", newPassword)))
         Try(ctx.modifyAttributes(userDN, mods))
       }
@@ -81,11 +81,11 @@ object LdapConnection {
 
   def apply(configuration: Configuration): LdapConnection =
     (for {
-      bindDN ← configuration.getOptional[String]("auth.ldap.bindDN")
-      bindPW ← configuration.getOptional[String]("auth.ldap.bindPW")
-      baseDN ← configuration.getOptional[String]("auth.ldap.baseDN")
-      filter ← configuration.getOptional[String]("auth.ldap.filter")
-      serverNames = configuration.getOptional[String]("auth.ldap.serverName").fold[Seq[String]](Nil)(s ⇒ Seq(s)) ++
+      bindDN <- configuration.getOptional[String]("auth.ldap.bindDN")
+      bindPW <- configuration.getOptional[String]("auth.ldap.bindPW")
+      baseDN <- configuration.getOptional[String]("auth.ldap.baseDN")
+      filter <- configuration.getOptional[String]("auth.ldap.filter")
+      serverNames = configuration.getOptional[String]("auth.ldap.serverName").fold[Seq[String]](Nil)(s => Seq(s)) ++
         configuration.getOptional[Seq[String]]("auth.ldap.serverNames").getOrElse(Nil)
       useSSL = configuration.get[Boolean]("auth.ldap.useSSL")
 
@@ -106,9 +106,9 @@ class LdapAuthSrv(ldapConnection: LdapConnection, userSrv: UserSrv, implicit val
   override def authenticate(username: String, password: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
     ldapConnection
       .authenticate(username, password)
-      .flatMap(_ ⇒ userSrv.getFromId(request, username, organisation))
+      .flatMap(_ => userSrv.getFromId(request, username, organisation))
       .recoverWith {
-        case t ⇒
+        case t =>
           logger.error("LDAP authentication failure", t)
           Failure(AuthenticationError("Authentication failure"))
       }
@@ -117,7 +117,7 @@ class LdapAuthSrv(ldapConnection: LdapConnection, userSrv: UserSrv, implicit val
     ldapConnection
       .changePassword(username, oldPassword, newPassword)
       .recoverWith {
-        case t ⇒
+        case t =>
           logger.error("LDAP change password failure", t)
           Failure(AuthorizationError("Change password failure"))
       }

@@ -16,8 +16,8 @@ trait MappingMacro extends MacroUtil with MacroLogger {
 
     val eType = weakTypeOf[E]
     eType match {
-      case CaseClassType(symbols @ _*) ⇒
-        symbols.map(s ⇒ MappingSymbol(s.name.decodedName.toString.trim, TermName(c.freshName(s.name + "Mapping")), getMapping(s, s.typeSignature)))
+      case CaseClassType(symbols @ _*) =>
+        symbols.map(s => MappingSymbol(s.name.decodedName.toString.trim, TermName(c.freshName(s.name + "Mapping")), getMapping(s, s.typeSignature)))
     }
   }
 
@@ -26,7 +26,7 @@ trait MappingMacro extends MacroUtil with MacroLogger {
       .orElse(getMappingFromImplicit(eType))
       .orElse(buildMapping(symbol, eType))
       .getOrElse(c.abort(c.enclosingPosition, s"Fail to get mapping of $symbol ($eType)"))
-    symbol.annotations.find(_.tree.tpe <:< typeOf[Readonly]).fold(mapping) { _ ⇒
+    symbol.annotations.find(_.tree.tpe <:< typeOf[Readonly]).fold(mapping) { _ =>
       q"$mapping.setReadonly(true)"
     }
   }
@@ -36,7 +36,7 @@ trait MappingMacro extends MacroUtil with MacroLogger {
       appliedType(weakTypeOf[WithMapping[_, _]].typeConstructor, eType, typeOf[Any])
     (symbol.annotations ::: eType.typeSymbol.annotations)
       .find(_.tree.tpe <:< mappingAnnotationType)
-      .map(annotation ⇒ annotation.tree.children.tail.head)
+      .map(annotation => annotation.tree.children.tail.head)
   }
 
   private def getMappingFromImplicit(eType: Type): Option[Tree] = {
@@ -48,15 +48,15 @@ trait MappingMacro extends MacroUtil with MacroLogger {
 
   private def buildMapping(symbol: Symbol, eType: Type): Option[Tree] =
     symbol.typeSignature match {
-      case EnumerationType(members @ _*) ⇒
+      case EnumerationType(members @ _*) =>
         val valueCases = members.map {
-          case (name, value) ⇒ cq"$name ⇒ $value"
+          case (name, value) => cq"$name ⇒ $value"
         } :+
           cq"""other ⇒ throw org.thp.scalligraph.InternalError(
               "Wrong value " + other +
               " for numeration " + ${symbol.toString} +
               ". Possible values are " + ${members.map(_._1).mkString(",")})"""
         Some(q"""org.thp.scalligraph.models.SingleMapping[$eType, String]("", e ⇒ Some(e.toString), g ⇒ g match { case ..$valueCases })""")
-      case _ ⇒ None
+      case _ => None
     }
 }

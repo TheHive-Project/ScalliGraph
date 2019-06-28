@@ -10,8 +10,8 @@ trait MacroUtil extends MacroLogger {
   import c.universe._
 
   def typeName(tpe: Type): String = tpe match {
-    case RefinedType(cl :: _, _) ⇒ symbolName(cl.typeSymbol)
-    case cl                      ⇒ symbolName(cl.typeSymbol)
+    case RefinedType(cl :: _, _) => symbolName(cl.typeSymbol)
+    case cl                      => symbolName(cl.typeSymbol)
   }
 
   def symbolName(s: Symbol): String = s.name.decodedName.toString.trim
@@ -43,8 +43,8 @@ trait MacroUtil extends MacroLogger {
 
     def unapply(s: Symbol): Option[Type] =
       s match {
-        case _: TypeSymbol ⇒ unapply(s.asType.toType)
-        case _: TermSymbol ⇒ unapply(s.typeSignature)
+        case _: TypeSymbol => unapply(s.asType.toType)
+        case _: TermSymbol => unapply(s.typeSignature)
       }
 
     def unapply(tpe: Type): Option[Type] =
@@ -58,8 +58,8 @@ trait MacroUtil extends MacroLogger {
 
     def unapply(s: Symbol): Option[Type] =
       s match {
-        case _: TypeSymbol ⇒ unapply(s.asType.toType)
-        case _: TermSymbol ⇒ unapply(s.typeSignature)
+        case _: TypeSymbol => unapply(s.asType.toType)
+        case _: TermSymbol => unapply(s.typeSignature)
       }
 
     def unapply(tpe: Type): Option[Type] =
@@ -73,8 +73,8 @@ trait MacroUtil extends MacroLogger {
 
     def unapply(s: Symbol): Option[Type] =
       s match {
-        case _: TypeSymbol ⇒ unapply(s.asType.toType)
-        case _: TermSymbol ⇒ unapply(s.typeSignature)
+        case _: TypeSymbol => unapply(s.asType.toType)
+        case _: TermSymbol => unapply(s.typeSignature)
       }
 
     def unapply(tpe: Type): Option[Type] =
@@ -91,21 +91,21 @@ trait MacroUtil extends MacroLogger {
     if (symbol.isType) symbol.asType.toType
     else symbol.typeSignature
 
-  def traverseEntity[E: WeakTypeTag, A](init: A)(f: (Tree, Symbol, A) ⇒ (List[(Tree, Symbol)], A)): A = {
+  def traverseEntity[E: WeakTypeTag, A](init: A)(f: (Tree, Symbol, A) => (List[(Tree, Symbol)], A)): A = {
 
-    def unfold(pathSymbolQueue: List[(Tree, Symbol)], currentAcc: A)(f: (Tree, Symbol, A) ⇒ (List[(Tree, Symbol)], A)): A =
+    def unfold(pathSymbolQueue: List[(Tree, Symbol)], currentAcc: A)(f: (Tree, Symbol, A) => (List[(Tree, Symbol)], A)): A =
       if (pathSymbolQueue.isEmpty) currentAcc
       else {
         val (listOfPathSymbol, nextAcc) = pathSymbolQueue
           .foldLeft[(List[(Tree, Symbol)], A)]((Nil, currentAcc)) {
-            case ((newPathSymbolQueue, acc), (path, symbol)) ⇒
+            case ((newPathSymbolQueue, acc), (path, symbol)) =>
               val (nextSymbols, a) = f(path, symbol, acc)
-              (newPathSymbolQueue ::: nextSymbols) → a
+              (newPathSymbolQueue ::: nextSymbols) -> a
           }
         unfold(listOfPathSymbol, nextAcc)(f)
       }
 
-    unfold(List(q"org.thp.scalligraph.FPath.empty" → weakTypeOf[E].typeSymbol), init)(f)
+    unfold(List(q"org.thp.scalligraph.FPath.empty" -> weakTypeOf[E].typeSymbol), init)(f)
   }
 
   object EnumerationType {
@@ -123,7 +123,7 @@ trait MacroUtil extends MacroLogger {
           .asInstanceOf[TypeRef]
           .pre
           .members
-          .filter(s ⇒ s.isTerm && !(s.isMethod || s.isModule || s.isClass) && (s.typeSignature.resultType <:< typeOf[Enumeration#Value]))
+          .filter(s => s.isTerm && !(s.isMethod || s.isModule || s.isClass) && (s.typeSignature.resultType <:< typeOf[Enumeration#Value]))
           .toList
         if (members.isEmpty) {
           trace(s"$tpe is an enumeration but value list is empty")
@@ -145,8 +145,8 @@ trait MacroUtil extends MacroLogger {
         if ((cs.isTrait || cs.isAbstract) && cs.isSealed) {
           trace(s"searching direct sub classes for $cs")
           cs.knownDirectSubclasses.foldLeft[Option[List[Symbol]]](Some(Nil)) {
-            case (None, _)                  ⇒ None
-            case (Some(set), knownSubclass) ⇒ sealedType(knownSubclass).map(set ++ _)
+            case (None, _)                  => None
+            case (Some(set), knownSubclass) => sealedType(knownSubclass).map(set ++ _)
           }
         } else {
           trace(s"$s is a class but it is not sealed")
@@ -158,17 +158,17 @@ trait MacroUtil extends MacroLogger {
       }
 
     def extractEnum(tpe: Type, sym: Symbol): Option[Seq[(Tree, Tree)]] =
-      (enumerationType(tpe, sym) orElse sealedType(sym)).map(_.map { value ⇒
+      (enumerationType(tpe, sym) orElse sealedType(sym)).map(_.map { value =>
         val valueName = q"${value.name.decodedName.toString.trim}" // q"$value.toString"
         if (value.isModuleClass) {
           if (value.owner.isModuleClass) {
             val v = value.owner.typeSignature.member(value.name.toTermName)
             if (value.asClass.toType.member(TermName("name")) == NoSymbol)
-              valueName → q"$v"
+              valueName -> q"$v"
             else
-              q"$v.name" → q"$v"
+              q"$v.name" -> q"$v"
           } else {
-            valueName → q"${value.name.toTermName}"
+            valueName -> q"${value.name.toTermName}"
           }
         } else {
           val moduleClass = tpe.asInstanceOf[TypeRef].pre.typeSymbol
@@ -176,7 +176,7 @@ trait MacroUtil extends MacroLogger {
           if (ownerSymbol == NoSymbol) {
             c.abort(c.enclosingPosition, s"Enumeration in a module is not supported. Put $moduleClass outside ${moduleClass.owner}")
           }
-          valueName → q"$ownerSymbol.${value.asTerm.getter}"
+          valueName -> q"$ownerSymbol.${value.asTerm.getter}"
         }
       })
   }

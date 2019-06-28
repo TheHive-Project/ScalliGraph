@@ -1,10 +1,10 @@
 package org.thp.scalligraph.query
 
-import java.lang.{Double ⇒ JDouble, Float ⇒ JFloat, Integer ⇒ JInt, Long ⇒ JLong}
-import java.util.{Collection ⇒ JCollection, List ⇒ JList, Map ⇒ JMap}
+import java.lang.{Double => JDouble, Float => JFloat, Integer => JInt, Long => JLong}
+import java.util.{Collection => JCollection, List => JList, Map => JMap}
 
 import scala.collection.JavaConverters._
-import scala.reflect.runtime.{universe ⇒ ru}
+import scala.reflect.runtime.{universe => ru}
 
 import play.api.libs.json.{JsNumber, JsObject, Json, Writes}
 
@@ -22,52 +22,52 @@ object GroupAggregation {
   object AggObj {
 
     def unapply(field: Field): Option[(String, FObject)] = field match {
-      case f: FObject ⇒
+      case f: FObject =>
         f.get("_agg") match {
-          case FString(name) ⇒ Some(name → (f - "_agg"))
-          case _             ⇒ None
+          case FString(name) => Some(name -> (f - "_agg"))
+          case _             => None
         }
-      case _ ⇒ None
+      case _ => None
     }
   }
 
   def groupAggregationParser: PartialFunction[String, FieldsParser[GroupAggregation[_, _]]] = {
-    case "field" ⇒
+    case "field" =>
       FieldsParser("FieldAggregation") {
-        case (_, field) ⇒
+        case (_, field) =>
           withGood(
             FieldsParser.string.optional.on("_aggName")(field),
             FieldsParser.string.on("_field")(field),
             aggregationFieldsParser.sequence.on("_select")(field)
-          )((aggName, fieldName, subAgg) ⇒ FieldAggregation(aggName, fieldName, subAgg))
+          )((aggName, fieldName, subAgg) => FieldAggregation(aggName, fieldName, subAgg))
       }
-    case "count" ⇒
+    case "count" =>
       FieldsParser("CountAggregation") {
-        case (_, field) ⇒ FieldsParser.string.optional.on("_aggName")(field).map(aggName ⇒ AggCount(aggName))
+        case (_, field) => FieldsParser.string.optional.on("_aggName")(field).map(aggName => AggCount(aggName))
       }
 
   }
 
   def functionAggregationParser: PartialFunction[String, FieldsParser[Aggregation[_, _]]] = {
-    case "avg" ⇒
+    case "avg" =>
       FieldsParser("AvgAggregation") {
-        case (_, field) ⇒
+        case (_, field) =>
           withGood(
             FieldsParser.string.optional.on("_aggName")(field),
             FieldsParser.string.on("_field")(field)
-          )((aggName, fieldName) ⇒ AggAvg(aggName, fieldName))
+          )((aggName, fieldName) => AggAvg(aggName, fieldName))
       }
-    case "min" ⇒
+    case "min" =>
       FieldsParser("MinAggregation") {
-        case (_, field) ⇒
+        case (_, field) =>
           withGood(
             FieldsParser.string.optional.on("_aggName")(field),
             FieldsParser.string.on("_field")(field)
-          )((aggName, fieldName) ⇒ AggMin(aggName, fieldName))
+          )((aggName, fieldName) => AggMin(aggName, fieldName))
       }
-    case "count" ⇒
+    case "count" =>
       FieldsParser("CountAggregation") {
-        case (_, field) ⇒ FieldsParser.string.optional.on("_aggName")(field).map(aggName ⇒ AggCount(aggName))
+        case (_, field) => FieldsParser.string.optional.on("_aggName")(field).map(aggName => AggCount(aggName))
       }
   }
 
@@ -77,19 +77,19 @@ object GroupAggregation {
         .orElse(groupAggregationParser)
         .applyOrElse(
           name,
-          (name: String) ⇒
+          (name: String) =>
             FieldsParser[Aggregation[_, _]]("aggregation") {
-              case _ ⇒ Bad(One(InvalidFormatAttributeError("_agg", "aggregation name", Set("avg", "min", "max", "count", "top"), FString(name))))
+              case _ => Bad(One(InvalidFormatAttributeError("_agg", "aggregation name", Set("avg", "min", "max", "count", "top"), FString(name))))
             }
         )
     FieldsParser("aggregation") {
-      case (_, AggObj(name, field)) ⇒ fp(name)(field)
+      case (_, AggObj(name, field)) => fp(name)(field)
       //    case other => Bad(InvalidFormatAttributeError()) // TODO
     }
   }
 
   implicit val fieldsParser: FieldsParser[GroupAggregation[_, _]] = FieldsParser("aggregation") {
-    case (_, AggObj(name, field)) ⇒ groupAggregationParser(name)(field)
+    case (_, AggObj(name, field)) => groupAggregationParser(name)(field)
     //    orElse Bad(InvalidFormatAttributeError()) // TODO
   }
 }
@@ -104,7 +104,7 @@ abstract class Aggregation[T, R](val name: String) {
 
   def getProperty(properties: Seq[PublicProperty[_, _]], stepType: ru.Type, fieldName: String): PublicProperty[_, _] =
     properties
-      .find(p ⇒ p.stepType =:= stepType && p.propertyName == fieldName)
+      .find(p => p.stepType =:= stepType && p.propertyName == fieldName)
       .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))
   def apply(publicProperties: List[PublicProperty[_, _]], stepType: ru.Type, fromStep: ScalliSteps[_, _, _], authContext: AuthContext): ScalarSteps[T]
   def output(t: T): Output[R]
@@ -112,10 +112,10 @@ abstract class Aggregation[T, R](val name: String) {
 
 abstract class AggFunction[T, R](name: String) extends Aggregation[T, R](name) {
   implicit val numberWrites: Writes[Number] = Writes[Number] {
-    case i: Integer ⇒ JsNumber(i.toInt)
-    case l: JLong   ⇒ JsNumber(l.toLong)
-    case f: JFloat  ⇒ JsNumber(f.toDouble)
-    case o: Number  ⇒ JsNumber(o.doubleValue())
+    case i: Integer => JsNumber(i.toInt)
+    case l: JLong   => JsNumber(l.toLong)
+    case f: JFloat  => JsNumber(f.toDouble)
+    case o: Number  => JsNumber(o.doubleValue())
   }
 }
 
@@ -130,10 +130,10 @@ case class AggSum(fieldName: String) extends AggFunction[Number, Number](s"sum_$
     val raw            = fromStep.raw.asInstanceOf[GremlinScala[Vertex]]
 
     val result = publicProperty.mapping.graphTypeClass match {
-      case c if c == classOf[Int]    ⇒ publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Int]].sum[Number]
-      case c if c == classOf[Long]   ⇒ publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Long]].sum[Number]
-      case c if c == classOf[Float]  ⇒ publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Float]].sum[Number]
-      case c if c == classOf[Double] ⇒ publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Double]].sum[Number]
+      case c if c == classOf[Int]    => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Int]].sum[Number]
+      case c if c == classOf[Long]   => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Long]].sum[Number]
+      case c if c == classOf[Float]  => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Float]].sum[Number]
+      case c if c == classOf[Double] => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Double]].sum[Number]
     }
     ScalarSteps(result)
   }
@@ -152,10 +152,10 @@ case class AggAvg(aggName: Option[String], fieldName: String) extends AggFunctio
     val raw            = fromStep.raw.asInstanceOf[GremlinScala[Vertex]]
 
     val result = publicProperty.mapping.graphTypeClass match {
-      case c if c == classOf[Int]    ⇒ publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Int]].mean
-      case c if c == classOf[Long]   ⇒ publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Long]].mean
-      case c if c == classOf[Float]  ⇒ publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Float]].mean
-      case c if c == classOf[Double] ⇒ publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Double]].mean
+      case c if c == classOf[Int]    => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Int]].mean
+      case c if c == classOf[Long]   => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Long]].mean
+      case c if c == classOf[Float]  => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Float]].mean
+      case c if c == classOf[Double] => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Double]].mean
     }
     ScalarSteps(result)
   }
@@ -174,15 +174,15 @@ case class AggMin(aggName: Option[String], fieldName: String) extends AggFunctio
     val raw            = fromStep.raw.asInstanceOf[GremlinScala[Vertex]]
 
     val result = publicProperty.mapping.graphTypeClass match {
-      case c if c == classOf[Int]    ⇒ publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Int]].min[JInt]
-      case c if c == classOf[Long]   ⇒ publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Long]].min[JLong]
-      case c if c == classOf[Float]  ⇒ publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Float]].min[JFloat]
-      case c if c == classOf[Double] ⇒ publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Double]].min[JDouble]
-      case _                         ⇒ ???
+      case c if c == classOf[Int]    => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Int]].min[JInt]
+      case c if c == classOf[Long]   => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Long]].min[JLong]
+      case c if c == classOf[Float]  => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Float]].min[JFloat]
+      case c if c == classOf[Double] => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Double]].min[JDouble]
+      case _                         => ???
     }
     ScalarSteps(result.asInstanceOf[GremlinScala[AnyVal]])
   }
-  override def output(t: AnyVal): Output[AnyVal] = Output(t)(Output.valWrites.transform(v ⇒ Json.obj(name → v)))
+  override def output(t: AnyVal): Output[AnyVal] = Output(t)(Output.valWrites.transform(v => Json.obj(name -> v)))
 }
 
 case class AggMax(fieldName: String) extends AggFunction[AnyVal, AnyVal](s"max_$fieldName") {
@@ -196,15 +196,15 @@ case class AggMax(fieldName: String) extends AggFunction[AnyVal, AnyVal](s"max_$
     val raw            = fromStep.raw.asInstanceOf[GremlinScala[Vertex]]
 
     val result = publicProperty.mapping.graphTypeClass match {
-      case c if c == classOf[Int]    ⇒ publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Int]].max[JInt]
-      case c if c == classOf[Long]   ⇒ publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Long]].max[JLong]
-      case c if c == classOf[Float]  ⇒ publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Float]].max[JFloat]
-      case c if c == classOf[Double] ⇒ publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Double]].max[JDouble]
-      case _                         ⇒ ???
+      case c if c == classOf[Int]    => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Int]].max[JInt]
+      case c if c == classOf[Long]   => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Long]].max[JLong]
+      case c if c == classOf[Float]  => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Float]].max[JFloat]
+      case c if c == classOf[Double] => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Double]].max[JDouble]
+      case _                         => ???
     }
     ScalarSteps(result.asInstanceOf[GremlinScala[AnyVal]])
   }
-  override def output(t: AnyVal): Output[AnyVal] = Output(t)(Output.valWrites.transform(v ⇒ Json.obj(name → v)))
+  override def output(t: AnyVal): Output[AnyVal] = Output(t)(Output.valWrites.transform(v => Json.obj(name -> v)))
 }
 
 case class AggCount(aggName: Option[String]) extends GroupAggregation[JLong, Long](aggName.getOrElse("count")) {
@@ -215,7 +215,7 @@ case class AggCount(aggName: Option[String]) extends GroupAggregation[JLong, Lon
       authContext: AuthContext
   ): ScalarSteps[JLong] =
     ScalarSteps(fromStep.raw.count())
-  override def output(t: JLong): Output[Long] = Output(t.toLong, Json.obj(name → t.toLong))
+  override def output(t: JLong): Output[Long] = Output(t.toLong, Json.obj(name -> t.toLong))
 
 }
 //case class AggTop[T](fieldName: String) extends AggFunction[T](s"top_$fieldName")
@@ -239,7 +239,7 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs:
     ScalarSteps(groupedVertices)
       .project[Any](
         By(__[JMap.Entry[Any, Any]].selectKeys) +: subAggs
-          .map(a ⇒ By(a.apply(publicProperties, stepType, ScalarSteps(__[JMap[Any, Any]].selectValues.unfold()), authContext).raw)): _*
+          .map(a => By(a.apply(publicProperties, stepType, ScalarSteps(__[JMap[Any, Any]].selectValues.unfold()), authContext).raw)): _*
       )
       .fold
   }
@@ -248,32 +248,32 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs:
     val subMap: Map[Any, Output[Map[String, Any]]] = l
       .asScala
       .map(_.asScala)
-      .flatMap { e ⇒
+      .flatMap { e =>
         val key = e.head
         if (key != "") { // maybe should be compared with property.mapping.noValue but property is not accessible here
           val values = subAggs
             .asInstanceOf[Seq[Aggregation[Any, Any]]]
             .zip(e.tail)
-            .map { case (a, r) ⇒ a.name → a.output(r).toOutput }
+            .map { case (a, r) => a.name -> a.output(r).toOutput }
             .toMap
           val jsValues =
             subAggs
               .asInstanceOf[Seq[Aggregation[Any, Any]]]
               .zip(e.tail)
               .foldLeft(JsObject.empty) {
-                case (acc, (ar, r)) ⇒
+                case (acc, (ar, r)) =>
                   ar.output(r).toJson match {
-                    case o: JsObject ⇒ acc ++ o
-                    case v           ⇒ acc + (ar.name → v)
+                    case o: JsObject => acc ++ o
+                    case v           => acc + (ar.name -> v)
                   }
               }
-          Some(key → Output(values, jsValues))
+          Some(key -> Output(values, jsValues))
         } else None
       }
       .toMap
 
     val native: Map[Any, Map[String, Any]] = subMap.mapValues(_.toOutput)
-    val json: JsObject                     = JsObject(subMap.map { case (k, v) ⇒ k.toString → v.toJson })
+    val json: JsObject                     = JsObject(subMap.map { case (k, v) => k.toString -> v.toJson })
     //Json.obj(name -> JsObject(subMap.map { case (k, v) ⇒ k.toString → v.toJson }))
     Output(native, json)
   }

@@ -18,7 +18,7 @@ class RetryTest extends PlaySpecification {
       var count = 0
       Retry(4, classOf[ArithmeticException]) {
         count += 1
-        try { Success(12 / (count - 1)) } catch { case t: Throwable ⇒ throw new RuntimeException("wrap", t) }
+        try { Success(12 / (count - 1)) } catch { case t: Throwable => throw new RuntimeException("wrap", t) }
       }
       count must_=== 2
     }

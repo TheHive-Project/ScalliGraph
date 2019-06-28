@@ -43,18 +43,18 @@ class SangriaTest extends PlaySpecification {
 
   def readResource(resource: String): Try[String] =
     Try(Source.fromResource(resource).mkString)
-      .recoverWith { case NonFatal(_) ⇒ Failure(new FileNotFoundException(resource)) }
+      .recoverWith { case NonFatal(_) => Failure(new FileNotFoundException(resource)) }
 
   def executeQueryFile(testName: String, variables: JsObject = JsObject.empty)(
       implicit graph: Graph,
       schema: SangriaSchema[AuthGraph, Unit]): MatchResult[_] = {
     val query    = QueryParser.parse(readResource(s"graphql/$testName.graphql").get).get
     val expected = Json.parse(readResource(s"graphql/$testName.expected.json").get)
-    val vars     = readResource(s"graphql/$testName.vars.json").fold(_ ⇒ variables, Json.parse)
+    val vars     = readResource(s"graphql/$testName.vars.json").fold(_ => variables, Json.parse)
     executeQuery(query = query, expected = expected, variables = vars)
   }
 
-  Fragments.foreach(new DatabaseProviders().list) { dbProvider ⇒
+  Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
     val app: AppBuilder = AppBuilder()
       .bindToProvider(dbProvider)
     step(setupDatabase(app)) ^ specs(dbProvider.name, app) ^ step(teardownDatabase(app))
@@ -71,36 +71,36 @@ class SangriaTest extends PlaySpecification {
     implicit val schema: SangriaSchema[AuthGraph, Unit] = SchemaGenerator(executor)
 
     s"[$name] Modern graph" should {
-      "finds all persons" in db.transaction { implicit graph ⇒
+      "finds all persons" in db.transaction { implicit graph =>
         val personSteps = app.instanceOf[PersonSrv].initSteps
         val r           = personSteps.toSet.map(_.name)
         r must_=== Set("marko", "vadas", "josh", "peter", "marc", "franck")
       }
 
-      "have GraphQL schema" in db.transaction { _ ⇒
+      "have GraphQL schema" in db.transaction { _ =>
         val schemaStr = SchemaRenderer.renderSchema(schema)
 //      println(s"new modern graphql schema is:\n$schemaStr")
 
         schemaStr must_!== ""
       }
 
-      "execute simple query" in db.transaction { implicit graph ⇒
+      "execute simple query" in db.transaction { implicit graph =>
         executeQueryFile("simpleQuery")
       }
 
-      "filter entity using query object" in db.transaction { implicit graph ⇒
+      "filter entity using query object" in db.transaction { implicit graph =>
         executeQueryFile("queryWithFilterObject")
       }
 
-      "filter entity using query object with boolean operator" in db.transaction { implicit graph ⇒
+      "filter entity using query object with boolean operator" in db.transaction { implicit graph =>
         executeQueryFile("queryWithBooleanOperators")
       }
 
-      "return several attributes" in db.transaction { implicit graph ⇒
+      "return several attributes" in db.transaction { implicit graph =>
         executeQueryFile("queryWithSeveralAttributes")
       }
 
-      "execute complex query" in db.transaction { implicit graph ⇒
+      "execute complex query" in db.transaction { implicit graph =>
         executeQueryFile("complexQuery")
       }
     }

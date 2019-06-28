@@ -1,6 +1,6 @@
 package org.thp.scalligraph.orientdb
 
-import java.util.{List ⇒ JList, Set ⇒ JSet}
+import java.util.{List => JList, Set => JSet}
 
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
@@ -39,9 +39,9 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
 
   def this() = this(Configuration.load(Environment.simple()))
 
-  override def noTransaction[A](body: Graph ⇒ A): A = body(graphFactory.getNoTx)
+  override def noTransaction[A](body: Graph => A): A = body(graphFactory.getNoTx)
 
-  override def tryTransaction[A](body: Graph ⇒ Try[A]): Try[A] =
+  override def tryTransaction[A](body: Graph => Try[A]): Try[A] =
     Retry(maxRetryOnConflict)
       .on[OConcurrentModificationException]
       .on[ORecordDuplicatedException]
@@ -57,9 +57,9 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
           a
         }.flatten
           .recoverWith {
-            case t: OConcurrentModificationException ⇒ Failure(new DatabaseException(cause = t))
-            case t: ORecordDuplicatedException       ⇒ Failure(new DatabaseException(cause = t))
-            case e: Throwable ⇒
+            case t: OConcurrentModificationException => Failure(new DatabaseException(cause = t))
+            case t: ORecordDuplicatedException       => Failure(new DatabaseException(cause = t))
+            case e: Throwable =>
               logger.error(s"Exception raised, rollback (${e.getMessage})")
               Try(tx.rollback())
               MDC.remove("tx")
@@ -72,12 +72,12 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
   private def getVariablesVertex(implicit graph: Graph): Option[Vertex] = graph.traversal().V().hasLabel("variables").headOption()
 
   override def version(module: String): Int =
-    tryTransaction { implicit graph ⇒
-      Success(getVariablesVertex.fold(0)(v ⇒ getSingleProperty(v, s"${module}_version", UniMapping.intMapping)))
+    tryTransaction { implicit graph =>
+      Success(getVariablesVertex.fold(0)(v => getSingleProperty(v, s"${module}_version", UniMapping.intMapping)))
     }.get
 
   override def setVersion(module: String, v: Int): Unit =
-    tryTransaction { implicit graph ⇒
+    tryTransaction { implicit graph =>
       val variables = getVariablesVertex.getOrElse(graph.addVertex("variables"))
       Success(setSingleProperty(variables, s"${module}_version", v, UniMapping.intMapping))
     }.get
@@ -86,17 +86,17 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
     val superClass = schema.getClass(superClassName)
     val clazz      = schema.createClass(model.label, superClass)
     model.fields.foreach {
-      case (field, sm: SingleMapping[_, _]) ⇒
+      case (field, sm: SingleMapping[_, _]) =>
         clazz.createProperty(field, OType.getTypeByClass(sm.graphTypeClass)).setMandatory(strict).setNotNull(true).setReadonly(sm.isReadonly)
-      case (field, om: OptionMapping[_, _]) ⇒
+      case (field, om: OptionMapping[_, _]) =>
         clazz.createProperty(field, OType.getTypeByClass(om.graphTypeClass)).setMandatory(false).setNotNull(false).setReadonly(om.isReadonly)
-      case (field, lm: ListMapping[_, _]) ⇒
+      case (field, lm: ListMapping[_, _]) =>
         clazz
           .createProperty(field, OType.EMBEDDEDLIST, OType.getTypeByClass(lm.graphTypeClass))
           .setMandatory(false)
           .setNotNull(false)
           .setReadonly(lm.isReadonly)
-      case (field, sm: SetMapping[_, _]) ⇒
+      case (field, sm: SetMapping[_, _]) =>
         clazz
           .createProperty(field, OType.EMBEDDEDSET, OType.getTypeByClass(sm.graphTypeClass))
           .setMandatory(false)
@@ -113,21 +113,21 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
     clazz.createIndex(s"${model.label}__id", INDEX_TYPE.UNIQUE, "_id")
 
     model.indexes.foreach {
-      case (IndexType.unique, fields) ⇒
+      case (IndexType.unique, fields) =>
         clazz.createIndex(s"${model.label}_${fields.mkString("_")}", INDEX_TYPE.UNIQUE, fields: _*)
-      case (IndexType.standard, fields) ⇒
+      case (IndexType.standard, fields) =>
         clazz.createIndex(s"${model.label}_${fields.mkString("_")}", INDEX_TYPE.DICTIONARY, fields: _*)
-      case (IndexType.fulltext, fields) ⇒
+      case (IndexType.fulltext, fields) =>
         clazz.createIndex(s"${model.label}_${fields.mkString("_")}", INDEX_TYPE.FULLTEXT, fields: _*)
-      case indexType ⇒ throw InternalError(s"Unrecognized index type: $indexType")
+      case indexType => throw InternalError(s"Unrecognized index type: $indexType")
     }
     clazz
   }
 
   private def createEdgeProperties(schema: OSchema, model: EdgeModel[_, _], edgeClass: OClass): Unit =
     for {
-      fromClass ← Option(schema.getClass(model.fromLabel))
-      toClass   ← Option(schema.getClass(model.toLabel))
+      fromClass <- Option(schema.getClass(model.fromLabel))
+      toClass   <- Option(schema.getClass(model.toLabel))
       className = edgeClass.getName
     } {
       fromClass.createProperty(s"out_$className", OType.LINKBAG, edgeClass)
@@ -139,8 +139,8 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
   override def createSchema(models: Seq[Model]): Try[Unit] = {
     val schema = graphFactory.getNoTx.database().getMetadata.getSchema
     models.foreach {
-      case model: VertexModel ⇒ createElementSchema(schema, model, OClass.VERTEX_CLASS_NAME, strict = false)
-      case model: EdgeModel[_, _] ⇒
+      case model: VertexModel => createElementSchema(schema, model, OClass.VERTEX_CLASS_NAME, strict = false)
+      case model: EdgeModel[_, _] =>
         val edgeClass = createElementSchema(schema, model, OClass.EDGE_CLASS_NAME, strict = false)
         createEdgeProperties(schema, model, edgeClass)
     }

@@ -29,13 +29,13 @@ class CardinalityTest extends PlaySpecification with Mockito {
   implicit val authContext: AuthContext = userSrv.initialAuthContext
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
-  Fragments.foreach(new DatabaseProviders().list) { dbProvider ⇒
+  Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
     implicit val db: Database = dbProvider.get()
     db.createSchema(db.getModel[EntityWithSeq])
     val entityWithSeqSrv: EntityWithSeqSrv = new EntityWithSeqSrv
 
     s"[${dbProvider.name}] entity" should {
-      "create with empty list and set" in db.transaction { implicit graph ⇒
+      "create with empty list and set" in db.transaction { implicit graph =>
         val initialEntity                            = EntityWithSeq("The answer", Seq.empty, Set.empty)
         val createdEntity: EntityWithSeq with Entity = entityWithSeqSrv.create(initialEntity)
         createdEntity._id must_!== null
@@ -43,21 +43,21 @@ class CardinalityTest extends PlaySpecification with Mockito {
         entityWithSeqSrv.getOrFail(createdEntity._id) must beSuccessfulTry(createdEntity)
       }
 
-      "create and get entities with list property" in db.transaction { implicit graph ⇒
+      "create and get entities with list property" in db.transaction { implicit graph =>
         val initialEntity                            = EntityWithSeq("list", Seq("1", "2", "3"), Set.empty)
         val createdEntity: EntityWithSeq with Entity = entityWithSeqSrv.create(initialEntity)
         initialEntity must_=== createdEntity
         entityWithSeqSrv.getOrFail(createdEntity._id) must beSuccessfulTry(createdEntity)
       }
 
-      "create and get entities with set property" in db.transaction { implicit graph ⇒
+      "create and get entities with set property" in db.transaction { implicit graph =>
         val initialEntity                            = EntityWithSeq("list", Seq.empty, Set("a", "b", "c"))
         val createdEntity: EntityWithSeq with Entity = entityWithSeqSrv.create(initialEntity)
         initialEntity must_=== createdEntity
         entityWithSeqSrv.getOrFail(createdEntity._id) must_=== Success(createdEntity)
       }
 
-      "be searchable from its list property" in db.transaction { implicit graph ⇒
+      "be searchable from its list property" in db.transaction { implicit graph =>
         val initialEntity                            = EntityWithSeq("list", Seq("1", "2", "3"), Set.empty)
         val createdEntity: EntityWithSeq with Entity = entityWithSeqSrv.create(initialEntity)
         entityWithSeqSrv.getFromKey("valueList", "1") must beSuccessfulTry(createdEntity)

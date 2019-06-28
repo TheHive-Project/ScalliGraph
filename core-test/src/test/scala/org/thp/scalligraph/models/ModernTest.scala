@@ -10,7 +10,7 @@ class ModernTest extends PlaySpecification {
 
   implicit val authContext: AuthContext = AuthContextImpl("me", "", "", "", Set.empty)
 
-  Fragments.foreach(new DatabaseProviders().list) { dbProvider ⇒
+  Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
     val app: AppBuilder = AppBuilder()
       .bindToProvider(dbProvider)
     step(setupDatabase(app)) ^ specs(dbProvider.name, app) ^ step(teardownDatabase(app))
@@ -35,7 +35,7 @@ class ModernTest extends PlaySpecification {
 //        personSrv.get("marko").knownLevels must contain(exactly(1.0))
 //      }
 
-      "create initial values" in db.transaction { implicit graph ⇒
+      "create initial values" in db.transaction { implicit graph =>
         personSrv.initSteps.name.toList must contain(exactly("marko", "vadas", "franck", "marc", "josh", "peter"))
       }
     }

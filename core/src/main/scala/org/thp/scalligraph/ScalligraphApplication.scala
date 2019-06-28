@@ -1,6 +1,6 @@
 package org.thp.scalligraph
 
-import java.util.{Set ⇒ JSet}
+import java.util.{Set => JSet}
 
 import scala.collection.JavaConverters._
 
@@ -10,8 +10,8 @@ import play.api.{ApplicationLoader, Configuration, Environment, Logger}
 
 import com.google.inject.internal.{BindingImpl, Scoping}
 import com.google.inject.spi._
-import com.google.inject.util.{Modules ⇒ GuiceModules}
-import com.google.inject.{Binder, Module ⇒ GuiceModule, _}
+import com.google.inject.util.{Modules => GuiceModules}
+import com.google.inject.{Binder, Module => GuiceModule, _}
 import javax.inject.Inject
 import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
 import org.thp.scalligraph.controllers.{AuthenticateSrv, DefaultAuthenticateSrv}
@@ -19,14 +19,14 @@ import org.thp.scalligraph.controllers.{AuthenticateSrv, DefaultAuthenticateSrv}
 class ScalligraphGuiceableModule(modules: Seq[GuiceableModule]) extends GuiceableModule {
   override def guiced(env: Environment, conf: Configuration, binderOptions: Set[BinderOption]): Seq[GuiceModule] = {
     val guiceModules = modules.flatMap(_.guiced(env, conf, binderOptions))
-    val globalModule = guiceModules.tail.foldLeft(guiceModules.head) { (parentModule, childModule) ⇒
+    val globalModule = guiceModules.tail.foldLeft(guiceModules.head) { (parentModule, childModule) =>
       GuiceModules.`override`(parentModule).`with`(addMultiBindings(childModule))
     }
     Seq(globalModule)
   }
 
   override def disable(classes: Seq[Class[_]]): GuiceableModule =
-    new ScalligraphGuiceableModule(modules.filterNot(o ⇒ classes.exists(_.isAssignableFrom(o.getClass))))
+    new ScalligraphGuiceableModule(modules.filterNot(o => classes.exists(_.isAssignableFrom(o.getClass))))
 
   class InternalMultiBinding[T](binding: LinkedKeyBinding[T]) extends BindingImpl[T](null, binding.getKey, Scoping.UNSCOPED) {
     override def acceptTargetVisitor[V](visitor: BindingTargetVisitor[_ >: T, V]): V = visitor.visit(binding)
@@ -49,7 +49,7 @@ class ScalligraphGuiceableModule(modules: Seq[GuiceableModule]) extends Guiceabl
 
   def addMultiBindings(module: GuiceModule): GuiceModule = {
     val elements = Elements.getElements(module).asScala
-    val cc = elements ++ elements.flatMap { e ⇒
+    val cc = elements ++ elements.flatMap { e =>
       e.acceptVisitor(new DefaultElementVisitor[Seq[Element]] {
         override def visit[T](binding: Binding[T]): Seq[Element] = binding.acceptTargetVisitor(new MultibindVisitor[T])
         override def visitOther(element: Element): Seq[Element]  = Nil
@@ -61,8 +61,8 @@ class ScalligraphGuiceableModule(modules: Seq[GuiceableModule]) extends Guiceabl
 
 object ScalligraphApplicationLoader {
 
-  def loadModules(origLoadModules: (Environment, Configuration) ⇒ Seq[GuiceableModule]): (Environment, Configuration) ⇒ Seq[GuiceableModule] = {
-    (env, conf) ⇒
+  def loadModules(origLoadModules: (Environment, Configuration) => Seq[GuiceableModule]): (Environment, Configuration) => Seq[GuiceableModule] = {
+    (env, conf) =>
       Seq(new ScalligraphGuiceableModule(origLoadModules(env, conf) :+ GuiceableModule.guiceable(new ScalligraphModule)))
   }
 }

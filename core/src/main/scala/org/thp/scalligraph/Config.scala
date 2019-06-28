@@ -1,14 +1,14 @@
 package org.thp.scalligraph
 
-import java.lang.{Boolean ⇒ JBoolean, Byte ⇒ JByte, Double ⇒ JDouble, Float ⇒ JFloat, Long ⇒ JLong, Short ⇒ JShort}
-import java.math.{BigInteger, BigDecimal ⇒ JBigDecimal}
-import java.util.{Properties, Iterator ⇒ JIterator, List ⇒ JList}
+import java.lang.{Boolean => JBoolean, Byte => JByte, Double => JDouble, Float => JFloat, Long => JLong, Short => JShort}
+import java.math.{BigInteger, BigDecimal => JBigDecimal}
+import java.util.{Properties, Iterator => JIterator, List => JList}
 
 import scala.collection.JavaConverters._
 
-import play.api.{Configuration ⇒ PlayConfig}
+import play.api.{Configuration => PlayConfig}
 
-import org.apache.commons.configuration.{Configuration ⇒ ApacheConfig}
+import org.apache.commons.configuration.{Configuration => ApacheConfig}
 
 class Config(config: PlayConfig) extends ApacheConfig {
   override def subset(prefix: String): ApacheConfig                               = new Config(config.getOptional[PlayConfig](prefix).getOrElse(PlayConfig.empty))
@@ -52,8 +52,8 @@ class Config(config: PlayConfig) extends ApacheConfig {
   override def getStringArray(key: String): Array[String]                         = config.get[Seq[String]](key).toArray
   override def getList(key: String): JList[AnyRef] =
     config.underlying.getAnyRef(key) match {
-      case l: JList[_] ⇒ l.asInstanceOf[JList[AnyRef]]
-      case v           ⇒ Seq(v).asJava
+      case l: JList[_] => l.asInstanceOf[JList[AnyRef]]
+      case v           => Seq(v).asJava
     }
   override def getList(key: String, defaultValue: JList[_]): JList[AnyRef] = ???
 }

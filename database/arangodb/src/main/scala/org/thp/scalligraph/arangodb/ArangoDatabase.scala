@@ -33,24 +33,24 @@ object ArangoDatabase {
 
   def getGraph(configuration: Configuration, schema: Schema): ArangoDBGraph = {
     val vertexNames = schema.modelList.collect {
-      case vm: VertexModel ⇒ vm.label
+      case vm: VertexModel => vm.label
     }
     val edgeNames = schema.modelList.collect {
-      case em: EdgeModel[_, _] ⇒ em.label
+      case em: EdgeModel[_, _] => em.label
     }
     val relations = for {
-      em        ← schema.modelList.collect { case em: EdgeModel[_, _] ⇒ em }
-      fromLabel ← if (em.fromLabel.isEmpty) vertexNames else Seq(em.fromLabel)
-      toLabel   ← if (em.toLabel.isEmpty) vertexNames else Seq(em.toLabel)
+      em        <- schema.modelList.collect { case em: EdgeModel[_, _] => em }
+      fromLabel <- if (em.fromLabel.isEmpty) vertexNames else Seq(em.fromLabel)
+      toLabel   <- if (em.toLabel.isEmpty) vertexNames else Seq(em.toLabel)
       edgeLabelPrefix = if (em.fromLabel.isEmpty) s"$fromLabel-" else ""
       edgeLabelSuffix = if (em.toLabel.isEmpty) s"-$toLabel" else ""
     } yield s"$edgeLabelPrefix${em.label}$edgeLabelSuffix:$fromLabel->$toLabel"
 
     val schemaConfig = Configuration.from(
       Map(
-        "gremlin.arangodb.conf.graph.vertex"   → vertexNames,
-        "gremlin.arangodb.conf.graph.edge"     → edgeNames,
-        "gremlin.arangodb.conf.graph.relation" → relations))
+        "gremlin.arangodb.conf.graph.vertex"   -> vertexNames,
+        "gremlin.arangodb.conf.graph.edge"     -> edgeNames,
+        "gremlin.arangodb.conf.graph.relation" -> relations))
     new ArangoDBGraph(new Config(defaultConfiguration ++ configuration ++ schemaConfig))
   }
 }
@@ -61,27 +61,27 @@ class ArangoDatabase @Inject() (configuration: Configuration) extends BaseDataba
 
   override def createSchema(models: Seq[Model]): Unit = {
     val vertexNames = models.collect {
-      case vm: VertexModel ⇒ vm.label
+      case vm: VertexModel => vm.label
     }
     val edgeNames = models.collect {
-      case em: EdgeModel[_, _] ⇒ em.label
+      case em: EdgeModel[_, _] => em.label
     }
     val relations = for {
-      em        ← models.collect { case em: EdgeModel[_, _] ⇒ em }
+      em        <- models.collect { case em: EdgeModel[_, _] => em }
       fromLabel = if (em.fromLabel.isEmpty) vertexNames.mkString(",") else em.fromLabel
       toLabel   = if (em.toLabel.isEmpty) vertexNames.mkString(",") else em.toLabel
     } yield s"${em.label}:$fromLabel->$toLabel"
 
     val schemaConfig = Configuration.from(
       Map(
-        "gremlin.arangodb.conf.graph.vertex"   → vertexNames,
-        "gremlin.arangodb.conf.graph.edge"     → edgeNames,
-        "gremlin.arangodb.conf.graph.relation" → relations))
+        "gremlin.arangodb.conf.graph.vertex"   -> vertexNames,
+        "gremlin.arangodb.conf.graph.edge"     -> edgeNames,
+        "gremlin.arangodb.conf.graph.relation" -> relations))
     graph = new ArangoDBGraph(new Config(ArangoDatabase.defaultConfiguration ++ configuration ++ schemaConfig))
   }
 
-  override def noTransaction[A](body: Graph ⇒ A): A = body(graph)
-  override def transaction[A](body: Graph ⇒ A): A   = noTransaction(body)
+  override def noTransaction[A](body: Graph => A): A = body(graph)
+  override def transaction[A](body: Graph => A): A   = noTransaction(body)
   override def drop(): Unit                         = {
     graph.getClient.deleteGraph(graph.name())
     ()

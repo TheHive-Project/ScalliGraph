@@ -27,7 +27,7 @@ class DatabaseProviders @Inject()(config: Configuration) {
   lazy val list: Seq[DatabaseProvider] = janus /* :: orientdb :: neo4j*/ :: Nil
 }
 
-class DatabaseProvider(val name: String, db: ⇒ Database) extends Provider[Database] {
+class DatabaseProvider(val name: String, db: => Database) extends Provider[Database] {
   private lazy val _db = db
 
   override def get(): Database = _db

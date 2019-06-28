@@ -24,7 +24,7 @@ class SimpleEntityTest extends PlaySpecification with Mockito {
   implicit val authContext: AuthContext = userSrv.initialAuthContext
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
-  Fragments.foreach(new DatabaseProviders().list) { dbProvider ⇒
+  Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
     implicit val db: Database = dbProvider.get()
     db.createSchema(db.getModel[MyEntity])
     val myEntitySrv: VertexSrv[MyEntity, VertexSteps[MyEntity]] = new VertexSrv[MyEntity, VertexSteps[MyEntity]] {
@@ -32,23 +32,23 @@ class SimpleEntityTest extends PlaySpecification with Mockito {
     }
 
     s"[${dbProvider.name}] simple entity" should {
-      "create" in db.transaction { implicit graph ⇒
+      "create" in db.transaction { implicit graph =>
         val createdEntity: MyEntity with Entity = myEntitySrv.create(MyEntity("The answer", 42))
         createdEntity._id must_!== null
       }
 
-      "create and get entities" in db.transaction { implicit graph ⇒
+      "create and get entities" in db.transaction { implicit graph =>
         val createdEntity: MyEntity with Entity = myEntitySrv.create(MyEntity("e^π", -1))
-        myEntitySrv.getOrFail(createdEntity._id) must beSuccessfulTry.withValue { e: MyEntity with Entity ⇒
+        myEntitySrv.getOrFail(createdEntity._id) must beSuccessfulTry.withValue { e: MyEntity with Entity =>
           e.name must_=== "e^π"
           e.value must_=== -1
           e._createdBy must_=== "admin"
         }
       }
 
-      "update an entity" in db.transaction { implicit graph ⇒
+      "update an entity" in db.transaction { implicit graph =>
         val id = myEntitySrv.create(MyEntity("super", 7))._id
-        myEntitySrv.get(id).update("value" → 8) must beSuccessfulTry
+        myEntitySrv.get(id).update("value" -> 8) must beSuccessfulTry
 
         myEntitySrv.getOrFail(id) must beSuccessfulTry.withValue((_: MyEntity with Entity).value must_=== 8)
       }

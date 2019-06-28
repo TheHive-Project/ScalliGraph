@@ -41,14 +41,14 @@ lazy val commonSettings = Seq(
   scalafmtConfig := file(".scalafmt.conf"),
   scalacOptions ++= {
     CrossVersion.partialVersion((Compile / scalaVersion).value) match {
-      case Some((2, n)) if n >= 13 ⇒ "-Ymacro-annotations" :: Nil
-      case _                       ⇒ Nil
+      case Some((2, n)) if n >= 13 => "-Ymacro-annotations" :: Nil
+      case _                       => Nil
     }
   },
   libraryDependencies ++= {
     CrossVersion.partialVersion(scalaVersion.value) match {
-      case Some((2, n)) if n >= 13 ⇒ Nil
-      case _                       ⇒ compilerPlugin(macroParadise) :: Nil
+      case Some((2, n)) if n >= 13 => Nil
+      case _                       => compilerPlugin(macroParadise) :: Nil
     }
   }
 )

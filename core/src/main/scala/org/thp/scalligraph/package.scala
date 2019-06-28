@@ -1,6 +1,6 @@
 package org.thp
 
-import java.util.{Map ⇒ JMap}
+import java.util.{Map => JMap}
 
 import scala.util.{Failure, Success, Try}
 
@@ -21,9 +21,9 @@ package object scalligraph {
 //  }
   implicit class RichSeq[A](s: TraversableOnce[A]) {
 
-    def toTry[B](f: A ⇒ Try[B]): Try[Seq[B]] = s.foldLeft[Try[Seq[B]]](Success(Nil)) {
-      case (Success(l), a) ⇒ f(a).map(l :+ _)
-      case (failure, _)    ⇒ failure
+    def toTry[B](f: A => Try[B]): Try[Seq[B]] = s.foldLeft[Try[Seq[B]]](Success(Nil)) {
+      case (Success(l), a) => f(a).map(l :+ _)
+      case (failure, _)    => failure
     }
   }
 

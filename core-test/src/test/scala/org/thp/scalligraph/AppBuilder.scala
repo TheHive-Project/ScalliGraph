@@ -34,46 +34,46 @@ class AppBuilder extends ScalaModule {
 
   def bind[T: Manifest, TImpl <: T: Manifest]: AppBuilder = {
     if (initialized) throw InternalError("Bind is not permitted after app use")
-    init = init.andThen(_ ⇒ bind[T].to[TImpl])
+    init = init.andThen(_ => bind[T].to[TImpl])
     this
   }
 
   def multiBind[T: Manifest](implementations: Class[_ <: T]*): AppBuilder = {
     if (initialized) throw InternalError("Bind is not permitted after app use")
-    init = init.andThen { _ ⇒
+    init = init.andThen { _ =>
       val multiBindings = ScalaMultibinder.newSetBinder[T](binder)
-      implementations.foreach(i ⇒ multiBindings.addBinding.to(i))
+      implementations.foreach(i => multiBindings.addBinding.to(i))
     }
     this
   }
 
   def bindInstance[T: Manifest](instance: T): AppBuilder = {
     if (initialized) throw InternalError("Bind is not permitted after app use")
-    init = init.andThen(_ ⇒ bind[T].toInstance(instance))
+    init = init.andThen(_ => bind[T].toInstance(instance))
     this
   }
 
   def bindEagerly[T: Manifest]: AppBuilder = {
     if (initialized) throw InternalError("Bind is not permitted after app use")
-    init = init.andThen(_ ⇒ bind[T].asEagerSingleton())
+    init = init.andThen(_ => bind[T].asEagerSingleton())
     this
   }
 
   def bindToProvider[T: Manifest](provider: Provider[T]): AppBuilder = {
     if (initialized) throw InternalError("Bind is not permitted after app use")
-    init = init.andThen(_ ⇒ bind[T].toProvider(provider))
+    init = init.andThen(_ => bind[T].toProvider(provider))
     this
   }
 
   def bindToProvider[T: Manifest, TImpl <: Provider[T]: Manifest]: AppBuilder = {
     if (initialized) throw InternalError("Bind is not permitted after app use")
-    init = init.andThen(_ ⇒ bind[T].toProvider[TImpl])
+    init = init.andThen(_ => bind[T].toProvider[TImpl])
     this
   }
 
-  def bindActor[T <: Actor: ClassTag](name: String, props: Props ⇒ Props = identity): AppBuilder = {
+  def bindActor[T <: Actor: ClassTag](name: String, props: Props => Props = identity): AppBuilder = {
     if (initialized) throw InternalError("Bind is not permitted after app use")
-    init = init.andThen { _ ⇒
+    init = init.andThen { _ =>
       bind(classOf[ActorRef])
         .annotatedWith(Names.named(name))
         .toProvider(Providers.guicify(Akka.providerOf[T](name, props)))

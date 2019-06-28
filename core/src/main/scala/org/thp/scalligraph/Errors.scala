@@ -32,16 +32,16 @@ object AttributeCheckingError {
     Json.writes[UnsupportedAttributeError]
 
   implicit val attributeErrorWrites: Writes[AttributeError] = Writes[AttributeError] {
-    case ifae: InvalidFormatAttributeError ⇒
-      invalidFormatAttributeErrorWrites.writes(ifae) + ("type" → JsString("InvalidFormatAttributeError"))
-    case uae: UnknownAttributeError ⇒
-      unknownAttributeErrorWrites.writes(uae) + ("type" → JsString("UnknownAttributeError"))
-    case uroae: UpdateReadOnlyAttributeError ⇒
-      updateReadOnlyAttributeErrorWrites.writes(uroae) + ("type" → JsString("UpdateReadOnlyAttributeError"))
-    case mae: MissingAttributeError ⇒
-      missingAttributeErrorWrites.writes(mae) + ("type" → JsString("MissingAttributeError"))
-    case uae: UnsupportedAttributeError ⇒
-      unsupportedAttributeErrorWrites.writes(uae) + ("type" → JsString("UnsupportedAttributeError"))
+    case ifae: InvalidFormatAttributeError =>
+      invalidFormatAttributeErrorWrites.writes(ifae) + ("type" -> JsString("InvalidFormatAttributeError"))
+    case uae: UnknownAttributeError =>
+      unknownAttributeErrorWrites.writes(uae) + ("type" -> JsString("UnknownAttributeError"))
+    case uroae: UpdateReadOnlyAttributeError =>
+      updateReadOnlyAttributeErrorWrites.writes(uroae) + ("type" -> JsString("UpdateReadOnlyAttributeError"))
+    case mae: MissingAttributeError =>
+      missingAttributeErrorWrites.writes(mae) + ("type" -> JsString("MissingAttributeError"))
+    case uae: UnsupportedAttributeError =>
+      unsupportedAttributeErrorWrites.writes(uae) + ("type" -> JsString("UnsupportedAttributeError"))
   }
 
   implicit val attributeCheckingErrorWrites: OWrites[AttributeCheckingError] =

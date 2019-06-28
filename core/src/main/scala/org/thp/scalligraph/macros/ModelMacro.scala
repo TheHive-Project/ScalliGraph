@@ -18,10 +18,10 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacro with IndexMacro w
     debug(s"Building vertex model for $entityType")
     val label: String      = entityType.toString.split("\\.").last
     val mappings           = getEntityMappings[E]
-    val mappingDefinitions = mappings.map(m ⇒ q"val ${m.valName} = ${m.definition}")
-    val fieldMap           = mappings.map(m ⇒ q"${m.name} → ${m.valName}")
-    val setProperties      = mappings.map(m ⇒ q"db.setProperty(vertex, ${m.name}, e.${TermName(m.name)}, ${m.valName})")
-    val domainBuilder = mappings.map { m ⇒
+    val mappingDefinitions = mappings.map(m => q"val ${m.valName} = ${m.definition}")
+    val fieldMap           = mappings.map(m => q"${m.name} → ${m.valName}")
+    val setProperties      = mappings.map(m => q"db.setProperty(vertex, ${m.name}, e.${TermName(m.name)}, ${m.valName})")
+    val domainBuilder = mappings.map { m =>
       q"""
         try {
           db.getProperty(element, ${m.name}, ${m.valName})
@@ -78,10 +78,10 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacro with IndexMacro w
     val fromLabel: String  = fromType.toString.split("\\.").last
     val toLabel: String    = toType.toString.split("\\.").last
     val mappings           = getEntityMappings[E]
-    val mappingDefinitions = mappings.map(m ⇒ q"val ${m.valName} = ${m.definition}")
-    val fieldMap           = mappings.map(m ⇒ q"${m.name} -> ${m.valName}")
-    val setProperties      = mappings.map(m ⇒ q"db.setProperty(edge, ${m.name}, e.${TermName(m.name)}, ${m.valName})")
-    val domainBuilder = mappings.map { m ⇒
+    val mappingDefinitions = mappings.map(m => q"val ${m.valName} = ${m.definition}")
+    val fieldMap           = mappings.map(m => q"${m.name} -> ${m.valName}")
+    val setProperties      = mappings.map(m => q"db.setProperty(edge, ${m.name}, e.${TermName(m.name)}, ${m.valName})")
+    val domainBuilder = mappings.map { m =>
       q"""
         try {
           db.getProperty(element, ${m.name}, ${m.valName})

@@ -6,7 +6,7 @@ import scala.util.{Failure, Success, Try}
 
 object Collection {
 
-  def distinctBy[A, B, Repr, That](xs: IterableLike[A, Repr])(f: A ⇒ B)(implicit cbf: CanBuildFrom[Repr, A, That]): That = {
+  def distinctBy[A, B, Repr, That](xs: IterableLike[A, Repr])(f: A => B)(implicit cbf: CanBuildFrom[Repr, A, That]): That = {
     val builder = cbf(xs.repr)
     val i       = xs.iterator
     var set     = Set[B]()
@@ -28,8 +28,8 @@ object Collection {
     val aBuilder = cbfa()
     val bBuilder = cbfb()
     xs.foreach {
-      case Success(a) ⇒ aBuilder += a
-      case Failure(b) ⇒ bBuilder += b
+      case Success(a) => aBuilder += a
+      case Failure(b) => bBuilder += b
     }
     (aBuilder.result(), bBuilder.result())
   }

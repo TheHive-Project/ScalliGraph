@@ -1,6 +1,6 @@
 package org.thp.scalligraph.query
 
-import scala.reflect.runtime.{universe ⇒ ru}
+import scala.reflect.runtime.{universe => ru}
 
 import gremlin.scala.{__, GremlinScala, OrderBy}
 import org.apache.tinkerpop.gremlin.process.traversal.Order
@@ -14,7 +14,7 @@ import org.thp.scalligraph.models.ScalliSteps
 
 case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
 
-  def orderby[A, F, T](f: GremlinScala[F] ⇒ GremlinScala[T], order: Order): OrderBy[A] = new OrderBy[A] {
+  def orderby[A, F, T](f: GremlinScala[F] => GremlinScala[T], order: Order): OrderBy[A] = new OrderBy[A] {
     override def apply[End](traversal: GraphTraversal[_, End]): GraphTraversal[_, End] =
       traversal.by(f(__[F]).traversal, order)
   }
@@ -25,12 +25,12 @@ case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
       authContext: AuthContext
   ): S = {
     val orderBys = fieldOrder.flatMap {
-      case (fieldName, order) ⇒
+      case (fieldName, order) =>
         val property = getProperty(publicProperties, stepType, fieldName)
         property
           .definition
           .map {
-            case f: (GremlinScala[a] ⇒ GremlinScala[b]) ⇒
+            case f: (GremlinScala[a] => GremlinScala[b]) =>
               orderby[Any, a, b](_.coalesce(f, _.constant(property.mapping.noValue.asInstanceOf[b])), order)
           }
     }
@@ -42,15 +42,15 @@ case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
 
 object InputSort {
   implicit val fieldsParser: FieldsParser[InputSort] = FieldsParser("sort-f") {
-    case (_, FObjOne("_fields", FSeq(f))) ⇒
+    case (_, FObjOne("_fields", FSeq(f))) =>
       f.validatedBy {
-          case FObjOne(name, FString(order)) ⇒
-            try Good(new InputSort(name → Order.valueOf(order)))
+          case FObjOne(name, FString(order)) =>
+            try Good(new InputSort(name -> Order.valueOf(order)))
             catch {
-              case _: IllegalArgumentException ⇒
+              case _: IllegalArgumentException =>
                 Bad(One(InvalidFormatAttributeError("order", "order", Set("field: 'incr", "field: 'decr", "field: 'shuffle"), FString(order))))
             }
         }
-        .map(x ⇒ new InputSort(x.flatMap(_.fieldOrder): _*))
+        .map(x => new InputSort(x.flatMap(_.fieldOrder): _*))
   }
 }

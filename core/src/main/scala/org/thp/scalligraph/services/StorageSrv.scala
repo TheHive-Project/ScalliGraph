@@ -11,8 +11,8 @@ import play.api.{Configuration, Logger}
 
 import gremlin.scala._
 import javax.inject.{Inject, Singleton}
-import org.apache.hadoop.conf.{Configuration ⇒ HadoopConfig}
-import org.apache.hadoop.fs.{FileSystem ⇒ HDFileSystem, Path ⇒ HDPath}
+import org.apache.hadoop.conf.{Configuration => HadoopConfig}
+import org.apache.hadoop.fs.{FileSystem => HDFileSystem, Path => HDPath}
 import org.apache.hadoop.io.IOUtils
 import org.thp.scalligraph.models.{Database, UniMapping}
 
@@ -36,7 +36,7 @@ class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
       Files.copy(is, directory.resolve(id))
       ()
     }.recover {
-      case _: FileAlreadyExistsException ⇒ ()
+      case _: FileAlreadyExistsException => ()
     }
 }
 
@@ -45,9 +45,9 @@ object HadoopStorageSrv {
   def loadConfiguration(conf: Configuration): HadoopConfig = {
     val hadoopConfig = new HadoopConfig()
     conf.entrySet.foreach {
-      case (name, value) ⇒
+      case (name, value) =>
         value.unwrapped() match {
-          case s: String ⇒ hadoopConfig.set(name, s)
+          case s: String => hadoopConfig.set(name, s)
         }
     }
     hadoopConfig
@@ -91,12 +91,12 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
 
       override def read(): Int =
         buffer match {
-          case Some(b) if b.length > index ⇒
+          case Some(b) if b.length > index =>
             val d = b(index)
             index += 1
             d.toInt & 0xff
-          case None ⇒ -1
-          case _ ⇒
+          case None => -1
+          case _ =>
             vertex = vertex.out("nextChunk")
             buffer = vertex.clone.value[String]("binary").map(Base64.getDecoder.decode).headOption()
             index = 0
@@ -122,7 +122,7 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
     val chunks: Iterator[Vertex] = Iterator
       .continually(readNextChunk)
       .takeWhile(_.nonEmpty)
-      .map { data ⇒
+      .map { data =>
         val v = graph.addVertex("binary")
         db.setSingleProperty(v, "binary", data, UniMapping.stringMapping)
         db.setSingleProperty(v, "_id", UUID.randomUUID, db.idMapping)
@@ -138,7 +138,7 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
       val firstVertex = chunks.next
       db.setSingleProperty(firstVertex, "attachmentId", id, UniMapping.stringMapping)
       chunks.foldLeft(firstVertex) {
-        case (previousVertex, currentVertex) ⇒
+        case (previousVertex, currentVertex) =>
           previousVertex.addEdge("nextChunk", currentVertex)
           currentVertex
       }

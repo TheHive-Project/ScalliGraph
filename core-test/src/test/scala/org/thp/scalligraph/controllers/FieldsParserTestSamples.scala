@@ -19,22 +19,22 @@ case class LocaleInt(value: Int)
 object CustomFieldsParsers {
 
   val englishIntFieldsParser: FieldsParser[LocaleInt] = FieldsParser[LocaleInt]("englishInt", Set("one", "two", "three")) {
-    case (_, FString("one"))   ⇒ Good(LocaleInt(1))
-    case (_, FString("two"))   ⇒ Good(LocaleInt(2))
-    case (_, FString("three")) ⇒ Good(LocaleInt(3))
+    case (_, FString("one"))   => Good(LocaleInt(1))
+    case (_, FString("two"))   => Good(LocaleInt(2))
+    case (_, FString("three")) => Good(LocaleInt(3))
   }
 
   val frenchIntFieldsParser: FieldsParser[LocaleInt] = FieldsParser[LocaleInt]("frenchInt", Set("un", "deux", "trois")) {
-    case (_, FString("un"))    ⇒ Good(LocaleInt(1))
-    case (_, FString("deux"))  ⇒ Good(LocaleInt(2))
-    case (_, FString("trois")) ⇒ Good(LocaleInt(3))
+    case (_, FString("un"))    => Good(LocaleInt(1))
+    case (_, FString("deux"))  => Good(LocaleInt(2))
+    case (_, FString("trois")) => Good(LocaleInt(3))
   }
 
   val englishUpdateFieldsParser: UpdateFieldsParser[LocaleInt] =
-    UpdateFieldsParser[LocaleInt]("englishLocalInt", Seq(FPath.empty → englishIntFieldsParser))
+    UpdateFieldsParser[LocaleInt]("englishLocalInt", Seq(FPath.empty -> englishIntFieldsParser))
 
   val frenchUpdateFieldsParser: UpdateFieldsParser[LocaleInt] =
-    UpdateFieldsParser[LocaleInt]("frenchLocalInt", Seq(FPath.empty → frenchIntFieldsParser))
+    UpdateFieldsParser[LocaleInt]("frenchLocalInt", Seq(FPath.empty -> frenchIntFieldsParser))
 }
 
 case class ClassWithAnnotation(

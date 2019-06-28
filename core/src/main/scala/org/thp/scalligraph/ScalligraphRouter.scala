@@ -44,14 +44,14 @@ class ScalligraphRouter @Inject()(
   lazy val logger = Logger(getClass)
 
   val queryRoutes: Routes = {
-    case POST(p"/api/v${int(version)}/query") ⇒
+    case POST(p"/api/v${int(version)}/query") =>
       val queryExecutor = queryExecutors
         .filter(_.versionCheck(version))
         .reduceOption(_ ++ _)
         .getOrElse(???)
       entryPoint("query")
         .extract('query, queryExecutor.parser.on("query"))
-        .authTransaction(db) { implicit request ⇒ implicit graph ⇒
+        .authTransaction(db) { implicit request => implicit graph =>
           val authGraph = AuthGraph(request, graph)
           // macro can't be used because it is in the same module
           // val query: Query = request.body('query

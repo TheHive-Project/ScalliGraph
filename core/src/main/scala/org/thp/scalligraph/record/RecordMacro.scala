@@ -3,7 +3,7 @@ package org.thp.scalligraph.record
 import scala.annotation.tailrec
 import scala.reflect.macros.whitebox
 import scala.tools.nsc.Global
-import scala.{Symbol ⇒ ScalaSymbol}
+import scala.{Symbol => ScalaSymbol}
 
 import shapeless.labelled.KeyTag
 import shapeless.tag.Tagged
@@ -36,14 +36,14 @@ class RecordMacro(val c: whitebox.Context) {
 
     def unapply(fTpe: Type): Option[(Type, Type)] =
       fTpe.dealias match {
-        case RefinedType(l, _) ⇒
+        case RefinedType(l, _) =>
           val rf = refinedType(l.init, NoSymbol)
           l.last match {
-            case TypeRef(_, `keyTagSym`, List(k, v1)) if v1 =:= rf ⇒
-              Some(k → rf)
-            case _ ⇒ None
+            case TypeRef(_, `keyTagSym`, List(k, v1)) if v1 =:= rf =>
+              Some(k -> rf)
+            case _ => None
           }
-        case _ ⇒ None
+        case _ => None
       }
   }
 
@@ -67,9 +67,9 @@ class RecordMacro(val c: whitebox.Context) {
       if (l <:< typeOf[HNil]) None
       else
         l.baseType(hconsTpe.typeSymbol) match {
-          case TypeRef(pre, _, List(FieldType(k, v), lTail)) if pre =:= hconsPre ⇒
+          case TypeRef(pre, _, List(FieldType(k, v), lTail)) if pre =:= hconsPre =>
             Some((k, v, lTail))
-          case _ ⇒ None
+          case _ => None
         }
   }
 
@@ -77,9 +77,9 @@ class RecordMacro(val c: whitebox.Context) {
 
     def unapply(tTpe: Type): Option[String] =
       tTpe.dealias match {
-        case RefinedType(List(`symbolTpe`, TypeRef(tPre, `tagSym`, List(ConstantType(Constant(name: String))))), _) if tPre =:= tagPre ⇒
+        case RefinedType(List(`symbolTpe`, TypeRef(tPre, `tagSym`, List(ConstantType(Constant(name: String))))), _) if tPre =:= tagPre =>
           Some(name)
-        case _ ⇒ None
+        case _ => None
       }
   }
 
@@ -89,9 +89,9 @@ class RecordMacro(val c: whitebox.Context) {
       if (l <:< hnilTpe) acc
       else
         l.baseType(hconsTpe.typeSymbol) match {
-          case TypeRef(pre, _, List(FieldType(KeyTag(k), v), lTail)) if pre =:= hconsPre ⇒
+          case TypeRef(pre, _, List(FieldType(KeyTag(k), v), lTail)) if pre =:= hconsPre =>
             unfold(lTail, (k, v) :: acc)
-          case _ ⇒ c.abort(c.enclosingPosition, s"$l is not an HList type")
+          case _ => c.abort(c.enclosingPosition, s"$l is not an HList type")
         }
 
     unfold(hl, Nil)
@@ -100,19 +100,19 @@ class RecordMacro(val c: whitebox.Context) {
   def mkSelector[L <: HList, K](implicit lTag: WeakTypeTag[L], kTag: WeakTypeTag[K]): Tree = {
     def unfold(list: Type, key: Type): Option[(Type, Int)] =
       list match {
-        case l if l <:< typeOf[HNil]      ⇒ None
-        case Record(k, v, _) if k =:= key ⇒ Some(v → 0)
-        case Record(_, _, tail) ⇒
-          unfold(tail, key).map { case (_v, i) ⇒ _v → (i + 1) }
-        case l ⇒ c.abort(c.enclosingPosition, s"$l is not an HList type")
+        case l if l <:< typeOf[HNil]      => None
+        case Record(k, v, _) if k =:= key => Some(v -> 0)
+        case Record(_, _, tail) =>
+          unfold(tail, key).map { case (_v, i) => _v -> (i + 1) }
+        case l => c.abort(c.enclosingPosition, s"$l is not an HList type")
       }
 
     val lTpe = lTag.tpe.dealias
     val kTpe = kTag.tpe.dealias
     unfold(lTpe, kTpe) match {
-      case Some((v, i)) ⇒
+      case Some((v, i)) =>
         q" new org.thp.scalligraph.record.UnsafeSelector[$lTpe, $kTpe, $v]($i) "
-      case _ ⇒
+      case _ =>
         c.echo(c.enclosingPosition, s"DEBUG: $lTag")
         c.echo(c.enclosingPosition, s"No field $kTpe in record [${extractHlistTypes(lTpe).map(_._1).mkString(",")}]")
         q" new org.thp.scalligraph.record.UnsafeSelector[$lTpe, $kTpe, Nothing](0) "

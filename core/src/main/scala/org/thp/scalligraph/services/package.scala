@@ -1,6 +1,6 @@
 package org.thp.scalligraph
 
-import scala.reflect.runtime.{universe ⇒ ru}
+import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
 
 import gremlin.scala.{Edge, Element, Graph, GremlinScala, Vertex}

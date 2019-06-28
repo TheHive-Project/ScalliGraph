@@ -36,16 +36,16 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
   val personSrv   = new PersonSrv
   val softwareSrv = new SoftwareSrv
 
-  override val version: (Int, Int) = 1 → 1
+  override val version: (Int, Int) = 1 -> 1
 
   override val publicProperties: List[PublicProperty[_, _]] = {
     val labelMapping = SingleMapping[String, String](
       "",
       toGraphOptFn = {
-        case d if d startsWith "Mister " ⇒ Some(d.drop(7))
-        case d                           ⇒ Some(d)
+        case d if d startsWith "Mister " => Some(d.drop(7))
+        case d                           => Some(d)
       },
-      toDomainFn = (g: String) ⇒ "Mister " + g
+      toDomainFn = (g: String) => "Mister " + g
     )
     PublicPropertyListBuilder[PersonSteps]
       .property[String]("createdBy")(_.rename("_createdBy").readonly)
@@ -62,21 +62,21 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
   }
 
   override val queries: Seq[ParamQuery[_]] = Seq(
-    Query.init[PersonSteps]("allPeople", (graph, _) ⇒ personSrv.initSteps(graph)),
-    Query.init[SoftwareSteps]("allSoftware", (graph, _) ⇒ softwareSrv.initSteps(graph)),
+    Query.init[PersonSteps]("allPeople", (graph, _) => personSrv.initSteps(graph)),
+    Query.init[SoftwareSteps]("allSoftware", (graph, _) => softwareSrv.initSteps(graph)),
     Query.initWithParam[SeniorAgeThreshold, PersonSteps](
       "seniorPeople",
-      FieldsParser[SeniorAgeThreshold], { (seniorAgeThreshold, graph, _) ⇒
+      FieldsParser[SeniorAgeThreshold], { (seniorAgeThreshold, graph, _) =>
         personSrv.initSteps(graph).has(Key[Int]("age"), P.gte(seniorAgeThreshold.age))
       }
     ),
-    Query[PersonSteps, SoftwareSteps]("created", (personSteps, _) ⇒ personSteps.created),
+    Query[PersonSteps, SoftwareSteps]("created", (personSteps, _) => personSteps.created),
     Query.withParam[FriendLevel, PersonSteps, PersonSteps](
       "friends",
       FieldsParser[FriendLevel],
-      (friendLevel, personSteps, _) ⇒ personSteps.friends(friendLevel.level)
+      (friendLevel, personSteps, _) => personSteps.friends(friendLevel.level)
     ),
-    Query[Person with Entity, Output[OutputPerson]]("output", (person, _) ⇒ person),
-    Query[Software with Entity, Output[OutputSoftware]]("output", (software, _) ⇒ software)
+    Query[Person with Entity, Output[OutputPerson]]("output", (person, _) => person),
+    Query[Software with Entity, Output[OutputSoftware]]("output", (software, _) => software)
   )
 }

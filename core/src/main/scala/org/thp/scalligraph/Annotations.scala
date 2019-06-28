@@ -1,7 +1,7 @@
 package org.thp.scalligraph
 
 import scala.annotation.{compileTimeOnly, StaticAnnotation}
-import scala.language.experimental.{macros ⇒ enableMacros}
+import scala.language.experimental.{macros => enableMacros}
 
 import play.api.libs.json.Writes
 
