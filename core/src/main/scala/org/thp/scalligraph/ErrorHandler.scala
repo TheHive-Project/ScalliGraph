@@ -76,10 +76,6 @@ class ErrorHandler extends HttpErrorHandler {
 
   def onServerError(request: RequestHeader, exception: Throwable): Future[Result] = {
     val (status, body) = toErrorResult(exception)
-      .map { e ⇒
-        logger.info("Error", exception)
-        e
-      }
       .getOrElse {
         logger.error("Internal error", exception)
         Status.INTERNAL_SERVER_ERROR → Json
@@ -87,9 +83,9 @@ class ErrorHandler extends HttpErrorHandler {
       }
     exception match {
       case AuthenticationError(message) ⇒
-        logger.info(s"${request.method} ${request.uri} returned $status: $message")
+        logger.warn(s"${request.method} ${request.uri} returned $status: $message")
       case ex ⇒
-        logger.info(s"${request.method} ${request.uri} returned $status", ex)
+        logger.warn(s"${request.method} ${request.uri} returned $status", ex)
     }
     Future.successful(toResult(status, body))
   }
