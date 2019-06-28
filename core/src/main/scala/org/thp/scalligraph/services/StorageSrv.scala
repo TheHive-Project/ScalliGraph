@@ -24,6 +24,8 @@ trait StorageSrv {
 
 @Singleton
 class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
+  if (!Files.exists(directory))
+    Files.createDirectory(directory)
 
   @Inject()
   def this(configuration: Configuration) = this(Paths.get(configuration.get[String]("storage.localfs.location")))
