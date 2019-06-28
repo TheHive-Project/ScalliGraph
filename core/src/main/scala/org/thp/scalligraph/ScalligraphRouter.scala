@@ -50,11 +50,11 @@ class ScalligraphRouter @Inject()(
         .reduceOption(_ ++ _)
         .getOrElse(???)
       entryPoint("query")
-        .extract('query, queryExecutor.parser.on("query"))
+        .extract("query", queryExecutor.parser.on("query"))
         .authTransaction(db) { implicit request => implicit graph =>
           val authGraph = AuthGraph(request, graph)
           // macro can't be used because it is in the same module
-          // val query: Query = request.body('query
+          // val query: Query = request.body("query"
           val query: Query = request.body.list.head
           Success(Results.Ok(queryExecutor.execute(query)(authGraph).toJson))
         }
