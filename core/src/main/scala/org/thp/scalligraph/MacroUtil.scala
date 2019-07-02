@@ -117,7 +117,7 @@ trait MacroUtil extends MacroLogger {
       if (sym.isType) extractEnum(sym.asType.toType, sym)
       else extractEnum(sym.typeSignature, sym)
 
-    def enumerationType(tpe: Type, sym: Symbol): Option[Seq[Symbol]] =
+    def enumerationType(tpe: Type): Option[Seq[Symbol]] =
       if (tpe <:< typeOf[Enumeration#Value]) {
         val members = tpe
           .asInstanceOf[TypeRef]
@@ -158,7 +158,7 @@ trait MacroUtil extends MacroLogger {
       }
 
     def extractEnum(tpe: Type, sym: Symbol): Option[Seq[(Tree, Tree)]] =
-      (enumerationType(tpe, sym) orElse sealedType(sym)).map(_.map { value =>
+      (enumerationType(tpe) orElse sealedType(sym)).map(_.map { value =>
         val valueName = q"${value.name.decodedName.toString.trim}" // q"$value.toString"
         if (value.isModuleClass) {
           if (value.owner.isModuleClass) {
