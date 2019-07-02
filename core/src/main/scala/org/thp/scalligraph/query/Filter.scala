@@ -197,7 +197,7 @@ object InputFilter {
       withGood(field, values)(in(_, _: _*))
 
     case (_, FObjOne("_contains", FString(path))) => Good(isDefined(path))
-
+    case (_, FFieldValue(key, value))             => Good(is(key, value))
     case (_, FObjOne(key, FNative(value))) =>
       logger.warn(s"""Use of filter {"$key": "$value"} is deprecated. Please use {"_is":{"$key":"$value"}}""")
       Good(is(key, value))

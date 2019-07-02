@@ -10,6 +10,18 @@ object FObjOne {
   }
 }
 
+object FFieldValue {
+
+  def unapply(field: Field): Option[(String, Any)] = {
+    val fieldName  = field.get("_field")
+    val fieldValue = field.get("_value")
+    (fieldName, fieldValue) match {
+      case (FString(name), FNative(value)) => Some(name -> value)
+      case _                               => None
+    }
+  }
+}
+
 object FNamedObj {
 
   def unapply(field: Field): Option[(String, FObject)] = field match {
