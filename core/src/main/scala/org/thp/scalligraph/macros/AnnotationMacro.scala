@@ -5,7 +5,7 @@ import scala.util.{Try => UTry}
 
 import org.thp.scalligraph.{MacroLogger, MacroUtil}
 
-class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMacro with MacroLogger {
+class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMacroHelper with MacroLogger {
 
   import c.universe._
 

@@ -2,12 +2,14 @@ package org.thp.scalligraph.models
 
 import java.util.Date
 
+import scala.language.experimental.macros
 import scala.reflect.{classTag, ClassTag}
 
 import play.api.libs.json.{JsObject, Json}
 
 import gremlin.scala.dsl.Converter
 import org.thp.scalligraph.auth.Permission
+import org.thp.scalligraph.macros.MappingMacro
 import org.thp.scalligraph.{Hash, InternalError, Utils}
 
 object MappingCardinality extends Enumeration {
@@ -24,7 +26,11 @@ trait UniMapping[D] {
   type GraphType
 }
 
-object UniMapping {
+trait MappingLowPrio {
+  implicit def build[T]: UniMapping[T] = macro MappingMacro.getOrBuildMapping[T]
+}
+
+object UniMapping extends MappingLowPrio {
   implicit val jsonMapping: SingleMapping[JsObject, String] =
     SingleMapping[JsObject, String]("", toGraphOptFn = j => Some(j.toString), toDomainFn = s => Json.parse(s).as[JsObject])
   implicit val stringMapping: SingleMapping[String, String]         = SingleMapping[String, String]("")

@@ -5,7 +5,7 @@ import scala.reflect.macros.blackbox
 import org.thp.scalligraph.MacroLogger
 import org.thp.scalligraph.models.Model
 
-class ModelMacro(val c: blackbox.Context) extends MappingMacro with IndexMacro with MacroLogger {
+class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexMacro with MacroLogger {
 
   import c.universe._
 

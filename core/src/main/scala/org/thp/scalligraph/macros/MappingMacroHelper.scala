@@ -5,7 +5,21 @@ import scala.reflect.macros.blackbox
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.{MacroLogger, MacroUtil}
 
-trait MappingMacro extends MacroUtil with MacroLogger {
+class MappingMacro(val c: blackbox.Context) extends MappingMacroHelper with MacroLogger {
+  import c.universe._
+
+  def getOrBuildMapping[E: WeakTypeTag]: Tree = {
+    val eType = weakTypeOf[E]
+    if (eType <:< typeOf[Enumeration#Value]) initLogger(eType.asInstanceOf[TypeRef].pre.typeSymbol)
+    else initLogger(eType.typeSymbol)
+    ret(
+      s"Mapping of $eType",
+      getMapping(eType.typeSymbol, eType)
+    )
+  }
+}
+
+trait MappingMacroHelper extends MacroUtil with MacroLogger {
   val c: blackbox.Context
 
   import c.universe._
@@ -41,13 +55,13 @@ trait MappingMacro extends MacroUtil with MacroLogger {
 
   private def getMappingFromImplicit(eType: Type): Option[Tree] = {
     val mappingType = appliedType(typeOf[UniMapping[_]].typeConstructor, eType)
-    val mapping     = c.inferImplicitValue(mappingType, silent = true)
+    val mapping     = c.inferImplicitValue(mappingType, silent = true, withMacrosDisabled = true)
     if (mapping.tpe =:= NoType) None
     else Some(mapping)
   }
 
   private def buildMapping(symbol: Symbol, eType: Type): Option[Tree] =
-    symbol.typeSignature match {
+    eType match {
       case EnumerationType(members @ _*) =>
         val valueCases = members.map {
           case (name, value) => cq"$name ⇒ $value"
