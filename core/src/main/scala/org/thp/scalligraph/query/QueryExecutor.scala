@@ -2,6 +2,7 @@ package org.thp.scalligraph.query
 
 import scala.reflect.runtime.{universe => ru}
 
+import play.api.Logger
 import play.api.libs.json.{JsNull, Json}
 
 import gremlin.scala.Graph
@@ -15,6 +16,7 @@ abstract class QueryExecutor { executor =>
   val version: (Int, Int)
   val publicProperties: List[PublicProperty[_, _]] = Nil
   val queries: Seq[ParamQuery[_]]                  = Nil
+  lazy val logger                                  = Logger(getClass)
 
   final lazy val allQueries = queries :+ sortQuery :+ filterQuery :+ aggregationQuery :+ ToListQuery
   lazy val sortQuery        = new SortQuery(publicProperties)
@@ -65,12 +67,15 @@ abstract class QueryExecutor { executor =>
         query
           .paramParser(from)
           .map(p => query.toQuery(p))
-      } else Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name).toSet, field)))
+      } else {
+        logger.warn(s"getQuery($tpe, $field).applyQuery($query, $from) fails because $query.checkFrom($tpe) returns false")
+        Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name).toSet, field)))
+      }
 
     field match {
       case FNamedObj(name, f) =>
         val potentialQueries = allQueries
-          .filter(_.name == name)
+          .filter(q => q.name == name && q.checkFrom(tpe))
           .map(q => applyQuery(q, f))
         potentialQueries
           .find(_.isGood)
@@ -79,9 +84,15 @@ abstract class QueryExecutor { executor =>
               .collect { case Bad(x) => x }
               .reduceOption(_ ++ _)
               .map(Bad(_))
-              .getOrElse(Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name).toSet, field))))
+              .getOrElse {
+                logger.warn(s"getQuery($tpe, $field) fails because query $name ($f) has potential queries $potentialQueries")
+                Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name).toSet, field)))
+              }
           }
-      case _ => Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name).toSet, field)))
+      case _ => {
+        logger.warn(s"getQuery($tpe, $field) fails because field has no name")
+        Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name).toSet, field)))
+      }
     }
   }
 
