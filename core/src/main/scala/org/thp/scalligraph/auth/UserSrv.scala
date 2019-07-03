@@ -28,6 +28,8 @@ case class AuthContextImpl(userId: String, userName: String, organisation: Strin
 
 object AuthContext {
 
+  val empty: AuthContext = AuthContextImpl("", "", "", "", Set.empty)
+
   def fromJson(request: RequestHeader, json: String): Try[AuthContext] =
     Try {
       Json.parse(json).as(reads(Instance.getRequestId(request)))
