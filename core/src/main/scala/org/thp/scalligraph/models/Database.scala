@@ -110,7 +110,7 @@ abstract class BaseDatabase extends Database {
     SingleMapping[Array[Byte], String]("", data => Some(Base64.getEncoder.encodeToString(data)), Base64.getDecoder.decode)
 
   protected var transactionSuccessCallback: List[(Graph, () => Unit)] = Nil
-  protected val transactionSuccessCallbackLock                       = new Object
+  protected val transactionSuccessCallbackLock                        = new Object
 
   override def onSuccessTransaction(graph: Graph)(body: () => Unit): Unit = transactionSuccessCallbackLock.synchronized {
     transactionSuccessCallback = (graph -> body) :: transactionSuccessCallback

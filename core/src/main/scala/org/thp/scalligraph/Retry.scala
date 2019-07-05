@@ -22,8 +22,8 @@ object Retry {
 class Retry(maxTries: Int, exceptions: Seq[Class[_]]) {
   import Retry._
 
-  def apply[T](fn: => T): T                               = run(1, fn)
-  def withTry[T](fn: => Try[T]): Try[T]                   = runTry(1, fn)
+  def apply[T](fn: => T): T                              = run(1, fn)
+  def withTry[T](fn: => Try[T]): Try[T]                  = runTry(1, fn)
   def on[E <: Throwable](implicit manifest: Manifest[E]) = new Retry(maxTries, exceptions :+ manifest.runtimeClass)
 
   def delayed(delay: Int => FiniteDuration)(implicit scheduler: Scheduler, ec: ExecutionContext) =
@@ -57,7 +57,7 @@ class Retry(maxTries: Int, exceptions: Seq[Class[_]]) {
 class DelayRetry(maxTries: Int, exceptions: Seq[Class[_]], scheduler: Scheduler, delay: Int => FiniteDuration, implicit val ec: ExecutionContext) {
   import Retry._
 
-  def apply[T](fn: => Future[T]): Future[T]               = run(1, fn)
+  def apply[T](fn: => Future[T]): Future[T]              = run(1, fn)
   def on[E <: Throwable](implicit manifest: Manifest[E]) = new DelayRetry(maxTries, exceptions :+ manifest.runtimeClass, scheduler, delay, ec)
 
   private def run[T](currentTry: Int, fn: => Future[T]): Future[T] =

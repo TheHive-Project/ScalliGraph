@@ -4,9 +4,9 @@ import scala.util.{Failure, Success, Try}
 
 import gremlin.scala.Graph
 import org.thp.scalligraph.NotFoundError
-import org.thp.scalligraph.models.{Database, ElementSteps, Entity, Model}
+import org.thp.scalligraph.models.{ElementSteps, Entity, Model}
 
-abstract class ElementSrv[E <: Product, S <: ElementSteps[E, _, S]](implicit db: Database) {
+abstract class ElementSrv[E <: Product, S <: ElementSteps[E, _, S]] {
   val model: Model.Base[E]
 
   def initSteps(implicit graph: Graph): S

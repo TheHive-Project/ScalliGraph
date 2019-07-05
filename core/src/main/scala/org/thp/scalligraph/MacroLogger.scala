@@ -61,20 +61,20 @@ trait MacroLogger {
     writer.toString
   }
 
-  def isTraceEnabled: Boolean    = level >= LogLevel.trace
+  def isTraceEnabled: Boolean     = level >= LogLevel.trace
   def trace(msg: => String): Unit = if (isTraceEnabled) println(s"[TRACE] $msg")
 
-  def isDebugEnabled: Boolean    = level >= LogLevel.debug
+  def isDebugEnabled: Boolean     = level >= LogLevel.debug
   def debug(msg: => String): Unit = if (isDebugEnabled) println(s"[DEBUG] $msg")
 
-  def isInfoEnabled: Boolean    = level >= LogLevel.info
+  def isInfoEnabled: Boolean     = level >= LogLevel.info
   def info(msg: => String): Unit = if (isInfoEnabled) println(s"[INFO]  $msg")
 
-  def isWarnEnabled: Boolean                          = level >= LogLevel.warn
+  def isWarnEnabled: Boolean                           = level >= LogLevel.warn
   def warn(msg: => String): Unit                       = if (isWarnEnabled) println(s"[WARN]  $msg")
   def warn(msg: => String, throwable: Throwable): Unit = if (isWarnEnabled) println(s"[WARN]  $msg\n${printStackTrace(throwable)}")
 
-  def isErrorEnabled: Boolean    = level >= LogLevel.error
+  def isErrorEnabled: Boolean     = level >= LogLevel.error
   def error(msg: => String): Unit = if (isErrorEnabled) println(s"[ERROR] $msg")
 
   def error(msg: => String, throwable: Throwable): Unit =
