@@ -18,7 +18,7 @@ case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
     override def apply[End](traversal: GraphTraversal[_, End]): GraphTraversal[_, End] =
       traversal.by(f(__[F]).traversal, order)
   }
-  override def apply[S <: ScalliSteps[_, _, _]](
+  override def apply[S <: ScalliSteps[_, _, S]](
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,

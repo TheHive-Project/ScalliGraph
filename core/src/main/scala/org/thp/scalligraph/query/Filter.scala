@@ -4,111 +4,104 @@ import scala.reflect.runtime.{universe => ru}
 
 import play.api.Logger
 
-import gremlin.scala.{Element, GremlinScala, Key, P, Vertex}
+import gremlin.scala.{GremlinScala, P, Vertex}
 import org.scalactic.Accumulation._
 import org.scalactic.{Bad, Good, One}
 import org.thp.scalligraph.InvalidFormatAttributeError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
-import org.thp.scalligraph.models.ScalliSteps
+import org.thp.scalligraph.models.BaseVertexSteps
 
 trait InputFilter extends InputQuery {
-  def apply[S <: ScalliSteps[_, _, _]](publicProperties: List[PublicProperty[_, _]], stepType: ru.Type, step: S, authContext: AuthContext): S
+  def apply[S <: BaseVertexSteps[_, S]](publicProperties: List[PublicProperty[_, _]], stepType: ru.Type, step: S, authContext: AuthContext): S
 }
 
 case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilter {
-  override def apply[S <: ScalliSteps[_, _, _]](
+  override def apply[S <: BaseVertexSteps[_, S]](
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
       authContext: AuthContext
-  ): S = {
-    val scalliStep = step.asInstanceOf[ScalliSteps[_, _, S]]
+  ): S =
     getProperty(publicProperties, stepType, fieldName)
       .definition
       .map(f => f.andThen(_.is(predicate)))
       .asInstanceOf[Seq[GremlinScala[_] => GremlinScala[_]]] match {
-      case Seq()  => scalliStep.where(_.is(null)) // TODO need checks
-      case Seq(f) => scalliStep.where(f)
-      case f      => scalliStep.where(_.or(f: _*))
+      case Seq()  => step.filter(_.is(null)) // TODO need checks
+      case Seq(f) => step.filter(f)
+      case f      => step.filter(_.or(f: _*))
     }
-  }
 }
 
 case class IsDefinedFilter(fieldName: String) extends InputFilter {
-  override def apply[S <: ScalliSteps[_, _, _]](
+  override def apply[S <: BaseVertexSteps[_, S]](
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
       authContext: AuthContext
   ): S = {
-    val scalliStep = step.asInstanceOf[ScalliSteps[_, Vertex, S]]
-    val prop       = getProperty(publicProperties, stepType, fieldName)
-    scalliStep.where(prop.get(_, authContext))
+    val prop = getProperty(publicProperties, stepType, fieldName)
+    step.filter(prop.get(_, authContext))
   }
 }
 
 case class OrFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
-  override def apply[S <: ScalliSteps[_, _, _]](
+  override def apply[S <: BaseVertexSteps[_, S]](
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
       authContext: AuthContext
   ): S =
-    step match {
-      case s: ScalliSteps[_, gt, S] =>
-        inputFilters.map { ff => (g: GremlinScala[gt]) =>
-          ff[S](publicProperties, stepType, s.newInstance(g), authContext).raw //.asInstanceOf[S]
-        } match {
-          case Seq()  => s.where(_.is(null)) // TODO need checks
-          case Seq(f) => s.where(f)
-          case f      => s.asInstanceOf[ScalliSteps[_, gt, S]].where(_.or(f: _*))
-        }
+    inputFilters.map(ff => (g: GremlinScala[Vertex]) => ff(publicProperties, stepType, step.newInstance(g), authContext).raw) match {
+      case Seq()  => step.filter(_.is(null)) // TODO need checks
+      case Seq(f) => step.filter(f)
+      case f      => step.filter(_.or(f: _*))
     }
 }
 
 case class AndFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
-  override def apply[S <: ScalliSteps[_, _, _]](
+  override def apply[S <: BaseVertexSteps[_, S]](
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
       authContext: AuthContext
   ): S =
-    step match {
-      case s: ScalliSteps[_, gt, S] =>
-        inputFilters.filterNot(_ == YesFilter).map { ff => (g: GremlinScala[gt]) =>
-          ff[S](publicProperties, stepType, s.newInstance(g), authContext).raw
-        } match {
-          case Seq()       => step
-          case Seq(f)      => s.where(f)
-          case Seq(f @ _*) => s.asInstanceOf[ScalliSteps[_, gt, S]].where(_.and(f: _*))
+    inputFilters.map(ff => (g: GremlinScala[Vertex]) => ff(publicProperties, stepType, step.newInstance(g), authContext).raw) match {
+      case Seq()       => step
+      case Seq(f)      => step.filter(f)
+      case Seq(f @ _*) => step.filter(_.and(f: _*))
 
-        }
     }
 }
 
 case class NotFilter(inputFilter: InputFilter) extends InputFilter {
-  override def apply[S <: ScalliSteps[_, _, _]](
+  override def apply[S <: BaseVertexSteps[_, S]](
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
       authContext: AuthContext
-  ): S =
-    step match {
-      case s: ScalliSteps[_, gt, S] =>
-        val filter = (g: GremlinScala[gt]) => inputFilter[S](publicProperties, stepType, s.newInstance(g), authContext).raw
-        s.asInstanceOf[ScalliSteps[_, gt, S]]
-          .where(_.not(filter))
-    }
+  ): S = {
+    val criteria = (g: GremlinScala[Vertex]) => inputFilter(publicProperties, stepType, step.newInstance(g), authContext).raw
+    step.filter(_.not(criteria))
+  }
 }
 
 object YesFilter extends InputFilter {
-  override def apply[S <: ScalliSteps[_, _, _]](
+  override def apply[S <: BaseVertexSteps[_, S]](
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
       authContext: AuthContext
   ): S = step
+}
+
+class IdFilter(id: String) extends InputFilter {
+  override def apply[S <: BaseVertexSteps[_, S]](
+      publicProperties: List[PublicProperty[_, _]],
+      stepType: ru.Type,
+      step: S,
+      authContext: AuthContext
+  ): S = step.get(id)
 }
 
 object InputFilter {
@@ -154,18 +147,9 @@ object InputFilter {
 
   def yes: YesFilter.type = YesFilter
 
-  def withId(id: String): InputFilter =
-    InputFilter[ScalliSteps[_, Element, _]](s => s.where(_.has(Key("_id") of id)).asInstanceOf[ScalliSteps[_, Element, _]])
+  def withId(id: String): InputFilter = new IdFilter(id)
 
-  def apply[S0 <: ScalliSteps[_, _, _]](f: S0 => S0): InputFilter = new InputFilter {
-    override def apply[S <: ScalliSteps[_, _, _]](
-        publicProperties: List[PublicProperty[_, _]],
-        stepType: ru.Type,
-        step: S,
-        authContext: AuthContext
-    ): S = f(step.asInstanceOf[S0]).asInstanceOf[S]
-  }
-//  def in(field: String, values: Seq[Any]) = OrFilter(values.map(v ⇒ PredicateFilter(field, P.is(v))))
+  //  def in(field: String, values: Seq[Any]) = OrFilter(values.map(v ⇒ PredicateFilter(field, P.is(v))))
 
   implicit val fieldsParser: FieldsParser[InputFilter] = FieldsParser("query") {
     case (path, FObjOne("_and", FSeq(fields))) =>

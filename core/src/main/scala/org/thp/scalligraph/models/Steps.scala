@@ -16,190 +16,39 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.query.PropertyUpdater
 import org.thp.scalligraph.services.RichElement
 import org.thp.scalligraph.{AuthorizationError, InternalError, NotFoundError}
-import shapeless._
 
 case class PagedResult[R](result: Seq[R], totalSize: Option[Long]) {
   def map[T](f: R => T): PagedResult[T] = PagedResult(result.map(f), totalSize)
 }
 
-final class ScalarSteps[T: ClassTag](raw: GremlinScala[T])
-    extends Steps[T, T, HNil](raw)(SingleMapping[T, T](null.asInstanceOf[T]))
-    with ScalliSteps[T, T, ScalarSteps[T]] {
-
-  lazy val logger           = Logger(getClass)
-  lazy val typeName: String = /*ru.typeOf[T].toString*/ implicitly[ClassTag[T]].runtimeClass.getSimpleName
-
-  override def newInstance(raw: GremlinScala[T]): ScalarSteps[T] =
-    new ScalarSteps[T](raw)
-
-  override def map[A: ClassTag](f: T => A): ScalarSteps[A] = new ScalarSteps(raw.map(f))
-
-  override def toList(): List[T] = {
-    logger.debug(s"Execution of $raw")
-    super.toList()
-  }
-
-  override def toIterator: Iterator[T] = {
-    logger.debug(s"Execution of $raw")
-    raw.traversal.asScala
-  }
-
-  override def range(from: Long, to: Long): ScalarSteps[T] =
-    if (from == 0 && to == Long.MaxValue) this
-    else new ScalarSteps(raw.range(from, to))
-
-  override def page(from: Long, to: Long, withTotal: Boolean): PagedResult[T] = {
-    logger.debug(s"Execution of $raw")
-    val size   = if (withTotal) Some(raw.clone().count().head.toLong) else None
-    val values = range(from, to).toList()
-    PagedResult(values, size)
-//
-//
-//    val byValues =
-//      if (to == Long.MaxValue) By(__[JSet[T]])
-//      else By(__[JSet[T]].range(Scope.local, from, to))
-//    val label = StepLabel[JSet[T]]()
-//    val query = raw
-//      .aggregate(label)
-//      .cap(label)
-//      .project(
-//        _.apply(byValues)
-//          .and(By(__.count(Scope.local)))
-//      )
-//    logger.debug(s"Execution of $query")
-//    val (l, s) = query.head()
-//    ResultWithTotalSize(l.asScala.toSeq, s)
-  }
-
-  def richPage[U](from: Long, to: Long, withTotal: Boolean)(
-      f: GremlinScala[T] => GremlinScala[U]
-  ): PagedResult[U] = {
-    logger.debug(s"Execution of $raw (size)")
-    val size   = if (withTotal) Some(raw.clone().count().head.toLong) else None
-    val values = f(raw.range(from, to)).toList()
-    PagedResult(values, size)
-  }
-
-  override def head(): T = {
-    logger.debug(s"Execution of $raw")
-    super.head()
-  }
-
-  override def headOption(): Option[T] = {
-    logger.debug(s"Execution of $raw")
-    super.headOption()
-  }
-}
-
-object ScalarSteps {
-
-  def apply[T: ClassTag](raw: GremlinScala[T]): ScalarSteps[T] =
-    new ScalarSteps[T](raw)
-}
-
-trait ScalliSteps[EndDomain, EndGraph, ThisStep <: AnyRef] { _: ThisStep =>
-  val logger: Logger
+abstract class ScalliSteps[EndDomain, EndGraph, ThisStep <: ScalliSteps[EndDomain, EndGraph, ThisStep]] { _: ThisStep =>
   def typeName: String
   override def clone(): ThisStep = newInstance(raw.clone())
   def newInstance(raw: GremlinScala[EndGraph]): ThisStep
+  val converter: Converter.Aux[EndDomain, EndGraph]
   val raw: GremlinScala[EndGraph]
-  def toList(): Seq[EndDomain]
-  def toIterator: Iterator[EndDomain]
-  def range(from: Long, to: Long): ThisStep
-  def page(from: Long, to: Long, withTotal: Boolean): PagedResult[EndDomain]
 
-  def richPage[NewEndDomain](from: Long, to: Long, withTotal: Boolean)(
-      f: GremlinScala[EndGraph] => GremlinScala[NewEndDomain]
-  ): PagedResult[NewEndDomain]
-  def head(): EndDomain
-  def headOption(): Option[EndDomain]
+  lazy val logger: Logger = Logger(getClass)
 
-  def exists(): Boolean = {
+  def toList: List[EndDomain] = {
     logger.debug(s"Execution of $raw")
-    raw.limit(1).traversal.hasNext
+    raw.toList.map(converter.toDomain)
   }
-  def existsOrFail(): Try[Unit] = if (exists()) Success(()) else Failure(AuthorizationError("Unauthorized action"))
 
-  def getOrFail(): Try[EndDomain] =
-    headOption()
-      .fold[Try[EndDomain]](Failure(NotFoundError(s"$typeName not found")))(Success.apply)
-
-  def orFail(ex: Exception): Try[EndDomain] = headOption().fold[Try[EndDomain]](Failure(ex))(Success.apply)
-  def count(): Long
-  def sort(orderBys: OrderBy[_]*): ThisStep                                             = newInstance(raw.order(orderBys: _*))
-  def where(f: GremlinScala[EndGraph] => GremlinScala[_]): ThisStep                      = newInstance(raw.filter(f))
-  def has[A](key: Key[A], predicate: P[A])(implicit ev: EndGraph <:< Element): ThisStep = newInstance(raw.has(key, predicate))
-  def map[NewEndDomain: ClassTag](f: EndDomain => NewEndDomain): ScalarSteps[NewEndDomain]
-
-  def groupBy[K, V](k: By[K], v: By[V]): ScalarSteps[JMap[K, JCollection[V]]] =
-    new ScalarSteps(raw.group(k, v))
-
-  def groupBy[K](k: GremlinScala[K]): ScalarSteps[JMap[K, JCollection[EndGraph]]] =
-    new ScalarSteps(raw.group(By(k)))
-  def fold: ScalarSteps[JList[EndGraph]]                                                           = new ScalarSteps(raw.fold)
-  def unfold[A: ClassTag]                                                                          = new ScalarSteps(raw.unfold[A]())
-  def project[T <: Product: ClassTag](builder: ProjectionBuilder[Nil.type] => ProjectionBuilder[T]) = new ScalarSteps(raw.project(builder))
-
-  def project[A](bys: By[_ <: A]*): ScalarSteps[JCollection[A]] = {
-    val labels    = bys.map(_ => UUID.randomUUID().toString)
-    val traversal = bys.foldLeft(raw.project[A](labels.head, labels.tail: _*))((t, b) => GremlinScala(b.apply(t.traversal)))
-    ScalarSteps(traversal.selectValues)
-  }
-}
-
-abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisStep <: ElementSteps[E, EndGraph, ThisStep]](
-    raw: GremlinScala[EndGraph]
-)(implicit val db: Database, graph: Graph)
-    extends Steps[E with Entity, EndGraph, HNil](raw)(db.getModel[E].converter(db, graph).asInstanceOf[Converter.Aux[E with Entity, EndGraph]])
-    with ScalliSteps[E with Entity, EndGraph, ThisStep] { _: ThisStep =>
-
-  lazy val logger           = Logger(getClass)
-  lazy val typeName: String = ru.typeOf[E].toString
-
-  override def headOption(): Option[E with Entity] = {
+  def toIterator: Iterator[EndDomain] = {
     logger.debug(s"Execution of $raw")
-    super.headOption()
+    raw.traversal.asScala.map(converter.toDomain)
   }
 
-  def get(id: String): ThisStep = newInstance(raw.has(Key("_id") of id))
-
-  def update(fields: (String, Any)*)(implicit authContext: AuthContext): Try[E with Entity] =
-    db.update(raw, fields, db.getModel[E], graph, authContext)
-
-  override def map[T: ClassTag](f: E with Entity => T): ScalarSteps[T] = {
-    implicit val const: Constructor.Aux[T, HNil, T, ScalarSteps[T]] =
-      new Constructor[T, HNil] {
-        type GraphType = T
-        type StepsType = ScalarSteps[T]
-        def apply(raw: GremlinScala[GraphType]): StepsType = new ScalarSteps[T](raw)
-      }
-    implicit val identityConverter: Converter.Aux[T, T] = Converter.identityConverter[T]
-    map[T, T, ScalarSteps[T]](f)
-  }
-
-//  def filter(f: EntityFilter): ThisStep = newInstance(f(raw))
-
-  override def range(from: Long, to: Long): ThisStep =
-    if (from == 0 && to == Long.MaxValue) this
+  def range(from: Long, to: Long): ThisStep =
+    if (from == 0 && to == Long.MaxValue) newInstance(raw) //this
     else newInstance(raw.range(from, to))
 
-  override def page(from: Long, to: Long, withTotal: Boolean): PagedResult[E with Entity] = {
+  def page(from: Long, to: Long, withTotal: Boolean): PagedResult[EndDomain] = {
     logger.debug(s"Execution of $raw")
     val size   = if (withTotal) Some(raw.clone().count().head.toLong) else None
-    val values = range(from, to).toList()
+    val values = range(from, to).asInstanceOf[ScalliSteps[EndDomain, EndGraph, _]].toList
     PagedResult(values, size)
-//    val byValues = if (to == Long.MaxValue) By(__[JSet[EndGraph]])
-//    else By(__[JSet[EndGraph]].range(Scope.local, from, to))
-//    val label = StepLabel[JSet[EndGraph]]()
-//    val query = raw
-//      .aggregate(label)
-//      .cap(label)
-//      .project(
-//        _.apply(byValues)
-//          .and(By(__.count(Scope.local))))
-//    logger.debug(s"Execution of $query")
-//    val (l, s) = query.head()
-//    ResultWithTotalSize(l.asScala.toSeq.map(converter.toDomain), s)
   }
 
   def richPage[NewEndDomain](from: Long, to: Long, withTotal: Boolean)(
@@ -207,9 +56,64 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
   ): PagedResult[NewEndDomain] = {
     logger.debug(s"Execution of $raw (size)")
     val size   = if (withTotal) Some(raw.clone().count().head.toLong) else None
-    val values = f(range(from, to).raw).toList()
+    val values = f(range(from, to).asInstanceOf[ScalliSteps[EndDomain, EndGraph, _]].raw).toList
     PagedResult(values, size)
   }
+
+  def head(): EndDomain = {
+    logger.debug(s"Execution of $raw (size)")
+    converter.toDomain(raw.head)
+  }
+
+  def headOption(): Option[EndDomain] = {
+    logger.debug(s"Execution of $raw (size)")
+    raw.headOption().map(converter.toDomain)
+  }
+
+  def exists(): Boolean = {
+    logger.debug(s"Execution of $raw")
+    raw.limit(1).traversal.hasNext
+  }
+
+  def existsOrFail(): Try[Unit] = if (exists()) Success(()) else Failure(AuthorizationError("Unauthorized action"))
+
+  def getOrFail(): Try[EndDomain] =
+    headOption()
+      .fold[Try[EndDomain]](Failure(NotFoundError(s"$typeName not found")))(Success.apply)
+
+  def orFail(ex: Exception): Try[EndDomain] = headOption().fold[Try[EndDomain]](Failure(ex))(Success.apply)
+
+  def count: Long = raw.count().head()
+
+  def sort(orderBys: OrderBy[_]*): ThisStep = newInstance(raw.order(orderBys: _*))
+
+  def filter(f: GremlinScala[EndGraph] => GremlinScala[_]): ThisStep = newInstance(raw.filter(f))
+
+  def where(f: ThisStep => ScalliSteps[_, _, _]): ThisStep = newInstance(raw.filter(g => f(newInstance(g)).raw))
+
+  def has[A](key: Key[A], predicate: P[A])(implicit ev: EndGraph <:< Element): ThisStep = newInstance(raw.has(key, predicate))
+
+  def map[NewEndDomain: ClassTag](f: EndDomain => NewEndDomain): ScalarSteps[NewEndDomain] =
+    new ScalarSteps[NewEndDomain](raw.map(x => f(converter.toDomain(x))))
+
+  def groupBy[K, V](k: By[K], v: By[V]): ScalarSteps[JMap[K, JCollection[V]]] =
+    new ScalarSteps(raw.group(k, v))
+
+  def groupBy[K](k: GremlinScala[K]): ScalarSteps[JMap[K, JCollection[EndGraph]]] = new ScalarSteps(raw.group(By(k)))
+
+  def fold: ScalarSteps[JList[EndGraph]] = new ScalarSteps(raw.fold)
+
+  def unfold[A: ClassTag] = new ScalarSteps(raw.unfold[A]())
+
+  def project[T <: Product: ClassTag](builder: ProjectionBuilder[Nil.type] => ProjectionBuilder[T]) = new ScalarSteps(raw.project(builder))
+
+  def project[A](bys: By[_ <: A]*): ScalarSteps[JCollection[A]] = {
+    val labels    = bys.map(_ => UUID.randomUUID().toString)
+    val traversal = bys.foldLeft(raw.project[A](labels.head, labels.tail: _*))((t, b) => GremlinScala(b.apply(t.traversal)))
+    ScalarSteps(traversal.selectValues)
+  }
+
+  def as[A](stepLabel: StepLabel[A]): ThisStep = newInstance(new GremlinScala[EndGraph](raw.traversal.as(stepLabel.name)))
 
   def order(orderBys: List[OrderBy[_]]): ThisStep = newInstance(raw.order(orderBys: _*))
 
@@ -219,13 +123,6 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
 
   object ValueMap {
     def unapply(m: JMap[String, _]): Option[ValueMap] = Some(new ValueMap(m))
-  }
-
-  def onlyOneOfEntity[A <: Product: ru.TypeTag](elements: JList[_ <: Element]): A with Entity = {
-    val size = elements.size
-    if (size == 1) elements.get(0).as[A]
-    else if (size > 1) throw InternalError(s"Too many ${ru.typeOf[A]} in result ($size found)")
-    else throw InternalError(s"No ${ru.typeOf[A]} found")
   }
 
   def onlyOneOf[A](elements: JList[A]): A = {
@@ -241,15 +138,41 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
     else if (size > 1) throw InternalError(s"Too many elements in result ($size found)")
     else None
   }
+}
 
-  override def toList(): List[E with Entity] = {
-    logger.debug(s"Execution of $raw")
-    super.toList
-  }
+final class ScalarSteps[T: ClassTag](val raw: GremlinScala[T]) extends ScalliSteps[T, T, ScalarSteps[T]] {
 
-  override def toIterator: Iterator[E with Entity] = {
-    logger.debug(s"Execution of $raw")
-    raw.traversal.asScala.map(converter.toDomain)
+  override val converter: Converter.Aux[T, T] = Converter.identityConverter[T]
+  lazy val typeName: String                   = implicitly[ClassTag[T]].runtimeClass.getSimpleName
+
+  override def newInstance(raw: GremlinScala[T]): ScalarSteps[T] = new ScalarSteps[T](raw)
+}
+
+object ScalarSteps {
+
+  def apply[T: ClassTag](raw: GremlinScala[T]): ScalarSteps[T] =
+    new ScalarSteps[T](raw)
+}
+
+abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisStep <: ElementSteps[E, EndGraph, ThisStep]](
+    val raw: GremlinScala[EndGraph]
+)(implicit val db: Database, graph: Graph)
+    extends ScalliSteps[E with Entity, EndGraph, ThisStep] { _: ThisStep =>
+  override val converter: Converter.Aux[E with Entity, EndGraph] =
+    db.getModel[E].converter(db, graph).asInstanceOf[Converter.Aux[E with Entity, EndGraph]]
+
+  lazy val typeName: String = ru.typeOf[E].toString
+
+  def get(id: String): ThisStep = newInstance(raw.has(Key("_id") of id))
+
+  def update(fields: (String, Any)*)(implicit authContext: AuthContext): Try[E with Entity] =
+    db.update(raw, fields, db.getModel[E], graph, authContext)
+
+  def onlyOneOfEntity[A <: Product: ru.TypeTag](elements: JList[_ <: Element]): A with Entity = {
+    val size = elements.size
+    if (size == 1) elements.get(0).as[A]
+    else if (size > 1) throw InternalError(s"Too many ${ru.typeOf[A]} in result ($size found)")
+    else throw InternalError(s"No ${ru.typeOf[A]} found")
   }
 }
 
