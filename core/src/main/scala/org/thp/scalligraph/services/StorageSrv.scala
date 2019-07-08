@@ -14,10 +14,10 @@ import javax.inject.{Inject, Singleton}
 import org.apache.hadoop.conf.{Configuration => HadoopConfig}
 import org.apache.hadoop.fs.{FileSystem => HDFileSystem, Path => HDPath}
 import org.apache.hadoop.io.IOUtils
-import org.thp.scalligraph.models.{Database, UniMapping}
+import org.thp.scalligraph.models.{Database, UniMapping, ValueMap}
 
 trait StorageSrv {
-  def loadBinary(id: String)(implicit graph: Graph): InputStream
+  def loadBinary(id: String): InputStream
   def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit]
   def saveBinary(id: String, data: Array[Byte])(implicit graph: Graph): Try[Unit] = saveBinary(id, new ByteArrayInputStream(data))
 }
@@ -30,7 +30,7 @@ class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
   @Inject()
   def this(configuration: Configuration) = this(Paths.get(configuration.get[String]("storage.localfs.location")))
 
-  def loadBinary(id: String)(implicit graph: Graph): InputStream =
+  def loadBinary(id: String): InputStream =
     Files.newInputStream(directory.resolve(id))
 
   def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit] =
@@ -69,7 +69,7 @@ class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
       new HDPath(configuration.get[String]("storage.hdfs.location"))
     )
 
-  override def loadBinary(id: String)(implicit graph: Graph): InputStream =
+  override def loadBinary(id: String): InputStream =
     fs.open(new HDPath(id)).getWrappedStream
 
   override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit] =
@@ -82,25 +82,55 @@ class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
 @Singleton
 class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
 
+  val b64decoder: Base64.Decoder = Base64.getDecoder
+
   @Inject
   def this(db: Database, configuration: Configuration) = this(db, configuration.underlying.getBytes("storage.database.chunkSize").toInt)
 
-  override def loadBinary(id: String)(implicit graph: Graph): InputStream =
+  case class State(vertexId: String, buffer: Array[Byte]) {
+
+    def next: Option[State] = db.noTransaction { implicit graph =>
+      graph
+        .V()
+        .has(Key("_id") of vertexId)
+        .out("nextChunk")
+        .headOption()
+        .map {
+          case ValueMap(valueMap) =>
+            State(valueMap.get[String]("_id"), b64decoder.decode(valueMap.get[String]("binary")))
+        }
+    }
+  }
+
+  object State {
+
+    def apply(id: String): Option[State] = db.transaction { implicit graph =>
+      graph
+        .V()
+        .has(Key("attachmentId") of id)
+        .valueMap("_id", "binary")
+        .headOption()
+        .map {
+          case ValueMap(valueMap) =>
+            State(valueMap.get[String]("_id"), b64decoder.decode(valueMap.get[String]("binary")))
+        }
+    }
+  }
+
+  override def loadBinary(id: String): InputStream =
     new InputStream {
-      var vertex: GremlinScala[Vertex] = graph.V().has(Key("attachmentId") of id)
-      var buffer: Option[Array[Byte]]  = vertex.clone.value[String]("binary").map(Base64.getDecoder.decode).headOption()
-      var index                        = 0
+      var state = State(id)
+      var index = 0
 
       override def read(): Int =
-        buffer match {
-          case Some(b) if b.length > index =>
+        state match {
+          case Some(State(_, b)) if b.length > index =>
             val d = b(index)
             index += 1
             d.toInt & 0xff
           case None => -1
-          case _ =>
-            vertex = vertex.out("nextChunk")
-            buffer = vertex.clone.value[String]("binary").map(Base64.getDecoder.decode).headOption()
+          case Some(s) =>
+            state = s.next
             index = 0
             read()
         }
