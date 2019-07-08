@@ -4,6 +4,7 @@ import scala.collection.immutable
 import scala.util.Success
 
 import play.api.Logger
+import play.api.cache.AsyncCacheApi
 import play.api.http.HttpConfiguration
 import play.api.mvc.{Handler, RequestHeader, Results}
 import play.api.routing.Router.Routes
@@ -11,7 +12,7 @@ import play.api.routing.sird._
 import play.api.routing.{Router, SimpleRouter}
 
 import com.google.inject.Provider
-import javax.inject.Inject
+import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.controllers.EntryPoint
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.query.{AuthGraph, Query, QueryExecutor}
@@ -34,21 +35,33 @@ object DebugRouter {
   }
 }
 
+@Singleton
+class GlobalQueryExecutor @Inject()(queryExecutors: immutable.Set[QueryExecutor], cache: AsyncCacheApi) {
+
+  def get(version: Int): QueryExecutor =
+    cache.sync.getOrElseUpdate(s"QueryExecutor.$version") {
+      queryExecutors
+        .filter(_.versionCheck(version))
+        .reduceOption(_ ++ _)
+        .getOrElse(???)
+    }
+
+  def get: QueryExecutor = queryExecutors.reduce(_ ++ _)
+}
+
+@Singleton
 class ScalligraphRouter @Inject()(
     httpConfig: HttpConfiguration,
     routers: immutable.Set[Router],
     entryPoint: EntryPoint,
     db: Database,
-    queryExecutors: immutable.Set[QueryExecutor]
+    globalQueryExecutor: GlobalQueryExecutor
 ) extends Provider[Router] {
   lazy val logger = Logger(getClass)
 
   val queryRoutes: Routes = {
     case POST(p"/api/v${int(version)}/query") =>
-      val queryExecutor = queryExecutors
-        .filter(_.versionCheck(version))
-        .reduceOption(_ ++ _)
-        .getOrElse(???)
+      val queryExecutor = globalQueryExecutor.get(version)
       entryPoint("query")
         .extract("query", queryExecutor.parser.on("query"))
         .authTransaction(db) { implicit request => implicit graph =>

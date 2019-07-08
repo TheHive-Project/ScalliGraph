@@ -14,9 +14,9 @@ import org.thp.scalligraph.models.PagedResult
 
 abstract class QueryExecutor { executor =>
   val version: (Int, Int)
-  val publicProperties: List[PublicProperty[_, _]] = Nil
-  val queries: Seq[ParamQuery[_]]                  = Nil
-  lazy val logger                                  = Logger(getClass)
+  lazy val publicProperties: List[PublicProperty[_, _]] = Nil
+  lazy val queries: Seq[ParamQuery[_]]                  = Nil
+  lazy val logger                                       = Logger(getClass)
 
   final lazy val allQueries = queries :+ sortQuery :+ filterQuery :+ aggregationQuery :+ ToListQuery
   lazy val sortQuery        = new SortQuery(publicProperties)
@@ -89,10 +89,9 @@ abstract class QueryExecutor { executor =>
                 Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name).toSet, field)))
               }
           }
-      case _ => {
+      case _ =>
         logger.warn(s"getQuery($tpe, $field) fails because field has no name")
         Bad(One(InvalidFormatAttributeError("_name", "query", allQueries.filter(_.checkFrom(tpe)).map(_.name).toSet, field)))
-      }
     }
   }
 
@@ -110,8 +109,8 @@ abstract class QueryExecutor { executor =>
 
   def ++(other: QueryExecutor): QueryExecutor = new QueryExecutor {
     override val version: (Int, Int) = math.max(executor.version._1, other.version._1) -> math.min(executor.version._2, other.version._2)
-    override val publicProperties: List[PublicProperty[_, _]] =
+    override lazy val publicProperties: List[PublicProperty[_, _]] =
       (executor.publicProperties :: other.publicProperties).asInstanceOf[List[PublicProperty[_, _]]]
-    override val queries: Seq[ParamQuery[_]] = executor.queries ++ other.queries
+    override lazy val queries: Seq[ParamQuery[_]] = executor.queries ++ other.queries
   }
 }

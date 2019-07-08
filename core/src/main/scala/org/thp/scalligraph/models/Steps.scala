@@ -52,11 +52,11 @@ abstract class ScalliSteps[EndDomain, EndGraph, ThisStep <: ScalliSteps[EndDomai
   }
 
   def richPage[NewEndDomain](from: Long, to: Long, withTotal: Boolean)(
-      f: GremlinScala[EndGraph] => GremlinScala[NewEndDomain]
+      f: ThisStep => GremlinScala[NewEndDomain]
   ): PagedResult[NewEndDomain] = {
     logger.debug(s"Execution of $raw (size)")
     val size   = if (withTotal) Some(raw.clone().count().head.toLong) else None
-    val values = f(range(from, to).asInstanceOf[ScalliSteps[EndDomain, EndGraph, _]].raw).toList
+    val values = f(range(from, to)).toList
     PagedResult(values, size)
   }
 
@@ -117,14 +117,6 @@ abstract class ScalliSteps[EndDomain, EndGraph, ThisStep <: ScalliSteps[EndDomai
 
   def order(orderBys: List[OrderBy[_]]): ThisStep = newInstance(raw.order(orderBys: _*))
 
-  class ValueMap(m: JMap[String, _]) {
-    def get[A](name: String): A = m.get(name).asInstanceOf[A]
-  }
-
-  object ValueMap {
-    def unapply(m: JMap[String, _]): Option[ValueMap] = Some(new ValueMap(m))
-  }
-
   def onlyOneOf[A](elements: JList[A]): A = {
     val size = elements.size
     if (size == 1) elements.get(0)
@@ -138,6 +130,16 @@ abstract class ScalliSteps[EndDomain, EndGraph, ThisStep <: ScalliSteps[EndDomai
     else if (size > 1) throw InternalError(s"Too many elements in result ($size found)")
     else None
   }
+}
+
+class ValueMap(m: Map[String, Seq[AnyRef]]) {
+  def get[A](name: String): A = m(name).head.asInstanceOf[A]
+}
+
+object ValueMap {
+
+  def unapply(m: JMap[_, _]): Option[ValueMap] =
+    Some(new ValueMap(m.asScala.map { case (k, v) => k.toString -> v.asInstanceOf[JList[AnyRef]].asScala.toSeq }.toMap))
 }
 
 final class ScalarSteps[T: ClassTag](val raw: GremlinScala[T]) extends ScalliSteps[T, T, ScalarSteps[T]] {

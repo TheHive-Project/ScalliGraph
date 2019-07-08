@@ -38,7 +38,7 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
 
   override val version: (Int, Int) = 1 -> 1
 
-  override val publicProperties: List[PublicProperty[_, _]] = {
+  override lazy val publicProperties: List[PublicProperty[_, _]] = {
     val labelMapping = SingleMapping[String, String](
       "",
       toGraphOptFn = {
@@ -61,7 +61,7 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
         .build
   }
 
-  override val queries: Seq[ParamQuery[_]] = Seq(
+  override lazy val queries: Seq[ParamQuery[_]] = Seq(
     Query.init[PersonSteps]("allPeople", (graph, _) => personSrv.initSteps(graph)),
     Query.init[SoftwareSteps]("allSoftware", (graph, _) => softwareSrv.initSteps(graph)),
     Query.initWithParam[SeniorAgeThreshold, PersonSteps](

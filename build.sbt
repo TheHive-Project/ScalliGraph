@@ -78,10 +78,11 @@ lazy val core = (project in file("core"))
       reflections,
       bouncyCastle,
       shapeless,
-      scalaCompiler(scalaVersion.value),
-      scalaReflect(scalaVersion.value),
+      caffeine,
       specs       % Test,
-      playLogback % Test
+      playLogback % Test,
+      scalaCompiler(scalaVersion.value),
+      scalaReflect(scalaVersion.value)
     )
   )
 

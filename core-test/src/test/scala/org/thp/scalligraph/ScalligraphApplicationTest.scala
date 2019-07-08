@@ -1,5 +1,6 @@
 package org.thp.scalligraph
 
+import play.api.cache.caffeine.CaffeineCacheModule
 import play.api.i18n.{I18nModule => PlayI18nModule}
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.inject.{BuiltinModule => PlayBuiltinModule}
@@ -62,6 +63,7 @@ class ScalligraphApplicationTest extends PlaySpecification with Mockito {
         new PlayBuiltinModule,
         new PlayI18nModule,
         new PlayCookiesModule,
+        new CaffeineCacheModule,
         new TestServiceModule[TestService1],
         new TestServiceModule[TestService2],
         new TestServiceModule[TestService3],
