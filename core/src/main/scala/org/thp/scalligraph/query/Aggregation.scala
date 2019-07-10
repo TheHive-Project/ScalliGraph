@@ -1,16 +1,19 @@
 package org.thp.scalligraph.query
 
 import java.lang.{Double => JDouble, Float => JFloat, Integer => JInt, Long => JLong}
-import java.util.{Collection => JCollection, List => JList, Map => JMap}
+import java.time.temporal.ChronoUnit
+import java.util.{Calendar, Date, Collection => JCollection, List => JList, Map => JMap}
 
 import scala.collection.JavaConverters._
 import scala.reflect.runtime.{universe => ru}
+import scala.util.Try
+import scala.util.matching.Regex
 
 import play.api.libs.json.{JsNumber, JsObject, Json, Writes}
 
 import gremlin.scala.{__, By, GremlinScala, StepLabel, Vertex}
 import org.scalactic.Accumulation.withGood
-import org.scalactic.{Bad, One}
+import org.scalactic.{Bad, Good, One, Or}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FObject, FString, Field, FieldsParser}
 import org.thp.scalligraph.models.{ScalarSteps, ScalliSteps}
@@ -31,6 +34,34 @@ object GroupAggregation {
     }
   }
 
+  val intervalParser: FieldsParser[(Long, ChronoUnit)] = FieldsParser[(Long, ChronoUnit)]("interval") {
+    case (_, f) =>
+      withGood(
+        FieldsParser.long.optional.on("_interval")(f),
+        FieldsParser[ChronoUnit]("chronoUnit") {
+          case (_, f @ FString(value)) =>
+            Or.from(
+              Try(ChronoUnit.valueOf(value)).toOption,
+              One(InvalidFormatAttributeError("_unit", "chronoUnit", ChronoUnit.values.toSet.map((_: ChronoUnit).toString), f))
+            )
+        }.on("_unit")(f)
+      )((i, u) => i.getOrElse(0L) -> u)
+  }
+
+  val intervalRegex: Regex = "(\\d+)([smhdMy])".r
+
+  val mergedIntervalParser: FieldsParser[(Long, ChronoUnit)] = FieldsParser[(Long, ChronoUnit)]("interval") {
+    case (_, FString(intervalRegex(interval, unit))) =>
+      Good(unit match {
+        case "s" => interval.toLong -> ChronoUnit.SECONDS
+        case "m" => interval.toLong -> ChronoUnit.MINUTES
+        case "h" => interval.toLong -> ChronoUnit.HOURS
+        case "d" => interval.toLong -> ChronoUnit.DAYS
+        case "M" => interval.toLong -> ChronoUnit.MONTHS
+        case "y" => interval.toLong -> ChronoUnit.YEARS
+      })
+  }
+
   def groupAggregationParser: PartialFunction[String, FieldsParser[GroupAggregation[_, _]]] = {
     case "field" =>
       FieldsParser("FieldAggregation") {
@@ -45,7 +76,16 @@ object GroupAggregation {
       FieldsParser("CountAggregation") {
         case (_, field) => FieldsParser.string.optional.on("_aggName")(field).map(aggName => AggCount(aggName))
       }
-
+    case "time" =>
+      FieldsParser("TimeAggregation") {
+        case (_, field) =>
+          withGood(
+            FieldsParser.string.optional.on("_aggName")(field),
+            FieldsParser.string.sequence.on("_fields")(field),
+            mergedIntervalParser.on("_interval").orElse(intervalParser)(field),
+            aggregationFieldsParser.sequence.on("_select")(field)
+          )((aggName, fieldNames, intervalUnit, subAgg) => TimeAggregation(aggName, fieldNames.head, intervalUnit._1, intervalUnit._2, subAgg))
+      }
   }
 
   def functionAggregationParser: PartialFunction[String, FieldsParser[Aggregation[_, _]]] = {
@@ -280,4 +320,90 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs:
 }
 
 case class CategoryAggregation() // Map[String,
-case class TimeAggregation()     // Map[Date,
+case class TimeAggregation(aggName: Option[String], fieldName: String, interval: Long, unit: ChronoUnit, subAggs: Seq[Aggregation[_, _]])
+    extends GroupAggregation[JList[JCollection[Any]], Map[Any, Map[String, Any]]](aggName.getOrElse(s"time_$fieldName")) {
+  val calendar: Calendar = Calendar.getInstance()
+
+  def dateToKey(date: Date): Long =
+    unit match {
+      case ChronoUnit.MONTHS =>
+        calendar.setTime(date)
+        val year  = calendar.get(Calendar.YEAR)
+        val month = (calendar.get(Calendar.MONTH) / interval) * interval
+        calendar.setTimeInMillis(0)
+        calendar.set(Calendar.YEAR, year)
+        calendar.set(Calendar.MONTH, month.toInt)
+        calendar.getTimeInMillis
+
+      case ChronoUnit.YEARS =>
+        calendar.setTime(date)
+        val year = (calendar.get(Calendar.YEAR) / interval) * interval
+        calendar.setTimeInMillis(0)
+        calendar.set(Calendar.YEAR, year.toInt)
+        calendar.getTimeInMillis
+      // TODO week
+      case other =>
+        val duration = other.getDuration.toMillis * interval
+        (date.getTime / duration) * duration
+    }
+
+  def keyToDate(key: Long): Date = new Date(key)
+
+  override def apply(
+      publicProperties: List[PublicProperty[_, _]],
+      stepType: ru.Type,
+      fromStep: ScalliSteps[_, _, _],
+      authContext: AuthContext
+  ): ScalarSteps[JList[JCollection[Any]]] = {
+    val property     = getProperty(publicProperties, stepType, fieldName).asInstanceOf[PublicProperty[_, Any]]
+    val elementLabel = StepLabel[Vertex]()
+    val groupedVertices: GremlinScala[JMap.Entry[Long, JCollection[Any]]] = property
+      .get(fromStep.raw.asInstanceOf[GremlinScala.Aux[Vertex, HNil]].as(elementLabel), authContext)
+      .map(date => dateToKey(date.asInstanceOf[Date]))
+      .group(By[Long](), By(__.select(elementLabel).fold()))
+      .unfold[JMap.Entry[Long, JCollection[Any]]] // Map.Entry[K, List[V]]
+
+    ScalarSteps(groupedVertices)
+      .project[Any](
+        By(__[JMap.Entry[Any, Any]].selectKeys)
+          +: subAggs
+            .map(a => By(a.apply(publicProperties, stepType, ScalarSteps(__[JMap[Long, Any]].selectValues.unfold()), authContext).raw)): _*
+      )
+      .fold
+  }
+
+  override def output(l: JList[JCollection[Any]]): Output[Map[Any, Map[String, Any]]] = {
+    val subMap: Map[Date, Output[Map[String, Any]]] = l
+      .asScala
+      .map(_.asScala)
+      .map { e =>
+        val key = e.head match {
+          case l: Long => keyToDate(l)
+          case _       => new Date(0)
+        }
+        val values = subAggs
+          .asInstanceOf[Seq[Aggregation[Any, Any]]]
+          .zip(e.tail)
+          .map { case (a, r) => a.name -> a.output(r).toOutput }
+          .toMap
+        val jsValues =
+          subAggs
+            .asInstanceOf[Seq[Aggregation[Any, Any]]]
+            .zip(e.tail)
+            .foldLeft(JsObject.empty) {
+              case (acc, (ar, r)) =>
+                ar.output(r).toJson match {
+                  case o: JsObject => acc ++ o
+                  case v           => acc + (ar.name -> v)
+                }
+            }
+        key -> Output(values, jsValues)
+      }
+      .toMap
+
+    val native: Map[Any, Map[String, Any]] = subMap.map { case (k, v) => k -> v.toOutput }
+    val json: JsObject                     = JsObject(subMap.map { case (k, v) => k.getTime.toString -> Json.obj(fieldName -> v.toJson) }.toMap)
+    Output(native, json)
+  }
+
+}
