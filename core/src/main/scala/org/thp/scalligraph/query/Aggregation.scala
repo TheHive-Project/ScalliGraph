@@ -48,7 +48,7 @@ object GroupAggregation {
       )((i, u) => i.getOrElse(0L) -> u)
   }
 
-  val intervalRegex: Regex = "(\\d+)([smhdMy])".r
+  val intervalRegex: Regex = "(\\d+)([smhdwMy])".r
 
   val mergedIntervalParser: FieldsParser[(Long, ChronoUnit)] = FieldsParser[(Long, ChronoUnit)]("interval") {
     case (_, FString(intervalRegex(interval, unit))) =>
@@ -57,6 +57,7 @@ object GroupAggregation {
         case "m" => interval.toLong -> ChronoUnit.MINUTES
         case "h" => interval.toLong -> ChronoUnit.HOURS
         case "d" => interval.toLong -> ChronoUnit.DAYS
+        case "w" => interval.toLong -> ChronoUnit.WEEKS
         case "M" => interval.toLong -> ChronoUnit.MONTHS
         case "y" => interval.toLong -> ChronoUnit.YEARS
       })
@@ -170,10 +171,14 @@ case class AggSum(fieldName: String) extends AggFunction[Number, Number](s"sum_$
     val raw            = fromStep.raw.asInstanceOf[GremlinScala[Vertex]]
 
     val result = publicProperty.mapping.graphTypeClass match {
-      case c if c == classOf[Int]    => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Int]].sum[Number]
-      case c if c == classOf[Long]   => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Long]].sum[Number]
-      case c if c == classOf[Float]  => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Float]].sum[Number]
-      case c if c == classOf[Double] => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Double]].sum[Number]
+      case c if c == classOf[Int]     => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Int]].sum[Number]
+      case c if c == classOf[Long]    => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Long]].sum[Number]
+      case c if c == classOf[Float]   => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Float]].sum[Number]
+      case c if c == classOf[Double]  => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Double]].sum[Number]
+      case c if c == classOf[Integer] => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Integer]].sum[Number]
+      case c if c == classOf[JLong]   => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[JLong]].sum[Number]
+      case c if c == classOf[JFloat]  => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[JFloat]].sum[Number]
+      case c if c == classOf[JDouble] => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[JDouble]].sum[Number]
     }
     ScalarSteps(result)
   }
@@ -192,10 +197,14 @@ case class AggAvg(aggName: Option[String], fieldName: String) extends AggFunctio
     val raw            = fromStep.raw.asInstanceOf[GremlinScala[Vertex]]
 
     val result = publicProperty.mapping.graphTypeClass match {
-      case c if c == classOf[Int]    => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Int]].mean
-      case c if c == classOf[Long]   => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Long]].mean
-      case c if c == classOf[Float]  => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Float]].mean
-      case c if c == classOf[Double] => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Double]].mean
+      case c if c == classOf[Int]     => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Int]].mean
+      case c if c == classOf[Long]    => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Long]].mean
+      case c if c == classOf[Float]   => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Float]].mean
+      case c if c == classOf[Double]  => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Double]].mean
+      case c if c == classOf[Integer] => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[Integer]].mean
+      case c if c == classOf[JLong]   => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[JLong]].mean
+      case c if c == classOf[JFloat]  => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[JFloat]].mean
+      case c if c == classOf[JDouble] => publicProperty.get(raw, authContext).asInstanceOf[GremlinScala[JDouble]].mean
     }
     ScalarSteps(result)
   }
