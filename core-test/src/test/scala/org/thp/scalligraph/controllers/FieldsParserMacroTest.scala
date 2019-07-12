@@ -183,7 +183,7 @@ class FieldsParserMacroTest extends Specification with TestUtils {
     val r                  = updateFieldsParser(Field(Json.obj("yy" -> "plop", "p1" -> "yop"))).toEither
     r must beRight.which { updaters =>
       val p1Updater: Matcher[PropertyUpdater] = beLike {
-        case PropertyUpdater(prop, FPath.empty, "yop", _) if prop == properties.head => ok
+        case PropertyUpdater(FPath("p1"), "yop", _) => ok
       }
       updaters must contain(exactly(p1Updater))
     }
@@ -191,9 +191,8 @@ class FieldsParserMacroTest extends Specification with TestUtils {
 
   "update using custom function" in {
     val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
-      .property[String]("p1")(_.rename("p2").custom[String] { (prop, path, value, _, _, _, _) =>
-        prop.propertyName must_=== "p1"
-        path must_=== FPath("sp2")
+      .property[String]("p1")(_.rename("p2").custom { (path, value, _, _, _, _) =>
+        path must_=== FPath("p1.sp2")
         value must_== "yop"
         Success(Json.obj("p2" -> "yop"))
       })
@@ -202,7 +201,7 @@ class FieldsParserMacroTest extends Specification with TestUtils {
     val r                  = updateFieldsParser(Field(Json.obj("yy" -> "plop", "p1.sp2" -> "yop"))).toEither
     r must beRight.which { updaters =>
       val p1Updater: Matcher[PropertyUpdater] = beLike {
-        case PropertyUpdater(prop, FPath("sp2"), "yop", f) if prop == properties.head =>
+        case PropertyUpdater(FPath("p1", "sp2"), "yop", f) =>
           f(null, null, null, null) must beSuccessfulTry
       }
       updaters must contain(exactly(p1Updater))
@@ -225,16 +224,14 @@ class FieldsParserMacroTest extends Specification with TestUtils {
       .property[String]("p1")(_.simple.updatable)
       .property[String]("p2")(_.simple.updatable)
       .build
-    val p1Prop             = properties.find(_.propertyName == "p1").get
-    val p2Prop             = properties.find(_.propertyName == "p2").get
     val updateFieldsParser = FieldsParser.update("xxx", properties)
     val r                  = updateFieldsParser(Field(Json.obj("p2" -> "plop", "p1" -> "a"))).toEither
     r must beRight.which { updaters =>
       val p1Updater: Matcher[PropertyUpdater] = beLike {
-        case PropertyUpdater(prop, FPath(), "a", _) if prop == p1Prop => ok
+        case PropertyUpdater(FPath("p1"), "a", _) => ok
       }
       val p2Updater: Matcher[PropertyUpdater] = beLike {
-        case PropertyUpdater(prop, FPath(), "plop", _) if prop == p2Prop => ok
+        case PropertyUpdater(FPath("p2"), "plop", _) => ok
       }
       updaters must contain(exactly(p1Updater, p2Updater))
     }
@@ -248,7 +245,7 @@ class FieldsParserMacroTest extends Specification with TestUtils {
     val r                  = updateFieldsParser(Field(Json.obj("yy" -> "plop", "p1.sp1.sp2" -> "yop"))).toEither
     r must beRight.which { updaters =>
       val p1Updater: Matcher[PropertyUpdater] = beLike {
-        case PropertyUpdater(prop, FPath("sp1", "sp2"), "yop", _) if prop == properties.head => ok
+        case PropertyUpdater(FPath("p1", "sp1", "sp2"), "yop", _) => ok
       }
       updaters must contain(exactly(p1Updater))
     }

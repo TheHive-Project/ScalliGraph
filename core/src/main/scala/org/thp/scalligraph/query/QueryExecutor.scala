@@ -63,9 +63,9 @@ abstract class QueryExecutor { executor =>
 
   private def getQuery(tpe: ru.Type, field: Field): Or[Query, Every[AttributeError]] = {
     def applyQuery[P](query: ParamQuery[P], from: Field): Or[Query, Every[AttributeError]] =
-      if (query.checkFrom(tpe)) {
+      if (query.checkFrom(tpe)) { // FIXME why double check of type ?
         query
-          .paramParser(from)
+          .paramParser(tpe, publicProperties)(from)
           .map(p => query.toQuery(p))
       } else {
         logger.warn(s"getQuery($tpe, $field).applyQuery($query, $from) fails because $query.checkFrom($tpe) returns false")

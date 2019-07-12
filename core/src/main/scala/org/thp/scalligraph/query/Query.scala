@@ -14,7 +14,7 @@ import org.thp.scalligraph.{BadRequestError, Output, RichType}
 
 abstract class ParamQuery[P: ru.TypeTag] { q =>
   val paramType: ru.Type = ru.typeOf[P]
-  val paramParser: FieldsParser[P]
+  def paramParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[P]
   val name: String
   def checkFrom(t: ru.Type): Boolean
   def toType(t: ru.Type): ru.Type
@@ -29,7 +29,9 @@ abstract class ParamQuery[P: ru.TypeTag] { q =>
 }
 
 abstract class Query extends ParamQuery[Unit] { q =>
-  override val paramParser: FieldsParser[Unit] = FieldsParser[Unit]("unit") { case _ => Good(()) }
+  override def paramParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[Unit] = FieldsParser[Unit]("unit") {
+    case _ => Good(())
+  }
 
   def andThen(query: Query): Query = new Query {
     override val name: String                                                 = q.name + "/" + query.name
@@ -50,11 +52,11 @@ object Query {
 
   def initWithParam[P: ru.TypeTag, T: ru.TypeTag](queryName: String, parser: FieldsParser[P], f: (P, Graph, AuthContext) => T): ParamQuery[P] =
     new ParamQuery[P] {
-      override val paramParser: FieldsParser[P]                              = parser
-      override val name: String                                              = queryName
-      override def checkFrom(t: ru.Type): Boolean                            = t <:< ru.typeOf[Graph]
-      override def toType(t: ru.Type): ru.Type                               = ru.typeOf[T]
-      override def apply(param: P, from: Any, authContext: AuthContext): Any = f(param, from.asInstanceOf[Graph], authContext)
+      override def paramParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[P] = parser
+      override val name: String                                                                      = queryName
+      override def checkFrom(t: ru.Type): Boolean                                                    = t <:< ru.typeOf[Graph]
+      override def toType(t: ru.Type): ru.Type                                                       = ru.typeOf[T]
+      override def apply(param: P, from: Any, authContext: AuthContext): Any                         = f(param, from.asInstanceOf[Graph], authContext)
     }
 
   def apply[F: ru.TypeTag, T: ru.TypeTag](queryName: String, f: (F, AuthContext) => T): Query = new Query {
@@ -66,11 +68,11 @@ object Query {
 
   def withParam[P: ru.TypeTag, F: ru.TypeTag, T: ru.TypeTag](queryName: String, parser: FieldsParser[P], f: (P, F, AuthContext) => T): ParamQuery[P] =
     new ParamQuery[P] {
-      override val paramParser: FieldsParser[P]                              = parser
-      override val name: String                                              = queryName
-      override def checkFrom(t: ru.Type): Boolean                            = t <:< ru.typeOf[F]
-      override def toType(t: ru.Type): ru.Type                               = ru.typeOf[T]
-      override def apply(param: P, from: Any, authContext: AuthContext): Any = f(param, from.asInstanceOf[F], authContext)
+      override def paramParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[P] = parser
+      override val name: String                                                                      = queryName
+      override def checkFrom(t: ru.Type): Boolean                                                    = t <:< ru.typeOf[F]
+      override def toType(t: ru.Type): ru.Type                                                       = ru.typeOf[T]
+      override def apply(param: P, from: Any, authContext: AuthContext): Any                         = f(param, from.asInstanceOf[F], authContext)
     }
 
   def output[F: ru.TypeTag, T: ru.TypeTag](implicit toOutput: F => Output[T]): Query = new Query {
@@ -82,10 +84,11 @@ object Query {
 }
 
 class SortQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[InputSort] {
-  override val paramParser: FieldsParser[InputSort] = InputSort.fieldsParser
-  override val name: String                         = "sort"
-  override def checkFrom(t: ru.Type): Boolean       = t <:< ru.typeOf[ScalliSteps[_, _, _]]
-  override def toType(t: ru.Type): ru.Type          = t
+//  override val paramParser: FieldsParser[InputSort] = InputSort.fieldsParser
+  override def paramParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[InputSort] = InputSort.fieldsParser
+  override val name: String                                                                              = "sort"
+  override def checkFrom(t: ru.Type): Boolean                                                            = t <:< ru.typeOf[ScalliSteps[_, _, _]]
+  override def toType(t: ru.Type): ru.Type                                                               = t
   override def apply(inputSort: InputSort, from: Any, authContext: AuthContext): Any =
     inputSort(
       publicProperties,
@@ -96,10 +99,10 @@ class SortQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery
 }
 
 class FilterQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[InputFilter] {
-  override val paramParser: FieldsParser[InputFilter] = InputFilter.fieldsParser
-  override val name: String                           = "filter"
-  override def checkFrom(t: ru.Type): Boolean         = t <:< ru.typeOf[BaseVertexSteps[_, _]]
-  override def toType(t: ru.Type): ru.Type            = t
+  override def paramParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[InputFilter] = InputFilter.fieldsParser(tpe, properties)
+  override val name: String                                                                                = "filter"
+  override def checkFrom(t: ru.Type): Boolean                                                              = t <:< ru.typeOf[BaseVertexSteps[_, _]]
+  override def toType(t: ru.Type): ru.Type                                                                 = t
   override def apply(inputFilter: InputFilter, from: Any, authContext: AuthContext): Any =
     inputFilter(
       publicProperties,
@@ -110,10 +113,10 @@ class FilterQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQue
 }
 
 class AggregationQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[GroupAggregation[_, _]] {
-  override val paramParser: FieldsParser[GroupAggregation[_, _]] = GroupAggregation.fieldsParser
-  override val name: String                                      = "aggregation"
-  override def checkFrom(t: ru.Type): Boolean                    = t <:< ru.typeOf[BaseVertexSteps[_, _]]
-  override def toType(t: ru.Type): ru.Type                       = ru.typeOf[JsValue]
+  override def paramParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[GroupAggregation[_, _]] = GroupAggregation.fieldsParser
+  override val name: String                                                                                           = "aggregation"
+  override def checkFrom(t: ru.Type): Boolean                                                                         = t <:< ru.typeOf[BaseVertexSteps[_, _]]
+  override def toType(t: ru.Type): ru.Type                                                                            = ru.typeOf[JsValue]
   override def apply(aggregation: GroupAggregation[_, _], from: Any, authContext: AuthContext): Any =
     aggregation.get(publicProperties, rm.classSymbol(from.getClass).toType, from.asInstanceOf[BaseVertexSteps[_, _]], authContext)
 }

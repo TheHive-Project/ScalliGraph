@@ -16,6 +16,7 @@ class PublicProperty[D, G](
     val propertyName: String,
     val mapping: Mapping[D, _, G],
     val definition: Seq[GremlinScala[Vertex] => GremlinScala[G]],
+    val fieldsParser: FieldsParser[D],
     updateFieldsParserBuilder: PublicProperty[D, G] => Option[FieldsParser[PropertyUpdater]]
 ) {
 
@@ -31,7 +32,7 @@ class PublicProperty[D, G](
 object PropertyUpdater {
 
   def apply[D, V](fieldsParser: FieldsParser[V], publicProperty: PublicProperty[D, _])(
-      f: (PublicProperty[D, _], FPath, V, Vertex, Database, Graph, AuthContext) => Try[JsObject]
+      f: (FPath, V, Vertex, Database, Graph, AuthContext) => Try[JsObject]
   ): FieldsParser[PropertyUpdater] =
     new FieldsParser(
       fieldsParser.formatName,
@@ -39,20 +40,25 @@ object PropertyUpdater {
         case (path, field) =>
           fieldsParser(path, field).map(
             fieldValue =>
-              new PropertyUpdater(publicProperty, path, fieldValue) {
+              new PropertyUpdater(publicProperty.propertyName /: path, fieldValue) {
                 override def apply(vertex: Vertex, db: Database, graph: Graph, authContext: AuthContext): Try[JsObject] =
-                  f(publicProperty, path, fieldValue, vertex, db, graph, authContext)
+                  f(path, fieldValue, vertex, db, graph, authContext)
               }
           )
       }
     )
 
-  def unapply(updater: PropertyUpdater): Option[(PublicProperty[_, _], FPath, Any, (Vertex, Database, Graph, AuthContext) => Try[JsObject])] =
-    Some((updater.property, updater.path, updater.value, updater.apply))
+  def apply(path: FPath, value: Any)(
+      f: (Vertex, Database, Graph, AuthContext) => Try[JsObject]
+  ): PropertyUpdater = new PropertyUpdater(path, value) {
+    override def apply(v: Vertex, db: Database, graph: Graph, authContext: AuthContext): Try[JsObject] = f(v, db, graph, authContext)
+  }
+
+  def unapply(updater: PropertyUpdater): Option[(FPath, Any, (Vertex, Database, Graph, AuthContext) => Try[JsObject])] =
+    Some((updater.path, updater.value, updater.apply))
 }
 
-abstract class PropertyUpdater(val property: PublicProperty[_, _], val path: FPath, val value: Any)
-    extends ((Vertex, Database, Graph, AuthContext) => Try[JsObject]) {
+abstract class PropertyUpdater(val path: FPath, val value: Any) extends ((Vertex, Database, Graph, AuthContext) => Try[JsObject]) {
   override def toString(): String =
-    s"PropertyUpdater(${property.stepType}:${property.propertyName}:${property.mapping.domainTypeClass.getSimpleName}, $path, $value)"
+    s"PropertyUpdater($path, $value)"
 }

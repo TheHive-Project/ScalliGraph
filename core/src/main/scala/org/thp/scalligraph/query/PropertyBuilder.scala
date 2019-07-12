@@ -33,11 +33,11 @@ class SimpleUpdatePropertyBuilder[S <: BaseVertexSteps[_, S]: ru.TypeTag, D, G](
       propertyName,
       mapping.asInstanceOf[Mapping[D, _, G]],
       definition,
+      fieldsParser,
       (property: PublicProperty[D, G]) =>
-        Some(PropertyUpdater(fieldsParser, property) {
-          (property: PublicProperty[D, _], _: FPath, value: D, vertex: Vertex, db: Database, _: Graph, _: AuthContext) =>
-            db.setProperty(vertex, fieldName, value, property.mapping)
-            Success(Json.obj(fieldName -> value.toString))
+        Some(PropertyUpdater(fieldsParser, property) { (_: FPath, value: D, vertex: Vertex, db: Database, _: Graph, _: AuthContext) =>
+          db.setProperty(vertex, fieldName, value, property.mapping)
+          Success(Json.obj(fieldName -> value.toString))
         })
     )
 }
@@ -48,23 +48,25 @@ class UpdatePropertyBuilder[S <: BaseVertexSteps[_, S]: ru.TypeTag, D, G](
     definition: Seq[GremlinScala[Vertex] => GremlinScala[G]]
 ) {
 
-  def readonly: PublicProperty[D, G] =
+  def readonly(implicit fieldsParser: FieldsParser[D]): PublicProperty[D, G] =
     new PublicProperty[D, G](
       ru.typeOf[S],
       propertyName,
       mapping.asInstanceOf[Mapping[D, _, G]],
       definition,
+      fieldsParser,
       _ => None
     )
 
-  def custom[V](
-      f: (PublicProperty[D, _], FPath, V, Vertex, Database, Graph, AuthContext) => Try[JsObject]
-  )(implicit fieldsParser: FieldsParser[V]): PublicProperty[D, G] =
+  def custom(
+      f: (FPath, D, Vertex, Database, Graph, AuthContext) => Try[JsObject]
+  )(implicit fieldsParser: FieldsParser[D]): PublicProperty[D, G] =
     new PublicProperty[D, G](
       ru.typeOf[S],
       propertyName,
       mapping.asInstanceOf[Mapping[D, _, G]],
       definition,
+      fieldsParser,
       (property: PublicProperty[D, G]) => Some(PropertyUpdater(fieldsParser, property)(f))
     )
 }

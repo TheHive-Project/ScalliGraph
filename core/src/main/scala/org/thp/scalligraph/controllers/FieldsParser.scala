@@ -129,6 +129,12 @@ object FieldsParser extends FieldsParserLowPrio {
     new FieldsParser[T]("good", Set.empty, {
       case _ => Good(value)
     })
+
+  def unknownAttribute[T](name: String): FieldsParser[T] =
+    new FieldsParser[T]("unknownAttribute", Set.empty, {
+      case (path, field) => Bad(One(UnknownAttributeError((path :/ name).toString, field)))
+    })
+
   def empty[T]: FieldsParser[T] = new FieldsParser[T]("empty", Set.empty, PartialFunction.empty)
 
   private def unlift[T, R](f: T => Option[R]): PartialFunction[T, R] =

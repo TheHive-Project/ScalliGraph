@@ -6,11 +6,10 @@ import play.api.Logger
 
 import gremlin.scala.{GremlinScala, P, Vertex}
 import org.scalactic.Accumulation._
-import org.scalactic.{Bad, Good, One}
-import org.thp.scalligraph.InvalidFormatAttributeError
+import org.scalactic.Good
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
-import org.thp.scalligraph.models.BaseVertexSteps
+import org.thp.scalligraph.models.{BaseVertexSteps, Mapping}
 
 trait InputFilter extends InputQuery {
   def apply[S <: BaseVertexSteps[_, S]](publicProperties: List[PublicProperty[_, _]], stepType: ru.Type, step: S, authContext: AuthContext): S
@@ -151,40 +150,48 @@ object InputFilter {
 
   //  def in(field: String, values: Seq[Any]) = OrFilter(values.map(v ⇒ PredicateFilter(field, P.is(v))))
 
-  implicit val fieldsParser: FieldsParser[InputFilter] = FieldsParser("query") {
-    case (path, FObjOne("_and", FSeq(fields))) =>
-      fields.zipWithIndex.validatedBy { case (field, index) => fieldsParser((path :/ "_and").toSeq(index), field) }.map(and)
-    case (path, FObjOne("_or", FSeq(fields))) =>
-      fields.zipWithIndex.validatedBy { case (field, index) => fieldsParser((path :/ "_or").toSeq(index), field) }.map(or)
-    case (path, FObjOne("_not", field))                            => fieldsParser(path :/ "_not", field).map(not)
-    case (_, FObjOne("_any", _))                                   => Good(yes)
-    case (_, FObjOne("_lt", FObjOne(key, FNative(value))))         => Good(lt(key, value))
-    case (_, FObjOne("_gt", FObjOne(key, FNative(value))))         => Good(gt(key, value))
-    case (_, FObjOne("_lte", FObjOne(key, FNative(value))))        => Good(lte(key, value))
-    case (_, FObjOne("_gte", FObjOne(key, FNative(value))))        => Good(gte(key, value))
-    case (_, FObjOne("_is", FObjOne(key, FNative(value))))         => Good(is(key, value))
-    case (_, FObjOne("_has", FObjOne(key, FString(value))))        => Good(has(key, value))
-    case (_, FObjOne("_startsWith", FObjOne(key, FString(value)))) => Good(startsWith(key, value))
-    case (_, FObjOne("_endsWith", FObjOne(key, FString(value))))   => Good(endsWith(key, value))
-    case (_, FObjOne("_id", FString(id)))                          => Good(withId(id))
-    case (_, FObjOne("_string", _)) =>
-      logger.warn("string filter is not supported, it is ignored")
-      Good(yes)
-    case (_, FObjOne("_in", o: FObject)) =>
-      val field = FString.parser(o.get("_field")).map(_.value)
-      val values = FSeq.parser(o.get("_values")).flatMap { s =>
-        s.values.validatedBy {
-          case FNative(value) => Good(value)
-          case other          => Bad(One(InvalidFormatAttributeError("_in._values", "native value", Set("string", "number", "boolean"), other)))
+  def fieldsParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[InputFilter] = {
+    val props = properties.filter(_.stepType =:= tpe)
+    def propParser(name: String): FieldsParser[Any] =
+      props
+        .find(_.propertyName == name)
+        .fold(FieldsParser.unknownAttribute[Any](name)) { prop =>
+          prop.fieldsParser.map(prop.fieldsParser.formatName)(v => prop.mapping.asInstanceOf[Mapping[_, Any, Any]].toGraph(v))
         }
-      }
-      withGood(field, values)(in(_, _: _*))
-
-    case (_, FObjOne("_contains", FString(path))) => Good(isDefined(path))
-    case (_, FFieldValue(key, value))             => Good(is(key, value))
-    case (_, FObjOne(key, FNative(value))) =>
-      logger.warn(s"""Use of filter {"$key": "$value"} is deprecated. Please use {"_is":{"$key":"$value"}}""")
-      Good(is(key, value))
-    case (_, FObject(kv)) if kv.isEmpty => Good(yes)
+    FieldsParser("query") {
+      case (path, FObjOne("_and", FSeq(fields))) =>
+        fields.zipWithIndex.validatedBy { case (field, index) => fieldsParser(tpe, properties)((path :/ "_and").toSeq(index), field) }.map(and)
+      case (path, FObjOne("_or", FSeq(fields))) =>
+        fields.zipWithIndex.validatedBy { case (field, index) => fieldsParser(tpe, properties)((path :/ "_or").toSeq(index), field) }.map(or)
+      case (path, FObjOne("_not", field))                            => fieldsParser(tpe, properties)(path :/ "_not", field).map(not)
+      case (_, FObjOne("_any", _))                                   => Good(yes)
+      case (_, FObjOne("_lt", FObjOne(key, field)))                  => propParser(key)(field).map(value => lt(key, value))
+      case (_, FObjOne("_gt", FObjOne(key, field)))                  => propParser(key)(field).map(value => gt(key, value))
+      case (_, FObjOne("_lte", FObjOne(key, field)))                 => propParser(key)(field).map(value => lte(key, value))
+      case (_, FObjOne("_gte", FObjOne(key, field)))                 => propParser(key)(field).map(value => gte(key, value))
+      case (_, FObjOne("_is", FObjOne(key, field)))                  => propParser(key)(field).map(value => is(key, value))
+      case (_, FObjOne("_has", FObjOne(key, FString(value))))        => Good(has(key, value))
+      case (_, FObjOne("_startsWith", FObjOne(key, FString(value)))) => Good(startsWith(key, value))
+      case (_, FObjOne("_endsWith", FObjOne(key, FString(value))))   => Good(endsWith(key, value))
+      case (_, FObjOne("_id", FString(id)))                          => Good(withId(id))
+      case (_, FObjOne("_between", FFieldFromTo(key, fromField, toField))) =>
+        withGood(propParser(key)(fromField), propParser(key)(toField))(between(key, _, _))
+      case (_, FObjOne("_string", _)) =>
+        logger.warn("string filter is not supported, it is ignored")
+        Good(yes)
+      case (_, FObjOne("_in", o: FObject)) =>
+        for {
+          key <- FieldsParser.string(o.get("_field"))
+          s   <- FSeq.parser(o.get("_values"))
+          valueParser = propParser(key)
+          values <- s.values.validatedBy(valueParser.apply)
+        } yield in(key, values: _*)
+      case (_, FObjOne("_contains", FString(path))) => Good(isDefined(path))
+      case (_, FFieldValue(key, field))             => propParser(key)(field).map(value => is(key, value))
+      case (_, FObjOne(key, field)) =>
+        logger.warn(s"""Use of filter {"$key": "$field"} is deprecated. Please use {"_is":{"$key":"$field"}}""")
+        propParser(key)(field).map(value => is(key, value))
+      case (_, FObject(kv)) if kv.isEmpty => Good(yes)
+    }
   }
 }
