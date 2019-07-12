@@ -36,7 +36,7 @@ class ModernTest extends PlaySpecification {
 //      }
 
       "create initial values" in db.transaction { implicit graph =>
-        personSrv.initSteps.name.toList must contain(exactly("marko", "vadas", "franck", "marc", "josh", "peter"))
+        personSrv.initSteps.toList.map(_.name) must contain(exactly("marko", "vadas", "franck", "marc", "josh", "peter"))
       }
     }
   }

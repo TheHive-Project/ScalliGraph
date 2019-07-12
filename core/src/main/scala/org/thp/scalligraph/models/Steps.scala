@@ -54,19 +54,19 @@ abstract class ScalliSteps[EndDomain, EndGraph, ThisStep <: ScalliSteps[EndDomai
   def richPage[NewEndDomain](from: Long, to: Long, withTotal: Boolean)(
       f: ThisStep => GremlinScala[NewEndDomain]
   ): PagedResult[NewEndDomain] = {
-    logger.debug(s"Execution of $raw (size)")
+    logger.debug(s"Execution of $raw")
     val size   = if (withTotal) Some(raw.clone().count().head.toLong) else None
     val values = f(range(from, to)).toList
     PagedResult(values, size)
   }
 
   def head(): EndDomain = {
-    logger.debug(s"Execution of $raw (size)")
+    logger.debug(s"Execution of $raw")
     converter.toDomain(raw.head)
   }
 
   def headOption(): Option[EndDomain] = {
-    logger.debug(s"Execution of $raw (size)")
+    logger.debug(s"Execution of $raw")
     raw.headOption().map(converter.toDomain)
   }
 

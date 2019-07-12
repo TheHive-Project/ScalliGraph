@@ -20,9 +20,9 @@ class DatabaseException(message: String = "Violation of database schema", cause:
 trait Database {
   lazy val logger = Logger("org.thp.scalligraph.models.Database")
   val idMapping: SingleMapping[UUID, String]
-  val createdAtMapping: SingleMapping[Date, Date]
+  val createdAtMapping: SingleMapping[Date, _]
   val createdByMapping: SingleMapping[String, String]
-  val updatedAtMapping: OptionMapping[Date, Date]
+  val updatedAtMapping: OptionMapping[Date, _]
   val updatedByMapping: OptionMapping[String, String]
   val binaryMapping: SingleMapping[Array[Byte], String]
 

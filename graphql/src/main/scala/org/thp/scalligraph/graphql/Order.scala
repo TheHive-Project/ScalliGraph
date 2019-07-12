@@ -16,7 +16,7 @@ object Order {
   lazy val orderEnumeration = EnumType(
     "Order",
     values = List(
-      EnumValue("decr", value = org.apache.tinkerpop.gremlin.process.traversal.Order.decr),
+      EnumValue("decr", value = org.apache.tinkerpop.gremlin.process.traversal.Order.decr), // TODO use Order.desc when possible: org.janusgraph.graphdb.internal.Order
       EnumValue("incr", value = org.apache.tinkerpop.gremlin.process.traversal.Order.incr),
       EnumValue("shuffle", value = org.apache.tinkerpop.gremlin.process.traversal.Order.shuffle)
     )
