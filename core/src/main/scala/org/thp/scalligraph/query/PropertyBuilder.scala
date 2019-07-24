@@ -1,81 +1,101 @@
 package org.thp.scalligraph.query
 
-import scala.reflect.runtime.{universe => ru}
-import scala.util.{Success, Try}
-
-import play.api.libs.json.{JsObject, Json}
-
 import gremlin.scala.{Graph, GremlinScala, Vertex}
 import org.thp.scalligraph.FPath
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.FieldsParser
-import org.thp.scalligraph.models.{BaseVertexSteps, Database, Mapping, UniMapping}
+import org.thp.scalligraph.models.{BaseVertexSteps, Database, Mapping}
+import play.api.libs.json.{JsObject, Json}
 
-class PropertyBuilder[S <: BaseVertexSteps[_, S]: ru.TypeTag, D](propertyName: String, mapping: UniMapping[D]) {
+import scala.reflect.runtime.{universe => ru}
+import scala.util.{Success, Try}
 
-  def simple[G] = new SimpleUpdatePropertyBuilder[S, D, G](propertyName, propertyName, mapping, Seq((_: GremlinScala[Vertex]).value[G](propertyName)))
+class PropertyBuilder[D, SD, G](stepType: ru.Type, propertyName: String, mapping: Mapping[D, SD, G]) {
 
-  def rename[G](newName: String) =
-    new SimpleUpdatePropertyBuilder[S, D, G](propertyName, newName, mapping, Seq((_: GremlinScala[Vertex]).value[G](newName)))
-  def derived[G](definition: (GremlinScala[Vertex] => GremlinScala[G])*) = new UpdatePropertyBuilder[S, D, G](propertyName, mapping, definition)
+  def simple =
+    new SimpleUpdatePropertyBuilder[D, SD, G](
+      stepType,
+      propertyName,
+      propertyName,
+      mapping,
+      Seq((_: GremlinScala[Vertex]).value[G](propertyName))
+    )
+
+  def rename(newName: String) =
+    new SimpleUpdatePropertyBuilder[D, SD, G](
+      stepType,
+      propertyName,
+      newName,
+      mapping,
+      Seq((_: GremlinScala[Vertex]).value(newName))
+    )
+
+  def derived(definition: (GremlinScala[Vertex] => GremlinScala[G])*) =
+    new UpdatePropertyBuilder[D, SD, G](stepType, propertyName, mapping, definition)
 }
 
-class SimpleUpdatePropertyBuilder[S <: BaseVertexSteps[_, S]: ru.TypeTag, D, G](
+class SimpleUpdatePropertyBuilder[D, SD, G](
+    stepType: ru.Type,
     propertyName: String,
     fieldName: String,
-    mapping: UniMapping[D],
+    val mapping: Mapping[D, SD, G],
     definition: Seq[GremlinScala[Vertex] => GremlinScala[G]]
-) extends UpdatePropertyBuilder[S, D, G](propertyName, mapping, definition) {
+) extends UpdatePropertyBuilder[D, SD, G](stepType, propertyName, mapping, definition) {
 
-  def updatable(implicit fieldsParser: FieldsParser[D]): PublicProperty[D, G] =
-    new PublicProperty[D, G](
-      ru.typeOf[S],
+  def updatable(implicit fieldsParser: FieldsParser[SD], updateFieldsParser: FieldsParser[D]): PublicProperty[SD, G] =
+    new PublicProperty[SD, G](
+      stepType,
       propertyName,
-      mapping.asInstanceOf[Mapping[D, _, G]],
+      mapping,
       definition,
       fieldsParser,
-      (property: PublicProperty[D, G]) =>
-        Some(PropertyUpdater(fieldsParser, property) { (_: FPath, value: D, vertex: Vertex, db: Database, _: Graph, _: AuthContext) =>
-          db.setProperty(vertex, fieldName, value, property.mapping)
-          Success(Json.obj(fieldName -> value.toString))
-        })
+      Some(PropertyUpdater(updateFieldsParser, propertyName) { (_: FPath, value: D, vertex: Vertex, db: Database, _: Graph, _: AuthContext) =>
+        db.setProperty(vertex, fieldName, value, mapping)
+        Success(Json.obj(fieldName -> value.toString))
+      })
     )
 }
 
-class UpdatePropertyBuilder[S <: BaseVertexSteps[_, S]: ru.TypeTag, D, G](
+class UpdatePropertyBuilder[D, SD, G](
+    stepType: ru.Type,
     propertyName: String,
-    mapping: UniMapping[D],
+    mapping: Mapping[D, SD, G],
     definition: Seq[GremlinScala[Vertex] => GremlinScala[G]]
 ) {
 
-  def readonly(implicit fieldsParser: FieldsParser[D]): PublicProperty[D, G] =
-    new PublicProperty[D, G](
-      ru.typeOf[S],
+  def readonly(implicit fieldsParser: FieldsParser[SD]): PublicProperty[SD, G] =
+    new PublicProperty[SD, G](
+      stepType,
       propertyName,
-      mapping.asInstanceOf[Mapping[D, _, G]],
+      mapping,
       definition,
       fieldsParser,
-      _ => None
+      None
     )
 
   def custom(
       f: (FPath, D, Vertex, Database, Graph, AuthContext) => Try[JsObject]
-  )(implicit fieldsParser: FieldsParser[D]): PublicProperty[D, G] =
-    new PublicProperty[D, G](
-      ru.typeOf[S],
+  )(implicit fieldsParser: FieldsParser[SD], updateFieldsParser: FieldsParser[D]): PublicProperty[SD, G] =
+    new PublicProperty[SD, G](
+      stepType,
       propertyName,
-      mapping.asInstanceOf[Mapping[D, _, G]],
+      mapping,
       definition,
       fieldsParser,
-      (property: PublicProperty[D, G]) => Some(PropertyUpdater(fieldsParser, property)(f))
+      Some(PropertyUpdater(updateFieldsParser, propertyName)(f))
     )
 }
 
 class PublicPropertyListBuilder[S <: BaseVertexSteps[_, S]: ru.TypeTag](properties: List[PublicProperty[_, _]]) {
   def build: List[PublicProperty[_, _]] = properties
 
-  def property[D](name: String)(prop: PropertyBuilder[S, D] => PublicProperty[_, _])(implicit mapping: UniMapping[D]): PublicPropertyListBuilder[S] =
-    new PublicPropertyListBuilder(prop(new PropertyBuilder[S, D](name, mapping)) :: properties)
+  def property[D, SD, G](
+      name: String,
+      mapping: Mapping[D, SD, G]
+  )(prop: PropertyBuilder[D, SD, G] => PublicProperty[SD, G]): PublicPropertyListBuilder[S] =
+    new PublicPropertyListBuilder(
+      prop(new PropertyBuilder(ru.typeOf[S], name, mapping)) :: properties
+    )
 }
 
 object PublicPropertyListBuilder {

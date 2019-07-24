@@ -4,13 +4,6 @@ import java.lang.{Double => JDouble, Float => JFloat, Integer => JInt, Long => J
 import java.time.temporal.ChronoUnit
 import java.util.{Calendar, Date, Collection => JCollection, List => JList, Map => JMap}
 
-import scala.collection.JavaConverters._
-import scala.reflect.runtime.{universe => ru}
-import scala.util.Try
-import scala.util.matching.Regex
-
-import play.api.libs.json.{JsNumber, JsObject, Json, Writes}
-
 import gremlin.scala.{__, By, GremlinScala, StepLabel, Vertex}
 import org.scalactic.Accumulation.withGood
 import org.scalactic.{Bad, Good, One, Or}
@@ -18,7 +11,13 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FObject, FString, Field, FieldsParser}
 import org.thp.scalligraph.models.{ScalarSteps, ScalliSteps}
 import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError, Output}
+import play.api.libs.json.{JsNumber, JsObject, Json, Writes}
 import shapeless.HNil
+
+import scala.collection.JavaConverters._
+import scala.reflect.runtime.{universe => ru}
+import scala.util.Try
+import scala.util.matching.Regex
 
 object GroupAggregation {
 
@@ -147,7 +146,13 @@ abstract class Aggregation[T, R](val name: String) {
     properties
       .find(p => p.stepType =:= stepType && p.propertyName == fieldName)
       .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))
-  def apply(publicProperties: List[PublicProperty[_, _]], stepType: ru.Type, fromStep: ScalliSteps[_, _, _], authContext: AuthContext): ScalarSteps[T]
+
+  def apply(
+      publicProperties: List[PublicProperty[_, _]],
+      stepType: ru.Type,
+      fromStep: ScalliSteps[_, _, _],
+      authContext: AuthContext
+  ): ScalarSteps[T]
   def output(t: T): Output[R]
 }
 
@@ -278,12 +283,14 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs:
       fromStep: ScalliSteps[_, _, _],
       authContext: AuthContext
   ): ScalarSteps[JList[JCollection[Any]]] = {
-    val property     = getProperty(publicProperties, stepType, fieldName).asInstanceOf[PublicProperty[_, Any]]
+    val property = getProperty(publicProperties, stepType, fieldName).asInstanceOf[PublicProperty[_, Any]]
+
     val elementLabel = StepLabel[Vertex]()
-    val groupedVertices: GremlinScala[JMap.Entry[Any, JCollection[Any]]] = property
-      .get(fromStep.raw.asInstanceOf[GremlinScala.Aux[Vertex, HNil]].as(elementLabel), authContext)
-      .group(By(), By(__.select(elementLabel).fold()))
-      .unfold[JMap.Entry[Any, JCollection[Any]]] // Map.Entry[K, List[V]]
+    val groupedVertices: GremlinScala[JMap.Entry[Any, JCollection[Any]]] =
+      property
+        .get(fromStep.raw.asInstanceOf[GremlinScala.Aux[Vertex, HNil]].as(elementLabel), authContext)
+        .group(By(), By(__.select(elementLabel).fold()))
+        .unfold[JMap.Entry[Any, JCollection[Any]]] // Map.Entry[K, List[V]]
 
     ScalarSteps(groupedVertices)
       .project[Any](

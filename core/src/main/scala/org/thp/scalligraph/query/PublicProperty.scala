@@ -1,26 +1,23 @@
 package org.thp.scalligraph.query
 
-import scala.reflect.runtime.{universe => ru}
-import scala.util.Try
-
-import play.api.libs.json.JsObject
-
 import gremlin.scala.{Graph, GremlinScala, Vertex}
 import org.thp.scalligraph.FPath
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.FieldsParser
 import org.thp.scalligraph.models.{Database, Mapping}
+import play.api.libs.json.JsObject
+
+import scala.reflect.runtime.{universe => ru}
+import scala.util.Try
 
 class PublicProperty[D, G](
     val stepType: ru.Type,
     val propertyName: String,
-    val mapping: Mapping[D, _, G],
+    val mapping: Mapping[_, D, G],
     val definition: Seq[GremlinScala[Vertex] => GremlinScala[G]],
     val fieldsParser: FieldsParser[D],
-    updateFieldsParserBuilder: PublicProperty[D, G] => Option[FieldsParser[PropertyUpdater]]
+    val updateFieldsParser: Option[FieldsParser[PropertyUpdater]]
 ) {
-
-  def updateFieldsParser: Option[FieldsParser[PropertyUpdater]] = updateFieldsParserBuilder(this)
 
   def get(elementTraversal: GremlinScala[Vertex], authContext: AuthContext): GremlinScala[G] =
     if (definition.lengthCompare(1) == 0)
@@ -31,16 +28,16 @@ class PublicProperty[D, G](
 
 object PropertyUpdater {
 
-  def apply[D, V](fieldsParser: FieldsParser[V], publicProperty: PublicProperty[D, _])(
+  def apply[D, V](fieldsParser: FieldsParser[V], propertyName: String)(
       f: (FPath, V, Vertex, Database, Graph, AuthContext) => Try[JsObject]
   ): FieldsParser[PropertyUpdater] =
     new FieldsParser(
       fieldsParser.formatName,
-      fieldsParser.acceptedInput.map(publicProperty.propertyName + "/" + _), {
+      fieldsParser.acceptedInput.map(propertyName + "/" + _), {
         case (path, field) =>
           fieldsParser(path, field).map(
             fieldValue =>
-              new PropertyUpdater(publicProperty.propertyName /: path, fieldValue) {
+              new PropertyUpdater(propertyName /: path, fieldValue) {
                 override def apply(vertex: Vertex, db: Database, graph: Graph, authContext: AuthContext): Try[JsObject] =
                   f(path, fieldValue, vertex, db, graph, authContext)
               }

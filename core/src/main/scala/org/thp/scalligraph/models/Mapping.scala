@@ -49,6 +49,7 @@ object UniMapping extends MappingLowPrio {
   implicit def optionMapping[D, G](implicit subMapping: SingleMapping[D, G]): OptionMapping[D, G] = subMapping.optional
   implicit def seqMapping[D, G](implicit subMapping: SingleMapping[D, G]): ListMapping[D, G]      = subMapping.sequence
   implicit def setMapping[D, G](implicit subMapping: SingleMapping[D, G]): SetMapping[D, G]       = subMapping.set
+  def enumMapping[E <: Enumeration](e: E): SingleMapping[E#Value, String]                         = SingleMapping[E#Value, String]("", e => Some(e.toString), e.withName(_))
 }
 
 sealed abstract class Mapping[D, SD: ClassTag, G: ClassTag] extends UniMapping[D] with Converter[SD] {

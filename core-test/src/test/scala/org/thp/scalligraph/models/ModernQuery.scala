@@ -48,16 +48,18 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
       toDomainFn = (g: String) => "Mister " + g
     )
     PublicPropertyListBuilder[PersonSteps]
-      .property[String]("createdBy")(_.rename("_createdBy").readonly)
-      .property[String]("label")(_.rename("name").updatable)(labelMapping)
-      .property[String]("name")(_.simple.updatable)
-      .property[Int]("age")(_.simple.updatable)
+      .property("createdBy", UniMapping.stringMapping)(_.rename("_createdBy").readonly)
+      .property("label", labelMapping)(_.rename("name").updatable)
+      .property("name", UniMapping.stringMapping)(_.simple.updatable)
+      .property("age", UniMapping.intMapping)(_.simple.updatable)
       .build :::
       PublicPropertyListBuilder[SoftwareSteps]
-        .property[String]("createdBy")(_.rename("_createdBy").readonly)
-        .property[String]("name")(_.simple.updatable)
-        .property[String]("lang")(_.simple.updatable)
-        .property[String]("any")(_.derived(_.value[String]("_createdBy"), _.value[String]("name"), _.value[String]("lang")).readonly)
+        .property("createdBy", UniMapping.stringMapping)(_.rename("_createdBy").readonly)
+        .property("name", UniMapping.stringMapping)(_.simple.updatable)
+        .property("lang", UniMapping.stringMapping)(_.simple.updatable)
+        .property("any", UniMapping.stringMapping)(
+          _.derived(_.value[String]("_createdBy"), _.value[String]("name"), _.value[String]("lang")).readonly
+        )
         .build
   }
 
