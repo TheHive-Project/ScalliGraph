@@ -63,8 +63,8 @@ class EntryPoint @Inject()(
       * @tparam T type of extracted field
       * @return a new entry point with added fields parser
       */
-    def extract[N, T](fieldName: Witness.Aux[N], fp: FieldsParser[T]): EntryPointBuilder[FieldType[N, T] :: V] =
-      EntryPointBuilder(name, fieldsParser.andThen(fieldName.toString)(fp)(labelled.field[N](_) :: _))
+    def extract[T](fieldName: Witness, fp: FieldsParser[T]): EntryPointBuilder[FieldType[fieldName.T, T] :: V] =
+      EntryPointBuilder(name, fieldsParser.andThen(fieldName.toString)(fp)(labelled.field[fieldName.T](_) :: _))
 
     /**
       * Add an authentication check to this entry point.
