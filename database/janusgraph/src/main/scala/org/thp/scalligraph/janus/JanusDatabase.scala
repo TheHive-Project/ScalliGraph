@@ -1,14 +1,11 @@
 package org.thp.scalligraph.janus
 
-import java.util.{Date, UUID}
+import java.nio.file.{Files, Paths}
+import java.util.{Date, Properties, UUID}
 
-import scala.util.{Failure, Success, Try}
-
-import play.api.{Configuration, Environment}
-
+import com.typesafe.config.ConfigObject
 import gremlin.scala._
 import javax.inject.{Inject, Singleton}
-import org.apache.tinkerpop.gremlin.structure.{Edge => _, Element => _, Graph => _, Vertex => _}
 import org.janusgraph.core._
 import org.janusgraph.core.schema.{ConsistencyModifier, JanusGraphManagement, JanusGraphSchemaType, Mapping}
 import org.janusgraph.diskstorage.PermanentBackendException
@@ -17,6 +14,28 @@ import org.slf4j.MDC
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
+import play.api.{Configuration, Environment}
+
+import scala.collection.JavaConverters._
+import scala.util.{Failure, Success, Try}
+
+object JanusDatabase {
+
+  def openDatabase(configuration: Configuration): JanusGraph = {
+    val backend = configuration.get[String]("db.janusgraph.storage.backend")
+    if (backend == "berkeleyje") {
+      val jePropertyFile = Paths.get(configuration.get[String]("db.janusgraph.storage.directory"), "je.properties")
+      configuration.getOptional[ConfigObject]("db.janusgraph.berkeleyje").foreach { configObject =>
+        val props = new Properties
+        configObject.asScala.foreach { case (k, v) => props.put(s"je.$k", v.render()) }
+        val propertyOutputStream = Files.newOutputStream(jePropertyFile)
+        try props.store(propertyOutputStream, "DO NOT EDIT, FILE GENERATED FROM application.conf")
+        finally propertyOutputStream.close()
+      }
+    }
+    JanusGraphFactory.open(new Config(configuration.get[Configuration]("db.janusgraph")))
+  }
+}
 
 @Singleton
 class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chunkSize: Int) extends BaseDatabase {
@@ -24,7 +43,7 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
 
   @Inject() def this(configuration: Configuration) = {
     this(
-      JanusGraphFactory.open(new Config(configuration.get[Configuration]("db.janusgraph"))),
+      JanusDatabase.openDatabase(configuration),
       configuration.get[Int]("db.maxRetryOnConflict"),
       configuration.underlying.getBytes("db.chunkSize").toInt
     )
