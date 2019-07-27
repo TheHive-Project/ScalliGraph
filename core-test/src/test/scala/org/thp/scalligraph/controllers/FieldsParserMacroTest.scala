@@ -166,7 +166,7 @@ class FieldsParserMacroTest extends Specification with TestUtils {
 
   "Nothing to update" in {
     val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
-      .property("p1", UniMapping.stringMapping)(_.simple.updatable)
+      .property("p1", UniMapping.string)(_.simple.updatable)
       .build
     val updateFieldsParser = FieldsParser.update("xxx", properties)
     val r                  = updateFieldsParser(Field(Json.obj("yy" -> "plop", "xxx" -> "yop"))).toEither
@@ -175,7 +175,7 @@ class FieldsParserMacroTest extends Specification with TestUtils {
 
   "update one field" in {
     val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
-      .property("p1", UniMapping.stringMapping)(_.simple.updatable)
+      .property("p1", UniMapping.string)(_.simple.updatable)
       .build
     val updateFieldsParser = FieldsParser.update("xxx", properties)
     val r                  = updateFieldsParser(Field(Json.obj("yy" -> "plop", "p1" -> "yop"))).toEither
@@ -189,7 +189,7 @@ class FieldsParserMacroTest extends Specification with TestUtils {
 
   "update using custom function" in {
     val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
-      .property("p1", UniMapping.stringMapping)(_.rename("p2").custom { (path, value, _, _, _, _) =>
+      .property("p1", UniMapping.string)(_.rename("p2").custom { (path, value, _, _, _, _) =>
         path must_=== FPath("p1.sp2")
         value must_== "yop"
         Success(Json.obj("p2" -> "yop"))
@@ -208,8 +208,8 @@ class FieldsParserMacroTest extends Specification with TestUtils {
 
   "fail if contains an invalid field format" in {
     val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
-      .property("p1", UniMapping.stringMapping)(_.simple.updatable)
-      .property("p2", UniMapping.stringMapping)(_.simple.updatable)
+      .property("p1", UniMapping.string)(_.simple.updatable)
+      .property("p2", UniMapping.string)(_.simple.updatable)
       .build
     val updateFieldsParser = FieldsParser.update("xxx", properties)
     val r                  = updateFieldsParser(Field(Json.obj("yy" -> "plop", "p1" -> 10)))
@@ -219,8 +219,8 @@ class FieldsParserMacroTest extends Specification with TestUtils {
 
   "update several fields" in {
     val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
-      .property("p1", UniMapping.stringMapping)(_.simple.updatable)
-      .property("p2", UniMapping.stringMapping)(_.simple.updatable)
+      .property("p1", UniMapping.string)(_.simple.updatable)
+      .property("p2", UniMapping.string)(_.simple.updatable)
       .build
     val updateFieldsParser = FieldsParser.update("xxx", properties)
     val r                  = updateFieldsParser(Field(Json.obj("p2" -> "plop", "p1" -> "a"))).toEither
@@ -237,7 +237,7 @@ class FieldsParserMacroTest extends Specification with TestUtils {
 
   "update subfield" in {
     val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
-      .property("p1", UniMapping.stringMapping)(_.simple.updatable)
+      .property("p1", UniMapping.string)(_.simple.updatable)
       .build
     val updateFieldsParser = FieldsParser.update("xxx", properties)
     val r                  = updateFieldsParser(Field(Json.obj("yy" -> "plop", "p1.sp1.sp2" -> "yop"))).toEither

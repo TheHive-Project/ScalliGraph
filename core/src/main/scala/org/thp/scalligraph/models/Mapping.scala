@@ -31,25 +31,25 @@ trait MappingLowPrio {
 }
 
 object UniMapping extends MappingLowPrio {
-  implicit val jsonMapping: SingleMapping[JsObject, String] =
+  implicit val json: SingleMapping[JsObject, String] =
     SingleMapping[JsObject, String]("", toGraphOptFn = j => Some(j.toString), toDomainFn = s => Json.parse(s).as[JsObject])
-  implicit val stringMapping: SingleMapping[String, String]         = SingleMapping[String, String]("")
-  implicit val longMapping: SingleMapping[Long, Long]               = SingleMapping[Long, Long](0)
-  implicit val intMapping: SingleMapping[Int, Int]                  = SingleMapping[Int, Int](0)
-  implicit val dateMapping: SingleMapping[Date, Date]               = SingleMapping[Date, Date](new Date(0))
-  implicit val booleanMapping: SingleMapping[Boolean, Boolean]      = SingleMapping[Boolean, Boolean](false)
-  implicit val doubleMapping: SingleMapping[Double, Double]         = SingleMapping[Double, Double](0)
-  implicit val floatMapping: SingleMapping[Float, Float]            = SingleMapping[Float, Float](0)
-  implicit val permissionMapping: SingleMapping[Permission, String] = SingleMapping[Permission, String]("")
-  implicit val hashMapping: SingleMapping[Hash, String] = SingleMapping[Hash, String](
+  implicit val string: SingleMapping[String, String]         = SingleMapping[String, String]("")
+  implicit val long: SingleMapping[Long, Long]               = SingleMapping[Long, Long](0)
+  implicit val int: SingleMapping[Int, Int]                  = SingleMapping[Int, Int](0)
+  implicit val date: SingleMapping[Date, Date]               = SingleMapping[Date, Date](new Date(0))
+  implicit val boolean: SingleMapping[Boolean, Boolean]      = SingleMapping[Boolean, Boolean](false)
+  implicit val double: SingleMapping[Double, Double]         = SingleMapping[Double, Double](0)
+  implicit val float: SingleMapping[Float, Float]            = SingleMapping[Float, Float](0)
+  implicit val permission: SingleMapping[Permission, String] = SingleMapping[Permission, String]("")
+  implicit val hash: SingleMapping[Hash, String] = SingleMapping[Hash, String](
     "",
     toGraphOptFn = h => Some(h.toString),
     toDomainFn = Hash(_)
   )
-  implicit def optionMapping[D, G](implicit subMapping: SingleMapping[D, G]): OptionMapping[D, G] = subMapping.optional
-  implicit def seqMapping[D, G](implicit subMapping: SingleMapping[D, G]): ListMapping[D, G]      = subMapping.sequence
-  implicit def setMapping[D, G](implicit subMapping: SingleMapping[D, G]): SetMapping[D, G]       = subMapping.set
-  def enumMapping[E <: Enumeration](e: E): SingleMapping[E#Value, String]                         = SingleMapping[E#Value, String]("", e => Some(e.toString), e.withName(_))
+  implicit def option[D, G](implicit subMapping: SingleMapping[D, G]): OptionMapping[D, G] = subMapping.optional
+  implicit def seq[D, G](implicit subMapping: SingleMapping[D, G]): ListMapping[D, G]      = subMapping.sequence
+  implicit def set[D, G](implicit subMapping: SingleMapping[D, G]): SetMapping[D, G]       = subMapping.set
+  def enum[E <: Enumeration](e: E): SingleMapping[E#Value, String]                         = SingleMapping[E#Value, String]("", e => Some(e.toString), e.withName(_))
 }
 
 sealed abstract class Mapping[D, SD: ClassTag, G: ClassTag] extends UniMapping[D] with Converter[SD] {

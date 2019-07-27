@@ -101,10 +101,10 @@ trait Database {
 
 abstract class BaseDatabase extends Database {
   val idMapping: SingleMapping[UUID, String]          = SingleMapping[UUID, String]("", uuid => Some(uuid.toString), UUID.fromString)
-  val createdAtMapping: SingleMapping[Date, Date]     = UniMapping.dateMapping
-  val createdByMapping: SingleMapping[String, String] = UniMapping.stringMapping
-  val updatedAtMapping: OptionMapping[Date, Date]     = UniMapping.dateMapping.optional
-  val updatedByMapping: OptionMapping[String, String] = UniMapping.stringMapping.optional
+  val createdAtMapping: SingleMapping[Date, Date]     = UniMapping.date
+  val createdByMapping: SingleMapping[String, String] = UniMapping.string
+  val updatedAtMapping: OptionMapping[Date, Date]     = UniMapping.date.optional
+  val updatedByMapping: OptionMapping[String, String] = UniMapping.string.optional
 
   val binaryMapping: SingleMapping[Array[Byte], String] =
     SingleMapping[Array[Byte], String]("", data => Some(Base64.getEncoder.encodeToString(data)), Base64.getDecoder.decode)
@@ -328,16 +328,16 @@ abstract class BaseDatabase extends Database {
     override def create(binary: Binary)(implicit db: Database, graph: Graph): Vertex = {
       val v    = graph.addVertex("binary")
       val data = Base64.getEncoder.encodeToString(binary.data)
-      setSingleProperty(v, "binary", data, UniMapping.stringMapping)
+      setSingleProperty(v, "binary", data, UniMapping.string)
       setSingleProperty(v, "_id", UUID.randomUUID, idMapping)
       v
     }
     override type E = Binary
     override val label: String                                = "binary"
     override val indexes: Seq[(IndexType.Value, Seq[String])] = Nil
-    override val fields: Map[String, Mapping[_, _, _]]        = Map("binary" -> UniMapping.stringMapping)
+    override val fields: Map[String, Mapping[_, _, _]]        = Map("binary" -> UniMapping.string)
     override def toDomain(element: Vertex)(implicit db: Database): Binary with Entity = {
-      val base64Data = getSingleProperty[String, String](element, "binary", UniMapping.stringMapping)
+      val base64Data = getSingleProperty[String, String](element, "binary", UniMapping.string)
       val data       = Base64.getDecoder.decode(base64Data)
       new Binary(data) with Entity {
         override val _id: String                = element.id().toString

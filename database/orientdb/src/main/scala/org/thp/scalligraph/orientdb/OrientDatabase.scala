@@ -73,13 +73,13 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
 
   override def version(module: String): Int =
     tryTransaction { implicit graph =>
-      Success(getVariablesVertex.fold(0)(v => getSingleProperty(v, s"${module}_version", UniMapping.intMapping)))
+      Success(getVariablesVertex.fold(0)(v => getSingleProperty(v, s"${module}_version", UniMapping.int)))
     }.get
 
   override def setVersion(module: String, v: Int): Unit =
     tryTransaction { implicit graph =>
       val variables = getVariablesVertex.getOrElse(graph.addVertex("variables"))
-      Success(setSingleProperty(variables, s"${module}_version", v, UniMapping.intMapping))
+      Success(setSingleProperty(variables, s"${module}_version", v, UniMapping.int))
     }.get
 
   private def createElementSchema(schema: OSchema, model: Model, superClassName: String, strict: Boolean): OClass = {

@@ -3,29 +3,29 @@ package org.thp.scalligraph.graphql
 import java.io.FileNotFoundException
 
 import scala.concurrent.duration._
-import scala.concurrent.{ Await, ExecutionContext }
+import scala.concurrent.{Await, ExecutionContext}
 import scala.io.Source
 import scala.util.control.NonFatal
-import scala.util.{ Failure, Try }
+import scala.util.{Failure, Try}
 
-import play.api.libs.json.{ JsObject, JsValue, Json }
+import play.api.libs.json.{JsObject, JsValue, Json}
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
-import play.api.{ Configuration, Environment }
+import play.api.{Configuration, Environment}
 
 import gremlin.scala._
 import org.specs2.matcher.MatchResult
-import org.specs2.specification.core.{ Fragment, Fragments }
-import org.thp.scalligraph.auth.{ AuthContext, AuthContextImpl }
+import org.specs2.specification.core.{Fragment, Fragments}
+import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.query.AuthGraph
-import org.thp.scalligraph.{ AppBuilder, UnthreadedExecutionContext }
+import org.thp.scalligraph.{AppBuilder, UnthreadedExecutionContext}
 import sangria.ast.Document
 import sangria.execution.Executor
 import sangria.marshalling.playJson._
 import sangria.parser.QueryParser
 import sangria.renderer.SchemaRenderer
-import sangria.schema.{ Schema => SangriaSchema }
+import sangria.schema.{Schema => SangriaSchema}
 
 class SangriaTest extends PlaySpecification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)

@@ -33,11 +33,11 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
     }
     val model = c.Expr[Model.Vertex[E]](q"""
       import java.util.Date
-      import scala.concurrent.{ ExecutionContext, Future }
-      import gremlin.scala.{ Graph, Vertex }
-      import scala.util.{ Failure, Try }
-      import org.thp.scalligraph.{ FPath, InternalError }
-      import org.thp.scalligraph.models.{ Database, Entity, IndexType, Mapping, Model, UniMapping, VertexModel }
+      import scala.concurrent.{ExecutionContext, Future}
+      import gremlin.scala.{Graph, Vertex}
+      import scala.util.{Failure, Try}
+      import org.thp.scalligraph.{FPath, InternalError}
+      import org.thp.scalligraph.models.{Database, Entity, IndexType, Mapping, Model, UniMapping, VertexModel}
 
       new VertexModel { thisModel ⇒
         override type E = $entityType
@@ -58,10 +58,10 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
         override def toDomain(element: ElementType)(implicit db: Database): EEntity = new $entityType(..$domainBuilder) with Entity {
           val _id        = element.value[String]("_id")
           val _model     = thisModel
-          val _createdAt = db.getProperty(element, "_createdAt", UniMapping.dateMapping)
-          val _createdBy = db.getProperty(element, "_createdBy", UniMapping.stringMapping)
-          val _updatedAt = db.getProperty(element, "_updatedAt", UniMapping.dateMapping.optional)
-          val _updatedBy = db.getProperty(element, "_updatedBy", UniMapping.stringMapping.optional)
+          val _createdAt = db.getProperty(element, "_createdAt", UniMapping.date)
+          val _createdBy = db.getProperty(element, "_createdBy", UniMapping.string)
+          val _updatedAt = db.getProperty(element, "_updatedAt", UniMapping.date.optional)
+          val _updatedBy = db.getProperty(element, "_updatedBy", UniMapping.string.optional)
         }
       }
       """)
@@ -93,11 +93,11 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
     }
     val model = c.Expr[Model.Edge[E, FROM, TO]](q"""
       import java.util.Date
-      import scala.concurrent.{ ExecutionContext, Future }
+      import scala.concurrent.{ExecutionContext, Future}
       import scala.util.Try
-      import gremlin.scala.{ Edge, Graph, Vertex }
-      import org.thp.scalligraph.{ FPath, InternalError }
-      import org.thp.scalligraph.models.{ Database, EdgeModel, Entity, IndexType, Mapping, Model, UniMapping }
+      import gremlin.scala.{Edge, Graph, Vertex}
+      import org.thp.scalligraph.{FPath, InternalError}
+      import org.thp.scalligraph.models.{Database, EdgeModel, Entity, IndexType, Mapping, Model, UniMapping}
 
       new EdgeModel[$fromType, $toType] { thisModel ⇒
         override type E = $entityType
@@ -121,10 +121,10 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
         override def toDomain(element: ElementType)(implicit db: Database): EEntity = new $entityType(..$domainBuilder) with Entity {
           val _id        = element.value[String]("_id")
           val _model     = thisModel
-          val _createdAt = db.getProperty(element, "_createdAt", UniMapping.dateMapping)
-          val _createdBy = db.getProperty(element, "_createdBy", UniMapping.stringMapping)
-          val _updatedAt = db.getProperty(element, "_updatedAt", UniMapping.dateMapping.optional)
-          val _updatedBy = db.getProperty(element, "_updatedBy", UniMapping.stringMapping.optional)
+          val _createdAt = db.getProperty(element, "_createdAt", UniMapping.date)
+          val _createdBy = db.getProperty(element, "_createdBy", UniMapping.string)
+          val _updatedAt = db.getProperty(element, "_updatedAt", UniMapping.date.optional)
+          val _updatedBy = db.getProperty(element, "_updatedBy", UniMapping.string.optional)
 
         }
       }

@@ -48,16 +48,16 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
       toDomainFn = (g: String) => "Mister " + g
     )
     PublicPropertyListBuilder[PersonSteps]
-      .property("createdBy", UniMapping.stringMapping)(_.rename("_createdBy").readonly)
+      .property("createdBy", UniMapping.string)(_.rename("_createdBy").readonly)
       .property("label", labelMapping)(_.rename("name").updatable)
-      .property("name", UniMapping.stringMapping)(_.simple.updatable)
-      .property("age", UniMapping.intMapping)(_.simple.updatable)
+      .property("name", UniMapping.string)(_.simple.updatable)
+      .property("age", UniMapping.int)(_.simple.updatable)
       .build :::
       PublicPropertyListBuilder[SoftwareSteps]
-        .property("createdBy", UniMapping.stringMapping)(_.rename("_createdBy").readonly)
-        .property("name", UniMapping.stringMapping)(_.simple.updatable)
-        .property("lang", UniMapping.stringMapping)(_.simple.updatable)
-        .property("any", UniMapping.stringMapping)(
+        .property("createdBy", UniMapping.string)(_.rename("_createdBy").readonly)
+        .property("name", UniMapping.string)(_.simple.updatable)
+        .property("lang", UniMapping.string)(_.simple.updatable)
+        .property("any", UniMapping.string)(
           _.derived(_.value[String]("_createdBy"), _.value[String]("name"), _.value[String]("lang")).readonly
         )
         .build

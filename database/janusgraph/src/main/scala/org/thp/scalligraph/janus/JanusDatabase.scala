@@ -278,7 +278,7 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
     setSingleProperty(createdVertex, "_id", UUID.randomUUID, idMapping)
     setSingleProperty(createdVertex, "_createdAt", new Date, createdAtMapping)
     setSingleProperty(createdVertex, "_createdBy", authContext.userId, createdByMapping)
-    setSingleProperty(createdVertex, "_label", model.label, UniMapping.stringMapping)
+    setSingleProperty(createdVertex, "_label", model.label, UniMapping.string)
     logger.trace(s"Created vertex is ${Model.printElement(createdVertex)}")
     model.toDomain(createdVertex)(this)
   }
@@ -299,7 +299,7 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
       setSingleProperty(createdEdge, "_id", UUID.randomUUID, idMapping)
       setSingleProperty(createdEdge, "_createdAt", new Date, createdAtMapping)
       setSingleProperty(createdEdge, "_createdBy", authContext.userId, createdByMapping)
-      setSingleProperty(createdEdge, "_label", model.label, UniMapping.stringMapping)
+      setSingleProperty(createdEdge, "_label", model.label, UniMapping.string)
       logger.trace(s"Create edge ${model.label} from $f to $t: ${Model.printElement(createdEdge)}")
       model.toDomain(createdEdge)(this)
     }

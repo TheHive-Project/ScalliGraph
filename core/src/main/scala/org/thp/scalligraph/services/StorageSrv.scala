@@ -156,19 +156,19 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
       .takeWhile(_.nonEmpty)
       .map { data =>
         val v = graph.addVertex("binary")
-        db.setSingleProperty(v, "binary", data, UniMapping.stringMapping)
+        db.setSingleProperty(v, "binary", data, UniMapping.string)
         db.setSingleProperty(v, "_id", UUID.randomUUID, db.idMapping)
         v
       }
     if (chunks.isEmpty) {
       logger.debug("Saving empty file")
       val v = graph.addVertex("binary")
-      db.setSingleProperty(v, "binary", "", UniMapping.stringMapping)
-      db.setSingleProperty(v, "attachmentId", id, UniMapping.stringMapping)
+      db.setSingleProperty(v, "binary", "", UniMapping.string)
+      db.setSingleProperty(v, "attachmentId", id, UniMapping.string)
       db.setSingleProperty(v, "_id", UUID.randomUUID, db.idMapping)
     } else {
       val firstVertex = chunks.next
-      db.setSingleProperty(firstVertex, "attachmentId", id, UniMapping.stringMapping)
+      db.setSingleProperty(firstVertex, "attachmentId", id, UniMapping.string)
       chunks.foldLeft(firstVertex) {
         case (previousVertex, currentVertex) =>
           previousVertex.addEdge("nextChunk", currentVertex)

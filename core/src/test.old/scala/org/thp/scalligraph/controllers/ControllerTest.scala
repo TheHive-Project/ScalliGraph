@@ -1,20 +1,19 @@
 package org.thp.scalligraph.controllers
 
+import akka.stream.scaladsl.Source
+import org.thp.scalligraph.ErrorHandler
+import play.api.inject.guice.GuiceApplicationBuilder
+import play.api.libs.json.Json
+import play.api.mvc.{AnyContentAsJson, DefaultActionBuilder, Results}
+import play.api.{Application, Configuration, Environment}
+
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.util.Success
 
-import play.api.inject.guice.GuiceApplicationBuilder
-import play.api.libs.json.Json
-import play.api.mvc.{ AnyContentAsJson, DefaultActionBuilder, Results }
-import play.api.{ Application, Configuration, Environment }
-
-import akka.stream.scaladsl.Source
-import org.thp.scalligraph.ErrorHandler
-
 class ControllerTest extends PlaySpecification with Mockito {
-  lazy val app: Application           = new GuiceApplicationBuilder().build()
-  implicit val ee: ExecutionEnv       = ExecutionEnv.fromGlobalExecutionContext
+  lazy val app: Application     = new GuiceApplicationBuilder().build()
+  implicit val ee: ExecutionEnv = ExecutionEnv.fromGlobalExecutionContext
 
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 

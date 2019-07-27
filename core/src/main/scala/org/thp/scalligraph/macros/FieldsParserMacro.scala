@@ -84,7 +84,7 @@ trait FieldsParserUtil extends MacroLogger with MacroUtil {
               } yield {
                 val builderName = TermName(c.freshName())
                 q"""
-                  import org.scalactic.{ Bad, Every }
+                  import org.scalactic.{Bad, Every}
                   import org.thp.scalligraph.AttributeError
 
                   val $builderName = $builder

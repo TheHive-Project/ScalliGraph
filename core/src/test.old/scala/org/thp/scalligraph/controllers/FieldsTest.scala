@@ -6,7 +6,7 @@ import java.nio.file.Path
 import play.api.libs.Files
 import play.api.libs.Files.TemporaryFileCreator
 import play.api.mvc.MultipartFormData.FilePart
-import play.api.mvc.{ AnyContentAsMultipartFormData, Headers, MultipartFormData }
+import play.api.mvc.{AnyContentAsMultipartFormData, Headers, MultipartFormData}
 
 case class FakeTemporaryFile(name: String) extends Files.TemporaryFile {
   def file                                       = new File(name)
