@@ -1,21 +1,22 @@
 package org.thp.scalligraph.controllers
 
-import scala.util.Success
-
+import akka.stream.Materializer
+import org.specs2.concurrent.ExecutionEnv
+import org.specs2.mock.Mockito
+import org.thp.scalligraph.ErrorHandler
+import org.thp.scalligraph.auth.AuthSrv
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.libs.json.Json
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.mvc.{AnyContentAsJson, DefaultActionBuilder, Results}
-import play.api.test.{FakeRequest, Helpers, PlaySpecification}
+import play.api.test.{FakeRequest, Helpers, NoMaterializer, PlaySpecification}
 import play.api.{Application, Configuration, Environment}
 
-import org.specs2.concurrent.ExecutionEnv
-import org.specs2.mock.Mockito
-import org.thp.scalligraph.ErrorHandler
+import scala.util.Success
 
-class ControllerTest extends PlaySpecification with Mockito {
-  lazy val app: Application     = new GuiceApplicationBuilder().build()
-  implicit val ee: ExecutionEnv = ExecutionEnv.fromGlobalExecutionContext
+class ControllerTest(implicit executionEnv: ExecutionEnv) extends PlaySpecification with Mockito {
+  lazy val app: Application      = new GuiceApplicationBuilder().build()
+  implicit val mat: Materializer = NoMaterializer
 
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
@@ -24,7 +25,7 @@ class ControllerTest extends PlaySpecification with Mockito {
     "extract simple class from HTTP request" in {
 
       val actionBuilder = DefaultActionBuilder(Helpers.stubBodyParser())
-      val entryPoint    = new EntryPoint(mock[AuthenticateSrv], actionBuilder, new ErrorHandler, ee.ec)
+      val entryPoint    = new EntryPoint(mock[AuthSrv], actionBuilder, new ErrorHandler, executionEnv.ec)
 
       val action = entryPoint("model extraction")
         .extract("simpleClass", FieldsParser[SimpleClassForFieldsParserMacroTest]) { req =>

@@ -1,32 +1,31 @@
 package org.thp.scalligraph.controllers
 
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Try
-
-import play.api.Logger
-import play.api.http.HttpErrorHandler
-import play.api.libs.json.Json
-import play.api.mvc.Results.BadRequest
-import play.api.mvc._
-
 import gremlin.scala.Graph
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.AttributeCheckingError
+import org.thp.scalligraph.auth.AuthSrv
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.record.Record
+import play.api.Logger
+import play.api.http.HttpErrorHandler
+import play.api.libs.json.Json
+import play.api.mvc._
 import shapeless.labelled.FieldType
 import shapeless.{::, labelled, HList, HNil, Witness}
+
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Try
 
 /**
   * API entry point. This class create a controller action which parse request and check authentication
   *
-  * @param authenticateSrv method that check user authentication
+  * @param authSrv method that check user authentication
   * @param actionBuilder ActionBuilder
   * @param ec            ExecutionContext
   */
 @Singleton
 class EntryPoint @Inject()(
-    authenticateSrv: AuthenticateSrv,
+    authSrv: AuthSrv,
     actionBuilder: DefaultActionBuilder,
     errorHandler: HttpErrorHandler,
     implicit val ec: ExecutionContext
@@ -66,21 +65,21 @@ class EntryPoint @Inject()(
     def extract[T](fieldName: Witness, fp: FieldsParser[T]): EntryPointBuilder[FieldType[fieldName.T, T] :: V] =
       EntryPointBuilder(name, fieldsParser.andThen(fieldName.toString)(fp)(labelled.field[fieldName.T](_) :: _))
 
+    val AuthenticationFailureActionFunction: ActionFunction[Request, AuthenticatedRequest] =
+      new ActionFunction[Request, AuthenticatedRequest] {
+        override def invokeBlock[A](request: Request[A], block: AuthenticatedRequest[A] => Future[Result]): Future[Result] =
+          Future.successful(Results.Unauthorized(Json.obj("type" -> "AuthenticationError", "message" -> "Authentication failure")))
+        override protected def executionContext: ExecutionContext = ec
+      }
+
     /**
       * Add an authentication check to this entry point.
       *
       * @return a new entry point with added authentication check
       */
     def auth(block: AuthenticatedRequest[Record[V]] => Try[Result]): Action[AnyContent] =
-      actionBuilder.async { request =>
-        val result = for {
-          authContext <- authenticateSrv.getAuthContext(request)
-          values      <- fieldsParser(Field(request)).badMap(errors => AttributeCheckingError(errors.toSeq)).toTry
-          authRequest = new AuthenticatedRequest(authContext, request.map(_ => Record(values)))
-          result <- block(authRequest)
-          authResult = authenticateSrv.setSessingUser(result, authContext)(request)
-        } yield authResult
-        result.fold[Future[Result]](errorHandler.onServerError(request, _), Future.successful)
+      asyncAuth { request =>
+        block(request).fold(errorHandler.onServerError(request, _), Future.successful)
       }
 
     /**
@@ -90,29 +89,17 @@ class EntryPoint @Inject()(
       * @return
       */
     def asyncAuth(block: AuthenticatedRequest[Record[V]] => Future[Result]): Action[AnyContent] =
-      actionBuilder.async { request =>
-        val result = for {
-          authContext <- Future.fromTry(authenticateSrv.getAuthContext(request))
-          values      <- Future.fromTry(fieldsParser(Field(request)).badMap(errors => AttributeCheckingError(errors.toSeq)).toTry)
-          authRequest = new AuthenticatedRequest(authContext, request.map(_ => Record(values)))
-          result <- block(authRequest)
-          authResult = authenticateSrv.setSessingUser(result, authContext)(request)
-        } yield authResult
-
-        result
-      }
+      actionBuilder
+        .andThen(authSrv.actionFunction(AuthenticationFailureActionFunction))
+        .async { request =>
+          fieldsParser(Field(request))
+            .fold(v => block(request.map(_ => Record(v))), e => errorHandler.onServerError(request, AttributeCheckingError(e.toSeq)))
+        }
 
     def authTransaction(
         db: Database
     )(block: AuthenticatedRequest[Record[V]] => Graph => Try[Result]): Action[AnyContent] =
-      apply { request =>
-        val result = authenticateSrv.getAuthContext(request).flatMap { authContext =>
-          val authReq = new AuthenticatedRequest(authContext, request)
-          db.tryTransaction(graph => block(authReq)(graph))
-            .map(result => authenticateSrv.setSessingUser(result, authContext)(request))
-        }
-        result
-      }
+      auth(request => db.tryTransaction(graph => block(request)(graph)))
 
     /**
       * Materialize action using a function that transform request into response
@@ -121,9 +108,8 @@ class EntryPoint @Inject()(
       * @return Action
       */
     def apply(block: Request[Record[V]] => Try[Result]): Action[AnyContent] =
-      async { r =>
-        block(r)
-          .fold[Future[Result]](errorHandler.onServerError(r, _), Future.successful)
+      async { request =>
+        block(request).fold(errorHandler.onServerError(request, _), Future.successful)
       }
 
     /**
@@ -135,10 +121,7 @@ class EntryPoint @Inject()(
     def async(block: Request[Record[V]] => Future[Result]): Action[AnyContent] =
       actionBuilder.async { request =>
         fieldsParser(Field(request))
-          .fold[Future[Result]](
-            values => block(request.map(_ => Record(values))),
-            errors => Future.successful(BadRequest(Json.toJson(AttributeCheckingError(errors.toSeq))))
-          )
+          .fold(v => block(request.map(_ => Record(v))), e => errorHandler.onServerError(request, AttributeCheckingError(e.toSeq)))
       }
   }
 }

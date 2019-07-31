@@ -2,14 +2,13 @@ package org.thp.scalligraph.controllers
 
 import java.nio.file.Path
 
-import scala.collection.immutable
-
+import org.scalactic.Good
+import org.thp.scalligraph.{FPath, FPathElem, FPathElemInSeq, FPathEmpty, FPathSeq}
 import play.api.Logger
 import play.api.libs.json._
 import play.api.mvc._
 
-import org.scalactic.Good
-import org.thp.scalligraph.{FPath, FPathElem, FPathElemInSeq, FPathEmpty, FPathSeq}
+import scala.collection.immutable
 
 sealed trait Field {
   def get(pathElement: String): Field = FUndefined
@@ -36,28 +35,28 @@ object Field {
     case JsNull       => FNull
   }
 
-  def apply(request: Request[AnyContent]): Field = {
-    def queryFields: FObject =
-      FObject(
-        request
-          .queryString
-          .collect {
-            case (k, v) if k.nonEmpty => k -> FAny(v)
-          }
-          .toMap
-      )
+  def apply(request: Request[AnyContent]): Field =
+    apply(request.body) ++ FObject(
+      request
+        .queryString
+        .collect {
+          case (k, v) if k.nonEmpty => k -> FAny(v)
+        }
+        .toMap
+    )
 
-    request.body match {
+  def apply(body: AnyContent): FObject =
+    body match {
       case AnyContentAsFormUrlEncoded(data) =>
-        FObject(data.map { case (k, v) => k -> FAny(v) }.toMap) ++ queryFields
+        FObject(data.map { case (k, v) => k -> FAny(v) }.toMap)
       case AnyContentAsText(txt) =>
         logger.warn(s"Request body has unrecognized format (text), it is ignored:\n$txt")
-        queryFields
+        FObject()
       case AnyContentAsXml(xml) =>
         logger.warn(s"Request body has unrecognized format (xml), it is ignored:\n$xml")
-        queryFields
+        FObject()
       case AnyContentAsJson(json: JsObject) =>
-        Field(json).asInstanceOf[FObject] ++ queryFields
+        Field(json).asInstanceOf[FObject]
       case AnyContentAsMultipartFormData(MultipartFormData(dataParts, files, badParts)) =>
         if (badParts.nonEmpty)
           logger.warn("Request body contains invalid parts")
@@ -75,19 +74,19 @@ object Field {
               .toMap
           }
           .getOrElse(Map.empty)
-        files.foldLeft(queryFields ++ FObject(dataFields)) {
+        files.foldLeft(FObject(dataFields)) {
           case (obj, MultipartFormData.FilePart(key, filename, contentType, file, _, _)) =>
             obj.set(FPath(key), FFile(filename.split("[/\\\\]").last, file, contentType.getOrElse("application/octet-stream")))
         }
       case AnyContentAsRaw(raw) =>
         if (raw.size > 0)
-          logger.warn(s"Request $request has unrecognized body format (raw), it is ignored:\n$raw")
-        queryFields
-      case AnyContentAsEmpty => queryFields
+          logger.warn(s"Request has unrecognized body format (raw), it is ignored:\n$raw")
+        FObject()
+      case AnyContentAsEmpty => FObject()
       case other =>
-        sys.error(s"invalid request body : $other (${other.getClass})")
+        logger.warn(s"Unknown request body type : $other (${other.getClass})")
+        FObject()
     }
-  }
 
   implicit val fieldWrites: Writes[Field] = Writes[Field](field => JsString(field.toString))
   implicit val parser: FieldsParser[Field] = FieldsParser[Field]("Field") {

@@ -1,21 +1,41 @@
 package org.thp.scalligraph.auth
 
-import scala.collection.immutable
-import scala.util.{Failure, Try}
+import javax.inject.{Inject, Singleton}
+import org.thp.scalligraph.controllers.AuthenticatedRequest
+import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError}
+import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
+import play.api.{ConfigLoader, Configuration}
 
-import play.api.Logger
-import play.api.mvc.RequestHeader
-
-import javax.inject.{Inject, Provider, Singleton}
-import org.thp.scalligraph.{AuthenticationError, AuthorizationError, OAuth2Redirect}
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success, Try}
 
 object AuthCapability extends Enumeration {
-  val changePassword, setPassword, authByKey = Value
+  val changePassword, setPassword, authByKey, sso = Value
+}
+
+@Singleton
+class RequestOrganisation(organisationHeader: String) extends (Request[_] => Option[String]) {
+  @Inject() def this(configuration: Configuration) = this(configuration.get[String]("auth.organisationHeader"))
+  override def apply(request: Request[_]): Option[String] = request.headers.get(organisationHeader)
+}
+
+trait AuthSrvProvider extends (Configuration => Try[AuthSrv]) {
+  val name: String
+  implicit class RichConfig(configuration: Configuration) {
+
+    def getOrFail[A: ConfigLoader](path: String): Try[A] =
+      configuration
+        .getOptional[A](path)
+        .fold[Try[A]](Failure(BadConfigurationError(s"Configuration $path is missing")))(Success(_))
+  }
 }
 
 trait AuthSrv {
   val name: String
-  val capabilities = Set.empty[AuthCapability.Value]
+  def capabilities = Set.empty[AuthCapability.Value]
+
+  def actionFunction(nextFunction: ActionFunction[Request, AuthenticatedRequest]): ActionFunction[Request, AuthenticatedRequest] =
+    nextFunction
 
   def authenticate(username: String, password: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
     Failure(AuthenticationError("Operation not supported"))
@@ -23,8 +43,11 @@ trait AuthSrv {
   def authenticate(key: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
     Failure(AuthenticationError("Operation not supported"))
 
+  @deprecated("should not be useful any longer. Use ActionFunction", "0.2")
   def authenticate(organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
     Failure(AuthenticationError("Operation not supported"))
+
+  def setSessionUser(authContext: AuthContext): Result => Result = identity
 
   def changePassword(username: String, oldPassword: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] =
     Failure(AuthorizationError("Operation not supported"))
@@ -42,66 +65,23 @@ trait AuthSrv {
     Failure(AuthorizationError("Operation not supported"))
 }
 
-object MultiAuthSrv {
-  private[MultiAuthSrv] lazy val logger = Logger(getClass)
-}
+trait AuthSrvWithActionFunction extends AuthSrv {
 
-@Singleton
-class MultiAuthSrvProvider @Inject()(val authProviders: immutable.Set[AuthSrv]) extends Provider[AuthSrv] {
-  override def get(): AuthSrv = new MultiAuthSrv(authProviders)
-}
+  protected def ec: ExecutionContext
 
-class MultiAuthSrv(val authProviders: immutable.Set[AuthSrv]) extends AuthSrv {
-  val name: String                                     = "multi"
-  override val capabilities: Set[AuthCapability.Value] = authProviders.flatMap(_.capabilities)
+  def getAuthContext[A](request: Request[A]): Option[AuthContext]
 
-  private[auth] def forAllAuthProvider[A](body: AuthSrv => Try[A]): Try[A] =
-    authProviders.foldLeft[Try[A]](Failure(new Exception("no authentication provider found"))) { (f, a) =>
-      f.recoverWith {
-        case _ =>
-          val r = body(a)
-          r.failed.foreach(error => MultiAuthSrv.logger.debug(s"${a.name} ${error.getClass.getSimpleName} ${error.getMessage}"))
-          r
-      }
+  def transformResult[A](request: Request[A], authContext: AuthContext): Result => Result = identity
+
+  override def actionFunction(nextFunction: ActionFunction[Request, AuthenticatedRequest]): ActionFunction[Request, AuthenticatedRequest] =
+    new ActionFunction[Request, AuthenticatedRequest] {
+      override def invokeBlock[A](request: Request[A], block: AuthenticatedRequest[A] => Future[Result]): Future[Result] =
+        getAuthContext(request)
+          .fold(nextFunction.invokeBlock(request, block)) { authContext =>
+            block(new AuthenticatedRequest(authContext, request))
+              .map(transformResult(request, authContext))(ec)
+          }
+
+      override protected def executionContext: ExecutionContext = ec
     }
-
-  override def authenticate(username: String, password: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
-    forAllAuthProvider(_.authenticate(username, password, organisation))
-      .recoverWith {
-        case authError =>
-          MultiAuthSrv.logger.error("Authentication failure", authError)
-          Failure(AuthenticationError("Authentication failure"))
-      }
-
-  override def authenticate(key: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
-    forAllAuthProvider(_.authenticate(key, organisation))
-      .recoverWith {
-        case authError =>
-          MultiAuthSrv.logger.error("Authentication failure", authError)
-          Failure(AuthenticationError("Authentication failure"))
-      }
-
-  override def authenticate(organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
-    forAllAuthProvider(_.authenticate(organisation: Option[String]))
-      .recoverWith {
-        case e: OAuth2Redirect => Failure(e)
-        case authError =>
-          MultiAuthSrv.logger.error("Authentication failure", authError)
-          Failure(AuthenticationError("Authentication failure"))
-      }
-
-  override def changePassword(username: String, oldPassword: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] =
-    forAllAuthProvider(_.changePassword(username, oldPassword, newPassword))
-
-  override def setPassword(username: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] =
-    forAllAuthProvider(_.setPassword(username, newPassword))
-
-  override def renewKey(username: String)(implicit authContext: AuthContext): Try[String] =
-    forAllAuthProvider(_.renewKey(username))
-
-  override def getKey(username: String)(implicit authContext: AuthContext): Try[String] =
-    forAllAuthProvider(_.getKey(username))
-
-  override def removeKey(username: String)(implicit authContext: AuthContext): Try[Unit] =
-    forAllAuthProvider(_.removeKey(username))
 }
