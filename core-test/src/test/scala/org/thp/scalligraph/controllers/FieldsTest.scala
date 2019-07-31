@@ -12,14 +12,15 @@ import play.api.test.{FakeRequest, NoTemporaryFileCreator, PlaySpecification}
 import org.specs2.mock.Mockito
 import org.thp.scalligraph.FPath
 
-case class FakeTemporaryFile(name: String) extends Files.TemporaryFile {
-  def file                                       = new File(name)
+case class FakeTemporaryFile(file: File) extends Files.TemporaryFile {
   def path: Path                                 = file.toPath
   def temporaryFileCreator: TemporaryFileCreator = NoTemporaryFileCreator
 }
 
 object FakeTemporaryFile {
-  def apply(): Files.TemporaryFile = FakeTemporaryFile("temporaryFileName")
+  def apply(): Files.TemporaryFile                    = FakeTemporaryFile.fromFile("temporaryFileName")
+  def fromFile(name: String): Files.TemporaryFile     = FakeTemporaryFile(new File(name))
+  def fromResource(name: String): Files.TemporaryFile = FakeTemporaryFile(new File(getClass.getResource("/report-templates.zip").toURI))
 }
 
 class FieldsTest extends PlaySpecification with Mockito {
