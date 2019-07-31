@@ -47,6 +47,15 @@ class AppBuilder extends ScalaModule {
     this
   }
 
+  def multiBindInstance[T: Manifest](implementations: T*): AppBuilder = {
+    if (initialized) throw InternalError("Bind is not permitted after app use")
+    init = init.andThen { _ =>
+      val multiBindings = ScalaMultibinder.newSetBinder[T](binder)
+      implementations.foreach(i => multiBindings.addBinding.toInstance(i))
+    }
+    this
+  }
+
   def bindInstance[T: Manifest](instance: T): AppBuilder = {
     if (initialized) throw InternalError("Bind is not permitted after app use")
     init = init.andThen(_ => bind[T].toInstance(instance))
