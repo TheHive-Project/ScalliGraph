@@ -56,7 +56,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
 
         override val fields: Map[String, Mapping[_, _, _]] = Map(..$fieldMap)
         override def toDomain(element: ElementType)(implicit db: Database): EEntity = new $entityType(..$domainBuilder) with Entity {
-          val _id        = element.value[String]("_id")
+          val _id        = element.id().toString
           val _model     = thisModel
           val _createdAt = db.getProperty(element, "_createdAt", UniMapping.date)
           val _createdBy = db.getProperty(element, "_createdBy", UniMapping.string)
@@ -119,7 +119,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
         }
         override val fields: Map[String, Mapping[_, _, _]] = Map(..$fieldMap)
         override def toDomain(element: ElementType)(implicit db: Database): EEntity = new $entityType(..$domainBuilder) with Entity {
-          val _id        = element.value[String]("_id")
+          val _id        = element.id().toString
           val _model     = thisModel
           val _createdAt = db.getProperty(element, "_createdAt", UniMapping.date)
           val _createdBy = db.getProperty(element, "_createdBy", UniMapping.string)

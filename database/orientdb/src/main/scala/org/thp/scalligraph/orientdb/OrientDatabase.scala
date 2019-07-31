@@ -225,4 +225,5 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
 //    v.property(attachmentPropertyName, chunkIds.asJava)
 //    v
 //  }
+  override def isValidId(id: String): Boolean = ???
 }

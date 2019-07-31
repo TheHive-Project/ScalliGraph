@@ -2,18 +2,17 @@ package org.thp.scalligraph.orientdb
 import java.io.InputStream
 import java.util.{Base64, List => JList}
 
-import scala.collection.JavaConverters._
-import scala.util.{Success, Try}
-
-import play.api.Configuration
-
 import com.orientechnologies.orient.core.db.record.OIdentifiable
 import com.orientechnologies.orient.core.intent.OIntentMassiveInsert
 import com.orientechnologies.orient.core.record.impl.ORecordBytes
-import gremlin.scala.{Graph, Key, _}
+import gremlin.scala._
 import javax.inject.{Inject, Singleton}
 import org.apache.tinkerpop.gremlin.orientdb.OrientGraph
 import org.thp.scalligraph.services.StorageSrv
+import play.api.Configuration
+
+import scala.collection.JavaConverters._
+import scala.util.{Success, Try}
 
 @Singleton
 class OrientDatabaseStorageSrv(db: OrientDatabase, chunkSize: Int) extends StorageSrv {
@@ -34,7 +33,7 @@ class OrientDatabaseStorageSrv(db: OrientDatabase, chunkSize: Int) extends Stora
     def apply(id: String): Option[State] = db.noTransaction { implicit graph =>
       graph
         .V()
-        .has(Key("_id") of id)
+        .hasId(id)
         .value[JList[OIdentifiable]]("binary")
         .headOption()
         .fold(List.empty[OIdentifiable])(_.asScala.toList) match {
@@ -54,6 +53,7 @@ class OrientDatabaseStorageSrv(db: OrientDatabase, chunkSize: Int) extends Stora
       private var state = State(id)
       private var index = 0
 
+      @scala.annotation.tailrec
       override def read(): Int =
         state match {
           case Some(State(_, b)) if b.length > index =>
@@ -84,7 +84,7 @@ class OrientDatabaseStorageSrv(db: OrientDatabase, chunkSize: Int) extends Stora
       .toSeq
     odb.declareIntent(null)
     val v = graph.addVertex(db.attachmentVertexLabel)
-    v.property("_id", id)
+    v.property("_id", id) // FIXME:ID
     v.property(db.attachmentPropertyName, chunkIds.asJava)
     Success(())
   }

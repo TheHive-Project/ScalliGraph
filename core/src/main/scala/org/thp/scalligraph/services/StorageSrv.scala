@@ -3,18 +3,17 @@ package org.thp.scalligraph.services
 import java.io.{ByteArrayInputStream, InputStream}
 import java.net.URI
 import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
-import java.util.{Base64, UUID}
-
-import scala.util.{Success, Try}
-
-import play.api.{Configuration, Logger}
+import java.util.Base64
 
 import gremlin.scala._
 import javax.inject.{Inject, Singleton}
 import org.apache.hadoop.conf.{Configuration => HadoopConfig}
 import org.apache.hadoop.fs.{FileSystem => HDFileSystem, Path => HDPath}
 import org.apache.hadoop.io.IOUtils
-import org.thp.scalligraph.models.{Database, UniMapping, ValueMap}
+import org.thp.scalligraph.models.{Database, UniMapping}
+import play.api.{Configuration, Logger}
+
+import scala.util.{Success, Try}
 
 trait StorageSrv {
   def loadBinary(id: String): InputStream
@@ -87,18 +86,15 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
   @Inject
   def this(db: Database, configuration: Configuration) = this(db, configuration.underlying.getBytes("storage.database.chunkSize").toInt)
 
-  case class State(vertexId: String, buffer: Array[Byte]) {
+  case class State(vertexId: AnyRef, buffer: Array[Byte]) {
 
     def next: Option[State] = db.noTransaction { implicit graph =>
       graph
         .V()
-        .has(Key("_id") of vertexId)
+        .hasId(vertexId)
         .out("nextChunk")
         .headOption()
-        .map {
-          case ValueMap(valueMap) =>
-            State(valueMap.get[String]("_id"), b64decoder.decode(valueMap.get[String]("binary")))
-        }
+        .map(vertex => State(vertex.id(), b64decoder.decode(vertex.value[String]("binary"))))
     }
   }
 
@@ -108,12 +104,8 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
       graph
         .V()
         .has(Key("attachmentId") of id)
-        .valueMap("_id", "binary")
         .headOption()
-        .map {
-          case ValueMap(valueMap) =>
-            State(valueMap.get[String]("_id"), b64decoder.decode(valueMap.get[String]("binary")))
-        }
+        .map(vertex => State(vertex.id(), b64decoder.decode(vertex.value[String]("binary"))))
     }
   }
 
@@ -157,7 +149,6 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
       .map { data =>
         val v = graph.addVertex("binary")
         db.setSingleProperty(v, "binary", data, UniMapping.string)
-        db.setSingleProperty(v, "_id", UUID.randomUUID, db.idMapping)
         v
       }
     if (chunks.isEmpty) {
@@ -165,7 +156,6 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
       val v = graph.addVertex("binary")
       db.setSingleProperty(v, "binary", "", UniMapping.string)
       db.setSingleProperty(v, "attachmentId", id, UniMapping.string)
-      db.setSingleProperty(v, "_id", UUID.randomUUID, db.idMapping)
     } else {
       val firstVertex = chunks.next
       db.setSingleProperty(firstVertex, "attachmentId", id, UniMapping.string)

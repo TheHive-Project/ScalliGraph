@@ -94,7 +94,7 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
         _ = neo4jGraph
           .schema()
           .constraintFor(Label.label(model.label))
-          .assertPropertyIsUnique("_id")
+          .assertPropertyIsUnique("_id") // FIXME:ID
           .create()
         (indexType, properties) <- model.indexes
       } {
@@ -187,4 +187,5 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
 
   override def setOptionProperty[D, G](element: Element, key: String, value: Option[D], mapping: OptionMapping[D, _]): Unit =
     super.setOptionProperty(element, key, value, fixMapping(mapping))
+  override def isValidId(id: String): Boolean = ???
 }

@@ -165,7 +165,7 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
 
   lazy val typeName: String = ru.typeOf[E].toString
 
-  def get(id: String): ThisStep = newInstance(raw.has(Key("_id") of id))
+  def get(id: String): ThisStep = newInstance(raw.hasId(id))
 
   def update(fields: (String, Any)*)(implicit authContext: AuthContext): Try[E with Entity] =
     db.update(raw, fields, db.getModel[E], graph, authContext)

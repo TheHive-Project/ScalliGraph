@@ -1,7 +1,7 @@
 package org.thp.scalligraph.janus
 
 import java.nio.file.{Files, Paths}
-import java.util.{Date, Properties, UUID}
+import java.util.{Date, Properties}
 
 import com.typesafe.config.ConfigObject
 import gremlin.scala._
@@ -52,6 +52,8 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
 
   def this() = this(Configuration.load(Environment.simple()))
 
+  def isValidId(id: String): Boolean = id.forall(_.isDigit)
+
   override def noTransaction[A](body: Graph => A): A = {
     logger.debug(s"Begin of no-transaction")
     val a = body(graph)
@@ -62,9 +64,10 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
   override def tryTransaction[A](body: Graph => Try[A]): Try[A] = {
     val result =
       Retry(maxRetryOnConflict)
-        .on[PermanentLockingException]
+        .on[DatabaseException]
         .on[SchemaViolationException]
         .on[PermanentBackendException]
+        .on[PermanentLockingException]
         .withTry {
           //    val tx = graph.tx()
           //    tx.open() /*.createThreadedTx[JanusGraphTransaction]()*/
@@ -75,36 +78,32 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
           Try {
             body(tx)
               .map { a =>
+                logger.debug("Committing transaction")
                 tx.commit()
                 logger.debug("End of transaction")
+                executeTransactionCallbacks(tx)
                 a
               }
           }.flatten
-            .transform(
-              { r =>
-                executeTransactionCallbacks(tx)
-                Success(r)
-              }, {
-                case t: PermanentLockingException => Failure(new DatabaseException(cause = t))
-                case t: SchemaViolationException  => Failure(new DatabaseException(cause = t))
-                case t: PermanentBackendException => Failure(new DatabaseException(cause = t))
-                case e: Throwable =>
-                  logger.error(s"Exception raised, rollback (${e.getMessage})")
-                  Try(tx.rollback())
-                  Failure(e)
-              }
-            )
+            .recoverWith {
+              case t =>
+                Try(tx.rollback())
+                Failure(t)
+            }
+        }
+        .recoverWith {
+          case t: PermanentLockingException => Failure(new DatabaseException(cause = t))
+          case t: SchemaViolationException  => Failure(new DatabaseException(cause = t))
+          case t: PermanentBackendException => Failure(new DatabaseException(cause = t))
+          case e: Throwable =>
+            logger.error(s"Exception raised, rollback (${e.getMessage})")
+            Failure(e)
         }
     MDC.remove("tx")
     result
   }
 
   private def createEntityProperties(mgmt: JanusGraphManagement): Unit = {
-    mgmt
-      .makePropertyKey("_id")
-      .dataType(classOf[String])
-      .cardinality(Cardinality.SINGLE)
-      .make()
     mgmt
       .makePropertyKey("_label")
       .dataType(classOf[String])
@@ -226,35 +225,14 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
             createElementLabels(mgmt, models)
             createEntityProperties(mgmt)
             createProperties(mgmt, models)
-//          logger.debug("Creating unique index on fields _id")
-//          mgmt
-//            .buildIndex("_id_vertex_index", classOf[Vertex])
-//            .addKey(mgmt.getPropertyKey("_id"))
-//            .unique()
-//            .buildCompositeIndex()
-//            mgmt
-//              .buildIndex("_id_edge_index", classOf[Edge])
-//              .addKey(mgmt.getPropertyKey("_id"))
-//              .unique()
-//              .buildCompositeIndex()
             mgmt
               .buildIndex("_label_vertex_index", classOf[Vertex])
               .addKey(mgmt.getPropertyKey("_label"))
               .buildCompositeIndex()
-//          mgmt
-//            .buildIndex("_label_edge_index", classOf[Edge])
-//            .addKey(mgmt.getPropertyKey("_label"))
-//            .buildCompositeIndex()
 
             models.foreach {
               case model: VertexModel =>
                 val vertexLabel = mgmt.getVertexLabel(model.label)
-                mgmt
-                  .buildIndex(s"_id_${model.label}_index", classOf[Vertex])
-                  .indexOnly(vertexLabel)
-                  .addKey(mgmt.getPropertyKey("_id"))
-                  .unique()
-                  .buildCompositeIndex()
                 model.indexes.foreach {
                   case (indexType, properties) => createIndex(mgmt, classOf[Vertex], vertexLabel, indexType, properties)
                 }
@@ -275,7 +253,6 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
 
   override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
     val createdVertex = model.create(v)(this, graph)
-    setSingleProperty(createdVertex, "_id", UUID.randomUUID, idMapping)
     setSingleProperty(createdVertex, "_createdAt", new Date, createdAtMapping)
     setSingleProperty(createdVertex, "_createdBy", authContext.userId, createdByMapping)
     setSingleProperty(createdVertex, "_label", model.label, UniMapping.string)
@@ -292,11 +269,10 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
       to: TO with Entity
   ): E with Entity = {
     val edgeMaybe = for {
-      f <- graph.V().has(Key("_id") of from._id).headOption()
-      t <- graph.V().has(Key("_id") of to._id).headOption()
+      f <- graph.V(from._id).headOption()
+      t <- graph.V(to._id).headOption()
     } yield {
       val createdEdge = model.create(e, f, t)(this, graph)
-      setSingleProperty(createdEdge, "_id", UUID.randomUUID, idMapping)
       setSingleProperty(createdEdge, "_createdAt", new Date, createdAtMapping)
       setSingleProperty(createdEdge, "_createdBy", authContext.userId, createdByMapping)
       setSingleProperty(createdEdge, "_label", model.label, UniMapping.string)
@@ -304,14 +280,13 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
       model.toDomain(createdEdge)(this)
     }
     edgeMaybe.getOrElse {
-      val error = graph.V().has(Key("_id") of from._id).headOption().map(_ => "").getOrElse(s"${from._model.label}:${from._id} not found ") +
-        graph.V().has(Key("_id") of to._id).headOption().map(_ => "").getOrElse(s"${to._model.label}:${to._id} not found")
+      val error = graph.V(from._id).headOption().map(_ => "").getOrElse(s"${from._model.label}:${from._id} not found ") +
+        graph.V(to._id).headOption().map(_ => "").getOrElse(s"${to._model.label}:${to._id} not found")
       sys.error(s"Fail to create edge between ${from._model.label}:${from._id} and ${to._model.label}:${to._id}, $error")
     }
   }
 
-  override def vertexStep(graph: Graph, model: Model): GremlinScala[Vertex] = graph.V.has(Key("_label") of model.label)
-  override def edgeStep(graph: Graph, model: Model): GremlinScala[Edge]     = graph.E.has(Key("_label") of model.label)
+  override def labelFilter[E <: Element](model: Model): GremlinScala[E] => GremlinScala[E] = _.has(Key("_label") of model.label)
 
   override def drop(): Unit = JanusGraphFactory.drop(graph)
 }

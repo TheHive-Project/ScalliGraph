@@ -58,11 +58,13 @@ class SoftwareSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Gra
 class PersonSrv @Inject()(implicit db: Database) extends VertexSrv[Person, PersonSteps] {
   override val initialValues: Seq[Person]                                           = Seq(Person("marc", 34), Person("franck", 28))
   override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): PersonSteps = new PersonSteps(raw)
+  override def get(id: String)(implicit graph: Graph): PersonSteps                  = initSteps.get(id)
 }
 
 @Singleton
 class SoftwareSrv @Inject()(implicit db: Database) extends VertexSrv[Software, SoftwareSteps] {
   override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): SoftwareSteps = new SoftwareSteps(raw)
+  override def get(id: String)(implicit graph: Graph): SoftwareSteps                  = initSteps.get(id)
 }
 
 @Singleton

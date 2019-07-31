@@ -11,7 +11,7 @@ abstract class ElementSrv[E <: Product, S <: ElementSteps[E, _, S]] {
 
   def initSteps(implicit graph: Graph): S
 
-  def get(id: String)(implicit graph: Graph): S = initSteps(graph).get(id)
+  def get(id: String)(implicit graph: Graph): S
 
   def get(e: Entity)(implicit graph: Graph): S = get(e._id)
 

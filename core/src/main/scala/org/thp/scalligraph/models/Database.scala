@@ -1,25 +1,22 @@
 package org.thp.scalligraph.models
 
-import java.util.{Base64, Date, UUID}
-
-import scala.collection.JavaConverters._
-import scala.reflect.runtime.{universe => ru}
-import scala.util.{Failure, Success, Try}
-
-import play.api.Logger
+import java.util.{Base64, Date}
 
 import gremlin.scala._
 import org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.FAny
-import org.thp.scalligraph.services.RichGremlinScala
-import org.thp.scalligraph.{InternalError, RichSeq, UnknownAttributeError}
+import org.thp.scalligraph.{InternalError, NotFoundError, RichSeq, UnknownAttributeError}
+import play.api.Logger
+
+import scala.collection.JavaConverters._
+import scala.reflect.runtime.{universe => ru}
+import scala.util.{Failure, Success, Try}
 
 class DatabaseException(message: String = "Violation of database schema", cause: Exception) extends Exception(message, cause)
 
 trait Database {
   lazy val logger = Logger("org.thp.scalligraph.models.Database")
-  val idMapping: SingleMapping[UUID, String]
   val createdAtMapping: SingleMapping[Date, _]
   val createdByMapping: SingleMapping[String, String]
   val updatedAtMapping: OptionMapping[Date, _]
@@ -35,6 +32,7 @@ trait Database {
 
   def version(module: String): Int
   def setVersion(module: String, v: Int): Unit
+  def isValidId(id: String): Boolean
 
   def getModel[E <: Product: ru.TypeTag]: Model.Base[E]
   def getVertexModel[E <: Product: ru.TypeTag]: Model.Vertex[E]
@@ -93,14 +91,12 @@ trait Database {
     }
   }
 
-  def vertexStep(graph: Graph, model: Model): GremlinScala[Vertex]
-  def edgeStep(graph: Graph, model: Model): GremlinScala[Edge]
+  def labelFilter[E <: Element](model: Model): GremlinScala[E] => GremlinScala[E]
 
   val extraModels: Seq[Model]
 }
 
 abstract class BaseDatabase extends Database {
-  val idMapping: SingleMapping[UUID, String]          = SingleMapping[UUID, String]("", uuid => Some(uuid.toString), UUID.fromString)
   val createdAtMapping: SingleMapping[Date, Date]     = UniMapping.date
   val createdByMapping: SingleMapping[String, String] = UniMapping.string
   val updatedAtMapping: OptionMapping[Date, Date]     = UniMapping.date.optional
@@ -170,7 +166,6 @@ abstract class BaseDatabase extends Database {
 
   override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
     val createdVertex = model.create(v)(this, graph)
-    setSingleProperty(createdVertex, "_id", UUID.randomUUID, idMapping)
     setSingleProperty(createdVertex, "_createdAt", new Date, createdAtMapping)
     setSingleProperty(createdVertex, "_createdBy", authContext.userId, createdByMapping)
     logger.trace(s"Created vertex is ${Model.printElement(createdVertex)}")
@@ -186,19 +181,18 @@ abstract class BaseDatabase extends Database {
       to: TO with Entity
   ): E with Entity = {
     val edgeMaybe = for {
-      f <- graph.V().has(Key("_id") of from._id).headOption()
-      t <- graph.V().has(Key("_id") of to._id).headOption()
+      f <- graph.V(from._id).headOption()
+      t <- graph.V(to._id).headOption()
     } yield {
       val createdEdge = model.create(e, f, t)(this, graph)
-      setSingleProperty(createdEdge, "_id", UUID.randomUUID, idMapping)
       setSingleProperty(createdEdge, "_createdAt", new Date, createdAtMapping)
       setSingleProperty(createdEdge, "_createdBy", authContext.userId, createdByMapping)
       logger.trace(s"Create edge ${model.label} from $f to $t: ${Model.printElement(createdEdge)}")
       model.toDomain(createdEdge)(this)
     }
     edgeMaybe.getOrElse {
-      val error = graph.V().has(Key("_id") of from._id).headOption().map(_ => "").getOrElse(s"${from._model.label}:${from._id} not found ") +
-        graph.V().has(Key("_id") of to._id).headOption().map(_ => "").getOrElse(s"${to._model.label}:${to._id} not found")
+      val error = graph.V(from._id).headOption().map(_ => "").getOrElse(s"${from._model.label}:${from._id} not found ") +
+        graph.V(to._id).headOption().map(_ => "").getOrElse(s"${to._model.label}:${to._id} not found")
       throw InternalError(s"Fail to create edge between ${from._model.label}:${from._id} and ${to._model.label}:${to._id}, $error")
     }
   }
@@ -209,27 +203,27 @@ abstract class BaseDatabase extends Database {
       model: Model.Base[E],
       graph: Graph,
       authContext: AuthContext
-  ): Try[E with Entity] =
+  ): Try[E with Entity] = {
+
+    def getFieldMapping(key: String, value: Any): Try[Mapping[_, _, _]] =
+      model
+        .fields
+        .get(key)
+        .fold[Try[Mapping[_, _, _]]](Failure(UnknownAttributeError(key, FAny(Seq(value.toString)))))(Success.apply)
+
+    logger.debug(s"Execution of $elementTraversal")
     elementTraversal
-      .getOrFail
+      .headOption()
+      .fold[Try[_ <: Element]](Failure(NotFoundError(s"${model.label} not found")))(Success.apply)
       .flatMap { element =>
         logger.trace(s"Update ${element.id()} by ${authContext.userId}")
         fields
           .toTry {
             case (key, value) =>
-              model
-                .fields
-                .get(key)
-                .fold[Try[Mapping[_, _, _]]](Failure(UnknownAttributeError(key, FAny(Seq(value.toString)))))(Success.apply)
-                .flatMap { mapping =>
-                  // TODO check if value has the correct type
-                  setProperty(element, key.toString, value, mapping.asInstanceOf[Mapping[Any, _, _]])
+              getFieldMapping(key, value)
+                .map { mapping => // TODO check if value has the correct type
+                  setProperty(element, key, value, mapping.asInstanceOf[Mapping[Any, _, _]])
                   logger.trace(s" - $key = $value")
-                  Success(())
-//                  }
-//                  else {
-//                    Failure(InvalidFormatAttributeError(key.toString, mapping.domainType.toString, Set.empty, FAny(Seq(value.toString))))
-//                  }
                 }
           }
           .map { _ =>
@@ -238,6 +232,7 @@ abstract class BaseDatabase extends Database {
             model.toDomain(element.asInstanceOf[model.ElementType])(this)
           }
       }
+  }
 
   override def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D = {
     val values = element.properties[G](key)
@@ -329,7 +324,6 @@ abstract class BaseDatabase extends Database {
       val v    = graph.addVertex("binary")
       val data = Base64.getEncoder.encodeToString(binary.data)
       setSingleProperty(v, "binary", data, UniMapping.string)
-      setSingleProperty(v, "_id", UUID.randomUUID, idMapping)
       v
     }
     override type E = Binary
@@ -350,9 +344,7 @@ abstract class BaseDatabase extends Database {
     }
   }
 
-  override def vertexStep(graph: Graph, model: Model): GremlinScala[Vertex] = graph.V.hasLabel(model.label)
-
-  override def edgeStep(graph: Graph, model: Model): GremlinScala[Edge] = graph.E.hasLabel(model.label)
+  override def labelFilter[E <: Element](model: Model): GremlinScala[E] => GremlinScala[E] = _.hasLabel(model.label)
 
   override val extraModels: Seq[Model] = Seq(binaryModel, binaryLinkModel)
 
