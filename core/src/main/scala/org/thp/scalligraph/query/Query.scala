@@ -84,11 +84,11 @@ object Query {
 }
 
 class SortQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[InputSort] {
-//  override val paramParser: FieldsParser[InputSort] = InputSort.fieldsParser
   override def paramParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[InputSort] = InputSort.fieldsParser
   override val name: String                                                                              = "sort"
-  override def checkFrom(t: ru.Type): Boolean                                                            = t <:< ru.typeOf[ScalliSteps[_, _, _]]
-  override def toType(t: ru.Type): ru.Type                                                               = t
+  // FIXME https://stackoverflow.com/questions/56854716/inconsistent-result-when-checking-type-subtype
+  override def checkFrom(t: ru.Type): Boolean = t <:< ru.typeOf[ScalliSteps[_, _, _]] || t <:< ru.typeOf[ScalliSteps[_, _, _]]
+  override def toType(t: ru.Type): ru.Type    = t
   override def apply(inputSort: InputSort, from: Any, authContext: AuthContext): Any =
     inputSort(
       publicProperties,
@@ -101,8 +101,9 @@ class SortQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery
 class FilterQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[InputFilter] {
   override def paramParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[InputFilter] =
     InputFilter.fieldsParser(tpe, properties)
-  override val name: String                   = "filter"
-  override def checkFrom(t: ru.Type): Boolean = t <:< ru.typeOf[BaseVertexSteps[_, _]]
+  override val name: String = "filter"
+  // FIXME https://stackoverflow.com/questions/56854716/inconsistent-result-when-checking-type-subtype
+  override def checkFrom(t: ru.Type): Boolean = t <:< ru.typeOf[BaseVertexSteps[_, _]] || t <:< ru.typeOf[BaseVertexSteps[_, _]]
   override def toType(t: ru.Type): ru.Type    = t
   override def apply(inputFilter: InputFilter, from: Any, authContext: AuthContext): Any =
     inputFilter(
@@ -116,8 +117,9 @@ class FilterQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQue
 class AggregationQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[GroupAggregation[_, _]] {
   override def paramParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[GroupAggregation[_, _]] =
     GroupAggregation.fieldsParser
-  override val name: String                   = "aggregation"
-  override def checkFrom(t: ru.Type): Boolean = t <:< ru.typeOf[BaseVertexSteps[_, _]]
+  override val name: String = "aggregation"
+  // FIXME https://stackoverflow.com/questions/56854716/inconsistent-result-when-checking-type-subtype
+  override def checkFrom(t: ru.Type): Boolean = t <:< ru.typeOf[BaseVertexSteps[_, _]] || t <:< ru.typeOf[BaseVertexSteps[_, _]]
   override def toType(t: ru.Type): ru.Type    = ru.typeOf[JsValue]
   override def apply(aggregation: GroupAggregation[_, _], from: Any, authContext: AuthContext): Any =
     aggregation.get(publicProperties, rm.classSymbol(from.getClass).toType, from.asInstanceOf[BaseVertexSteps[_, _]], authContext)
