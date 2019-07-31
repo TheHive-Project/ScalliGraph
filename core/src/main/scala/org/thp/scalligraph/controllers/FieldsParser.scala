@@ -2,17 +2,16 @@ package org.thp.scalligraph.controllers
 
 import java.util.Date
 
-import scala.language.experimental.macros
-import scala.util.Try
-
-import play.api.libs.json.JsValue
-
 import org.scalactic.Accumulation._
 import org.scalactic._
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.Permission
 import org.thp.scalligraph.macros.FieldsParserMacro
 import org.thp.scalligraph.query.{PropertyUpdater, PublicProperty}
+import play.api.libs.json.{JsObject, JsValue}
+
+import scala.language.experimental.macros
+import scala.util.Try
 
 class FieldsParser[T](
     val formatName: String,
@@ -93,11 +92,17 @@ class FieldsParser[T](
   def toUpdate: UpdateFieldsParser[T] = new UpdateFieldsParser[T](formatName, Seq(FPathEmpty -> this))
 }
 
-trait FieldsParserLowPrio {
+trait FieldsParserLowestPrio {
   implicit def build[T]: FieldsParser[T] = macro FieldsParserMacro.getOrBuildFieldsParser[T]
 }
 
-object FieldsParser extends FieldsParserLowPrio {
+trait FieldsParserLowerPrio extends FieldsParserLowestPrio {
+  implicit val json: FieldsParser[JsValue] = FieldsParser[JsValue]("json") {
+    case (_, _field) => Good(_field.toJson)
+  }
+}
+
+object FieldsParser extends FieldsParserLowerPrio {
   def apply[T](implicit fp: FieldsParser[T]): FieldsParser[T] = fp
 
   def apply[T](formatName: String, acceptedInput: Set[String])(parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]]) =
@@ -182,8 +187,8 @@ object FieldsParser extends FieldsParserLowPrio {
     case (_, FAny(Seq(s))) => Try(Good(s.toDouble)).toOption
     case _                 => None
   })
-  implicit val json: FieldsParser[JsValue] = FieldsParser[JsValue]("json") {
-    case (_, _field) => Good(_field.toJson)
+  implicit val jsObject: FieldsParser[JsObject] = FieldsParser[JsObject]("jsObject") {
+    case (_, FObject(f)) => Good(JsObject(f.map { case (k, v) => k -> v.toJson }))
   }
   implicit def seq[A](implicit fp: FieldsParser[A]): FieldsParser[Seq[A]]       = fp.sequence
   implicit def set[A](implicit fp: FieldsParser[A]): FieldsParser[Set[A]]       = fp.set
