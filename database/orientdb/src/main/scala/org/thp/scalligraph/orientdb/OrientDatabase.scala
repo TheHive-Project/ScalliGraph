@@ -39,7 +39,7 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
 
   def this() = this(Configuration.load(Environment.simple()))
 
-  override def noTransaction[A](body: Graph => A): A = body(graphFactory.getNoTx)
+  override def roTransaction[A](body: Graph => A): A = body(graphFactory.getNoTx)
 
   override def tryTransaction[A](body: Graph => Try[A]): Try[A] =
     Retry(maxRetryOnConflict)
@@ -72,15 +72,17 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
   private def getVariablesVertex(implicit graph: Graph): Option[Vertex] = graph.traversal().V().hasLabel("variables").headOption()
 
   override def version(module: String): Int =
-    tryTransaction { implicit graph =>
-      Success(getVariablesVertex.fold(0)(v => getSingleProperty(v, s"${module}_version", UniMapping.int)))
-    }.get
+    roTransaction { implicit graph =>
+      getVariablesVertex.fold(0)(v => getSingleProperty(v, s"${module}_version", UniMapping.int))
+    }
 
-  override def setVersion(module: String, v: Int): Unit =
+  override def setVersion(module: String, v: Int): Try[Unit] =
     tryTransaction { implicit graph =>
-      val variables = getVariablesVertex.getOrElse(graph.addVertex("variables"))
-      Success(setSingleProperty(variables, s"${module}_version", v, UniMapping.int))
-    }.get
+      Try {
+        val variables = getVariablesVertex.getOrElse(graph.addVertex("variables"))
+        setSingleProperty(variables, s"${module}_version", v, UniMapping.int)
+      }
+    }
 
   private def createElementSchema(schema: OSchema, model: Model, superClassName: String, strict: Boolean): OClass = {
     val superClass = schema.getClass(superClassName)
@@ -225,5 +227,6 @@ class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, 
 //    v.property(attachmentPropertyName, chunkIds.asJava)
 //    v
 //  }
-  override def isValidId(id: String): Boolean = ???
+  override def isValidId(id: String): Boolean             = ???
+  override def currentTransactionId(graph: Graph): AnyRef = graph
 }

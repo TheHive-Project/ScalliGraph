@@ -4,7 +4,6 @@ import play.api.libs.json.Json
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
-
 import org.scalactic.Good
 import org.specs2.mock.Mockito
 import org.specs2.specification.core.{Fragment, Fragments}
@@ -12,6 +11,8 @@ import org.thp.scalligraph.AppBuilder
 import org.thp.scalligraph.auth.UserSrv
 import org.thp.scalligraph.controllers.Field
 import org.thp.scalligraph.query.AuthGraph
+
+import scala.util.Try
 
 class QueryTest extends PlaySpecification with Mockito {
 
@@ -25,8 +26,8 @@ class QueryTest extends PlaySpecification with Mockito {
     step(setupDatabase(app)) ^ specs(dbProvider.name, app) ^ step(teardownDatabase(app))
   }
 
-  def setupDatabase(app: AppBuilder): Unit =
-    DatabaseBuilder.build(app.instanceOf[ModernSchema])(app.instanceOf[Database], userSrv.initialAuthContext).get
+  def setupDatabase(app: AppBuilder): Try[Unit] =
+    DatabaseBuilder.build(app.instanceOf[ModernSchema])(app.instanceOf[Database], userSrv.initialAuthContext)
 
   def teardownDatabase(app: AppBuilder): Unit = app.instanceOf[Database].drop()
 
@@ -37,7 +38,7 @@ class QueryTest extends PlaySpecification with Mockito {
 
     s"[$name] Query executor" should {
       "execute simple query from Json" in {
-        db.transaction { implicit graph =>
+        db.roTransaction { implicit graph =>
           val authGraph = AuthGraph(userSrv.initialAuthContext, graph)
           val input =
             Field(
@@ -66,7 +67,7 @@ class QueryTest extends PlaySpecification with Mockito {
       }
 
       "execute aggregation query" in {
-        db.transaction { implicit graph =>
+        db.roTransaction { implicit graph =>
           val authGraph = AuthGraph(userSrv.initialAuthContext, graph)
           val input = Field(
             Json.arr(
@@ -91,7 +92,7 @@ class QueryTest extends PlaySpecification with Mockito {
       }
 
       "execute aggregation query 2" in {
-        db.transaction { implicit graph =>
+        db.roTransaction { implicit graph =>
           val authGraph = AuthGraph(userSrv.initialAuthContext, graph)
           val input = Field(
             Json.arr(

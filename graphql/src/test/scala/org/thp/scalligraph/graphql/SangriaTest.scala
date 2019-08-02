@@ -60,7 +60,7 @@ class SangriaTest extends PlaySpecification {
     step(setupDatabase(app)) ^ specs(dbProvider.name, app) ^ step(teardownDatabase(app))
   }
 
-  def setupDatabase(app: AppBuilder): Unit =
+  def setupDatabase(app: AppBuilder): Try[Unit] =
     DatabaseBuilder.build(app.instanceOf[ModernSchema])(app.instanceOf[Database], authContext)
 
   def teardownDatabase(app: AppBuilder): Unit = () //app.instanceOf[Database].drop()

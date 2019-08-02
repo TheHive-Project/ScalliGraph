@@ -88,7 +88,7 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
 
   case class State(vertexId: AnyRef, buffer: Array[Byte]) {
 
-    def next: Option[State] = db.noTransaction { implicit graph =>
+    def next: Option[State] = db.roTransaction { implicit graph =>
       graph
         .V()
         .hasId(vertexId)
@@ -100,7 +100,7 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
 
   object State {
 
-    def apply(id: String): Option[State] = db.transaction { implicit graph =>
+    def apply(id: String): Option[State] = db.roTransaction { implicit graph =>
       graph
         .V()
         .has(Key("attachmentId") of id)

@@ -33,13 +33,17 @@ class SimpleEntityTest extends PlaySpecification with Mockito {
 
     s"[${dbProvider.name}] simple entity" should {
       "create" in db.transaction { implicit graph =>
-        val createdEntity: MyEntity with Entity = myEntitySrv.create(MyEntity("The answer", 42))
-        createdEntity._id must_!== null
+        myEntitySrv.create(MyEntity("The answer", 42)) must beSuccessfulTry.which { createdEntity =>
+          createdEntity._id must_!== null
+        }
       }
 
       "create and get entities" in db.transaction { implicit graph =>
-        val createdEntity: MyEntity with Entity = myEntitySrv.create(MyEntity("e^π", -1))
-        myEntitySrv.getOrFail(createdEntity._id) must beSuccessfulTry.withValue { e: MyEntity with Entity =>
+        myEntitySrv
+          .create(MyEntity("e^π", -1))
+          .flatMap { createdEntity =>
+            myEntitySrv.getOrFail(createdEntity._id)
+          } must beSuccessfulTry.which { e: MyEntity with Entity =>
           e.name must_=== "e^π"
           e.value must_=== -1
           e._createdBy must_=== "admin"
@@ -47,10 +51,10 @@ class SimpleEntityTest extends PlaySpecification with Mockito {
       }
 
       "update an entity" in db.transaction { implicit graph =>
-        val id = myEntitySrv.create(MyEntity("super", 7))._id
-        myEntitySrv.get(id).update("value" -> 8) must beSuccessfulTry
-
-        myEntitySrv.getOrFail(id) must beSuccessfulTry.withValue((_: MyEntity with Entity).value must_=== 8)
+        myEntitySrv.create(MyEntity("super", 7)) must beASuccessfulTry.which { entity =>
+          myEntitySrv.get(entity._id).update("value" -> 8) must beSuccessfulTry
+          myEntitySrv.getOrFail(entity._id) must beSuccessfulTry.which((_: MyEntity with Entity).value must_=== 8)
+        }
       }
     }
   }

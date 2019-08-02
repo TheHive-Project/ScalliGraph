@@ -6,6 +6,7 @@ import java.util.{Date, Properties}
 import com.typesafe.config.ConfigObject
 import gremlin.scala._
 import javax.inject.{Inject, Singleton}
+import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
 import org.janusgraph.core._
 import org.janusgraph.core.schema.{ConsistencyModifier, JanusGraphManagement, JanusGraphSchemaType, Mapping}
 import org.janusgraph.diskstorage.PermanentBackendException
@@ -40,6 +41,7 @@ object JanusDatabase {
 @Singleton
 class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chunkSize: Int) extends BaseDatabase {
   val name = "janus"
+  graph.tx.onReadWrite(READ_WRITE_BEHAVIOR.MANUAL)
 
   @Inject() def this(configuration: Configuration) = {
     this(
@@ -54,14 +56,36 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
 
   def isValidId(id: String): Boolean = id.forall(_.isDigit)
 
-  override def noTransaction[A](body: Graph => A): A = {
-    logger.debug(s"Begin of no-transaction")
-    val a = body(graph)
-    logger.debug(s"End of no-transaction")
-    a
+  override def roTransaction[R](body: Graph => R): R = {
+    logger.debug(s"Begin of readonly transaction")
+    val tx = graph.buildTransaction().readOnly().start()
+    val r  = body(tx)
+    tx.commit()
+    logger.debug(s"End of readonly transaction")
+    r
   }
 
-  override def tryTransaction[A](body: Graph => Try[A]): Try[A] = {
+  override def tryTransaction[R](body: Graph => Try[R]): Try[R] = {
+    def executeCallbacks(tx: JanusGraphTransaction): R => Try[R] = { r =>
+      val currentCallbacks = takeCallbacks(tx)
+      currentCallbacks
+        .foldRight[Try[Unit]](Success(()))((cb, a) => a.flatMap(_ => cb()))
+        .map(_ => r)
+    }
+
+    def commitTransaction(tx: JanusGraphTransaction): R => R = { r =>
+      logger.debug("Committing transaction")
+      tx.commit()
+      logger.debug("End of transaction")
+      r
+    }
+
+    def rollbackTransaction(tx: JanusGraphTransaction): PartialFunction[Throwable, Failure[R]] = {
+      case t =>
+        Try(tx.rollback())
+        Failure(t)
+    }
+
     val result =
       Retry(maxRetryOnConflict)
         .on[DatabaseException]
@@ -69,27 +93,14 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
         .on[PermanentBackendException]
         .on[PermanentLockingException]
         .withTry {
-          //    val tx = graph.tx()
-          //    tx.open() /*.createThreadedTx[JanusGraphTransaction]()*/
-          // Transaction is automatically open at the first operation.
-          val tx = graph.tx.createThreadedTx[JanusGraphTransaction]()
+          val tx: JanusGraphTransaction = graph.buildTransaction().start()
           MDC.put("tx", f"${tx.hashCode()}%08x")
           logger.debug("Begin of transaction")
-          Try {
-            body(tx)
-              .map { a =>
-                logger.debug("Committing transaction")
-                tx.commit()
-                logger.debug("End of transaction")
-                executeTransactionCallbacks(tx)
-                a
-              }
-          }.flatten
-            .recoverWith {
-              case t =>
-                Try(tx.rollback())
-                Failure(t)
-            }
+          Try(body(tx))
+            .flatten
+            .flatMap(executeCallbacks(tx))
+            .map(commitTransaction(tx))
+            .recoverWith(rollbackTransaction(tx))
         }
         .recoverWith {
           case t: PermanentLockingException => Failure(new DatabaseException(cause = t))
@@ -102,6 +113,8 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
     MDC.remove("tx")
     result
   }
+
+  def currentTransactionId(graph: Graph): AnyRef = graph
 
   private def createEntityProperties(mgmt: JanusGraphManagement): Unit = {
     mgmt

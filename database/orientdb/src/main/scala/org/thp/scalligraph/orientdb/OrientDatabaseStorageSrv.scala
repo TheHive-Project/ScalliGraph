@@ -30,7 +30,7 @@ class OrientDatabaseStorageSrv(db: OrientDatabase, chunkSize: Int) extends Stora
   object State {
     val b64decoder: Base64.Decoder = Base64.getDecoder
 
-    def apply(id: String): Option[State] = db.noTransaction { implicit graph =>
+    def apply(id: String): Option[State] = db.roTransaction { implicit graph =>
       graph
         .V()
         .hasId(id)

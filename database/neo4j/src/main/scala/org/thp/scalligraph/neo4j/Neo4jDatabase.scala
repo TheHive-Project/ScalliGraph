@@ -48,7 +48,7 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
 
   def this() = this(Configuration.empty)
 
-  override def noTransaction[A](body: Graph => A): A = graph.synchronized {
+  override def roTransaction[A](body: Graph => A): A = graph.synchronized {
     body(graph)
   }
 
@@ -187,5 +187,6 @@ class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseData
 
   override def setOptionProperty[D, G](element: Element, key: String, value: Option[D], mapping: OptionMapping[D, _]): Unit =
     super.setOptionProperty(element, key, value, fixMapping(mapping))
-  override def isValidId(id: String): Boolean = ???
+  override def isValidId(id: String): Boolean             = ???
+  override def currentTransactionId(graph: Graph): AnyRef = ???
 }

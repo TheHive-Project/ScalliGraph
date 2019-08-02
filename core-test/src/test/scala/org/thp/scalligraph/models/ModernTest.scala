@@ -1,10 +1,11 @@
 package org.thp.scalligraph.models
 
 import play.api.test.PlaySpecification
-
 import org.specs2.specification.core.{Fragment, Fragments}
 import org.thp.scalligraph.AppBuilder
 import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
+
+import scala.util.Try
 
 class ModernTest extends PlaySpecification {
 
@@ -16,8 +17,8 @@ class ModernTest extends PlaySpecification {
     step(setupDatabase(app)) ^ specs(dbProvider.name, app) ^ step(teardownDatabase(app))
   }
 
-  def setupDatabase(app: AppBuilder): Unit =
-    DatabaseBuilder.build(app.instanceOf[ModernSchema])(app.instanceOf[Database], authContext).get
+  def setupDatabase(app: AppBuilder): Try[Unit] =
+    DatabaseBuilder.build(app.instanceOf[ModernSchema])(app.instanceOf[Database], authContext)
 
   def teardownDatabase(app: AppBuilder): Unit = app.instanceOf[Database].drop()
 
@@ -35,7 +36,7 @@ class ModernTest extends PlaySpecification {
 //        personSrv.get("marko").knownLevels must contain(exactly(1.0))
 //      }
 
-      "create initial values" in db.transaction { implicit graph =>
+      "create initial values" in db.roTransaction { implicit graph =>
         personSrv.initSteps.toList.map(_.name) must contain(exactly("marko", "vadas", "franck", "marc", "josh", "peter"))
       }
     }

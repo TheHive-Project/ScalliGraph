@@ -23,15 +23,17 @@ trait Database {
   val updatedByMapping: OptionMapping[String, String]
   val binaryMapping: SingleMapping[Array[Byte], String]
 
-  def noTransaction[A](body: Graph => A): A
-  def tryTransaction[A](body: Graph => Try[A]): Try[A]
-  def transaction[A](body: Graph => A): A = tryTransaction(graph => Try(body(graph))).get
+  def roTransaction[A](body: Graph => A): A
 
-  def onSuccessTransaction(graph: Graph)(body: () => Unit): Unit
-  def executeTransactionCallbacks(graph: Graph): Unit
+  @deprecated("Use tryTransaction", "0.2")
+  def transaction[A](body: Graph => A): A
+  def tryTransaction[A](body: Graph => Try[A]): Try[A]
+  def currentTransactionId(graph: Graph): AnyRef
+  def addCallback(callback: () => Try[Unit])(implicit graph: Graph): Unit
+  protected def takeCallbacks(graph: Graph): List[() => Try[Unit]]
 
   def version(module: String): Int
-  def setVersion(module: String, v: Int): Unit
+  def setVersion(module: String, v: Int): Try[Unit]
   def isValidId(id: String): Boolean
 
   def getModel[E <: Product: ru.TypeTag]: Model.Base[E]
@@ -105,25 +107,26 @@ abstract class BaseDatabase extends Database {
   val binaryMapping: SingleMapping[Array[Byte], String] =
     SingleMapping[Array[Byte], String]("", data => Some(Base64.getEncoder.encodeToString(data)), Base64.getDecoder.decode)
 
-  protected var transactionSuccessCallback: List[(Graph, () => Unit)] = Nil
-  protected val transactionSuccessCallbackLock                        = new Object
+  override def version(module: String): Int = roTransaction(graph => graph.variables.get[Int](s"${module}_version").orElse(0))
 
-  override def onSuccessTransaction(graph: Graph)(body: () => Unit): Unit = transactionSuccessCallbackLock.synchronized {
-    transactionSuccessCallback = (graph -> body) :: transactionSuccessCallback
+  override def setVersion(module: String, v: Int): Try[Unit] = tryTransaction(graph => Try(graph.variables.set(s"${module}_version", v)))
+
+  override def transaction[A](body: Graph => A): A = tryTransaction(graph => Try(body(graph))).get
+
+  private var callbacks: List[(AnyRef, () => Try[Unit])] = Nil
+
+  def addCallback(callback: () => Try[Unit])(implicit graph: Graph): Unit = synchronized {
+    callbacks = (currentTransactionId(graph) -> callback) :: callbacks
   }
 
-  override def executeTransactionCallbacks(graph: Graph): Unit = transactionSuccessCallbackLock.synchronized {
-    transactionSuccessCallback = transactionSuccessCallback.filter {
-      case (`graph`, callback) =>
-        callback()
-        false
-      case _ => true
-    }
+  protected def takeCallbacks(graph: Graph): List[() => Try[Unit]] = {
+    val tx = currentTransactionId(graph)
+    synchronized {
+      val (cb, updatedCallbacks) = callbacks.partition(_._1 == tx)
+      callbacks = updatedCallbacks
+      cb
+    }.map(_._2)
   }
-
-  override def version(module: String): Int = transaction(graph => graph.variables.get[Int](s"${module}_version").orElse(0))
-
-  override def setVersion(module: String, v: Int): Unit = transaction(graph => graph.variables.set(s"${module}_version", v))
 
   override def getModel[E <: Product: ru.TypeTag]: Model.Base[E] = {
     val rm = ru.runtimeMirror(getClass.getClassLoader)
@@ -157,10 +160,11 @@ abstract class BaseDatabase extends Database {
   }
 
   override def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Try[Unit] =
-    createSchema(schemaObject.modelList ++ extraModels).map { _ =>
-      transaction(graph => schemaObject.initialValues.foreach(_.create()(this, graph, authContext)))
-      transaction(graph => schemaObject.init(graph, authContext))
-    }
+    for {
+      _ <- createSchema(schemaObject.modelList ++ extraModels)
+      _ <- tryTransaction(graph => Try(schemaObject.initialValues.foreach(_.create()(this, graph, authContext))))
+      _ <- tryTransaction(graph => schemaObject.init(graph, authContext))
+    } yield ()
 
   override def createSchema(models: Seq[Model]): Try[Unit]
 

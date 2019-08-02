@@ -101,6 +101,11 @@ class EntryPoint @Inject()(
     )(block: AuthenticatedRequest[Record[V]] => Graph => Try[Result]): Action[AnyContent] =
       auth(request => db.tryTransaction(graph => block(request)(graph)))
 
+    def authRoTransaction(
+        db: Database
+    )(block: AuthenticatedRequest[Record[V]] => Graph => Try[Result]): Action[AnyContent] =
+      auth(request => db.roTransaction(graph => block(request)(graph)))
+
     /**
       * Materialize action using a function that transform request into response
       *

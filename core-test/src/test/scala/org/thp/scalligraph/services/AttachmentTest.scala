@@ -48,9 +48,9 @@ class AttachmentTest extends Specification {
         lazy val f2  = Paths.get("build.sbt")
         val filePath = if (Files.exists(f1)) f1 else f2
         val is       = Files.newInputStream(filePath)
-        db.transaction { implicit graph =>
-          storageSrv.saveBinary("build.sbt-custom-id", is) must beSuccessfulTry(())
-        }
+        db.tryTransaction { implicit graph =>
+          storageSrv.saveBinary("build.sbt-custom-id", is)
+        } must beSuccessfulTry(())
         is.close()
 
         val is1 = storageSrv.loadBinary("build.sbt-custom-id")
