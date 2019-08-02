@@ -85,22 +85,31 @@ class ApplicationConfiguration @Inject()(configuration: Configuration, db: Datab
       val path: String,
       val description: String,
       val defaultValue: T,
-      private var value: T,
       val configItemType: ConfigItemType[T],
       val validationFunction: T => Try[T],
-      private val setter: T => Unit,
+      private val getter: Unit => T,
+      private val setter: T => Try[Unit],
       private var updateCallbacks: List[(T, T) => Unit] = Nil
   ) extends ConfigItem[T] {
+    private var value: T = _
+    private var flag     = false
 
     private[ApplicationConfiguration] def update(newValueJson: JsValue): JsResult[Unit] = {
-      val oldValue = value
+      val oldValue = get
       configItemType.format.reads(newValueJson).map { newValue =>
         value = newValue
-        updateCallbacks.foreach(_.apply(oldValue, value))
+        flag = true
+        updateCallbacks.foreach(_.apply(oldValue, newValue))
       }
     }
-    override def get: T                   = value
-    override def set(v: T): Try[Unit]     = validation(v).map(setter)
+    override def get: T = {
+      if (!flag)
+        synchronized {
+          if (!flag) value = getter(())
+        }
+      value
+    }
+    override def set(v: T): Try[Unit]     = validation(v).flatMap(setter)
     override def validation(v: T): Try[T] = validationFunction(v)
     override def onUpdate(f: (T, T) => Unit): Unit = synchronized {
       updateCallbacks = f :: updateCallbacks
@@ -110,30 +119,35 @@ class ApplicationConfiguration @Inject()(configuration: Configuration, db: Datab
   private var items: Map[String, MutableConfigItem[_]] = Map.empty
   private val itemsLock                                = new Object
 
-  private def itemSetter[T](path: String)(implicit configItemType: ConfigItemType[T]): T => Unit =
+  private def itemSetter[T](path: String)(implicit configItemType: ConfigItemType[T]): T => Try[Unit] =
     (value: T) => {
       val valueJson = configItemType.format.writes(value)
-      db.noTransaction { implicit graph =>
-        graph
-          .variables()
-          .set(s"config.$path", valueJson)
-      }
-      // TODO notify all MutableConfiguration on the cluster
-      update(path, valueJson)
+      db.tryTransaction { implicit graph =>
+          Try(
+            graph
+              .variables()
+              .set(s"config.$path", valueJson)
+          )
+        }
+        // TODO notify all MutableConfiguration on the cluster
+        .map(_ => update(path, valueJson))
     }
 
-  private def update(path: String, value: JsValue): Unit = items.get(path).foreach(_.update(value))
-
-  private def getValue(path: String): Option[JsValue] =
-    if (ignoreDatabaseConfiguration) None
+  private def itemGetter[T](path: String, defaultValue: T)(implicit configItemType: ConfigItemType[T]): Unit => T = { _ =>
+    if (ignoreDatabaseConfiguration) defaultValue
     else
-      db.noTransaction { implicit graph =>
-        graph
-          .variables()
-          .get[String](s"config.$path")
-          .asScala
-          .flatMap(s => Try(Json.parse(s)).toOption)
-      }
+      db.roTransaction { implicit graph =>
+          graph
+            .variables()
+            .get[String](s"config.$path")
+        }
+        .asScala
+        .flatMap(s => Try(Json.parse(s)).toOption)
+        .flatMap(configItemType.format.reads(_).asOpt)
+        .getOrElse(defaultValue)
+  }
+
+  private def update(path: String, value: JsValue): Unit = items.get(path).foreach(_.update(value))
 
   def item[T: ConfigLoader](path: String, description: String)(implicit configItemType: ConfigItemType[T]): ConfigItem[T] =
     validatedItem[T](path, description, Success.apply)
@@ -146,10 +160,8 @@ class ApplicationConfiguration @Inject()(configuration: Configuration, db: Datab
       items
         .getOrElse(
           path, {
-            val value = getValue(path)
-              .flatMap(configItemType.format.reads(_).asOpt)
-              .getOrElse(defaultValue)
-            val configItem = new MutableConfigItem(path, description, defaultValue, value, configItemType, validation, itemSetter(path))
+            val configItem =
+              new MutableConfigItem(path, description, defaultValue, configItemType, validation, itemGetter(path, defaultValue), itemSetter(path))
             items = items + (path -> configItem)
             configItem
           }
