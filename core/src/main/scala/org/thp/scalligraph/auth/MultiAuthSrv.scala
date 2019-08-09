@@ -2,21 +2,25 @@ package org.thp.scalligraph.auth
 
 import javax.inject.{Inject, Provider, Singleton}
 import org.thp.scalligraph.controllers.AuthenticatedRequest
-import org.thp.scalligraph.services.{ApplicationConfiguration, ConfigItem}
 import org.thp.scalligraph.{AuthenticationError, BadConfigurationError, OAuth2Redirect, RichSeq}
 import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
 import play.api.{Configuration, Logger}
-
 import scala.collection.immutable
 import scala.util.{Failure, Try}
 
-class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfiguration, availableAuthProviders: immutable.Set[AuthSrvProvider])
+import org.thp.scalligraph.services.config.{ApplicationConfig, ConfigItem}
+
+class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, availableAuthProviders: immutable.Set[AuthSrvProvider])
     extends AuthSrv {
   val name: String = "multi"
   lazy val logger  = Logger(getClass)
 
   val authSrvProviderConfigsConfig: ConfigItem[Seq[Configuration]] =
-    appConfig.validatedItem[Seq[Configuration]]("auth.providers", "List of authentication provider", cfg => parseConfiguration(cfg).map(_ => cfg))
+    appConfig.validatedItem[Seq[Configuration]](
+      "auth.providers",
+      "List of authentication provider",
+      (cfg: Seq[Configuration]) => parseConfiguration(cfg).map(_ => cfg)
+    )
   authSrvProviderConfigsConfig.onUpdate((_, cfg) => internalAuthProviders = parseConfiguration(cfg).get)
   /* this is a lazy var implementation to prevent circular dependency with Guice (some authSrv requires global authSrv) at class init */
   private var internalAuthProviders: Seq[AuthSrv]          = Nil
@@ -105,7 +109,7 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfigura
 }
 
 @Singleton
-class MultiAuthSrvProvider @Inject()(configuration: Configuration, appConfig: ApplicationConfiguration, authProviders: immutable.Set[AuthSrvProvider])
+class MultiAuthSrvProvider @Inject()(configuration: Configuration, appConfig: ApplicationConfig, authProviders: immutable.Set[AuthSrvProvider])
     extends Provider[AuthSrv] {
   override def get(): AuthSrv = new MultiAuthSrv(configuration, appConfig, authProviders)
 }
