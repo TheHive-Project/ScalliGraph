@@ -4,9 +4,7 @@ import java.util.Date
 
 import scala.language.experimental.macros
 import scala.reflect.{classTag, ClassTag}
-
-import play.api.libs.json.{JsObject, Json}
-
+import play.api.libs.json.{JsObject, JsValue, Json}
 import gremlin.scala.dsl.Converter
 import org.thp.scalligraph.auth.Permission
 import org.thp.scalligraph.macros.MappingMacro
@@ -26,12 +24,17 @@ trait UniMapping[D] {
   type GraphType
 }
 
-trait MappingLowPrio {
+trait MappingLowestPrio {
   implicit def build[T]: UniMapping[T] = macro MappingMacro.getOrBuildMapping[T]
 }
 
-object UniMapping extends MappingLowPrio {
-  implicit val json: SingleMapping[JsObject, String] =
+trait MappingLowerPrio extends MappingLowestPrio {
+  implicit val json: SingleMapping[JsValue, String] =
+    SingleMapping[JsValue, String]("", toGraphOptFn = j => Some(j.toString), toDomainFn = s => Json.parse(s))
+}
+
+object UniMapping extends MappingLowerPrio {
+  implicit val jsObject: SingleMapping[JsObject, String] =
     SingleMapping[JsObject, String]("", toGraphOptFn = j => Some(j.toString), toDomainFn = s => Json.parse(s).as[JsObject])
   implicit val string: SingleMapping[String, String]         = SingleMapping[String, String]("")
   implicit val long: SingleMapping[Long, Long]               = SingleMapping[Long, Long](0)
