@@ -22,7 +22,7 @@ case class Created(weight: Double)
 
 @EntitySteps[Person]
 class PersonSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph) extends BaseVertexSteps[Person, PersonSteps](raw) {
-  override def get(id: String): PersonSteps = new PersonSteps(graph.V().has(Key("name") of id))
+  override def getByIds(ids: String*): PersonSteps = new PersonSteps(graph.V().has(Key[String]("name"), P.within(ids)))
 
   def created = new SoftwareSteps(raw.outTo[Created])
 
@@ -51,20 +51,20 @@ class SoftwareSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Gra
   def isRipple = new SoftwareSteps(raw.has(Key("name") of "ripple"))
 
   override def newInstance(raw: GremlinScala[Vertex]): SoftwareSteps = new SoftwareSteps(raw)
-  override def get(id: String): SoftwareSteps                        = new SoftwareSteps(graph.V().has(Key("name") of id))
+  override def getByIds(ids: String*): SoftwareSteps                 = new SoftwareSteps(graph.V().has(Key[String]("name"), P.within(ids)))
 }
 
 @Singleton
 class PersonSrv @Inject()(implicit db: Database) extends VertexSrv[Person, PersonSteps] {
   override val initialValues: Seq[Person]                                           = Seq(Person("marc", 34), Person("franck", 28))
   override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): PersonSteps = new PersonSteps(raw)
-  override def get(id: String)(implicit graph: Graph): PersonSteps                  = initSteps.get(id)
+  override def getByIds(ids: String*)(implicit graph: Graph): PersonSteps           = initSteps.getByIds(ids: _*)
 }
 
 @Singleton
 class SoftwareSrv @Inject()(implicit db: Database) extends VertexSrv[Software, SoftwareSteps] {
   override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): SoftwareSteps = new SoftwareSteps(raw)
-  override def get(id: String)(implicit graph: Graph): SoftwareSteps                  = initSteps.get(id)
+  override def getByIds(ids: String*)(implicit graph: Graph): SoftwareSteps           = initSteps.getByIds(ids: _*)
 }
 
 @Singleton

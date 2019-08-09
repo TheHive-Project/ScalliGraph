@@ -93,6 +93,8 @@ abstract class ScalliSteps[EndDomain, EndGraph, ThisStep <: ScalliSteps[EndDomai
 
   def has[A](key: Key[A], predicate: P[A])(implicit ev: EndGraph <:< Element): ThisStep = newInstance(raw.has(key, predicate))
 
+  def hasNot[A](key: Key[A], predicate: P[A])(implicit ev: EndGraph <:< Element): ThisStep = newInstance(raw.hasNot(key, predicate))
+
   def map[NewEndDomain: ClassTag](f: EndDomain => NewEndDomain): ScalarSteps[NewEndDomain] =
     new ScalarSteps[NewEndDomain](raw.map(x => f(converter.toDomain(x))))
 
@@ -117,6 +119,8 @@ abstract class ScalliSteps[EndDomain, EndGraph, ThisStep <: ScalliSteps[EndDomai
 
   def order(orderBys: List[OrderBy[_]]): ThisStep = newInstance(raw.order(orderBys: _*))
 
+  def iterate(): ThisStep = newInstance(raw.iterate())
+
   def onlyOneOf[A](elements: JList[A]): A = {
     val size = elements.size
     if (size == 1) elements.get(0)
@@ -130,6 +134,11 @@ abstract class ScalliSteps[EndDomain, EndGraph, ThisStep <: ScalliSteps[EndDomai
     else if (size > 1) throw InternalError(s"Too many elements in result ($size found)")
     else None
   }
+
+//  def union(u: (ThisStep => ScalliSteps[_, _, _])*) = {
+//    val unionTraversals = u.map(st => (t: GremlinScala.Aux[EndGraph, HNil]) => st(newInstance(t)).raw)
+//    raw.unionFlat(unionTraversals: _*)
+//  }
 }
 
 class ValueMap(m: Map[String, Seq[AnyRef]]) {
@@ -165,7 +174,7 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
 
   lazy val typeName: String = ru.typeOf[E].toString
 
-  def get(id: String): ThisStep = newInstance(raw.hasId(id))
+  def getByIds(ids: String*): ThisStep = newInstance(raw.hasId(ids: _*))
 
   def update(fields: (String, Any)*)(implicit authContext: AuthContext): Try[E with Entity] =
     db.update(raw, fields, db.getModel[E], graph, authContext)

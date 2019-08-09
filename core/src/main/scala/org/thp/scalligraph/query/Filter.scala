@@ -100,7 +100,7 @@ class IdFilter(id: String) extends InputFilter {
       stepType: ru.Type,
       step: S,
       authContext: AuthContext
-  ): S = step.get(id)
+  ): S = step.getByIds(id)
 }
 
 object InputFilter {

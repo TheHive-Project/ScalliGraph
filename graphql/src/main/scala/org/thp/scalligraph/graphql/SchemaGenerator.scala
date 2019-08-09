@@ -348,7 +348,7 @@ object SchemaGenerator {
           resolve = ctx =>
             Value(duplicate(ctx.value) // ScalliSteps[EndDomain, EndGraph => B, ThisStep <: AnyRef]
               .asInstanceOf[ElementSteps[_, A, _]] // ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisStep <: ElementSteps[E, EndGraph, ThisStep]] ScalliSteps[E with Entity, EndGraph, ThisStep]
-              .get[B](ctx.ctx.auth, property))
+              .getByIds[B](ctx.ctx.auth, property))
         ) // def get[A](authContext: AuthContext, property: PublicProperty[EndGraph, _, A]): ScalarSteps[A] = {
           .asInstanceOf[Field[AuthGraph, Any]]))
   }

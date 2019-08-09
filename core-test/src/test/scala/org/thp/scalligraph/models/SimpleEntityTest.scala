@@ -52,7 +52,7 @@ class SimpleEntityTest extends PlaySpecification with Mockito {
 
       "update an entity" in db.transaction { implicit graph =>
         myEntitySrv.create(MyEntity("super", 7)) must beASuccessfulTry.which { entity =>
-          myEntitySrv.get(entity._id).update("value" -> 8) must beSuccessfulTry
+          myEntitySrv.getByIds(entity._id).update("value" -> 8) must beSuccessfulTry
           myEntitySrv.getOrFail(entity._id) must beSuccessfulTry.which((_: MyEntity with Entity).value must_=== 8)
         }
       }

@@ -11,9 +11,11 @@ abstract class ElementSrv[E <: Product, S <: ElementSteps[E, _, S]] {
 
   def initSteps(implicit graph: Graph): S
 
-  def get(id: String)(implicit graph: Graph): S
+  def get(idOrName: String)(implicit graph: Graph): S = getByIds(idOrName)
 
-  def get(e: Entity)(implicit graph: Graph): S = get(e._id)
+  def getByIds(ids: String*)(implicit graph: Graph): S
+
+  def get(e: Entity)(implicit graph: Graph): S = getByIds(e._id)
 
   def getOrFail(id: String)(implicit graph: Graph): Try[E with Entity] =
     get(id).headOption().fold[Try[E with Entity]](Failure(NotFoundError(s"${model.label} $id not found")))(Success.apply)
