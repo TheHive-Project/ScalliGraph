@@ -1,24 +1,26 @@
 package org.thp.scalligraph.janus
 
 import java.nio.file.{Files, Paths}
+import java.util.function.Consumer
 import java.util.{Date, Properties}
 
 import com.typesafe.config.ConfigObject
-import gremlin.scala._
+import gremlin.scala.{asScalaGraph, Edge, Element, Graph, GremlinScala, Key, Vertex}
+import org.apache.tinkerpop.gremlin.structure.Transaction
+import org.janusgraph.core.{Cardinality, JanusGraph, JanusGraphFactory, SchemaViolationException}
+import org.thp.scalligraph.models._
+import org.thp.scalligraph.{Config, InternalError, Retry}
 import javax.inject.{Inject, Singleton}
 import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
-import org.janusgraph.core._
 import org.janusgraph.core.schema.{ConsistencyModifier, JanusGraphManagement, JanusGraphSchemaType, Mapping}
 import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
 import org.slf4j.MDC
-import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.models._
-import play.api.{Configuration, Environment}
-
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
+
+import play.api.{Configuration, Environment}
 
 object JanusDatabase {
 
@@ -27,6 +29,7 @@ object JanusDatabase {
     if (backend == "berkeleyje") {
       val jePropertyFile = Paths.get(configuration.get[String]("db.janusgraph.storage.directory"), "je.properties")
       configuration.getOptional[ConfigObject]("db.janusgraph.berkeleyje").foreach { configObject =>
+        Files.createDirectories(jePropertyFile.getParent)
         val props = new Properties
         configObject.asScala.foreach { case (k, v) => props.put(s"je.$k", v.render()) }
         val propertyOutputStream = Files.newOutputStream(jePropertyFile)
@@ -39,9 +42,10 @@ object JanusDatabase {
 }
 
 @Singleton
-class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chunkSize: Int) extends BaseDatabase {
-  val name = "janus"
-  graph.tx.onReadWrite(READ_WRITE_BEHAVIOR.MANUAL)
+class JanusDatabase(janusGraph: JanusGraph, maxRetryOnConflict: Int, override val chunkSize: Int) extends BaseDatabase {
+  val name             = "janus"
+  val localTransaction = new ThreadLocal[Transaction]
+  janusGraph.tx.onReadWrite(READ_WRITE_BEHAVIOR.MANUAL)
 
   @Inject() def this(configuration: Configuration) = {
     this(
@@ -57,30 +61,36 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
   def isValidId(id: String): Boolean = id.forall(_.isDigit)
 
   override def roTransaction[R](body: Graph => R): R = {
+    val graph = janusGraph.buildTransaction().readOnly().start()
+    val tx    = graph.tx()
+    localTransaction.set(tx)
+    MDC.put("tx", f"${System.identityHashCode(tx)}%08x")
     logger.debug(s"Begin of readonly transaction")
-    val tx = graph.buildTransaction().readOnly().start()
-    val r  = body(tx)
-    tx.commit()
+    val r = body(graph)
     logger.debug(s"End of readonly transaction")
+    MDC.remove("tx")
+    localTransaction.remove()
+    tx.commit()
+
     r
   }
 
   override def tryTransaction[R](body: Graph => Try[R]): Try[R] = {
-    def executeCallbacks(tx: JanusGraphTransaction): R => Try[R] = { r =>
-      val currentCallbacks = takeCallbacks(tx)
+    def executeCallbacks(graph: Graph): R => Try[R] = { r =>
+      val currentCallbacks = takeCallbacks(graph)
       currentCallbacks
         .foldRight[Try[Unit]](Success(()))((cb, a) => a.flatMap(_ => cb()))
         .map(_ => r)
     }
 
-    def commitTransaction(tx: JanusGraphTransaction): R => R = { r =>
+    def commitTransaction(tx: Transaction): R => R = { r =>
       logger.debug("Committing transaction")
       tx.commit()
       logger.debug("End of transaction")
       r
     }
 
-    def rollbackTransaction(tx: JanusGraphTransaction): PartialFunction[Throwable, Failure[R]] = {
+    def rollbackTransaction(tx: Transaction): PartialFunction[Throwable, Failure[R]] = {
       case t =>
         Try(tx.rollback())
         Failure(t)
@@ -93,12 +103,14 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
         .on[PermanentBackendException]
         .on[PermanentLockingException]
         .withTry {
-          val tx: JanusGraphTransaction = graph.buildTransaction().start()
-          MDC.put("tx", f"${tx.hashCode()}%08x")
+          val graph = janusGraph.buildTransaction().start()
+          val tx    = graph.tx()
+          localTransaction.set(tx)
+          MDC.put("tx", f"${System.identityHashCode(tx)}%08x")
           logger.debug("Begin of transaction")
-          Try(body(tx))
+          Try(body(graph))
             .flatten
-            .flatMap(executeCallbacks(tx))
+            .flatMap(executeCallbacks(graph))
             .map(commitTransaction(tx))
             .recoverWith(rollbackTransaction(tx))
         }
@@ -110,11 +122,18 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
             logger.error(s"Exception raised, rollback (${e.getMessage})")
             Failure(e)
         }
+    localTransaction.remove()
     MDC.remove("tx")
     result
   }
 
   def currentTransactionId(graph: Graph): AnyRef = graph
+
+  override def addTransactionListener(listener: Consumer[Transaction.Status])(implicit graph: Graph): Unit =
+    Option(localTransaction.get()) match {
+      case Some(tx) => tx.addTransactionListener(listener)
+      case None     => logger.warn("Trying to add a transaction listener without open transaction")
+    }
 
   private def createEntityProperties(mgmt: JanusGraphManagement): Unit = {
     mgmt
@@ -224,8 +243,8 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
       .on[PermanentLockingException]
       .withTry {
         logger.info("Creating database schema")
-        graph.synchronized {
-          val mgmt = graph.openManagement()
+        janusGraph.synchronized {
+          val mgmt = janusGraph.openManagement()
           val alreadyExists = models
             .map(_.label)
             .flatMap(l => Option(mgmt.getVertexLabel(l)).orElse(Option(mgmt.getEdgeLabel(l))))
@@ -301,5 +320,5 @@ class JanusDatabase(graph: JanusGraph, maxRetryOnConflict: Int, override val chu
 
   override def labelFilter[E <: Element](model: Model): GremlinScala[E] => GremlinScala[E] = _.has(Key("_label") of model.label)
 
-  override def drop(): Unit = JanusGraphFactory.drop(graph)
+  override def drop(): Unit = JanusGraphFactory.drop(janusGraph)
 }

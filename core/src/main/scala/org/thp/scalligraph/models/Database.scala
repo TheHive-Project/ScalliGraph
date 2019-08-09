@@ -1,17 +1,20 @@
 package org.thp.scalligraph.models
 
+import java.util.function.Consumer
 import java.util.{Base64, Date}
-
-import gremlin.scala._
-import org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality
-import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.controllers.FAny
-import org.thp.scalligraph.{InternalError, NotFoundError, RichSeq, UnknownAttributeError}
-import play.api.Logger
 
 import scala.collection.JavaConverters._
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
+
+import play.api.Logger
+
+import gremlin.scala._
+import org.apache.tinkerpop.gremlin.structure.Transaction.Status
+import org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality
+import org.thp.scalligraph.auth.AuthContext
+import org.thp.scalligraph.controllers.FAny
+import org.thp.scalligraph.{InternalError, NotFoundError, RichSeq, UnknownAttributeError}
 
 class DatabaseException(message: String = "Violation of database schema", cause: Exception) extends Exception(message, cause)
 
@@ -31,6 +34,7 @@ trait Database {
   def currentTransactionId(graph: Graph): AnyRef
   def addCallback(callback: () => Try[Unit])(implicit graph: Graph): Unit
   protected def takeCallbacks(graph: Graph): List[() => Try[Unit]]
+  def addTransactionListener(listener: Consumer[Status])(implicit graph: Graph): Unit
 
   def version(module: String): Int
   def setVersion(module: String, v: Int): Try[Unit]
@@ -127,6 +131,8 @@ abstract class BaseDatabase extends Database {
       cb
     }.map(_._2)
   }
+
+  override def addTransactionListener(listener: Consumer[Status])(implicit graph: Graph): Unit = graph.tx().addTransactionListener(listener)
 
   override def getModel[E <: Product: ru.TypeTag]: Model.Base[E] = {
     val rm = ru.runtimeMirror(getClass.getClassLoader)
