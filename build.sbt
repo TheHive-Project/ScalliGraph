@@ -79,6 +79,8 @@ lazy val core = (project in file("core"))
       bouncyCastle,
       shapeless,
       caffeine,
+      akkaCluster,
+      akkaClusterTools,
       specs       % Test,
       playLogback % Test,
       scalaCompiler(scalaVersion.value),
