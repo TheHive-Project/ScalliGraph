@@ -78,7 +78,7 @@ class ModernSchema @Inject()(implicit db: Database) extends Schema {
   override def initialValues: Seq[InitialValue[_]] = vertexServices.map(_.getInitialValues).flatten
 }
 
-object DatabaseBuilder {
+object ModernDatabaseBuilder {
 
   def build(schema: ModernSchema)(implicit db: Database, authContext: AuthContext): Try[Unit] =
     db.createSchemaFrom(schema).flatMap { _ =>

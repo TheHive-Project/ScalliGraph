@@ -19,7 +19,7 @@ class ModernTest extends PlaySpecification {
   }
 
   def setupDatabase(app: AppBuilder): Try[Unit] =
-    DatabaseBuilder.build(app.instanceOf[ModernSchema])(app.instanceOf[Database], authContext)
+    ModernDatabaseBuilder.build(app.instanceOf[ModernSchema])(app.instanceOf[Database], authContext)
 
   def teardownDatabase(app: AppBuilder): Unit = app.instanceOf[Database].drop()
 

@@ -28,7 +28,7 @@ class QueryTest extends PlaySpecification with Mockito {
   }
 
   def setupDatabase(app: AppBuilder): Try[Unit] =
-    DatabaseBuilder.build(app.instanceOf[ModernSchema])(app.instanceOf[Database], userSrv.getSystemAuthContext)
+    ModernDatabaseBuilder.build(app.instanceOf[ModernSchema])(app.instanceOf[Database], userSrv.getSystemAuthContext)
 
   def teardownDatabase(app: AppBuilder): Unit = app.instanceOf[Database].drop()
 
