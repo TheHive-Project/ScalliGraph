@@ -19,7 +19,8 @@ class UpdateFieldsParserMacroTest extends Specification with TestUtils {
     "make all fields of complex class updatable" in {
       val fieldsParser = getUpdateFieldsParser[ComplexClassForFieldsParserMacroTest]
       fieldsParser.parsers.keys.map(_.toString) must contain(
-        exactly("", "name", "value", "subClasses", "subClasses[]", "subClasses[].name", "subClasses[].option"))
+        exactly("", "name", "value", "subClasses", "subClasses[]", "subClasses[].name", "subClasses[].option")
+      )
     }
 
     "parse complex class" in {
@@ -38,7 +39,8 @@ class UpdateFieldsParserMacroTest extends Specification with TestUtils {
 
     "parse class with implicit" in {
       implicit val subClassFieldsParser: UpdateFieldsParser[SubClassForFieldsParserMacroTest] = UpdateFieldsParser[SubClassForFieldsParserMacroTest](
-        "SubClassForFieldsParserMacroTest")(FPath("option") -> FieldsParser[UpdateOps.Type]("Optional Int") {
+        "SubClassForFieldsParserMacroTest"
+      )(FPath("option") -> FieldsParser[UpdateOps.Type]("Optional Int") {
         case (_, FString(intStr)) =>
           Or.from(Try(intStr.toInt)) match {
             case Good(i) => Good(UpdateOps.SetAttribute(i))

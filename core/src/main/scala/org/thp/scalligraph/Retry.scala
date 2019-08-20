@@ -1,13 +1,13 @@
 package org.thp.scalligraph
 
-import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Try}
 
 import play.api.Logger
 
-import akka.pattern.after
 import akka.actor.Scheduler
+import akka.pattern.after
 
 object Retry {
 

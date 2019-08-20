@@ -2,16 +2,17 @@ package org.thp.scalligraph.controllers
 
 import java.util.Date
 
+import scala.language.experimental.macros
+import scala.util.Try
+
+import play.api.libs.json.{JsObject, JsValue}
+
 import org.scalactic.Accumulation._
 import org.scalactic._
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.Permission
 import org.thp.scalligraph.macros.FieldsParserMacro
 import org.thp.scalligraph.query.{PropertyUpdater, PublicProperty}
-import play.api.libs.json.{JsObject, JsValue}
-
-import scala.language.experimental.macros
-import scala.util.Try
 
 class FieldsParser[T](
     val formatName: String,

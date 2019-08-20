@@ -1,7 +1,9 @@
 package org.thp.scalligraph.controllers
 
 import scala.util.Success
+
 import play.api.libs.json.Json
+
 import org.scalactic.{Bad, Good, One}
 import org.specs2.matcher.Matcher
 import org.specs2.mutable.Specification

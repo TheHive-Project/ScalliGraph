@@ -1,12 +1,13 @@
 package org.thp.scalligraph.auth
 
-import javax.inject.Inject
-import org.thp.scalligraph.controllers.AuthenticatedRequest
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Try
+
 import play.api.Configuration
 import play.api.mvc.{ActionFunction, Request, Result}
 
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Try
+import javax.inject.Inject
+import org.thp.scalligraph.controllers.AuthenticatedRequest
 
 class HeaderAuthSrv(userHeader: String, requestOrganisation: RequestOrganisation, userSrv: UserSrv, ec: ExecutionContext) extends AuthSrv {
   override val name: String = "header"

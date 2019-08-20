@@ -1,12 +1,12 @@
 package org.thp.scalligraph.models
 
+import scala.util.Try
+
 import gremlin.scala.{asScalaGraph, Graph, GremlinScala, Key, P, Vertex}
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.services._
-
-import scala.util.Try
 
 @VertexEntity
 case class Person(name: String, age: Int)

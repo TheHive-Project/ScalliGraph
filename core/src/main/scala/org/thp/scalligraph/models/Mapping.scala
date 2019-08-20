@@ -4,7 +4,9 @@ import java.util.Date
 
 import scala.language.experimental.macros
 import scala.reflect.{classTag, ClassTag}
+
 import play.api.libs.json.{JsObject, JsValue, Json}
+
 import gremlin.scala.dsl.Converter
 import org.thp.scalligraph.auth.Permission
 import org.thp.scalligraph.macros.MappingMacro

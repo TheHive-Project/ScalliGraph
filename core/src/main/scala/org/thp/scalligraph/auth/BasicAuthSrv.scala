@@ -1,13 +1,14 @@
 package org.thp.scalligraph.auth
 import java.util.Base64
 
-import javax.inject.{Inject, Provider, Singleton}
+import scala.concurrent.ExecutionContext
+import scala.util.{Success, Try}
+
 import play.api.Configuration
 import play.api.http.HeaderNames
 import play.api.mvc.Request
 
-import scala.concurrent.ExecutionContext
-import scala.util.{Success, Try}
+import javax.inject.{Inject, Provider, Singleton}
 
 class BasicAuthSrv(authSrv: AuthSrv, requestOrganisation: RequestOrganisation, val ec: ExecutionContext) extends AuthSrvWithActionFunction {
 

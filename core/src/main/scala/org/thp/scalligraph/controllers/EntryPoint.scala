@@ -1,20 +1,21 @@
 package org.thp.scalligraph.controllers
 
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Try
+
+import play.api.Logger
+import play.api.http.HttpErrorHandler
+import play.api.libs.json.Json
+import play.api.mvc._
+
 import gremlin.scala.Graph
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.AttributeCheckingError
 import org.thp.scalligraph.auth.AuthSrv
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.record.Record
-import play.api.Logger
-import play.api.http.HttpErrorHandler
-import play.api.libs.json.Json
-import play.api.mvc._
 import shapeless.labelled.FieldType
 import shapeless.{::, labelled, HList, HNil, Witness}
-
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Try
 
 /**
   * API entry point. This class create a controller action which parse request and check authentication

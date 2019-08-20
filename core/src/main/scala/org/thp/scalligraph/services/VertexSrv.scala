@@ -2,7 +2,9 @@ package org.thp.scalligraph.services
 
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
+
 import play.api.libs.json.JsObject
+
 import gremlin.scala._
 import org.thp.scalligraph.NotFoundError
 import org.thp.scalligraph.auth.AuthContext

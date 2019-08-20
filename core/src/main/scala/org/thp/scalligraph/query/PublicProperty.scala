@@ -1,14 +1,15 @@
 package org.thp.scalligraph.query
 
+import scala.reflect.runtime.{universe => ru}
+import scala.util.Try
+
+import play.api.libs.json.JsObject
+
 import gremlin.scala.{Graph, GremlinScala, Vertex}
 import org.thp.scalligraph.FPath
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.FieldsParser
 import org.thp.scalligraph.models.{Database, Mapping}
-import play.api.libs.json.JsObject
-
-import scala.reflect.runtime.{universe => ru}
-import scala.util.Try
 
 class PublicProperty[D, G](
     val stepType: ru.Type,

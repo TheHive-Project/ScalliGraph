@@ -2,6 +2,11 @@ package org.thp.scalligraph.orientdb
 import java.io.InputStream
 import java.util.{Base64, List => JList}
 
+import scala.collection.JavaConverters._
+import scala.util.{Success, Try}
+
+import play.api.Configuration
+
 import com.orientechnologies.orient.core.db.record.OIdentifiable
 import com.orientechnologies.orient.core.intent.OIntentMassiveInsert
 import com.orientechnologies.orient.core.record.impl.ORecordBytes
@@ -9,10 +14,6 @@ import gremlin.scala._
 import javax.inject.{Inject, Singleton}
 import org.apache.tinkerpop.gremlin.orientdb.OrientGraph
 import org.thp.scalligraph.services.StorageSrv
-import play.api.Configuration
-
-import scala.collection.JavaConverters._
-import scala.util.{Success, Try}
 
 @Singleton
 class OrientDatabaseStorageSrv(db: OrientDatabase, chunkSize: Int) extends StorageSrv {

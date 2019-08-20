@@ -1,16 +1,17 @@
 package org.thp.scalligraph.models
 
+import scala.util.{Success, Try}
+
+import play.api.libs.logback.LogbackLoggerConfigurator
+import play.api.test.PlaySpecification
+import play.api.{Configuration, Environment}
+
 import gremlin.scala.{Graph, GremlinScala, Key, Vertex}
 import org.specs2.mock.Mockito
 import org.specs2.specification.core.Fragments
 import org.thp.scalligraph.VertexEntity
 import org.thp.scalligraph.auth.{AuthContext, UserSrv}
 import org.thp.scalligraph.services.VertexSrv
-import play.api.libs.logback.LogbackLoggerConfigurator
-import play.api.test.PlaySpecification
-import play.api.{Configuration, Environment}
-
-import scala.util.{Success, Try}
 
 @VertexEntity
 case class EntityWithSeq(name: String, valueList: Seq[String], valueSet: Set[String])

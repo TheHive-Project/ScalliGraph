@@ -3,7 +3,7 @@ package org.thp.scalligraph.services.config
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
 import play.api.Configuration
-import play.api.libs.json.{Format, JsError, JsString, JsSuccess, JsValue, Json, Reads, Writes}
+import play.api.libs.json._
 
 import com.typesafe.config.{ConfigFactory, ConfigRenderOptions}
 

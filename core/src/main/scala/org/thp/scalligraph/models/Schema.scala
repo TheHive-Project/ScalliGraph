@@ -1,9 +1,9 @@
 package org.thp.scalligraph.models
 
+import scala.util.{Success, Try}
+
 import gremlin.scala.Graph
 import org.thp.scalligraph.auth.AuthContext
-
-import scala.util.{Success, Try}
 
 case class InitialValue[V <: Product](model: Model.Vertex[V], value: V) {
 

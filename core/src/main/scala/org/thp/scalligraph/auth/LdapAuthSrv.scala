@@ -3,14 +3,15 @@ package org.thp.scalligraph.auth
 import java.net.ConnectException
 import java.util
 
+import scala.util.{Failure, Success, Try}
+
+import play.api.mvc.RequestHeader
+import play.api.{Configuration, Logger}
+
 import javax.inject.{Inject, Singleton}
 import javax.naming.Context
 import javax.naming.directory._
 import org.thp.scalligraph.{AuthenticationError, AuthorizationError}
-import play.api.mvc.RequestHeader
-import play.api.{Configuration, Logger}
-
-import scala.util.{Failure, Success, Try}
 
 case class LdapConfig(hosts: Seq[String], useSSL: Boolean, bindDN: String, bindPW: String, baseDN: String, filter: String)
 

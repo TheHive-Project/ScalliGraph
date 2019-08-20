@@ -1,11 +1,11 @@
 package org.thp.scalligraph.services
 
 import scala.reflect.runtime.{universe => ru}
+import scala.util.{Success, Try}
+
 import gremlin.scala._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
-
-import scala.util.{Success, Try}
 
 class EdgeSrv[E <: Product: ru.TypeTag, FROM <: Product: ru.TypeTag, TO <: Product: ru.TypeTag](implicit val db: Database)
     extends ElementSrv[E, EdgeSteps[E, FROM, TO]] {

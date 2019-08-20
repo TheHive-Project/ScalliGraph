@@ -2,13 +2,14 @@ package org.thp.scalligraph.controllers
 
 import java.nio.file.Path
 
-import org.scalactic.Good
-import org.thp.scalligraph.{FPath, FPathElem, FPathElemInSeq, FPathEmpty, FPathSeq}
+import scala.collection.immutable
+
 import play.api.Logger
 import play.api.libs.json._
 import play.api.mvc._
 
-import scala.collection.immutable
+import org.scalactic.Good
+import org.thp.scalligraph.{FPath, FPathElem, FPathElemInSeq, FPathEmpty, FPathSeq}
 
 sealed trait Field {
   def get(pathElement: String): Field = FUndefined

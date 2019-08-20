@@ -1,14 +1,15 @@
 package org.thp.scalligraph.auth
 
-import javax.inject.{Inject, Provider, Singleton}
-import org.thp.scalligraph.controllers.AuthenticatedRequest
-import org.thp.scalligraph.{AuthenticationError, BadConfigurationError, OAuth2Redirect, RichSeq}
-import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
-import play.api.{Configuration, Logger}
 import scala.collection.immutable
 import scala.util.{Failure, Try}
 
+import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
+import play.api.{Configuration, Logger}
+
+import javax.inject.{Inject, Provider, Singleton}
+import org.thp.scalligraph.controllers.AuthenticatedRequest
 import org.thp.scalligraph.services.config.{ApplicationConfig, ConfigItem}
+import org.thp.scalligraph.{AuthenticationError, BadConfigurationError, OAuth2Redirect, RichSeq}
 
 class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, availableAuthProviders: immutable.Set[AuthSrvProvider])
     extends AuthSrv {

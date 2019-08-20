@@ -1,13 +1,14 @@
 package org.thp.scalligraph.auth
 
-import javax.inject.{Inject, Singleton}
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration.{DurationLong, FiniteDuration}
+import scala.util.Try
+
 import play.api.libs.json.Json
 import play.api.mvc.{Request, RequestHeader, Result, Session}
 import play.api.{Configuration, Logger}
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.duration.{DurationLong, FiniteDuration}
-import scala.util.Try
+import javax.inject.{Inject, Singleton}
 
 object ExpirationStatus {
   sealed abstract class Type

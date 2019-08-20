@@ -4,23 +4,24 @@ import java.nio.file.{Files, Paths}
 import java.util.function.Consumer
 import java.util.{Date, Properties}
 
-import com.typesafe.config.ConfigObject
-import gremlin.scala.{asScalaGraph, Edge, Element, Graph, GremlinScala, Key, Vertex}
-import org.apache.tinkerpop.gremlin.structure.Transaction
-import org.janusgraph.core.{Cardinality, JanusGraph, JanusGraphFactory, SchemaViolationException}
-import org.thp.scalligraph.models._
-import org.thp.scalligraph.{Config, InternalError, Retry}
-import javax.inject.{Inject, Singleton}
-import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
-import org.janusgraph.core.schema.{ConsistencyModifier, JanusGraphManagement, JanusGraphSchemaType, Mapping}
-import org.janusgraph.diskstorage.PermanentBackendException
-import org.janusgraph.diskstorage.locking.PermanentLockingException
-import org.slf4j.MDC
-import org.thp.scalligraph.auth.AuthContext
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
 
 import play.api.{Configuration, Environment}
+
+import com.typesafe.config.ConfigObject
+import gremlin.scala.{asScalaGraph, Edge, Element, Graph, GremlinScala, Key, Vertex}
+import javax.inject.{Inject, Singleton}
+import org.apache.tinkerpop.gremlin.structure.Transaction
+import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
+import org.janusgraph.core.schema.{ConsistencyModifier, JanusGraphManagement, JanusGraphSchemaType, Mapping}
+import org.janusgraph.core.{Cardinality, JanusGraph, JanusGraphFactory, SchemaViolationException}
+import org.janusgraph.diskstorage.PermanentBackendException
+import org.janusgraph.diskstorage.locking.PermanentLockingException
+import org.slf4j.MDC
+import org.thp.scalligraph.auth.AuthContext
+import org.thp.scalligraph.models._
+import org.thp.scalligraph.{Config, InternalError, Retry}
 
 object JanusDatabase {
 

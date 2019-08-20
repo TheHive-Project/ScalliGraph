@@ -3,15 +3,16 @@ import java.io.ByteArrayInputStream
 import java.security.cert.X509Certificate
 import java.util.{List => JList}
 
-import javax.inject.{Inject, Singleton}
-import javax.naming.ldap.LdapName
-import org.bouncycastle.asn1._
-import play.api.Configuration
-import play.api.mvc.Request
-
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
 import scala.util.Try
+
+import play.api.Configuration
+import play.api.mvc.Request
+
+import javax.inject.{Inject, Singleton}
+import javax.naming.ldap.LdapName
+import org.bouncycastle.asn1._
 
 class PkiAuthSrv(certificateField: String, requestOrganisation: RequestOrganisation, userSrv: UserSrv, val ec: ExecutionContext)
     extends AuthSrvWithActionFunction {

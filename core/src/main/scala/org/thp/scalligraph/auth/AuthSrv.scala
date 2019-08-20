@@ -1,13 +1,14 @@
 package org.thp.scalligraph.auth
 
-import javax.inject.{Inject, Singleton}
-import org.thp.scalligraph.controllers.AuthenticatedRequest
-import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError}
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success, Try}
+
 import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
 import play.api.{ConfigLoader, Configuration}
 
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success, Try}
+import javax.inject.{Inject, Singleton}
+import org.thp.scalligraph.controllers.AuthenticatedRequest
+import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError}
 
 object AuthCapability extends Enumeration {
   val changePassword, setPassword, authByKey, sso = Value

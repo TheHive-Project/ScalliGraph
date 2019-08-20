@@ -32,7 +32,8 @@ class FieldsParserMacroTest extends Specification with TestUtils {
       val complexClass = ComplexClassForFieldsParserMacroTest(
         "complexClass",
         42,
-        Seq(SubClassForFieldsParserMacroTest("sc1", Some(12)), SubClassForFieldsParserMacroTest("sc2", None)))
+        Seq(SubClassForFieldsParserMacroTest("sc1", Some(12)), SubClassForFieldsParserMacroTest("sc2", None))
+      )
       fieldsParser(fields) must_=== Good(complexClass)
     }
 
@@ -54,7 +55,8 @@ class FieldsParserMacroTest extends Specification with TestUtils {
       val complexClass = ComplexClassForFieldsParserMacroTest(
         "complexClass",
         42,
-        Seq(SubClassForFieldsParserMacroTest("sc1", Some(12)), SubClassForFieldsParserMacroTest("sc2", None)))
+        Seq(SubClassForFieldsParserMacroTest("sc1", Some(12)), SubClassForFieldsParserMacroTest("sc2", None))
+      )
       fieldsParser(fields) must_=== Good(complexClass)
     }
 

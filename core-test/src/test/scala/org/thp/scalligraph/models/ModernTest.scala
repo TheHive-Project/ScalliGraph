@@ -1,11 +1,12 @@
 package org.thp.scalligraph.models
 
+import scala.util.Try
+
 import play.api.test.PlaySpecification
+
 import org.specs2.specification.core.{Fragment, Fragments}
 import org.thp.scalligraph.AppBuilder
 import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
-
-import scala.util.Try
 
 class ModernTest extends PlaySpecification {
 

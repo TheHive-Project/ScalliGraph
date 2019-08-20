@@ -1,41 +1,41 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration debug="false">
 
-	<conversionRule conversionWord="coloredLevel"
-		converterClass="play.api.libs.logback.ColoredLevel" />
+    <conversionRule conversionWord="coloredLevel"
+                    converterClass="play.api.libs.logback.ColoredLevel"/>
 
-	<appender name="FILE" class="ch.qos.logback.core.FileAppender">
-		<file>${application.home:-.}/logs/application.log</file>
-		<encoder>
-			<pattern>%date [%level] from %logger in %thread - %message%n%xException</pattern>
-		</encoder>
-	</appender>
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <file>${application.home:-.}/logs/application.log</file>
+        <encoder>
+            <pattern>%date [%level] from %logger in %thread - %message%n%xException</pattern>
+        </encoder>
+    </appender>
 
-	<appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
-		<encoder>
-			<pattern>%coloredLevel %logger{15} - %message%n%xException{10}
-			</pattern>
-		</encoder>
-	</appender>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%coloredLevel %logger{15} - %message%n%xException{10}
+            </pattern>
+        </encoder>
+    </appender>
 
-	<appender name="ASYNCFILE" class="ch.qos.logback.classic.AsyncAppender">
-		<appender-ref ref="FILE" />
-	</appender>
+    <appender name="ASYNCFILE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="FILE"/>
+    </appender>
 
-	<appender name="ASYNCSTDOUT" class="ch.qos.logback.classic.AsyncAppender">
-		<appender-ref ref="STDOUT" />
-	</appender>
+    <appender name="ASYNCSTDOUT" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="STDOUT"/>
+    </appender>
 
-	<logger name="org.thp.scalligraph.models" level="TRACE" />
-	<!--<logger name="org.thp" level="DEBUG" />-->
-	<logger name="org.thp.scalligraph.controllers" level="TRACE" />
-	<logger name="org.thp.scalligraph.services.auth" level="TRACE" />
-	<logger name="org.thp.scalligraph.models" level="TRACE" />
-	<logger name="org.thp.scalligraph.janus" level="TRACE" />
+    <logger name="org.thp.scalligraph.models" level="TRACE"/>
+    <!--<logger name="org.thp" level="DEBUG" />-->
+    <logger name="org.thp.scalligraph.controllers" level="TRACE"/>
+    <logger name="org.thp.scalligraph.services.auth" level="TRACE"/>
+    <logger name="org.thp.scalligraph.models" level="TRACE"/>
+    <logger name="org.thp.scalligraph.janus" level="TRACE"/>
 
-	<root level="INFO">
-		<appender-ref ref="ASYNCFILE" />
-		<appender-ref ref="ASYNCSTDOUT" />
-	</root>
+    <root level="INFO">
+        <appender-ref ref="ASYNCFILE"/>
+        <appender-ref ref="ASYNCSTDOUT"/>
+    </root>
 
 </configuration>

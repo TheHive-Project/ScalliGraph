@@ -1,9 +1,12 @@
 package org.thp.scalligraph.models
 
+import scala.util.Try
+
 import play.api.libs.json.Json
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
+
 import org.scalactic.Good
 import org.specs2.mock.Mockito
 import org.specs2.specification.core.{Fragment, Fragments}
@@ -11,8 +14,6 @@ import org.thp.scalligraph.AppBuilder
 import org.thp.scalligraph.auth.UserSrv
 import org.thp.scalligraph.controllers.Field
 import org.thp.scalligraph.query.AuthGraph
-
-import scala.util.Try
 
 class QueryTest extends PlaySpecification with Mockito {
 

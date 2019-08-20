@@ -13,9 +13,11 @@ case class FakeTemporaryFile(name: String) extends Files.TemporaryFile {
   def path: Path                                 = file.toPath
   def temporaryFileCreator: TemporaryFileCreator = NoTemporaryFileCreator
 }
+
 object FakeTemporaryFile {
   def apply(): Files.TemporaryFile = FakeTemporaryFile("temporaryFileName")
 }
+
 class FieldsTest extends PlaySpecification with Mockito {
   "Field" should {
     "be built from HTTP request with file" in {
@@ -61,7 +63,8 @@ class FieldsTest extends PlaySpecification with Mockito {
       val request   = FakeRequest("GET", "/", Headers.create(), body = AnyContentAsMultipartFormData(MultipartFormData(dataParts, files, Nil)))
 
       Field(request) must_=== FObject(
-        "f1" -> FObject("a" -> FString("v1"), "b" -> FSeq(List(FString("a"), FString("b"), FFile("myfile.txt", file.path, "text/plain")))))
+        "f1" -> FObject("a" -> FString("v1"), "b" -> FSeq(List(FString("a"), FString("b"), FFile("myfile.txt", file.path, "text/plain"))))
+      )
     }
 
     "be built from HTTP request with file in seq field 3" in {
@@ -71,7 +74,8 @@ class FieldsTest extends PlaySpecification with Mockito {
       val request   = FakeRequest("GET", "/", Headers.create(), body = AnyContentAsMultipartFormData(MultipartFormData(dataParts, files, Nil)))
 
       Field(request) must_=== FObject(
-        "f1" -> FObject("a" -> FString("v1"), "b" -> FSeq(List(FString("a"), FFile("myfile.txt", file.path, "text/plain"), FString("c")))))
+        "f1" -> FObject("a" -> FString("v1"), "b" -> FSeq(List(FString("a"), FFile("myfile.txt", file.path, "text/plain"), FString("c"))))
+      )
     }
   }
 }
