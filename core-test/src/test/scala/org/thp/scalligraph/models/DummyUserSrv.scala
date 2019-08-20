@@ -17,7 +17,5 @@ case class DummyUserSrv(
   val authContext: AuthContext                                                                                       = AuthContextImpl(userSrv.userId, userSrv.userName, userSrv.organisation, userSrv.requestId, userSrv.permissions)
   override def getFromId(request: RequestHeader, userId: String, organisationName: Option[String]): Try[AuthContext] = Success(authContext)
 
-  override def getInitialUser(request: RequestHeader): Try[AuthContext] = Success(authContext)
-
-  override val initialAuthContext: AuthContext = authContext
+  override def getSystemAuthContext: AuthContext = authContext
 }

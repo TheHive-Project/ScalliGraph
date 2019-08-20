@@ -52,8 +52,7 @@ object AuthContext {
 
 trait UserSrv {
   def getFromId(request: RequestHeader, userId: String, organisationName: Option[String]): Try[AuthContext]
-  def getInitialUser(request: RequestHeader): Try[AuthContext]
-  val initialAuthContext: AuthContext
+  def getSystemAuthContext: AuthContext
 }
 
 trait User {

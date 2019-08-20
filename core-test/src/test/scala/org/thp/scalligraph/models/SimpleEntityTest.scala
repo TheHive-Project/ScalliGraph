@@ -21,7 +21,7 @@ object MyEntity {
 class SimpleEntityTest extends PlaySpecification with Mockito {
 
   val userSrv: UserSrv                  = DummyUserSrv()
-  implicit val authContext: AuthContext = userSrv.initialAuthContext
+  implicit val authContext: AuthContext = userSrv.getSystemAuthContext
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>

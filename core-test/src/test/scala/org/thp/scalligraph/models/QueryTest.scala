@@ -27,7 +27,7 @@ class QueryTest extends PlaySpecification with Mockito {
   }
 
   def setupDatabase(app: AppBuilder): Try[Unit] =
-    DatabaseBuilder.build(app.instanceOf[ModernSchema])(app.instanceOf[Database], userSrv.initialAuthContext)
+    DatabaseBuilder.build(app.instanceOf[ModernSchema])(app.instanceOf[Database], userSrv.getSystemAuthContext)
 
   def teardownDatabase(app: AppBuilder): Unit = app.instanceOf[Database].drop()
 
@@ -39,7 +39,7 @@ class QueryTest extends PlaySpecification with Mockito {
     s"[$name] Query executor" should {
       "execute simple query from Json" in {
         db.roTransaction { implicit graph =>
-          val authGraph = AuthGraph(userSrv.initialAuthContext, graph)
+          val authGraph = AuthGraph(userSrv.getSystemAuthContext, graph)
           val input =
             Field(
               Json.arr(
@@ -68,7 +68,7 @@ class QueryTest extends PlaySpecification with Mockito {
 
       "execute aggregation query" in {
         db.roTransaction { implicit graph =>
-          val authGraph = AuthGraph(userSrv.initialAuthContext, graph)
+          val authGraph = AuthGraph(userSrv.getSystemAuthContext, graph)
           val input = Field(
             Json.arr(
               Json.obj("_name" -> "allPeople"),
@@ -93,7 +93,7 @@ class QueryTest extends PlaySpecification with Mockito {
 
       "execute aggregation query 2" in {
         db.roTransaction { implicit graph =>
-          val authGraph = AuthGraph(userSrv.initialAuthContext, graph)
+          val authGraph = AuthGraph(userSrv.getSystemAuthContext, graph)
           val input = Field(
             Json.arr(
               Json.obj("_name" -> "allSoftware"),
