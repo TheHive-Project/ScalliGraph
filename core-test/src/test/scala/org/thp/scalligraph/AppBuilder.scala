@@ -2,7 +2,7 @@ package org.thp.scalligraph
 
 import scala.reflect.ClassTag
 
-import play.api.inject.guice.GuiceApplicationBuilder
+import play.api.inject.guice.{GuiceApplicationBuilder, GuiceableModule}
 import play.api.libs.concurrent.Akka
 import play.api.{Application, Configuration}
 
@@ -15,9 +15,10 @@ import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
 
 class AppBuilder extends ScalaModule {
 
-  private var initialized                  = false
-  private var init: Function[Unit, _]      = identity[Unit]
-  private var configuration: Configuration = Configuration.empty
+  private var initialized                            = false
+  private var init: Function[Unit, _]                = identity[Unit]
+  private var configuration: Configuration           = Configuration.empty
+  private var overrideModules: List[GuiceableModule] = Nil
 
   override def configure(): Unit = {
     init(())
@@ -91,9 +92,15 @@ class AppBuilder extends ScalaModule {
     this
   }
 
+  def `override`(m: AppBuilder => AppBuilder): AppBuilder = {
+    if (initialized) throw InternalError("Bind is not permitted after app use")
+    overrideModules = m(AppBuilder()) :: overrideModules
+    this
+  }
+
   lazy val app: Application = {
     initialized = true
-    GuiceApplicationBuilder(modules = Seq(this), configuration = configuration).build()
+    GuiceApplicationBuilder(modules = Seq(this), overrides = overrideModules, configuration = configuration).build()
   }
 
   def instanceOf[T: ClassTag]: T = app.injector.instanceOf[T]
