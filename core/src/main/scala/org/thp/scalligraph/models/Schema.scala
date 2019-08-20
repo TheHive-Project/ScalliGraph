@@ -11,9 +11,15 @@ case class InitialValue[V <: Product](model: Model.Vertex[V], value: V) {
     db.createVertex[V](graph, authContext, model, value)
 }
 
-trait Schema {
+trait Schema { schema =>
   def modelList: Seq[Model]
   def initialValues: Seq[InitialValue[_]]                              = Nil
-  def getModel(label: String): Option[Model]                           = modelList.find(_.label == label)
+  final def getModel(label: String): Option[Model]                     = modelList.find(_.label == label)
   def init(implicit graph: Graph, authContext: AuthContext): Try[Unit] = Success(())
+
+  def +(other: Schema): Schema = new Schema {
+    override def modelList: Seq[Model]                                            = schema.modelList ++ other.modelList
+    override def initialValues: Seq[InitialValue[_]]                              = schema.initialValues ++ other.initialValues
+    override def init(implicit graph: Graph, authContext: AuthContext): Try[Unit] = schema.init.flatMap(_ => other.init)
+  }
 }

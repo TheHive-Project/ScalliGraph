@@ -88,7 +88,7 @@ trait Database {
   def setSetProperty[D, G](element: Element, key: String, values: Set[D], mapping: SetMapping[D, _]): Unit
 
   def setProperty[D](element: Element, key: String, value: D, mapping: Mapping[D, _, _]): Unit = {
-    logger.trace(s"update ${element.id()}, $key = $value")
+    logger.trace(s"set ${element.id()}, $key = $value")
     mapping match {
       case m: SingleMapping[d, _] => setSingleProperty(element, key, value, m)
       case m: OptionMapping[d, _] => setOptionProperty(element, key, value.asInstanceOf[Option[d]], m)
