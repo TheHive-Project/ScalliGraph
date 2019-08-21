@@ -3,11 +3,13 @@ package org.thp.scalligraph.neo4j
 import java.nio.file.{Files, Paths}
 import java.util.Date
 
+import scala.concurrent.duration.FiniteDuration
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
 
 import play.api.Configuration
 
+import akka.actor.ActorSystem
 import gremlin.scala._
 import javax.inject.Singleton
 import org.apache.tinkerpop.gremlin.neo4j.structure.Neo4jGraph
@@ -36,25 +38,38 @@ object Neo4jDatabase {
 }
 
 @Singleton
-class Neo4jDatabase(graph: Neo4jGraph, maxRetryOnConflict: Int) extends BaseDatabase {
+class Neo4jDatabase(
+    graph: Neo4jGraph,
+    maxAttempts: Int,
+    minBackoff: FiniteDuration,
+    maxBackoff: FiniteDuration,
+    randomFactor: Double,
+    system: ActorSystem
+) extends BaseDatabase {
 
-  def this(dbPath: String, maxRetryOnConflict: Int) = this(Neo4jGraph.open(dbPath), maxRetryOnConflict)
+  def this(dbPath: String, maxAttempts: Int, minBackoff: FiniteDuration, maxBackoff: FiniteDuration, randomFactor: Double, system: ActorSystem) =
+    this(Neo4jGraph.open(dbPath), maxAttempts, minBackoff, maxBackoff, randomFactor, system)
 
-  def this(configuration: Configuration) =
+  def this(configuration: Configuration, system: ActorSystem) =
     this(
       Neo4jGraph.open(new Config(Neo4jDatabase.defaultConfiguration ++ configuration)),
-      configuration.get[Int]("database.maxRetryOnConflict")
+      configuration.get[Int]("db.onConflict.maxAttempts"),
+      configuration.get[FiniteDuration]("db.onConflict.minBackoff"),
+      configuration.get[FiniteDuration]("db.onConflict.maxBackoff"),
+      configuration.get[Double]("db.onConflict.randomFactor"),
+      system
     )
 
-  def this() = this(Configuration.empty)
+  def this(system: ActorSystem) = this(Configuration.empty, system)
 
   override def roTransaction[A](body: Graph => A): A = graph.synchronized {
     body(graph)
   }
 
   override def tryTransaction[A](body: Graph => Try[A]): Try[A] =
-    Retry(maxRetryOnConflict)
+    Retry(maxAttempts)
       .on[ConstraintViolationException]
+      .withBackoff(minBackoff, maxBackoff, randomFactor)(system)
       .withTry {
         val tx = graph.tx
         val r =

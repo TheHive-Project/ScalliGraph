@@ -8,6 +8,7 @@ import scala.annotation.tailrec
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.{Configuration, Environment}
 
+import akka.actor.ActorSystem
 import org.specs2.mutable.Specification
 import org.specs2.specification.core.{Fragment, Fragments}
 import org.thp.scalligraph.janus.JanusDatabase
@@ -27,12 +28,13 @@ class AttachmentTest extends Specification {
 
   val storageDirectory: Path = Paths.get(s"target/AttachmentTest-${math.random()}")
   Files.createDirectory(storageDirectory)
-  val dbProviders = new DatabaseProviders()
+  val actorSystem = ActorSystem("AttachmentTest")
+  val dbProviders = new DatabaseProviders(actorSystem)
 
   val dbProvStorageSrv: Seq[(DatabaseProvider, StorageSrv)] = dbProviders.list.map {
     case db if db.name == "orientdb" => db -> new OrientDatabaseStorageSrv(db.get().asInstanceOf[OrientDatabase], 32 * 1024)
     case db                          => db -> new DatabaseStorageSrv(db.get(), 32 * 1024)
-  } :+ (new DatabaseProvider("janus", new JanusDatabase()) -> new LocalFileSystemStorageSrv(storageDirectory))
+  } :+ (new DatabaseProvider("janus", new JanusDatabase(actorSystem)) -> new LocalFileSystemStorageSrv(storageDirectory))
 
   Fragments.foreach(dbProvStorageSrv) {
     case (dbProvider, storageSrv) =>

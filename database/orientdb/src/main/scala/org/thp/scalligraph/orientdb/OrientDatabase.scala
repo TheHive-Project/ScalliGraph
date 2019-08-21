@@ -3,10 +3,12 @@ package org.thp.scalligraph.orientdb
 import java.util.{List => JList, Set => JSet}
 
 import scala.collection.JavaConverters._
+import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success, Try}
 
 import play.api.{Configuration, Environment}
 
+import akka.actor.ActorSystem
 import com.orientechnologies.orient.core.exception.OConcurrentModificationException
 import com.orientechnologies.orient.core.metadata.schema.OClass.INDEX_TYPE
 import com.orientechnologies.orient.core.metadata.schema.{OClass, OSchema, OType}
@@ -20,31 +22,54 @@ import org.thp.scalligraph.models._
 import org.thp.scalligraph.{InternalError, Retry}
 
 @Singleton
-class OrientDatabase(graphFactory: OrientGraphFactory, maxRetryOnConflict: Int, override val chunkSize: Int) extends BaseDatabase {
+class OrientDatabase(
+    graphFactory: OrientGraphFactory,
+    maxAttempts: Int,
+    minBackoff: FiniteDuration,
+    maxBackoff: FiniteDuration,
+    randomFactor: Double,
+    override val chunkSize: Int,
+    system: ActorSystem
+) extends BaseDatabase {
   val attachmentVertexLabel  = "binaryData"
   val attachmentPropertyName = "binary"
 
-  def this(url: String, user: String, password: String, maxRetryOnConflict: Int, chunkSize: Int) =
-    this(new OrientGraphFactory(url, user, password), maxRetryOnConflict, chunkSize)
+  def this(
+      url: String,
+      user: String,
+      password: String,
+      maxAttempts: Int,
+      minBackoff: FiniteDuration,
+      maxBackoff: FiniteDuration,
+      randomFactor: Double,
+      chunkSize: Int,
+      system: ActorSystem
+  ) =
+    this(new OrientGraphFactory(url, user, password), maxAttempts, minBackoff, maxBackoff, randomFactor, chunkSize, system)
 
   @Inject()
-  def this(configuration: Configuration) =
+  def this(configuration: Configuration, system: ActorSystem) =
     this(
       configuration.get[String]("db.orientdb.url"),
       configuration.get[String]("db.orientdb.user"),
       configuration.get[String]("db.orientdb.password"),
-      configuration.get[Int]("db.maxRetryOnConflict"),
-      configuration.underlying.getBytes("db.chunkSize").toInt
+      configuration.get[Int]("db.onConflict.maxAttempts"),
+      configuration.get[FiniteDuration]("db.onConflict.minBackoff"),
+      configuration.get[FiniteDuration]("db.onConflict.maxBackoff"),
+      configuration.get[Double]("db.onConflict.randomFactor"),
+      configuration.underlying.getBytes("db.chunkSize").toInt,
+      system
     )
 
-  def this() = this(Configuration.load(Environment.simple()))
+  def this(system: ActorSystem) = this(Configuration.load(Environment.simple()), system)
 
   override def roTransaction[A](body: Graph => A): A = body(graphFactory.getNoTx)
 
   override def tryTransaction[A](body: Graph => Try[A]): Try[A] =
-    Retry(maxRetryOnConflict)
+    Retry(maxAttempts)
       .on[OConcurrentModificationException]
       .on[ORecordDuplicatedException]
+      .withBackoff(minBackoff, maxBackoff, randomFactor)(system)
       .withTry {
         val tx = graphFactory.getTx
         MDC.put("tx", f"${tx.hashCode()}%08x")

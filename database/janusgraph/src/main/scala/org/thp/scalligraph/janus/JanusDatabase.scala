@@ -5,10 +5,12 @@ import java.util.function.Consumer
 import java.util.{Date, Properties}
 
 import scala.collection.JavaConverters._
+import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success, Try}
 
 import play.api.{Configuration, Environment}
 
+import akka.actor.ActorSystem
 import com.typesafe.config.ConfigObject
 import gremlin.scala.{asScalaGraph, Edge, Element, Graph, GremlinScala, Key, Vertex}
 import javax.inject.{Inject, Singleton}
@@ -43,21 +45,33 @@ object JanusDatabase {
 }
 
 @Singleton
-class JanusDatabase(janusGraph: JanusGraph, maxRetryOnConflict: Int, override val chunkSize: Int) extends BaseDatabase {
+class JanusDatabase(
+    janusGraph: JanusGraph,
+    maxAttempts: Int,
+    minBackoff: FiniteDuration,
+    maxBackoff: FiniteDuration,
+    randomFactor: Double,
+    override val chunkSize: Int,
+    system: ActorSystem
+) extends BaseDatabase {
   val name             = "janus"
   val localTransaction = new ThreadLocal[Transaction]
   janusGraph.tx.onReadWrite(READ_WRITE_BEHAVIOR.MANUAL)
 
-  @Inject() def this(configuration: Configuration) = {
+  @Inject() def this(configuration: Configuration, system: ActorSystem) = {
     this(
       JanusDatabase.openDatabase(configuration),
-      configuration.get[Int]("db.maxRetryOnConflict"),
-      configuration.underlying.getBytes("db.chunkSize").toInt
+      configuration.get[Int]("db.onConflict.maxAttempts"),
+      configuration.get[FiniteDuration]("db.onConflict.minBackoff"),
+      configuration.get[FiniteDuration]("db.onConflict.maxBackoff"),
+      configuration.get[Double]("db.onConflict.randomFactor"),
+      configuration.underlying.getBytes("db.chunkSize").toInt,
+      system
     )
     logger.info(s"Instantiate JanusDatabase using ${configuration.get[String]("db.janusgraph.storage.backend")} backend")
   }
 
-  def this() = this(Configuration.load(Environment.simple()))
+  def this(system: ActorSystem) = this(Configuration.load(Environment.simple()), system)
 
   def isValidId(id: String): Boolean = id.forall(_.isDigit)
 
@@ -98,11 +112,12 @@ class JanusDatabase(janusGraph: JanusGraph, maxRetryOnConflict: Int, override va
     }
 
     val result =
-      Retry(maxRetryOnConflict)
+      Retry(maxAttempts)
         .on[DatabaseException]
         .on[SchemaViolationException]
         .on[PermanentBackendException]
         .on[PermanentLockingException]
+        .withBackoff(minBackoff, maxBackoff, randomFactor)(system)
         .withTry {
           val graph = janusGraph.buildTransaction().start()
           val tx    = graph.tx()
@@ -240,7 +255,7 @@ class JanusDatabase(janusGraph: JanusGraph, maxRetryOnConflict: Int, override va
   }
 
   override def createSchema(models: Seq[Model]): Try[Unit] =
-    Retry(maxRetryOnConflict)
+    Retry(maxAttempts)
       .on[PermanentLockingException]
       .withTry {
         logger.info("Creating database schema")
