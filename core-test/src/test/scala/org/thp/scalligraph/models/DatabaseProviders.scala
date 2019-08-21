@@ -24,9 +24,9 @@ class DatabaseProviders @Inject()(config: Configuration, system: ActorSystem) {
 
   lazy val janus: DatabaseProvider = new DatabaseProvider("janus", new JanusDatabase(config, system))
 
-  lazy val orientdb: DatabaseProvider = new DatabaseProvider("orientdb", new OrientDatabase(config))
+  lazy val orientdb: DatabaseProvider = new DatabaseProvider("orientdb", new OrientDatabase(config, system))
 
-  lazy val neo4j: DatabaseProvider = new DatabaseProvider("neo4j", new Neo4jDatabase(config))
+  lazy val neo4j: DatabaseProvider = new DatabaseProvider("neo4j", new Neo4jDatabase(config, system))
 
   lazy val list: Seq[DatabaseProvider] = janus /* :: orientdb :: neo4j*/ :: Nil
 }
