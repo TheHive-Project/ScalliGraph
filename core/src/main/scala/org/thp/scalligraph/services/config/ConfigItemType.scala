@@ -34,6 +34,7 @@ object ConfigItemType {
   implicit val string: ConfigItemType[String]                 = build[String]("string")
   implicit val configuration: ConfigItemType[Configuration]   = build[Configuration]("configuration")
   implicit val json: ConfigItemType[JsValue]                  = build[JsValue]("json")
+  implicit val jsObject: ConfigItemType[JsObject]             = build[JsObject]("json object")
   implicit def option[T](implicit cit: ConfigItemType[T]): ConfigItemType[Option[T]] = {
     import cit.format
     build[Option[T]](s"option(${cit.name})")(Reads.optionNoError, Writes.optionWithNull)
@@ -41,5 +42,9 @@ object ConfigItemType {
   implicit def seq[T](implicit cit: ConfigItemType[T]): ConfigItemType[Seq[T]] = {
     import cit.format
     build[Seq[T]](s"seq(${cit.name})")
+  }
+  implicit def map[T](implicit cit: ConfigItemType[T]): ConfigItemType[Map[String, T]] = {
+    import cit.format
+    build[Map[String, T]](s"map(string -> ${cit.name}")
   }
 }
