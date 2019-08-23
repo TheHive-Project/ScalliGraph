@@ -36,11 +36,6 @@ class PersonSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph
 
   def friends(threshold: Double = 0.8): PersonSteps = new PersonSteps(raw.outToE[Knows].has(Key[Double]("weight"), P.gte(threshold)).inV())
 
-  def remove(): Boolean = {
-    raw.drop().iterate()
-    true
-  }
-
   override def newInstance(raw: GremlinScala[Vertex]): PersonSteps = new PersonSteps(raw)
 }
 

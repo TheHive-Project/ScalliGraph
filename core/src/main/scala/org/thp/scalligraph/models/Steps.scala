@@ -135,6 +135,10 @@ abstract class ScalliSteps[EndDomain, EndGraph, ThisStep <: ScalliSteps[EndDomai
     else None
   }
 
+  def remove(): Unit = {
+    raw.drop().iterate()
+    ()
+  }
 //  def union(u: (ThisStep => ScalliSteps[_, _, _])*) = {
 //    val unionTraversals = u.map(st => (t: GremlinScala.Aux[EndGraph, HNil]) => st(newInstance(t)).raw)
 //    raw.unionFlat(unionTraversals: _*)
