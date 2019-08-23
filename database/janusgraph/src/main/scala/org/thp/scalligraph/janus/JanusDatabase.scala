@@ -4,12 +4,6 @@ import java.nio.file.{Files, Paths}
 import java.util.function.Consumer
 import java.util.{Date, Properties}
 
-import scala.collection.JavaConverters._
-import scala.concurrent.duration.FiniteDuration
-import scala.util.{Failure, Success, Try}
-
-import play.api.{Configuration, Environment}
-
 import akka.actor.ActorSystem
 import com.typesafe.config.ConfigObject
 import gremlin.scala.{asScalaGraph, Edge, Element, Graph, GremlinScala, Key, Vertex}
@@ -24,6 +18,11 @@ import org.slf4j.MDC
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.{Config, InternalError, Retry}
+import play.api.{Configuration, Environment}
+
+import scala.collection.JavaConverters._
+import scala.concurrent.duration.FiniteDuration
+import scala.util.{Failure, Success, Try}
 
 object JanusDatabase {
 
@@ -151,43 +150,84 @@ class JanusDatabase(
       case None     => logger.warn("Trying to add a transaction listener without open transaction")
     }
 
-  private def createEntityProperties(mgmt: JanusGraphManagement): Unit = {
-    mgmt
-      .makePropertyKey("_label")
-      .dataType(classOf[String])
-      .cardinality(Cardinality.SINGLE)
-      .make()
-    mgmt
-      .makePropertyKey("_createdBy")
-      .dataType(classOf[String])
-      .cardinality(Cardinality.SINGLE)
-      .make()
-    mgmt
-      .makePropertyKey("_createdAt")
-      .dataType(classOf[Date])
-      .cardinality(Cardinality.SINGLE)
-      .make()
-    mgmt
-      .makePropertyKey("_updatedBy")
-      .dataType(classOf[String])
-      .cardinality(Cardinality.SINGLE)
-      .make()
-    mgmt
-      .makePropertyKey("_updatedAt")
-      .dataType(classOf[Date])
-      .cardinality(Cardinality.SINGLE)
-      .make()
-    ()
-  }
+  override def createSchema(models: Seq[Model]): Try[Unit] =
+    Retry(maxAttempts)
+      .on[PermanentLockingException]
+      .withTry {
+        logger.info("Creating database schema")
+        janusGraph.synchronized {
+          val mgmt = janusGraph.openManagement()
+          createElementLabels(mgmt, models)
+          createEntityProperties(mgmt)
+          createProperties(mgmt, models)
+          if (Option(mgmt.getPropertyKey("_label")).isEmpty) {
+            mgmt
+              .buildIndex("_label_vertex_index", classOf[Vertex])
+              .addKey(mgmt.getPropertyKey("_label"))
+              .buildCompositeIndex()
+
+            models.foreach {
+              case model: VertexModel =>
+                val vertexLabel = mgmt.getVertexLabel(model.label)
+                model.indexes.foreach {
+                  case (indexType, properties) => createIndex(mgmt, classOf[Vertex], vertexLabel, indexType, properties)
+                }
+              case model: EdgeModel[_, _] =>
+                val edgeLabel = mgmt.getEdgeLabel(model.label)
+                model.indexes.foreach {
+                  case (indexType, properties) => createIndex(mgmt, classOf[Edge], edgeLabel, indexType, properties)
+                }
+            }
+          }
+          Success(())
+
+          // TODO add index for labels when it will be possible
+          // cf. https://github.com/JanusGraph/janusgraph/issues/283
+          mgmt.commit()
+        }
+        Success(())
+      }
+
+  private def createEntityProperties(mgmt: JanusGraphManagement): Unit =
+    if (Option(mgmt.getPropertyKey("_label")).isEmpty) {
+      mgmt
+        .makePropertyKey("_label")
+        .dataType(classOf[String])
+        .cardinality(Cardinality.SINGLE)
+        .make()
+      mgmt
+        .makePropertyKey("_createdBy")
+        .dataType(classOf[String])
+        .cardinality(Cardinality.SINGLE)
+        .make()
+      mgmt
+        .makePropertyKey("_createdAt")
+        .dataType(classOf[Date])
+        .cardinality(Cardinality.SINGLE)
+        .make()
+      mgmt
+        .makePropertyKey("_updatedBy")
+        .dataType(classOf[String])
+        .cardinality(Cardinality.SINGLE)
+        .make()
+      mgmt
+        .makePropertyKey("_updatedAt")
+        .dataType(classOf[Date])
+        .cardinality(Cardinality.SINGLE)
+        .make()
+      ()
+    }
 
   private def createElementLabels(mgmt: JanusGraphManagement, models: Seq[Model]): Unit =
     models.foreach {
-      case m: VertexModel =>
+      case m: VertexModel if Option(mgmt.getVertexLabel(m.label)).isDefined =>
         logger.trace(s"mgmt.getOrCreateVertexLabel(${m.label})")
         mgmt.getOrCreateVertexLabel(m.label)
-      case m: EdgeModel[_, _] =>
+      case m: EdgeModel[_, _] if Option(mgmt.getEdgeLabel(m.label)).isDefined =>
         logger.trace(s"mgmt.getOrCreateEdgeLabel(${m.label})")
         mgmt.getOrCreateEdgeLabel(m.label)
+      case m =>
+        logger.info(s"Model ${m.label} already exists, ignore it")
     }
 
   private def createProperties(mgmt: JanusGraphManagement, models: Seq[Model]): Unit =
@@ -215,12 +255,21 @@ class JanusDatabase(
             case MappingCardinality.set    => Cardinality.SET
           }
           logger.trace(s"mgmt.makePropertyKey($fieldName).dataType(${mapping.graphTypeClass.getSimpleName}.class).cardinality($cardinality).make()")
-          mgmt
-            .makePropertyKey(fieldName)
-            .dataType(mapping.graphTypeClass)
-            .cardinality(cardinality)
-            .make()
-
+          Option(mgmt.getPropertyKey(fieldName)) match {
+            case None =>
+              mgmt
+                .makePropertyKey(fieldName)
+                .dataType(mapping.graphTypeClass)
+                .cardinality(cardinality)
+                .make()
+            case Some(p) =>
+              if (p.dataType() == mapping.graphTypeClass && p.cardinality() == cardinality)
+                logger.info(s"Property $fieldName $cardinality:${mapping.graphTypeClass} already exists, ignore it")
+              else
+                logger.error(
+                  s"Property $fieldName exists with incompatible type: $cardinality:${mapping.graphTypeClass} Vs ${p.cardinality()}:${p.dataType()}"
+                )
+          }
       }
 
   private def createIndex(
@@ -231,73 +280,32 @@ class JanusDatabase(
       properties: Seq[String]
   ): Unit = {
     val indexName = elementLabel.name + "_" + properties.mkString("_")
-    val index     = mgmt.buildIndex(indexName, elementClass).indexOnly(elementLabel)
-    val propertyKeys = (properties :+ "_label").map { p =>
-      Option(mgmt.getPropertyKey(p)).getOrElse(throw InternalError(s"Property $p in ${elementLabel.name} not found"))
-    }
-    indexType match {
-      case IndexType.unique =>
-        logger.debug(s"Creating unique index on fields $elementLabel:${propertyKeys.mkString(",")}")
-        propertyKeys.foreach(index.addKey)
-        index.unique()
-        val i = index.buildCompositeIndex()
-        mgmt.setConsistency(i, ConsistencyModifier.LOCK)
-      case IndexType.standard =>
-        logger.debug(s"Creating index on fields $elementLabel:${propertyKeys.mkString(",")}")
-        propertyKeys.foreach(index.addKey)
-        index.buildCompositeIndex()
-      case IndexType.fulltext =>
-        logger.debug(s"Creating fulltext index on fields $elementLabel:${propertyKeys.mkString(",")}")
-        propertyKeys.foreach(k => index.addKey(k, Mapping.TEXT.asParameter()))
-        index.buildMixedIndex("search")
-    }
-    ()
-  }
-
-  override def createSchema(models: Seq[Model]): Try[Unit] =
-    Retry(maxAttempts)
-      .on[PermanentLockingException]
-      .withTry {
-        logger.info("Creating database schema")
-        janusGraph.synchronized {
-          val mgmt = janusGraph.openManagement()
-          val alreadyExists = models
-            .map(_.label)
-            .flatMap(l => Option(mgmt.getVertexLabel(l)).orElse(Option(mgmt.getEdgeLabel(l))))
-            .map(_.toString)
-          if (alreadyExists.nonEmpty) {
-            logger.info(s"Models already exists. Skipping schema creation (existing labels: ${alreadyExists.mkString(",")})")
-//          mgmt.rollback()
-          } else {
-            //    mgmt.setConsistency(leadidCUniqueIndex, ConsistencyModifier.LOCK)
-            createElementLabels(mgmt, models)
-            createEntityProperties(mgmt)
-            createProperties(mgmt, models)
-            mgmt
-              .buildIndex("_label_vertex_index", classOf[Vertex])
-              .addKey(mgmt.getPropertyKey("_label"))
-              .buildCompositeIndex()
-
-            models.foreach {
-              case model: VertexModel =>
-                val vertexLabel = mgmt.getVertexLabel(model.label)
-                model.indexes.foreach {
-                  case (indexType, properties) => createIndex(mgmt, classOf[Vertex], vertexLabel, indexType, properties)
-                }
-              case model: EdgeModel[_, _] =>
-                val edgeLabel = mgmt.getEdgeLabel(model.label)
-                model.indexes.foreach {
-                  case (indexType, properties) => createIndex(mgmt, classOf[Edge], edgeLabel, indexType, properties)
-                }
-            }
-
-            // TODO add index for labels when it will be possible
-            // cf. https://github.com/JanusGraph/janusgraph/issues/283
-            mgmt.commit()
-          }
-          Success(())
-        }
+    if (Option(mgmt.getGraphIndex(indexName)).isDefined) {
+      logger.info(s"Index $indexName already exists, ignore it")
+    } else {
+      val index = mgmt.buildIndex(indexName, elementClass).indexOnly(elementLabel)
+      val propertyKeys = (properties :+ "_label").map { p =>
+        Option(mgmt.getPropertyKey(p)).getOrElse(throw InternalError(s"Property $p in ${elementLabel.name} not found"))
       }
+      indexType match {
+        case IndexType.unique =>
+          logger.debug(s"Creating unique index on fields $elementLabel:${propertyKeys.mkString(",")}")
+          propertyKeys.foreach(index.addKey)
+          index.unique()
+          val i = index.buildCompositeIndex()
+          mgmt.setConsistency(i, ConsistencyModifier.LOCK)
+        case IndexType.standard =>
+          logger.debug(s"Creating index on fields $elementLabel:${propertyKeys.mkString(",")}")
+          propertyKeys.foreach(index.addKey)
+          index.buildCompositeIndex()
+        case IndexType.fulltext =>
+          logger.debug(s"Creating fulltext index on fields $elementLabel:${propertyKeys.mkString(",")}")
+          propertyKeys.foreach(k => index.addKey(k, Mapping.TEXT.asParameter()))
+          index.buildMixedIndex("search")
+      }
+      ()
+    }
+  }
 
   override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
     val createdVertex = model.create(v)(this, graph)
