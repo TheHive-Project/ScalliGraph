@@ -23,10 +23,13 @@ class AccessLogFilter @Inject()(implicit val mat: Materializer, ec: ExecutionCon
       val endTime     = System.currentTimeMillis
       val requestTime = endTime - startTime
 
-      logger.info(s"${requestHeader.method} ${requestHeader.uri} took ${requestTime}ms and returned ${result.header.status} ${result
-        .body
-        .contentLength
-        .fold("")(_ + " bytes")}")
+      MDC.put("request", f"${requestHeader.id}%08x")
+      logger.info(
+        s"${requestHeader.connection.remoteAddressString} ${requestHeader.method} ${requestHeader.uri} took ${requestTime}ms and returned ${result.header.status} ${result
+          .body
+          .contentLength
+          .fold("")(_ + " bytes")}"
+      )
 
       MDC.remove("request")
       result.withHeaders("Request-Time" -> requestTime.toString)
