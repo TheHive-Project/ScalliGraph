@@ -2,14 +2,13 @@ package org.thp.scalligraph.controllers
 
 import java.nio.file.Path
 
-import scala.collection.immutable
-
+import org.scalactic.Good
+import org.thp.scalligraph.{FPath, FPathElem, FPathElemInSeq, FPathEmpty, FPathSeq}
 import play.api.Logger
 import play.api.libs.json._
 import play.api.mvc._
 
-import org.scalactic.Good
-import org.thp.scalligraph.{FPath, FPathElem, FPathElemInSeq, FPathEmpty, FPathSeq}
+import scala.collection.immutable
 
 sealed trait Field {
   def get(pathElement: String): Field = FUndefined
@@ -61,10 +60,9 @@ object Field {
       case AnyContentAsMultipartFormData(MultipartFormData(dataParts, files, badParts)) =>
         if (badParts.nonEmpty)
           logger.warn("Request body contains invalid parts")
-        val dataFields = dataParts
-          .getOrElse("_json", Nil)
-          .headOption
-          .map { s =>
+
+        val dataFields = dataParts.flatMap {
+          case ("_json", Seq(s, _*)) =>
             Json
               .parse(s)
               .as[JsObject]
@@ -73,8 +71,8 @@ object Field {
                 case (k, v) => k -> Field(v)
               }
               .toMap
-          }
-          .getOrElse(Map.empty)
+          case (k, v) => Map(k -> FAny(v))
+        }
         files.foldLeft(FObject(dataFields)) {
           case (obj, MultipartFormData.FilePart(key, filename, contentType, file, _, _)) =>
             obj.set(FPath(key), FFile(filename.split("[/\\\\]").last, file, contentType.getOrElse("application/octet-stream")))
@@ -99,20 +97,8 @@ case class FString(value: String) extends Field {
   override def toJson: JsValue = JsString(value)
 }
 
-object FString {
-  implicit val parser: FieldsParser[FString] = FieldsParser[FString]("FString") {
-    case (_, field: FString) => Good(field)
-  }
-}
-
 case class FNumber(value: Long) extends Field {
   override def toJson: JsValue = JsNumber(value)
-}
-
-object FNumber {
-  implicit val parser: FieldsParser[FNumber] = FieldsParser[FNumber]("FNumber") {
-    case (_, field: FNumber) => Good(field)
-  }
 }
 
 case class FBoolean(value: Boolean) extends Field {
@@ -128,21 +114,6 @@ case class FSeq(values: List[Field]) extends Field {
   override def toJson: JsValue = JsArray(values.map(_.toJson))
 }
 
-object FSeq {
-  def apply(value1: Field, values: Field*): FSeq = new FSeq(value1 :: values.toList)
-  def apply()                                    = new FSeq(Nil)
-  implicit val parser: FieldsParser[FSeq] = FieldsParser[FSeq]("FSeq") {
-    case (_, field: FSeq) => Good(field)
-  }
-}
-case object FNull extends Field {
-  override def toJson: JsValue = JsNull
-}
-
-case object FUndefined extends Field {
-  override def toJson: JsValue = JsNull
-}
-
 case class FAny(value: Seq[String]) extends Field {
   override def toJson: JsValue = JsArray(value.map(JsString.apply))
 }
@@ -151,15 +122,6 @@ case class FFile(filename: String, filepath: Path, contentType: String) extends 
   override def toJson: JsValue = Json.obj("filename" -> filename, "filepath" -> filepath.toString, "contentType" -> contentType)
 }
 
-object FObject {
-  def empty                                   = new FObject(Map.empty)
-  def apply(elems: (String, Field)*): FObject = new FObject(Map(elems: _*))
-  def apply(map: Map[String, Field]): FObject = new FObject(map)
-  def apply(o: JsObject): FObject             = new FObject(o.value.mapValues(Field.apply).toMap)
-  implicit val parser: FieldsParser[FObject] = FieldsParser[FObject]("FObject") {
-    case (_, field: FObject) => Good(field)
-  }
-}
 case class FObject(fields: immutable.Map[String, Field]) extends Field {
   lazy val pathFields: Seq[(FPath, Field)] = fields.toSeq.map { case (k, v) => FPath(k) -> v }
 
@@ -214,4 +176,42 @@ case class FObject(fields: immutable.Map[String, Field]) extends Field {
   }
 
   override def toJson: JsValue = JsObject(fields.map { case (k, v) => k -> v.toJson })
+}
+
+object FString {
+  implicit val parser: FieldsParser[FString] = FieldsParser[FString]("FString") {
+    case (_, field: FString) => Good(field)
+  }
+}
+
+object FNumber {
+  implicit val parser: FieldsParser[FNumber] = FieldsParser[FNumber]("FNumber") {
+    case (_, field: FNumber) => Good(field)
+  }
+}
+
+object FSeq {
+  def apply(value1: Field, values: Field*): FSeq = new FSeq(value1 :: values.toList)
+  def apply()                                    = new FSeq(Nil)
+  implicit val parser: FieldsParser[FSeq] = FieldsParser[FSeq]("FSeq") {
+    case (_, field: FSeq) => Good(field)
+  }
+}
+
+case object FNull extends Field {
+  override def toJson: JsValue = JsNull
+}
+
+case object FUndefined extends Field {
+  override def toJson: JsValue = JsNull
+}
+
+object FObject {
+  def empty                                   = new FObject(Map.empty)
+  def apply(elems: (String, Field)*): FObject = new FObject(Map(elems: _*))
+  def apply(map: Map[String, Field]): FObject = new FObject(map)
+  def apply(o: JsObject): FObject             = new FObject(o.value.mapValues(Field.apply).toMap)
+  implicit val parser: FieldsParser[FObject] = FieldsParser[FObject]("FObject") {
+    case (_, field: FObject) => Good(field)
+  }
 }
