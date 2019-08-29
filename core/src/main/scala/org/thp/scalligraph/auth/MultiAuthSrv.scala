@@ -9,6 +9,7 @@ import play.api.{Configuration, Logger}
 import javax.inject.{Inject, Provider, Singleton}
 import org.thp.scalligraph.controllers.AuthenticatedRequest
 import org.thp.scalligraph.services.config.{ApplicationConfig, ConfigItem}
+import org.thp.scalligraph.services.config.ApplicationConfig.configurationFormat
 import org.thp.scalligraph.{AuthenticationError, BadConfigurationError, OAuth2Redirect, RichSeq}
 
 class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, availableAuthProviders: immutable.Set[AuthSrvProvider])
@@ -16,7 +17,7 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
   val name: String = "multi"
   lazy val logger  = Logger(getClass)
 
-  val authSrvProviderConfigsConfig: ConfigItem[Seq[Configuration]] =
+  val authSrvProviderConfigsConfig: ConfigItem[Seq[Configuration], Seq[Configuration]] =
     appConfig.validatedItem[Seq[Configuration]](
       "auth.providers",
       "List of authentication provider",

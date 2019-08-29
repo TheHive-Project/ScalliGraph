@@ -1,7 +1,7 @@
 package org.thp.scalligraph.services
 
 import scala.reflect.runtime.{universe => ru}
-import scala.util.{Success, Try}
+import scala.util.Try
 
 import gremlin.scala._
 import org.thp.scalligraph.auth.AuthContext
@@ -18,5 +18,5 @@ class EdgeSrv[E <: Product: ru.TypeTag, FROM <: Product: ru.TypeTag, TO <: Produ
   override def initSteps(implicit graph: Graph): EdgeSteps[E, FROM, TO] = steps(db.labelFilter(model)(graph.E))
 
   def create(e: E, from: FROM with Entity, to: TO with Entity)(implicit graph: Graph, authContext: AuthContext): Try[E with Entity] =
-    Success(db.createEdge[E, FROM, TO](graph, authContext, model, e, from, to))
+    Try(db.createEdge[E, FROM, TO](graph, authContext, model, e, from, to))
 }

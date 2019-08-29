@@ -4,7 +4,7 @@ import scala.compat.java8.OptionConverters._
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Try}
 
-import play.api.libs.json.{JsObject, JsValue, Json}
+import play.api.libs.json.{Format, JsObject, JsValue, Json}
 
 import akka.actor.ActorRef
 import javax.inject.{Inject, Singleton}
@@ -48,16 +48,15 @@ trait ContextConfigItem[T, C] {
   val path: String
   val description: String
   val defaultValue: T
-  val configItemType: ConfigItemType[T]
+  val jsonFormat: Format[T]
   def get(context: C): T
   def set(context: C, v: T)(implicit authContext: AuthContext): Try[Unit]
   def validation(v: T): Try[T]
-  def getDefaultValueJson: JsValue = configItemType.format.writes(defaultValue)
-  def getJson(context: C): JsValue = configItemType.format.writes(get(context))
+  def getDefaultValueJson: JsValue = jsonFormat.writes(defaultValue)
+  def getJson(context: C): JsValue = jsonFormat.writes(get(context))
 
   def setJson(context: C, v: JsValue)(implicit authContext: AuthContext): Try[Unit] =
-    configItemType
-      .format
+    jsonFormat
       .reads(v)
       .map(set(context, _))
       .fold(
@@ -69,7 +68,6 @@ trait ContextConfigItem[T, C] {
         },
         identity
       )
-  def forContext(context: C): ConfigItem[T]
 }
 
 class ContextConfigItemImpl[T, C](
@@ -77,7 +75,7 @@ class ContextConfigItemImpl[T, C](
     val path: String,
     val description: String,
     val defaultValue: T,
-    val configItemType: ConfigItemType[T],
+    val jsonFormat: Format[T],
     val validationFunction: T => Try[T],
     db: Database,
     eventSrv: EventSrv,
@@ -94,7 +92,7 @@ class ContextConfigItemImpl[T, C](
         if (!flag)
           value = context
             .getValue(ctx, path)
-            .flatMap(s => configItemType.format.reads(s).asOpt)
+            .flatMap(s => jsonFormat.reads(s).asOpt)
             .getOrElse(defaultValue)
         flag = true
       }
@@ -103,12 +101,10 @@ class ContextConfigItemImpl[T, C](
   }
 
   override def set(ctx: C, v: T)(implicit authContext: AuthContext): Try[Unit] = validation(v).flatMap { value =>
-    val valueJson = configItemType.format.writes(value)
+    val valueJson = jsonFormat.writes(value)
     context
       .setValue(ctx, path, valueJson)
       .map(p => eventSrv.publish(ConfigTopic.topicName)(Invalidate(p)))
   }
   override def validation(v: T): Try[T] = validationFunction(v)
-  override def forContext(context: C): ConfigItem[T] =
-    new ConfigItemImpl[T](path, description, defaultValue, configItemType, validationFunction, db, eventSrv, configActor, ec)
 }

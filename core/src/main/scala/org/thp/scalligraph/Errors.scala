@@ -5,7 +5,7 @@ import play.api.libs.json._
 import org.thp.scalligraph.controllers.Field
 
 case class BadRequestError(message: String)                                           extends Exception(message)
-case class CreateError(status: Option[String], message: String, attributes: JsObject) extends Exception(message)
+case class CreateError(message: String, attributes: JsObject)                         extends Exception(message)
 case class NotFoundError(message: String)                                             extends Exception(message)
 case class GetError(message: String)                                                  extends Exception(message)
 case class UpdateError(status: Option[String], message: String, attributes: JsObject) extends Exception(message)

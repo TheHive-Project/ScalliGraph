@@ -53,7 +53,7 @@ class ErrorHandler extends HttpErrorHandler {
         Some(Status.BAD_REQUEST -> Json.toJson(ace))
       case iae: IllegalArgumentException =>
         Some(Status.BAD_REQUEST -> Json.obj("type" -> "IllegalArgument", "message" -> iae.getMessage))
-      case CreateError(_, message, attributes) =>
+      case CreateError(message, attributes) =>
         Some(
           Status.INTERNAL_SERVER_ERROR -> Json
             .obj("type" -> "CreateError", "message" -> message, "object" -> attributes)
