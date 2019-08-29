@@ -54,8 +54,9 @@ class JanusDatabase(
     override val chunkSize: Int,
     system: ActorSystem
 ) extends BaseDatabase {
-  val name             = "janus"
-  val localTransaction = new ThreadLocal[Transaction]
+  val name = "janus"
+
+  val localTransaction: ThreadLocal[Option[Transaction]] = ThreadLocal.withInitial[Option[Transaction]](() => None)
   janusGraph.tx.onReadWrite(READ_WRITE_BEHAVIOR.MANUAL)
 
   @Inject() def this(configuration: Configuration, system: ActorSystem) = {
@@ -78,13 +79,16 @@ class JanusDatabase(
   override def roTransaction[R](body: Graph => R): R = {
     val graph = janusGraph.buildTransaction().readOnly().start()
     val tx    = graph.tx()
-    localTransaction.set(tx)
+    val oldTx = localTransaction.get()
+    if (oldTx.nonEmpty)
+      logger.warn("Creating transaction while another transaction is already open")
+    localTransaction.set(Some(tx))
     MDC.put("tx", f"${System.identityHashCode(tx)}%08x")
     logger.debug(s"Begin of readonly transaction")
     val r = body(graph)
     logger.debug(s"End of readonly transaction")
     MDC.remove("tx")
-    localTransaction.remove()
+    localTransaction.set(oldTx)
     tx.commit()
 
     r
@@ -110,7 +114,9 @@ class JanusDatabase(
         Try(tx.rollback())
         Failure(t)
     }
-
+    val oldTx = localTransaction.get()
+    if (oldTx.isDefined)
+      logger.warn("Creating transaction while another transaction is already open")
     val result =
       Retry(maxAttempts)
         .on[DatabaseException]
@@ -121,7 +127,7 @@ class JanusDatabase(
         .withTry {
           val graph = janusGraph.buildTransaction().start()
           val tx    = graph.tx()
-          localTransaction.set(tx)
+          localTransaction.set(Some(tx))
           MDC.put("tx", f"${System.identityHashCode(tx)}%08x")
           logger.debug("Begin of transaction")
           Try(body(graph))
@@ -138,7 +144,7 @@ class JanusDatabase(
             logger.error(s"Exception raised, rollback (${e.getMessage})")
             Failure(e)
         }
-    localTransaction.remove()
+    localTransaction.set(oldTx)
     MDC.remove("tx")
     result
   }
@@ -146,7 +152,7 @@ class JanusDatabase(
   def currentTransactionId(graph: Graph): AnyRef = graph
 
   override def addTransactionListener(listener: Consumer[Transaction.Status])(implicit graph: Graph): Unit =
-    Option(localTransaction.get()) match {
+    localTransaction.get() match {
       case Some(tx) => tx.addTransactionListener(listener)
       case None     => logger.warn("Trying to add a transaction listener without open transaction")
     }
