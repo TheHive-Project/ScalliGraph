@@ -69,6 +69,10 @@ class OrientDatabaseStorageSrv(db: OrientDatabase, chunkSize: Int) extends Stora
         }
     }
 
+  override def exists(id: String): Boolean = db.roTransaction { implicit graph =>
+    graph.V(id).exists()
+  }
+
   override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit] = {
     val odb = graph.asInstanceOf[OrientGraph].database()
 

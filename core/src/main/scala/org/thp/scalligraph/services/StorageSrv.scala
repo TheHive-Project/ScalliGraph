@@ -19,6 +19,7 @@ trait StorageSrv {
   def loadBinary(id: String): InputStream
   def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit]
   def saveBinary(id: String, data: Array[Byte])(implicit graph: Graph): Try[Unit] = saveBinary(id, new ByteArrayInputStream(data))
+  def exists(id: String): Boolean
 }
 
 trait StreamUtils {
@@ -37,16 +38,18 @@ class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
   @Inject()
   def this(configuration: Configuration) = this(Paths.get(configuration.get[String]("storage.localfs.location")))
 
-  def loadBinary(id: String): InputStream =
+  override def loadBinary(id: String): InputStream =
     Files.newInputStream(directory.resolve(id))
 
-  def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit] =
+  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit] =
     Try {
       Files.copy(is, directory.resolve(id))
       ()
     }.recover {
       case _: FileAlreadyExistsException => ()
     }
+
+  override def exists(id: String): Boolean = Files.exists(directory.resolve(id))
 }
 
 object HadoopStorageSrv {
@@ -84,6 +87,8 @@ class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
       val os = fs.create(new HDPath(location, id), false)
       IOUtils.copyBytes(is, os, 4096)
     }
+
+  override def exists(id: String): Boolean = fs.exists(new HDPath(id))
 }
 
 @Singleton
@@ -135,6 +140,10 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
             read()
         }
     }
+
+  override def exists(id: String): Boolean = db.roTransaction { implicit graph =>
+    graph.V().has(Key("attachmentId") of id).exists()
+  }
 
   override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit] = {
 
