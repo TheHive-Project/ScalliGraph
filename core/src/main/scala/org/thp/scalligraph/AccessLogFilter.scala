@@ -1,6 +1,6 @@
 package org.thp.scalligraph
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 
 import play.api.Logger
 import play.api.http.{DefaultHttpFilters, EnabledFilters}
@@ -8,32 +8,30 @@ import play.api.mvc._
 
 import akka.stream.Materializer
 import javax.inject.Inject
-import org.slf4j.MDC
 
-class AccessLogFilter @Inject()(implicit val mat: Materializer, ec: ExecutionContext) extends Filter {
+class AccessLogFilter @Inject()(implicit val mat: Materializer, ec: ExecutionContext) extends EssentialFilter {
 
   val logger = Logger(getClass)
 
-  def apply(nextFilter: RequestHeader => Future[Result])(requestHeader: RequestHeader): Future[Result] = {
-    MDC.put("request", f"${requestHeader.id}%08x")
-
+  override def apply(next: EssentialAction): EssentialAction = (requestHeader: RequestHeader) => {
     val startTime = System.currentTimeMillis
+    RequestContext
+      .withRequest(requestHeader)(next(requestHeader))
+      .map { result =>
+        RequestContext.withRequest(requestHeader) {
+          val endTime     = System.currentTimeMillis
+          val requestTime = endTime - startTime
 
-    nextFilter(requestHeader).map { result =>
-      val endTime     = System.currentTimeMillis
-      val requestTime = endTime - startTime
+          logger.info(
+            s"${requestHeader.connection.remoteAddressString} ${requestHeader.method} ${requestHeader.uri} took ${requestTime}ms and returned ${result.header.status} ${result
+              .body
+              .contentLength
+              .fold("")(_ + " bytes")}"
+          )
 
-      MDC.put("request", f"${requestHeader.id}%08x")
-      logger.info(
-        s"${requestHeader.connection.remoteAddressString} ${requestHeader.method} ${requestHeader.uri} took ${requestTime}ms and returned ${result.header.status} ${result
-          .body
-          .contentLength
-          .fold("")(_ + " bytes")}"
-      )
-
-      MDC.remove("request")
-      result.withHeaders("Request-Time" -> requestTime.toString)
-    }
+          result.withHeaders("Request-Time" -> requestTime.toString)
+        }
+      }
   }
 }
 
