@@ -1,10 +1,12 @@
 package org.thp.scalligraph
 
+import java.util.{Map => JMap}
 import java.util.concurrent.TimeUnit
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
+import play.api.Logger
 import play.api.mvc.RequestHeader
 
 import akka.dispatch._
@@ -32,7 +34,7 @@ class ContextPropagatingDispatcherConfigurator(config: Config, prerequisites: Di
 /**
   * A context propagating dispatcher.
   *
-  * This dispatcher propagates the current request context if it's set when it's executed.
+  * This dispatcher propagates the current diagnostic context if it's set when it's executed.
   */
 class ContextPropagatingDisptacher(
     _configurator: MessageDispatcherConfigurator,
@@ -52,75 +54,74 @@ class ContextPropagatingDisptacher(
 
   override def prepare(): ExecutionContext = new ExecutionContext {
     // capture the context
-    val context: CapturedRequestContext = RequestContext.capture()
-
-    def execute(r: Runnable): Unit        = self.execute(() => context.withContext(r.run()))
-    def reportFailure(t: Throwable): Unit = self.reportFailure(t)
+    val context: CapturedDiagnosticContext = DiagnosticContext.capture()
+    def execute(r: Runnable): Unit         = self.execute(() => context.withContext(r.run()))
+    def reportFailure(t: Throwable): Unit  = self.reportFailure(t)
   }
 }
 
 /**
-  * The current request context.
+  * The current diagnostic context.
   */
-object RequestContext {
-  private val request = new ThreadLocal[RequestHeader]()
+object DiagnosticContext {
 
-  private def setRequest(rh: RequestHeader): Unit = {
-    request.set(rh)
-    MDC.put("request", f"${rh.id}%08x")
-  }
+  /**
+    * Capture the current diagnostic context.
+    */
+  def capture(): CapturedDiagnosticContext = new CapturedDiagnosticContext {
+    val maybeMDC: Option[JMap[String, String]] = getDiagnosticContext
 
-  private def clear(): Unit = {
-    request.remove()
-    MDC.remove("request")
+    def withContext[T](block: => T): T =
+      maybeMDC match {
+        case Some(mdc) => withDiagnosticContext(mdc)(block)
+        case None      => block
+      }
   }
 
   /**
-    * Capture the current request context.
+    * Get the current diagnostic context.
     */
-  def capture(): CapturedRequestContext = new CapturedRequestContext {
-    val maybeRequest: Option[RequestHeader] = getRequest
+  def getDiagnosticContext: Option[JMap[String, String]] = Option(MDC.getCopyOfContextMap)
 
-    def withContext[T](block: => T): Unit = {
-      maybeRequest match {
-        case Some(rh) => withRequest(rh)(block)
-        case None     => block
-      }
-      ()
+  /**
+    * Execute the given block with the given diagnostic context.
+    */
+  def withDiagnosticContext[T](mdc: JMap[String, String])(block: => T): T = {
+    assert(mdc != null, "MDC must not be null")
+    saveDiagnosticContext {
+      MDC.setContextMap(mdc)
+      block
     }
   }
 
-  /**
-    * Get the current request ID.
-    */
-  def getRequest: Option[RequestHeader] = Option(request.get())
+  def withRequest[T](requestHeader: RequestHeader)(block: => T): T = {
+    assert(requestHeader != null, "RequestHeader must not be null")
+    saveDiagnosticContext {
+      MDC.put("request", f"${requestHeader.id}%08x")
+      block
+    }
+  }
 
-  /**
-    * Execute the given block with the given request id.
-    */
-  def withRequest[T](rh: RequestHeader)(block: => T): T = {
-    assert(rh != null, "RequestHeader must not be null")
-
-    val maybeOld = getRequest
+  def saveDiagnosticContext[T](block: => T): T = {
+    val maybeOld = getDiagnosticContext
     try {
-      setRequest(rh)
       block
     } finally {
       maybeOld match {
-        case Some(old) => setRequest(old)
-        case None      => clear()
+        case Some(old) => MDC.setContextMap(old)
+        case None      => MDC.clear()
       }
     }
   }
 }
 
 /**
-  * A captured request context
+  * A captured context
   */
-trait CapturedRequestContext {
+trait CapturedDiagnosticContext {
 
   /**
-    * Execute the given block with the captured request context.
+    * Execute the given block with the captured context.
     */
-  def withContext[T](block: => T)
+  def withContext[T](block: => T): T
 }

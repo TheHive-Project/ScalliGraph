@@ -15,10 +15,10 @@ class AccessLogFilter @Inject()(implicit val mat: Materializer, ec: ExecutionCon
 
   override def apply(next: EssentialAction): EssentialAction = (requestHeader: RequestHeader) => {
     val startTime = System.currentTimeMillis
-    RequestContext
+    DiagnosticContext
       .withRequest(requestHeader)(next(requestHeader))
       .map { result =>
-        RequestContext.withRequest(requestHeader) {
+        DiagnosticContext.withRequest(requestHeader) {
           val endTime     = System.currentTimeMillis
           val requestTime = endTime - startTime
 
