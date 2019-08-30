@@ -4,25 +4,41 @@ import play.api.libs.json._
 
 import org.thp.scalligraph.controllers.Field
 
-case class BadRequestError(message: String)                                           extends Exception(message)
-case class CreateError(message: String, attributes: JsObject)                         extends Exception(message)
-case class NotFoundError(message: String)                                             extends Exception(message)
-case class GetError(message: String)                                                  extends Exception(message)
-case class UpdateError(status: Option[String], message: String, attributes: JsObject) extends Exception(message)
-case class InternalError(message: String, cause: Throwable = null)                    extends Exception(message, cause)
-case class SearchError(message: String, cause: Throwable)                             extends Exception(message, cause)
-case class AuthenticationError(message: String)                                       extends Exception(message)
-case class AuthorizationError(message: String)                                        extends Exception(message)
-case class BadConfigurationError(message: String)                                     extends Exception(message)
-case class OAuth2Redirect(redirectUrl: String, params: Map[String, Seq[String]])      extends Exception(redirectUrl)
-case class MultiError(message: String, exceptions: Seq[Exception])
-    extends Exception(message + exceptions.map(_.getMessage).mkString(" :\n\t- ", "\n\t- ", ""))
+abstract class GenericError(val `type`: String, message: String, cause: Throwable) extends Exception(message, cause) {
 
-case class AttributeCheckingError(errors: Seq[AttributeError] = Nil) extends Exception(errors.mkString("[", "][", "]")) {
-  override def toString: String = errors.mkString("[", "][", "]")
+  def toJson: JsObject = {
+    val json = Json.obj("type" -> `type`, "message" -> message)
+    if (cause == null) json
+    else json + ("cause" -> JsString(cause.getMessage))
+  }
 }
 
-object AttributeCheckingError {
+case class AuthenticationError(message: String, cause: Throwable = null) extends GenericError("AuthenticationError", message, cause)
+case class AuthorizationError(message: String, cause: Throwable = null)  extends GenericError("AuthorizationError", message, cause)
+case class CreateError(message: String, attributes: JsObject, cause: Throwable = null) extends GenericError("CreateError", message, cause) {
+  override def toJson: JsObject = super.toJson + ("object" -> attributes)
+}
+case class GetError(message: String, cause: Throwable = null)    extends GenericError("GetError", message, cause)
+case class SearchError(message: String, cause: Throwable = null) extends GenericError("SearchError", message, cause)
+case class UpdateError(status: Option[String], message: String, attributes: JsObject, cause: Throwable = null)
+    extends GenericError("UpdateError", message, cause) {
+  override def toJson: JsObject = super.toJson + ("object" -> attributes)
+}
+case class NotFoundError(message: String, cause: Throwable = null)   extends GenericError("NotFoundError", message, cause)
+case class BadRequestError(message: String, cause: Throwable = null) extends GenericError("BadRequest", message, cause)
+case class MultiError(message: String, exceptions: Seq[GenericError], cause: Throwable = null)
+    extends GenericError("MultiError", message + exceptions.map(_.getMessage).mkString(" :\n\t- ", "\n\t- ", ""), cause) {
+  override def toJson: JsObject = super.toJson + ("suberrors" -> JsArray(exceptions.map(_.toJson)))
+}
+case class InternalError(message: String, cause: Throwable = null)                                        extends GenericError("InternalError", message, cause)
+case class BadConfigurationError(message: String, cause: Throwable = null)                                extends GenericError("BadConfigurationError", message, cause)
+case class OAuth2Redirect(redirectUrl: String, params: Map[String, Seq[String]], cause: Throwable = null) extends Exception(redirectUrl, cause)
+case class AttributeCheckingError(errors: Seq[AttributeError] = Nil, cause: Throwable = null)
+    extends GenericError("AttributeCheckingError", errors.mkString("[", "][", "]"), cause) {
+  override def toJson: JsObject = super.toJson + ("errors" -> Json.toJson(errors))
+}
+
+object AttributeError {
   implicit val invalidFormatAttributeErrorWrites: OWrites[InvalidFormatAttributeError] =
     Json.writes[InvalidFormatAttributeError]
   implicit val unknownAttributeErrorWrites: OWrites[UnknownAttributeError] = Json.writes[UnknownAttributeError]
@@ -44,9 +60,6 @@ object AttributeCheckingError {
     case uae: UnsupportedAttributeError =>
       unsupportedAttributeErrorWrites.writes(uae) + ("type" -> JsString("UnsupportedAttributeError"))
   }
-
-  implicit val attributeCheckingErrorWrites: OWrites[AttributeCheckingError] =
-    Json.writes[AttributeCheckingError]
 }
 
 sealed trait AttributeError extends Throwable {

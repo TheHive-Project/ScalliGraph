@@ -5,7 +5,7 @@ import scala.concurrent.Future
 import play.api.Logger
 import play.api.http.Status.{BAD_REQUEST, FORBIDDEN, NOT_FOUND}
 import play.api.http.{HttpErrorHandler, Status, Writeable}
-import play.api.libs.json.{JsValue, Json}
+import play.api.libs.json.{JsString, JsValue, Json}
 import play.api.mvc.{RequestHeader, ResponseHeader, Result}
 
 /**
@@ -26,48 +26,23 @@ class ErrorHandler extends HttpErrorHandler {
 
   def toErrorResult(ex: Throwable): Option[(Int, JsValue)] =
     ex match {
-      case AuthenticationError(message) =>
-        Some(Status.UNAUTHORIZED -> Json.obj("type" -> "AuthenticationError", "message" -> message))
-      case AuthorizationError(message) =>
-        Some(Status.FORBIDDEN -> Json.obj("type" -> "AuthorizationError", "message" -> message))
-      case UpdateError(_, message, attributes) =>
-        Some(
-          Status.INTERNAL_SERVER_ERROR -> Json
-            .obj("type" -> "UpdateError", "message" -> message, "object" -> attributes)
-        )
+      case e: AuthenticationError    => Some(Status.UNAUTHORIZED          -> e.toJson)
+      case e: AuthorizationError     => Some(Status.FORBIDDEN             -> e.toJson)
+      case e: CreateError            => Some(Status.INTERNAL_SERVER_ERROR -> e.toJson)
+      case e: GetError               => Some(Status.INTERNAL_SERVER_ERROR -> e.toJson)
+      case e: SearchError            => Some(Status.BAD_REQUEST           -> e.toJson)
+      case e: UpdateError            => Some(Status.INTERNAL_SERVER_ERROR -> e.toJson)
+      case e: NotFoundError          => Some(Status.NOT_FOUND             -> e.toJson)
+      case e: BadRequestError        => Some(Status.BAD_REQUEST           -> e.toJson)
+      case e: MultiError             => Some(Status.MULTI_STATUS          -> e.toJson)
+      case e: AttributeCheckingError => Some(Status.BAD_REQUEST           -> e.toJson)
+      case e: InternalError          => Some(Status.INTERNAL_SERVER_ERROR -> e.toJson)
+      case e: BadConfigurationError  => Some(Status.BAD_REQUEST           -> e.toJson)
+//      case e: OAuth2Redirect
       case nfe: NumberFormatException =>
-        Some(
-          Status.BAD_REQUEST -> Json
-            .obj("type" -> "NumberFormatException", "message" -> ("Invalid format " + nfe.getMessage))
-        )
-      case NotFoundError(message) =>
-        Some(Status.NOT_FOUND -> Json.obj("type" -> "NotFoundError", "message" -> message))
-      case BadRequestError(message) =>
-        Some(Status.BAD_REQUEST -> Json.obj("type" -> "BadRequest", "message" -> message))
-      case SearchError(message, cause) =>
-        Some(
-          Status.BAD_REQUEST -> Json
-            .obj("type" -> "SearchError", "message" -> s"$message (${cause.getMessage})")
-        )
-      case ace: AttributeCheckingError =>
-        Some(Status.BAD_REQUEST -> Json.toJson(ace))
+        Some(Status.BAD_REQUEST -> Json.obj("type" -> "NumberFormatException", "message" -> ("Invalid format " + nfe.getMessage)))
       case iae: IllegalArgumentException =>
         Some(Status.BAD_REQUEST -> Json.obj("type" -> "IllegalArgument", "message" -> iae.getMessage))
-      case CreateError(message, attributes) =>
-        Some(
-          Status.INTERNAL_SERVER_ERROR -> Json
-            .obj("type" -> "CreateError", "message" -> message, "object" -> attributes)
-        )
-      case GetError(message) =>
-        Some(Status.INTERNAL_SERVER_ERROR -> Json.obj("type" -> "GetError", "message" -> message))
-      case MultiError(message, exceptions) =>
-        val suberrors = exceptions.map(e => toErrorResult(e)).collect {
-          case Some((_, j)) => j
-        }
-        Some(
-          Status.MULTI_STATUS -> Json
-            .obj("type" -> "MultiError", "error" -> message, "suberrors" -> suberrors)
-        )
       case t: Throwable => Option(t.getCause).flatMap(toErrorResult)
     }
 
@@ -78,14 +53,12 @@ class ErrorHandler extends HttpErrorHandler {
     val (status, body) = toErrorResult(exception)
       .getOrElse {
         logger.error("Internal error", exception)
-        Status.INTERNAL_SERVER_ERROR -> Json
-          .obj("type" -> exception.getClass.getName, "message" -> exception.getMessage)
+        val json = Json.obj("type" -> exception.getClass.getName, "message" -> exception.getMessage)
+        Status.INTERNAL_SERVER_ERROR -> (if (exception.getCause == null) json else json + ("cause" -> JsString(exception.getCause.getMessage)))
       }
     exception match {
-      case AuthenticationError(message) =>
-        logger.warn(s"${request.method} ${request.uri} returned $status: $message")
-      case ex =>
-        logger.warn(s"${request.method} ${request.uri} returned $status", ex)
+      case AuthenticationError(message, _) => logger.warn(s"${request.method} ${request.uri} returned $status: $message")
+      case ex                              => logger.warn(s"${request.method} ${request.uri} returned $status", ex)
     }
     Future.successful(toResult(status, body))
   }

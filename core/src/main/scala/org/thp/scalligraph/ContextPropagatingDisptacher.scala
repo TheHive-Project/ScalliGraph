@@ -1,12 +1,11 @@
 package org.thp.scalligraph
 
-import java.util.{Map => JMap}
 import java.util.concurrent.TimeUnit
+import java.util.{Map => JMap}
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
-import play.api.Logger
 import play.api.mvc.RequestHeader
 
 import akka.dispatch._
