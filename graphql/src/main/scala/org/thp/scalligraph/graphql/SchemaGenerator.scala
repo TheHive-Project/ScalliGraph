@@ -2,19 +2,18 @@ package org.thp.scalligraph.graphql
 
 import java.util.Date
 
-import scala.reflect.runtime.{currentMirror => rm, universe => ru}
+import scala.reflect.runtime.{ currentMirror => rm, universe => ru }
 
 import play.api.Logger
 
-import gremlin.scala.{Element, Graph, GremlinScala, P}
+import gremlin.scala.{ Element, Graph, GremlinScala, P }
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.models.{Schema => _, _}
+import org.thp.scalligraph.models.{ Schema => _, _ }
 import org.thp.scalligraph.query._
 import org.thp.scalligraph._
-import sangria.marshalling.{CoercedScalaResultMarshaller, FromInput, ResultMarshaller}
-import sangria.schema._
-import sangria.util.tag.@@
+import org.thp.scalligraph.controllers.Output
+import org.thp.scalligraph.utils.{ CaseClassType, RichType }
 
 object SchemaGenerator {
   lazy val logger = Logger(getClass)

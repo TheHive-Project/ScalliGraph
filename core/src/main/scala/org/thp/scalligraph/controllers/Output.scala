@@ -1,4 +1,4 @@
-package org.thp.scalligraph
+package org.thp.scalligraph.controllers
 
 import play.api.libs.json._
 
@@ -7,10 +7,6 @@ class Output[O](_toOutput: => O, _toJson: => JsValue) {
   lazy val toOutput: O     = _toOutput
   lazy val toJson: JsValue = _toJson
 }
-//class Output[O: Writes](val toOutput: O) {
-//  type OUT = O
-//  def toJson: JsValue = implicitly[Writes[O]].writes(toOutput)
-//}
 
 object Output {
 
@@ -26,6 +22,10 @@ object Output {
 //    case _: Unit    ⇒ JsNull
     case _ => JsNull
   }
-  def apply[O](native: => O, json: => JsValue): Output[O]           = new Output[O](native, json)
-  def apply[O](native: => O)(implicit writes: Writes[O]): Output[O] = new Output[O](native, writes.writes(native)) // FIXME cache native
+  def apply[O](native: => O, json: => JsValue): Output[O] = new Output[O](native, json)
+
+  def apply[O](native: => O)(implicit writes: Writes[O]): Output[O] = {
+    lazy val n = native
+    new Output[O](n, writes.writes(n))
+  }
 }

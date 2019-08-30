@@ -1,4 +1,4 @@
-package org.thp.scalligraph
+package org.thp.scalligraph.utils
 
 import java.rmi.dgc.VMID
 import java.util.concurrent.atomic.AtomicInteger

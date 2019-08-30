@@ -18,7 +18,7 @@ import org.neo4j.graphdb.{ConstraintViolationException, Label}
 import org.neo4j.io.fs.FileUtils
 import org.neo4j.tinkerpop.api.impl.Neo4jGraphAPIImpl
 import org.thp.scalligraph.models._
-import org.thp.scalligraph.{Config, Retry}
+import org.thp.scalligraph.utils.{Config, Retry}
 
 object Neo4jDatabase {
 

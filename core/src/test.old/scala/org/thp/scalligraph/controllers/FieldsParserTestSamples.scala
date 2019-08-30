@@ -1,7 +1,6 @@
 package org.thp.scalligraph.controllers
 
 import org.scalactic.Good
-import org.thp.scalligraph.FPath
 
 case class SimpleClassForFieldsParserMacroTest(name: String, value: Int)
 

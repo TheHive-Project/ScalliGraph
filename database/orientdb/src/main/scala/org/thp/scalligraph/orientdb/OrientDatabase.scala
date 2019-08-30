@@ -19,7 +19,8 @@ import org.apache.tinkerpop.gremlin.orientdb.OrientGraphFactory
 import org.apache.tinkerpop.gremlin.structure.Graph
 import org.slf4j.MDC
 import org.thp.scalligraph.models._
-import org.thp.scalligraph.{InternalError, Retry}
+import org.thp.scalligraph.InternalError
+import org.thp.scalligraph.utils.Retry
 
 @Singleton
 class OrientDatabase(

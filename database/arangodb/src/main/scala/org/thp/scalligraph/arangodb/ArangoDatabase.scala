@@ -6,9 +6,9 @@ import play.api.Configuration
 import com.arangodb.tinkerpop.gremlin.structure.ArangoDBGraph
 import com.typesafe.config.ConfigFactory
 import gremlin.scala.Graph
-import javax.inject.{Inject, Singleton}
-import org.thp.scalligraph.Config
+import javax.inject.{ Inject, Singleton }
 import org.thp.scalligraph.models._
+import org.thp.scalligraph.utils.Config
 
 object ArangoDatabase {
   def randomName = new String(Array.fill(10)(('A' + Random.nextInt(26)).toChar))

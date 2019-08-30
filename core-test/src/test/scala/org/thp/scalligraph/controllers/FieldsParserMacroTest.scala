@@ -9,7 +9,7 @@ import org.specs2.matcher.Matcher
 import org.specs2.mutable.Specification
 import org.thp.scalligraph.models.{MyEntity, UniMapping, VertexSteps}
 import org.thp.scalligraph.query.{PropertyUpdater, PublicProperty, PublicPropertyListBuilder}
-import org.thp.scalligraph.{FPath, InvalidFormatAttributeError}
+import org.thp.scalligraph.InvalidFormatAttributeError
 
 object TestEnumeration extends Enumeration {
   val a, b, c = Value

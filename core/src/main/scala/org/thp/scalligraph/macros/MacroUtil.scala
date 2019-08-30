@@ -1,4 +1,4 @@
-package org.thp.scalligraph
+package org.thp.scalligraph.macros
 
 import java.util.Date
 
@@ -105,7 +105,7 @@ trait MacroUtil extends MacroLogger {
         unfold(listOfPathSymbol, nextAcc)(f)
       }
 
-    unfold(List(q"org.thp.scalligraph.FPath.empty" -> weakTypeOf[E].typeSymbol), init)(f)
+    unfold(List(q"org.thp.scalligraph.controllers.FPath.empty" -> weakTypeOf[E].typeSymbol), init)(f)
   }
 
   object EnumerationType {

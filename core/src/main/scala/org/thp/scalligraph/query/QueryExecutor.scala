@@ -11,6 +11,7 @@ import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.PagedResult
+import org.thp.scalligraph.utils.RichType
 
 abstract class QueryExecutor { executor =>
   val version: (Int, Int)

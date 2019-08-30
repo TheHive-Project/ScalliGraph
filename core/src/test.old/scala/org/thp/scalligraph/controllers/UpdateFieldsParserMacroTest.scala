@@ -2,8 +2,7 @@ package org.thp.scalligraph.controllers
 
 import scala.util.Try
 
-import org.scalactic.{Bad, Good, One, Or}
-import org.thp.scalligraph.FPath
+import org.scalactic.{ Bad, Good, One, Or }
 
 class UpdateFieldsParserMacroTest extends Specification with TestUtils {
 

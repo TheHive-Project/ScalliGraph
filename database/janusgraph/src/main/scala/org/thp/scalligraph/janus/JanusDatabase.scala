@@ -23,7 +23,8 @@ import org.janusgraph.diskstorage.locking.PermanentLockingException
 import org.slf4j.MDC
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
-import org.thp.scalligraph.{Config, InternalError, Retry}
+import org.thp.scalligraph.utils.{Config, Retry}
+import org.thp.scalligraph.InternalError
 
 object JanusDatabase {
 

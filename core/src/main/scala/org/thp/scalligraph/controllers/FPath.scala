@@ -1,4 +1,4 @@
-package org.thp.scalligraph
+package org.thp.scalligraph.controllers
 
 trait FPath {
   val isEmpty: Boolean  = false

@@ -10,7 +10,8 @@ import org.scalactic.Good
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.{BaseVertexSteps, ScalliSteps}
-import org.thp.scalligraph.{BadRequestError, Output, RichType}
+import org.thp.scalligraph.BadRequestError
+import org.thp.scalligraph.utils.RichType
 
 abstract class ParamQuery[P: ru.TypeTag] { q =>
   val paramType: ru.Type = ru.typeOf[P]

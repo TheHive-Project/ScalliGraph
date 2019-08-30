@@ -15,9 +15,9 @@ import gremlin.scala.{__, By, GremlinScala, StepLabel, Vertex}
 import org.scalactic.Accumulation.withGood
 import org.scalactic.{Bad, Good, One, Or}
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.controllers.{FObject, FString, Field, FieldsParser}
+import org.thp.scalligraph.controllers.{FObject, FString, Field, FieldsParser, Output}
 import org.thp.scalligraph.models.{ScalarSteps, ScalliSteps}
-import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError, Output}
+import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError}
 import shapeless.HNil
 
 object GroupAggregation {

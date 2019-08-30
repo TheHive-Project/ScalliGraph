@@ -4,6 +4,8 @@ import scala.util.Success
 
 import play.api.test.PlaySpecification
 
+import org.thp.scalligraph.utils.Retry
+
 class RetryTest extends PlaySpecification {
 
   "Retry" should {

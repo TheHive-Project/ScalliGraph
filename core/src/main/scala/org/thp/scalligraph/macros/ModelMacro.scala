@@ -2,7 +2,6 @@ package org.thp.scalligraph.macros
 
 import scala.reflect.macros.blackbox
 
-import org.thp.scalligraph.MacroLogger
 import org.thp.scalligraph.models.Model
 
 class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexMacro with MacroLogger {
@@ -36,7 +35,8 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
       import scala.concurrent.{ExecutionContext, Future}
       import gremlin.scala.{Graph, Vertex}
       import scala.util.{Failure, Try}
-      import org.thp.scalligraph.{FPath, InternalError}
+      import org.thp.scalligraph.InternalError
+      import org.thp.scalligraph.controllers.FPath
       import org.thp.scalligraph.models.{Database, Entity, IndexType, Mapping, Model, UniMapping, VertexModel}
 
       new VertexModel { thisModel ⇒
@@ -96,7 +96,8 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
       import scala.concurrent.{ExecutionContext, Future}
       import scala.util.Try
       import gremlin.scala.{Edge, Graph, Vertex}
-      import org.thp.scalligraph.{FPath, InternalError}
+      import org.thp.scalligraph.InternalError
+      import org.thp.scalligraph.controllers.FPath
       import org.thp.scalligraph.models.{Database, EdgeModel, Entity, IndexType, Mapping, Model, UniMapping}
 
       new EdgeModel[$fromType, $toType] { thisModel ⇒

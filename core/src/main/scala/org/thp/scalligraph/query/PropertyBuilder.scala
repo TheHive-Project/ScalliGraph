@@ -6,9 +6,8 @@ import scala.util.{Success, Try}
 import play.api.libs.json.{JsObject, Json}
 
 import gremlin.scala.{Graph, GremlinScala, Vertex}
-import org.thp.scalligraph.FPath
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.controllers.FieldsParser
+import org.thp.scalligraph.controllers.{FPath, FieldsParser}
 import org.thp.scalligraph.models.{BaseVertexSteps, Database, Mapping}
 
 class PropertyBuilder[D, SD, G](stepType: ru.Type, propertyName: String, mapping: Mapping[D, SD, G]) {

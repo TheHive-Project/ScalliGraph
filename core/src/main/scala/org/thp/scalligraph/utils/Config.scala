@@ -1,4 +1,4 @@
-package org.thp.scalligraph
+package org.thp.scalligraph.utils
 
 import java.lang.{Boolean => JBoolean, Byte => JByte, Double => JDouble, Float => JFloat, Long => JLong, Short => JShort}
 import java.math.{BigInteger, BigDecimal => JBigDecimal}

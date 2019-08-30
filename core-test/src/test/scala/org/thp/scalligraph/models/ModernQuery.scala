@@ -5,8 +5,7 @@ import scala.language.implicitConversions
 import play.api.libs.json.{Json, OWrites}
 
 import gremlin.scala.{Key, P}
-import org.thp.scalligraph.Output
-import org.thp.scalligraph.controllers.FieldsParser
+import org.thp.scalligraph.controllers.{FieldsParser, Output}
 import org.thp.scalligraph.query._
 
 case class OutputPerson(createdBy: String, label: String, name: String, age: Int)

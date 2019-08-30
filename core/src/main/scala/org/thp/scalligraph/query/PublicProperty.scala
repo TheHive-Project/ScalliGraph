@@ -6,9 +6,8 @@ import scala.util.Try
 import play.api.libs.json.JsObject
 
 import gremlin.scala.{Graph, GremlinScala, Vertex}
-import org.thp.scalligraph.FPath
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.controllers.FieldsParser
+import org.thp.scalligraph.controllers.{FPath, FieldsParser}
 import org.thp.scalligraph.models.{Database, Mapping}
 
 class PublicProperty[D, G](

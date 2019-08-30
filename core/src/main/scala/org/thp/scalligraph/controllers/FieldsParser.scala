@@ -13,6 +13,7 @@ import org.thp.scalligraph._
 import org.thp.scalligraph.auth.Permission
 import org.thp.scalligraph.macros.FieldsParserMacro
 import org.thp.scalligraph.query.{PropertyUpdater, PublicProperty}
+import org.thp.scalligraph.utils.Hash
 
 class FieldsParser[T](
     val formatName: String,

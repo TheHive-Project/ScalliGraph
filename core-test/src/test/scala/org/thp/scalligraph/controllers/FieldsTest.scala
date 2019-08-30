@@ -10,7 +10,6 @@ import play.api.mvc.{AnyContentAsMultipartFormData, Headers, MultipartFormData}
 import play.api.test.{FakeRequest, NoTemporaryFileCreator, PlaySpecification}
 
 import org.specs2.mock.Mockito
-import org.thp.scalligraph.FPath
 
 case class FakeTemporaryFile(file: File) extends Files.TemporaryFile {
   def path: Path                                 = file.toPath

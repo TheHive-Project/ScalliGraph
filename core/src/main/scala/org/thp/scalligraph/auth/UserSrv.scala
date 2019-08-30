@@ -6,7 +6,7 @@ import play.api.libs.functional.syntax._
 import play.api.libs.json.{JsPath, Json, Reads, Writes}
 import play.api.mvc.RequestHeader
 
-import org.thp.scalligraph.Instance
+import org.thp.scalligraph.utils.Instance
 
 trait PermissionTag
 

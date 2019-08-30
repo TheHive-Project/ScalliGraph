@@ -1,4 +1,4 @@
-package org.thp.scalligraph
+package org.thp.scalligraph.utils
 
 import java.util.concurrent.ThreadLocalRandom
 

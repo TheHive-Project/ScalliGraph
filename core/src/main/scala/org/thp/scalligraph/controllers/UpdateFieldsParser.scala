@@ -5,7 +5,7 @@ import scala.language.experimental.macros
 import org.scalactic.Accumulation._
 import org.scalactic.{Every, Or}
 import org.thp.scalligraph.macros.FieldsParserMacro
-import org.thp.scalligraph.{AttributeError, FPath, FPathElem, FPathSeq}
+import org.thp.scalligraph.AttributeError
 
 case class UpdateFieldsParser[T](formatName: String, parsers: Seq[(FPath, FieldsParser[_])]) {
 

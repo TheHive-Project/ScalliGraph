@@ -2,8 +2,8 @@ package org.thp.scalligraph.controllers
 
 import play.api.mvc.{Request, WrappedRequest}
 
-import org.thp.scalligraph.Instance
 import org.thp.scalligraph.auth.{AuthContext, Permission}
+import org.thp.scalligraph.utils.Instance
 
 /**
   * A request with authentication information

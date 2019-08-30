@@ -1,4 +1,4 @@
-package org.thp.scalligraph
+package org.thp.scalligraph.macros
 
 import java.io.{PrintWriter, StringWriter}
 

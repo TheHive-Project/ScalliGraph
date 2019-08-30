@@ -1,4 +1,4 @@
-package org.thp.scalligraph
+package org.thp.scalligraph.utils
 
 import scala.reflect.runtime.universe._
 

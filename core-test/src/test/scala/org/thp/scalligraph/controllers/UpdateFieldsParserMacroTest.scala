@@ -2,7 +2,7 @@ package org.thp.scalligraph.controllers
 
 import org.scalactic.{Bad, Good, One}
 import org.specs2.mutable.Specification
-import org.thp.scalligraph.{FPath, InvalidFormatAttributeError}
+import org.thp.scalligraph.InvalidFormatAttributeError
 
 class UpdateFieldsParserMacroTest extends Specification with TestUtils {
 

@@ -1,4 +1,5 @@
-package org.thp.scalligraph
+package org.thp.scalligraph.utils
+
 import scala.concurrent.ExecutionContext
 
 object UnthreadedExecutionContext extends ExecutionContext {

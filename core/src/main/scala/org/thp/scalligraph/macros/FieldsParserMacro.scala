@@ -3,7 +3,6 @@ package org.thp.scalligraph.macros
 import scala.reflect.macros.blackbox
 
 import org.thp.scalligraph.controllers._
-import org.thp.scalligraph.{MacroLogger, MacroUtil}
 
 class FieldsParserMacro(val c: blackbox.Context) extends MacroLogger with UpdateFieldsParserUtil {
 

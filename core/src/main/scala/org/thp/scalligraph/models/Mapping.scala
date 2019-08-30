@@ -1,5 +1,6 @@
 package org.thp.scalligraph.models
 
+import java.lang.{Boolean => JBoolean, Byte => JByte, Double => JDouble, Float => JFloat, Long => JLong, Short => JShort}
 import java.util.Date
 
 import scala.language.experimental.macros
@@ -8,9 +9,10 @@ import scala.reflect.{classTag, ClassTag}
 import play.api.libs.json.{JsObject, JsValue, Json}
 
 import gremlin.scala.dsl.Converter
+import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.auth.Permission
 import org.thp.scalligraph.macros.MappingMacro
-import org.thp.scalligraph.{Hash, InternalError, Utils}
+import org.thp.scalligraph.utils.Hash
 
 object MappingCardinality extends Enumeration {
   val option, single, list, set = Value
@@ -59,8 +61,8 @@ object UniMapping extends MappingLowerPrio {
 
 sealed abstract class Mapping[D, SD: ClassTag, G: ClassTag] extends UniMapping[D] with Converter[SD] {
   override type GraphType = G
-  val graphTypeClass: Class[_]  = Utils.convertToJava(classTag[G].runtimeClass)
-  val domainTypeClass: Class[_] = Utils.convertToJava(classTag[SD].runtimeClass)
+  val graphTypeClass: Class[_]  = convertToJava(classTag[G].runtimeClass)
+  val domainTypeClass: Class[_] = convertToJava(classTag[SD].runtimeClass)
   val cardinality: MappingCardinality.Value
   val noValue: G
   val isReadonly: Boolean
@@ -74,6 +76,18 @@ sealed abstract class Mapping[D, SD: ClassTag, G: ClassTag] extends UniMapping[D
 
   def isCompatibleWith(m: Mapping[_, _, _]): Boolean =
     graphTypeClass.equals(m.graphTypeClass) && MappingCardinality.isCompatible(cardinality, m.cardinality)
+
+  def convertToJava(c: Class[_]): Class[_] = c match {
+    case JByte.TYPE     => classOf[JByte]
+    case JShort.TYPE    => classOf[Short]
+    case Character.TYPE => classOf[Character]
+    case Integer.TYPE   => classOf[Integer]
+    case JLong.TYPE     => classOf[JLong]
+    case JFloat.TYPE    => classOf[JFloat]
+    case JDouble.TYPE   => classOf[JDouble]
+    case JBoolean.TYPE  => classOf[JBoolean]
+    case _              => c
+  }
 }
 
 case class OptionMapping[D: ClassTag, G: ClassTag](

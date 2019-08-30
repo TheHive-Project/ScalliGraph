@@ -10,7 +10,7 @@ import play.api.mvc._
 
 import gremlin.scala.Graph
 import javax.inject.{Inject, Singleton}
-import org.thp.scalligraph.AttributeCheckingError
+import org.thp.scalligraph.{AttributeCheckingError, RequestContext}
 import org.thp.scalligraph.auth.AuthSrv
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.record.Record
@@ -93,8 +93,10 @@ class EntryPoint @Inject()(
       actionBuilder
         .andThen(authSrv.actionFunction(AuthenticationFailureActionFunction))
         .async { request =>
-          fieldsParser(Field(request))
-            .fold(v => block(request.map(_ => Record(v))), e => errorHandler.onServerError(request, AttributeCheckingError(e.toSeq)))
+          RequestContext.withRequest(request) {
+            fieldsParser(Field(request))
+              .fold(v => block(request.map(_ => Record(v))), e => errorHandler.onServerError(request, AttributeCheckingError(e.toSeq)))
+          }
         }
 
     def authTransaction(
@@ -115,7 +117,9 @@ class EntryPoint @Inject()(
       */
     def apply(block: Request[Record[V]] => Try[Result]): Action[AnyContent] =
       async { request =>
-        block(request).fold(errorHandler.onServerError(request, _), Future.successful)
+        RequestContext.withRequest(request) {
+          block(request).fold(errorHandler.onServerError(request, _), Future.successful)
+        }
       }
 
     /**
@@ -126,8 +130,10 @@ class EntryPoint @Inject()(
       */
     def async(block: Request[Record[V]] => Future[Result]): Action[AnyContent] =
       actionBuilder.async { request =>
-        fieldsParser(Field(request))
-          .fold(v => block(request.map(_ => Record(v))), e => errorHandler.onServerError(request, AttributeCheckingError(e.toSeq)))
+        RequestContext.withRequest(request) {
+          fieldsParser(Field(request))
+            .fold(v => block(request.map(_ => Record(v))), e => errorHandler.onServerError(request, AttributeCheckingError(e.toSeq)))
+        }
       }
   }
 }
