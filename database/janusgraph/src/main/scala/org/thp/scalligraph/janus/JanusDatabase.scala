@@ -4,12 +4,6 @@ import java.nio.file.{Files, Paths}
 import java.util.function.Consumer
 import java.util.{Date, Properties}
 
-import scala.collection.JavaConverters._
-import scala.concurrent.duration.FiniteDuration
-import scala.util.{Failure, Success, Try}
-
-import play.api.{Configuration, Environment}
-
 import akka.actor.ActorSystem
 import com.typesafe.config.ConfigObject
 import gremlin.scala.{asScalaGraph, Edge, Element, Graph, GremlinScala, Key, Vertex}
@@ -21,10 +15,15 @@ import org.janusgraph.core.{Cardinality, JanusGraph, JanusGraphFactory, SchemaVi
 import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
 import org.slf4j.MDC
+import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.utils.{Config, Retry}
-import org.thp.scalligraph.InternalError
+import play.api.{Configuration, Environment}
+
+import scala.collection.JavaConverters._
+import scala.concurrent.duration.FiniteDuration
+import scala.util.{Failure, Success, Try}
 
 object JanusDatabase {
 
@@ -78,21 +77,24 @@ class JanusDatabase(
   def isValidId(id: String): Boolean = id.forall(_.isDigit)
 
   override def roTransaction[R](body: Graph => R): R = {
-    val graph = janusGraph.buildTransaction().readOnly().start()
-    val tx    = graph.tx()
-    val oldTx = localTransaction.get()
-    if (oldTx.nonEmpty)
-      logger.warn("Creating transaction while another transaction is already open")
-    localTransaction.set(Some(tx))
-    MDC.put("tx", f"${System.identityHashCode(tx)}%08x")
-    logger.debug(s"Begin of readonly transaction")
-    val r = body(graph)
-    logger.debug(s"End of readonly transaction")
-    MDC.remove("tx")
-    localTransaction.set(oldTx)
-    tx.commit()
-
-    r
+    val graph             = janusGraph.buildTransaction().readOnly().start()
+    val tx                = graph.tx()
+    val (oldTx, oldTxMDC) = (localTransaction.get(), Option(MDC.get("tx")))
+    try {
+      if (oldTx.nonEmpty)
+        logger.warn("Creating transaction while another transaction is already open")
+      localTransaction.set(Some(tx))
+      MDC.put("tx", f"${System.identityHashCode(tx)}%08x")
+      logger.debug(s"Begin of readonly transaction")
+      val r = body(graph)
+      logger.debug(s"End of readonly transaction")
+      tx.commit()
+      r
+    } finally {
+      if (tx.isOpen) tx.rollback()
+      oldTxMDC.fold(MDC.remove("tx"))(MDC.put("tx", _))
+      localTransaction.set(oldTx)
+    }
   }
 
   override def tryTransaction[R](body: Graph => Try[R]): Try[R] = {
@@ -157,6 +159,41 @@ class JanusDatabase(
       case Some(tx) => tx.addTransactionListener(listener)
       case None     => logger.warn("Trying to add a transaction listener without open transaction")
     }
+
+  override def createSchema(models: Seq[Model]): Try[Unit] =
+    Retry(maxAttempts)
+      .on[PermanentLockingException]
+      .withTry {
+        logger.info("Creating database schema")
+        janusGraph.synchronized {
+          val mgmt = janusGraph.openManagement()
+          createElementLabels(mgmt, models)
+          createEntityProperties(mgmt)
+          createProperties(mgmt, models)
+          mgmt
+            .buildIndex("_label_vertex_index", classOf[Vertex])
+            .addKey(mgmt.getPropertyKey("_label"))
+            .buildCompositeIndex()
+
+          models.foreach {
+            case model: VertexModel =>
+              val vertexLabel = mgmt.getVertexLabel(model.label)
+              model.indexes.foreach {
+                case (indexType, properties) => createIndex(mgmt, classOf[Vertex], vertexLabel, indexType, properties)
+              }
+            case model: EdgeModel[_, _] =>
+              val edgeLabel = mgmt.getEdgeLabel(model.label)
+              model.indexes.foreach {
+                case (indexType, properties) => createIndex(mgmt, classOf[Edge], edgeLabel, indexType, properties)
+              }
+          }
+
+          // TODO add index for labels when it will be possible
+          // cf. https://github.com/JanusGraph/janusgraph/issues/283
+          mgmt.commit()
+        }
+        Success(())
+      }
 
   private def createEntityProperties(mgmt: JanusGraphManagement): Unit =
     if (Option(mgmt.getPropertyKey("_label")).isEmpty) {
@@ -276,41 +313,6 @@ class JanusDatabase(
       ()
     }
   }
-
-  override def createSchema(models: Seq[Model]): Try[Unit] =
-    Retry(maxAttempts)
-      .on[PermanentLockingException]
-      .withTry {
-        logger.info("Creating database schema")
-        janusGraph.synchronized {
-          val mgmt = janusGraph.openManagement()
-          createElementLabels(mgmt, models)
-          createEntityProperties(mgmt)
-          createProperties(mgmt, models)
-          mgmt
-            .buildIndex("_label_vertex_index", classOf[Vertex])
-            .addKey(mgmt.getPropertyKey("_label"))
-            .buildCompositeIndex()
-
-          models.foreach {
-            case model: VertexModel =>
-              val vertexLabel = mgmt.getVertexLabel(model.label)
-              model.indexes.foreach {
-                case (indexType, properties) => createIndex(mgmt, classOf[Vertex], vertexLabel, indexType, properties)
-              }
-            case model: EdgeModel[_, _] =>
-              val edgeLabel = mgmt.getEdgeLabel(model.label)
-              model.indexes.foreach {
-                case (indexType, properties) => createIndex(mgmt, classOf[Edge], edgeLabel, indexType, properties)
-              }
-          }
-
-          // TODO add index for labels when it will be possible
-          // cf. https://github.com/JanusGraph/janusgraph/issues/283
-          mgmt.commit()
-        }
-        Success(())
-      }
 
   override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
     val createdVertex = model.create(v)(this, graph)
