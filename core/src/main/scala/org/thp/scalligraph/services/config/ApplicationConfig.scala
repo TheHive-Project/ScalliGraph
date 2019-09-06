@@ -1,13 +1,5 @@
 package org.thp.scalligraph.services.config
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.duration.{Duration, FiniteDuration}
-import scala.util.{Failure, Success, Try}
-
-import play.api.libs.functional.syntax._
-import play.api.libs.json._
-import play.api.{ConfigLoader, Configuration, Logger}
-
 import akka.actor.{ActorRef, ActorSystem}
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import javax.inject.{Inject, Named, Singleton}
@@ -15,6 +7,13 @@ import org.thp.scalligraph.NotFoundError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.services.EventSrv
+import play.api.libs.functional.syntax._
+import play.api.libs.json._
+import play.api.{ConfigLoader, Configuration, Logger}
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.util.{Failure, Success, Try}
 
 @Singleton
 class ApplicationConfig @Inject()(
@@ -28,9 +27,8 @@ class ApplicationConfig @Inject()(
   lazy val logger                          = Logger(getClass)
   val ignoreDatabaseConfiguration: Boolean = configuration.get[Boolean]("ignoreDatabaseConfiguration")
   if (ignoreDatabaseConfiguration) logger.warn("Emit warning !") // TODO
-
-  private var items: Map[String, ConfigItemImpl[_, _]] = Map.empty
   private val itemsLock                                = new Object
+  private var items: Map[String, ConfigItemImpl[_, _]] = Map.empty
 
   def item[T: Format](path: String, description: String): ConfigItem[T, T] =
     validatedMapItem[T, T](path, description, Success.apply, identity)
@@ -129,6 +127,6 @@ object ApplicationConfig {
         }
       case other => JsError(s"$other is not a valid finite duration")
     },
-    Writes(d => JsString(d.toString))
+    Writes(d => Option(d).map(v => JsString(v.toString)).getOrElse(JsNull))
   )
 }
