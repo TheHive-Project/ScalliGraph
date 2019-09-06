@@ -105,7 +105,7 @@ class ConfigItemImpl[B, F](
         Try(
           graph
             .variables()
-            .set(s"config.$path", valueJson)
+            .set(s"config.$path", valueJson.toString)
         )
       }
       .map(_ => eventSrv.publish(ConfigTopic.topicName)(Invalidate(path)))
