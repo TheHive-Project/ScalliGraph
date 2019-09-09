@@ -85,19 +85,24 @@ class ConfigItemImpl[B, F](
       .flatMap(s => Try(Json.parse(s)).toOption)
       .flatMap(jsonFormat.reads(_).asOpt)
 
-  override def get: F = {
-    if (!flag)
-      synchronized {
-        if (!flag) {
-          bValue = getValue.getOrElse(defaultValue)
-          fValue = mapFunction(bValue)
-        }
+  private def retrieveValues(): Unit =
+    synchronized {
+      if (!flag) {
+        bValue = getValue.getOrElse(defaultValue)
+        fValue = mapFunction(bValue)
         flag = true
       }
+    }
+
+  override def get: F = {
+    if (!flag) retrieveValues()
     fValue
   }
 
-  override def getJson: JsValue = jsonFormat.writes(bValue)
+  override def getJson: JsValue = {
+    if (!flag) retrieveValues()
+    jsonFormat.writes(bValue)
+  }
 
   override def set(v: B)(implicit authContext: AuthContext): Try[Unit] = validation(v).flatMap { value =>
     val valueJson = jsonFormat.writes(value)
