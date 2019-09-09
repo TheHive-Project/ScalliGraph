@@ -14,6 +14,7 @@ import com.google.inject.util.{Modules => GuiceModules}
 import com.google.inject.{Binder, Module => GuiceModule, _}
 import javax.inject.Inject
 import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
+import org.thp.scalligraph.models.{GlobalSchema, Schema}
 
 class ScalligraphGuiceableModule(modules: Seq[GuiceableModule]) extends GuiceableModule {
   override def guiced(env: Environment, conf: Configuration, binderOptions: Set[BinderOption]): Seq[GuiceModule] = {
@@ -87,6 +88,7 @@ class ScalligraphModule extends ScalaModule {
   override def configure(): Unit = {
     Logger(getClass).info("Loading scalligraph module")
     bind(classOf[Router]).toProvider(classOf[ScalligraphRouter])
+    bind(classOf[Schema]).toProvider(classOf[GlobalSchema])
     ()
   }
 }

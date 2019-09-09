@@ -43,7 +43,7 @@ class GlobalQueryExecutor @Inject()(queryExecutors: immutable.Set[QueryExecutor]
       queryExecutors
         .filter(_.versionCheck(version))
         .reduceOption(_ ++ _)
-        .getOrElse(???)
+        .getOrElse(throw BadRequestError(s"No available query executor for version $version"))
     }
 
   def get: QueryExecutor = queryExecutors.reduce(_ ++ _)

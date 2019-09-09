@@ -1,8 +1,10 @@
 package org.thp.scalligraph.models
 
+import scala.collection.immutable
 import scala.util.{Success, Try}
 
 import gremlin.scala.Graph
+import javax.inject.{Inject, Provider, Singleton}
 import org.thp.scalligraph.auth.AuthContext
 
 case class InitialValue[V <: Product](model: Model.Vertex[V], value: V) {
@@ -22,4 +24,16 @@ trait Schema { schema =>
     override def initialValues: Seq[InitialValue[_]]                              = schema.initialValues ++ other.initialValues
     override def init(implicit graph: Graph, authContext: AuthContext): Try[Unit] = schema.init.flatMap(_ => other.init)
   }
+}
+
+object Schema {
+
+  def empty: Schema = new Schema {
+    override def modelList: Seq[Model] = Nil
+  }
+}
+
+@Singleton
+class GlobalSchema @Inject()(schemas: immutable.Set[Schema]) extends Provider[Schema] {
+  override def get(): Schema = schemas.reduceOption(_ + _).getOrElse(Schema.empty)
 }
