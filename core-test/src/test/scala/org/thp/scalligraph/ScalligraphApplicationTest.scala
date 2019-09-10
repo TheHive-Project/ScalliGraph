@@ -14,7 +14,7 @@ import com.google.inject.Inject
 import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
 import org.specs2.mock.Mockito
 import org.thp.scalligraph.auth.{AuthSrv, UserSrv}
-import org.thp.scalligraph.models.Database
+import org.thp.scalligraph.models.{Database, Schema}
 import org.thp.scalligraph.query.QueryExecutor
 
 trait TestService {
@@ -48,6 +48,7 @@ object TestModule extends ScalaModule with Mockito {
     bind[AuthSrv].toInstance(mock[AuthSrv])
     bind[UserSrv].toInstance(mock[UserSrv])
     bind[Database].toInstance(mock[Database])
+    ScalaMultibinder.newSetBinder[Schema](binder)
     ScalaMultibinder.newSetBinder[QueryExecutor](binder)
     ScalaMultibinder.newSetBinder[PlayRouter](binder)
     ()
