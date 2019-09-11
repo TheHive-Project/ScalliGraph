@@ -18,7 +18,7 @@ import org.apache.tinkerpop.gremlin.process.traversal.Text
 import org.apache.tinkerpop.gremlin.structure.Transaction
 import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
 import org.janusgraph.core.attribute.{Text => JanusText}
-import org.janusgraph.core.schema.{Mapping, Mapping => _, _}
+import org.janusgraph.core.schema._
 import org.janusgraph.core.{Cardinality, JanusGraph, JanusGraphFactory, SchemaViolationException}
 import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
