@@ -9,7 +9,7 @@ import gremlin.scala.{Graph, GremlinScala}
 import org.scalactic.Good
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
-import org.thp.scalligraph.models.{BaseVertexSteps, ScalliSteps}
+import org.thp.scalligraph.models.{BaseVertexSteps, Database, ScalliSteps}
 import org.thp.scalligraph.BadRequestError
 import org.thp.scalligraph.utils.RichType
 
@@ -87,7 +87,7 @@ object Query {
   }
 }
 
-class SortQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[InputSort] {
+class SortQuery(db: Database, publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[InputSort] {
   override def paramParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[InputSort] = InputSort.fieldsParser
   override val name: String                                                                              = "sort"
   // FIXME https://stackoverflow.com/questions/56854716/inconsistent-result-when-checking-type-subtype
@@ -96,6 +96,7 @@ class SortQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery
   override def toType(t: ru.Type): ru.Type = t
   override def apply(inputSort: InputSort, from: Any, authContext: AuthContext): Any =
     inputSort(
+      db,
       publicProperties,
       rm.classSymbol(from.getClass).toType,
       from.asInstanceOf[X forSome { type X <: ScalliSteps[_, _, X] }],
@@ -103,7 +104,7 @@ class SortQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery
     )
 }
 
-class FilterQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[InputFilter] {
+class FilterQuery(db: Database, publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[InputFilter] {
   override def paramParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[InputFilter] =
     InputFilter.fieldsParser(tpe, properties)
   override val name: String = "filter"
@@ -113,6 +114,7 @@ class FilterQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQue
   override def toType(t: ru.Type): ru.Type = t
   override def apply(inputFilter: InputFilter, from: Any, authContext: AuthContext): Any =
     inputFilter(
+      db,
       publicProperties,
       rm.classSymbol(from.getClass).toType,
       from.asInstanceOf[X forSome { type X <: BaseVertexSteps[_, X] }],
@@ -155,7 +157,14 @@ object ToListQuery extends Query {
 }
 
 trait InputQuery {
-  def apply[S <: BaseVertexSteps[_, S]](publicProperties: List[PublicProperty[_, _]], stepType: ru.Type, step: S, authContext: AuthContext): S
+
+  def apply[S <: BaseVertexSteps[_, S]](
+      db: Database,
+      publicProperties: List[PublicProperty[_, _]],
+      stepType: ru.Type,
+      step: S,
+      authContext: AuthContext
+  ): S
 
   def getProperty(properties: Seq[PublicProperty[_, _]], stepType: ru.Type, fieldName: String): PublicProperty[_, _] =
     properties

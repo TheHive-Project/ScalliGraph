@@ -16,7 +16,7 @@ class Readonly extends StaticAnnotation
 class WithMapping[D, +G](mapping: Mapping[D, _, G]) extends StaticAnnotation
 
 object IndexType extends Enumeration {
-  val standard, unique, fulltext = Value
+  val basic, standard, unique, fulltext = Value
 }
 class DefineIndex(indexType: IndexType.Value, fields: String*) extends StaticAnnotation
 

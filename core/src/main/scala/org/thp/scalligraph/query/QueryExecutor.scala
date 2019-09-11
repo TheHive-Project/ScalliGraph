@@ -10,7 +10,7 @@ import org.scalactic._
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
-import org.thp.scalligraph.models.PagedResult
+import org.thp.scalligraph.models.{Database, PagedResult}
 import org.thp.scalligraph.utils.RichType
 
 abstract class QueryExecutor { executor =>
@@ -18,10 +18,11 @@ abstract class QueryExecutor { executor =>
   lazy val publicProperties: List[PublicProperty[_, _]] = Nil
   lazy val queries: Seq[ParamQuery[_]]                  = Nil
   lazy val logger                                       = Logger(getClass)
+  val db: Database
 
   final lazy val allQueries = queries :+ sortQuery :+ filterQuery :+ aggregationQuery :+ ToListQuery
-  lazy val sortQuery        = new SortQuery(publicProperties)
-  lazy val filterQuery      = new FilterQuery(publicProperties)
+  lazy val sortQuery        = new SortQuery(db, publicProperties)
+  lazy val filterQuery      = new FilterQuery(db, publicProperties)
   lazy val aggregationQuery = new AggregationQuery(publicProperties)
 
   def versionCheck(v: Int): Boolean = version._1 <= v && v <= version._2
@@ -109,6 +110,7 @@ abstract class QueryExecutor { executor =>
   }
 
   def ++(other: QueryExecutor): QueryExecutor = new QueryExecutor {
+    override val db: Database        = other.db
     override val version: (Int, Int) = math.max(executor.version._1, other.version._1) -> math.min(executor.version._2, other.version._2)
     override lazy val publicProperties: List[PublicProperty[_, _]] =
       (executor.publicProperties :: other.publicProperties).asInstanceOf[List[PublicProperty[_, _]]]

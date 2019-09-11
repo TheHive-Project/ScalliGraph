@@ -143,7 +143,7 @@ class OrientDatabase(
     model.indexes.foreach {
       case (IndexType.unique, fields) =>
         clazz.createIndex(s"${model.label}_${fields.mkString("_")}", INDEX_TYPE.UNIQUE, fields: _*)
-      case (IndexType.standard, fields) =>
+      case (IndexType.`basic`, fields) =>
         clazz.createIndex(s"${model.label}_${fields.mkString("_")}", INDEX_TYPE.DICTIONARY, fields: _*)
       case (IndexType.fulltext, fields) =>
         clazz.createIndex(s"${model.label}_${fields.mkString("_")}", INDEX_TYPE.FULLTEXT, fields: _*)

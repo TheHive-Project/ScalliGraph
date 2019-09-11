@@ -117,7 +117,7 @@ class Neo4jDatabase(
           logger.error(s"Neo4j index can contain only one property, found ${properties.size} for ${model.label}:${properties.mkString(",")}")
         properties.headOption.foreach { property =>
           indexType match {
-            case IndexType.standard =>
+            case IndexType.`basic` =>
               neo4jGraph
                 .schema()
                 .indexFor(Label.label(model.label))

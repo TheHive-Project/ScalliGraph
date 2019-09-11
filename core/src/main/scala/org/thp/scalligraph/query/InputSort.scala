@@ -10,7 +10,7 @@ import org.scalactic.{Bad, Good, One}
 import org.thp.scalligraph.InvalidFormatAttributeError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FSeq, FString, FieldsParser}
-import org.thp.scalligraph.models.ScalliSteps
+import org.thp.scalligraph.models.{Database, ScalliSteps}
 
 case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
 
@@ -19,6 +19,7 @@ case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
       traversal.by(f(__[F]).traversal, order)
   }
   override def apply[S <: ScalliSteps[_, _, S]](
+      db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,

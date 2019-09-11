@@ -4,13 +4,21 @@ import java.nio.file.{Files, Paths}
 import java.util.function.Consumer
 import java.util.{Date, Properties}
 
+import scala.collection.JavaConverters._
+import scala.concurrent.duration.FiniteDuration
+import scala.util.{Failure, Success, Try}
+
+import play.api.{Configuration, Environment}
+
 import akka.actor.ActorSystem
 import com.typesafe.config.ConfigObject
-import gremlin.scala.{asScalaGraph, Edge, Element, Graph, GremlinScala, Key, Vertex}
+import gremlin.scala.{asScalaGraph, Edge, Element, Graph, GremlinScala, Key, P, Vertex}
 import javax.inject.{Inject, Singleton}
+import org.apache.tinkerpop.gremlin.process.traversal.Text
 import org.apache.tinkerpop.gremlin.structure.Transaction
 import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
-import org.janusgraph.core.schema.{ConsistencyModifier, JanusGraphManagement, JanusGraphSchemaType, Mapping}
+import org.janusgraph.core.attribute.{Text => JanusText}
+import org.janusgraph.core.schema.{Mapping, Mapping => _, _}
 import org.janusgraph.core.{Cardinality, JanusGraph, JanusGraphFactory, SchemaViolationException}
 import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
@@ -19,11 +27,6 @@ import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.utils.{Config, Retry}
-import play.api.{Configuration, Environment}
-
-import scala.collection.JavaConverters._
-import scala.concurrent.duration.FiniteDuration
-import scala.util.{Failure, Success, Try}
 
 object JanusDatabase {
 
@@ -164,35 +167,46 @@ class JanusDatabase(
     Retry(maxAttempts)
       .on[PermanentLockingException]
       .withTry {
-        logger.info("Creating database schema")
-        janusGraph.synchronized {
-          val mgmt = janusGraph.openManagement()
-          createElementLabels(mgmt, models)
-          createEntityProperties(mgmt)
-          createProperties(mgmt, models)
-          mgmt
-            .buildIndex("_label_vertex_index", classOf[Vertex])
-            .addKey(mgmt.getPropertyKey("_label"))
-            .buildCompositeIndex()
+        Try {
+          logger.info("Creating database schema")
+          janusGraph.synchronized {
+            val mgmt = janusGraph.openManagement()
+            createElementLabels(mgmt, models)
+            createEntityProperties(mgmt)
+            createProperties(mgmt, models)
+            if (mgmt.getGraphIndex("_label_vertex_index") == null)
+              mgmt
+                .buildIndex("_label_vertex_index", classOf[Vertex])
+                .addKey(mgmt.getPropertyKey("_label"))
+                .buildCompositeIndex()
 
-          models.foreach {
-            case model: VertexModel =>
-              val vertexLabel = mgmt.getVertexLabel(model.label)
-              model.indexes.foreach {
-                case (indexType, properties) => createIndex(mgmt, classOf[Vertex], vertexLabel, indexType, properties)
-              }
-            case model: EdgeModel[_, _] =>
-              val edgeLabel = mgmt.getEdgeLabel(model.label)
-              model.indexes.foreach {
-                case (indexType, properties) => createIndex(mgmt, classOf[Edge], edgeLabel, indexType, properties)
-              }
+            models.foreach {
+              case model: VertexModel =>
+                val vertexLabel = mgmt.getVertexLabel(model.label)
+                model.indexes.foreach {
+                  case (indexType, properties) => createIndex(mgmt, classOf[Vertex], vertexLabel, indexType, properties)
+                }
+              case model: EdgeModel[_, _] =>
+                val edgeLabel = mgmt.getEdgeLabel(model.label)
+                model.indexes.foreach {
+                  case (indexType, properties) => createIndex(mgmt, classOf[Edge], edgeLabel, indexType, properties)
+                }
+            }
+            mgmt.commit()
+
+            // TODO add index for labels when it will be possible
+            // cf. https://github.com/JanusGraph/janusgraph/issues/283
+
+            val mgmt2 = janusGraph.openManagement()
+            //          mgmt2.getGraphIndexes(classOf[Vertex]).asScala.foreach { index =>
+            //            ManagementSystem.awaitGraphIndexStatus(janusGraph, index.name()).call()
+            //          }
+            mgmt2.getGraphIndexes(classOf[Vertex]).asScala.foreach { index =>
+              mgmt2.updateIndex(index, SchemaAction.REINDEX).get()
+            }
+            mgmt2.commit()
           }
-
-          // TODO add index for labels when it will be possible
-          // cf. https://github.com/JanusGraph/janusgraph/issues/283
-          mgmt.commit()
         }
-        Success(())
       }
 
   private def createEntityProperties(mgmt: JanusGraphManagement): Unit =
@@ -286,13 +300,15 @@ class JanusDatabase(
       indexType: IndexType.Value,
       properties: Seq[String]
   ): Unit = {
-    val indexName = elementLabel.name + "_" + properties.mkString("_")
-    if (Option(mgmt.getGraphIndex(indexName)).isDefined) {
+    val indexName = (elementLabel.name +: properties).map(_.replaceAll("[^\\p{Alnum}]", "").toLowerCase().capitalize).mkString
+    if (mgmt.getGraphIndex(indexName) != null) {
       logger.info(s"Index $indexName already exists, ignore it")
     } else {
       val index = mgmt.buildIndex(indexName, elementClass).indexOnly(elementLabel)
       val propertyKeys = (properties :+ "_label").map { p =>
-        Option(mgmt.getPropertyKey(p)).getOrElse(throw InternalError(s"Property $p in ${elementLabel.name} not found"))
+        val propertyKey = mgmt.getPropertyKey(p)
+        if (propertyKey == null) throw InternalError(s"Property $p in ${elementLabel.name} not found")
+        propertyKey
       }
       indexType match {
         case IndexType.unique =>
@@ -301,10 +317,14 @@ class JanusDatabase(
           index.unique()
           val i = index.buildCompositeIndex()
           mgmt.setConsistency(i, ConsistencyModifier.LOCK)
+        case IndexType.basic =>
+          logger.debug(s"Creating basic index on fields $elementLabel:${propertyKeys.mkString(",")}")
+          propertyKeys.foreach(index.addKey)
+          index.buildCompositeIndex()
         case IndexType.standard =>
           logger.debug(s"Creating index on fields $elementLabel:${propertyKeys.mkString(",")}")
           propertyKeys.foreach(index.addKey)
-          index.buildCompositeIndex()
+          index.buildMixedIndex("search")
         case IndexType.fulltext =>
           logger.debug(s"Creating fulltext index on fields $elementLabel:${propertyKeys.mkString(",")}")
           propertyKeys.foreach(k => index.addKey(k, Mapping.TEXT.asParameter()))
@@ -350,6 +370,17 @@ class JanusDatabase(
   }
 
   override def labelFilter[E <: Element](model: Model): GremlinScala[E] => GremlinScala[E] = _.has(Key("_label") of model.label)
+
+  override def mapPredicate[T](predicate: P[T]): P[T] =
+    predicate.getBiPredicate match {
+      case Text.containing    => JanusText.textContains(predicate.getValue)
+      case Text.notContaining => JanusText.textContains(predicate.getValue).negate()
+//      case Text.endingWith      => JanusText.textRegex(s"${predicate.getValue}.*")
+//      case Text.notEndingWith   => JanusText.textRegex(s"${predicate.getValue}.*").negate()
+      case Text.startingWith    => JanusText.textPrefix(predicate.getValue)
+      case Text.notStartingWith => JanusText.textPrefix(predicate.getValue).negate()
+      case _                    => predicate
+    }
 
   override def drop(): Unit = JanusGraphFactory.drop(janusGraph)
 }
