@@ -111,11 +111,8 @@ lazy val janus = (project in file("database/janusgraph"))
       janusGraph,
       janusGraphBerkeleyDB,
       janusGraphHBase,
-//      hbaseClient,
+      janusGraphLucene,
       cassandra,
-//      hbaseCommon,
-//      hadoopCommon,
-//      gremlinServer,
       specs % Test
     )
   )
