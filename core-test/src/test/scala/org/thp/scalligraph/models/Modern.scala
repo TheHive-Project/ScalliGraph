@@ -51,15 +51,17 @@ class SoftwareSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Gra
 
 @Singleton
 class PersonSrv @Inject()(implicit db: Database) extends VertexSrv[Person, PersonSteps] {
-  override val initialValues: Seq[Person]                                           = Seq(Person("marc", 34), Person("franck", 28))
-  override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): PersonSteps = new PersonSteps(raw)
-  override def getByIds(ids: String*)(implicit graph: Graph): PersonSteps           = initSteps.getByIds(ids: _*)
+  override val initialValues: Seq[Person]                                                         = Seq(Person("marc", 34), Person("franck", 28))
+  override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): PersonSteps               = new PersonSteps(raw)
+  override def getByIds(ids: String*)(implicit graph: Graph): PersonSteps                         = initSteps.getByIds(ids: _*)
+  def create(e: Person)(implicit graph: Graph, authContext: AuthContext): Try[Person with Entity] = createEntity(e)
 }
 
 @Singleton
 class SoftwareSrv @Inject()(implicit db: Database) extends VertexSrv[Software, SoftwareSteps] {
-  override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): SoftwareSteps = new SoftwareSteps(raw)
-  override def getByIds(ids: String*)(implicit graph: Graph): SoftwareSteps           = initSteps.getByIds(ids: _*)
+  override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): SoftwareSteps                 = new SoftwareSteps(raw)
+  override def getByIds(ids: String*)(implicit graph: Graph): SoftwareSteps                           = initSteps.getByIds(ids: _*)
+  def create(e: Software)(implicit graph: Graph, authContext: AuthContext): Try[Software with Entity] = createEntity(e)
 }
 
 @Singleton

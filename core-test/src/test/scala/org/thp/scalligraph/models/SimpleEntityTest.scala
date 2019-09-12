@@ -1,5 +1,7 @@
 package org.thp.scalligraph.models
 
+import scala.util.Try
+
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
@@ -18,6 +20,11 @@ object MyEntity {
   val initialValues: Seq[MyEntity] = Seq(MyEntity("ini1", 1), MyEntity("ini1", 2))
 }
 
+class MyEntitySrv(implicit db: Database) extends VertexSrv[MyEntity, VertexSteps[MyEntity]] {
+  override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): VertexSteps[MyEntity]         = new VertexSteps[MyEntity](raw)
+  def create(e: MyEntity)(implicit graph: Graph, authContext: AuthContext): Try[MyEntity with Entity] = createEntity(e)
+}
+
 class SimpleEntityTest extends PlaySpecification with Mockito {
 
   val userSrv: UserSrv                  = DummyUserSrv()
@@ -27,9 +34,7 @@ class SimpleEntityTest extends PlaySpecification with Mockito {
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
     implicit val db: Database = dbProvider.get()
     db.createSchema(db.getModel[MyEntity])
-    val myEntitySrv: VertexSrv[MyEntity, VertexSteps[MyEntity]] = new VertexSrv[MyEntity, VertexSteps[MyEntity]] {
-      override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): VertexSteps[MyEntity] = new VertexSteps[MyEntity](raw)
-    }
+    val myEntitySrv: MyEntitySrv = new MyEntitySrv
 
     s"[${dbProvider.name}] simple entity" should {
       "create" in db.transaction { implicit graph =>

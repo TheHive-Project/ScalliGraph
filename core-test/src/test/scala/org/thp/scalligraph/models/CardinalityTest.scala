@@ -19,6 +19,8 @@ case class EntityWithSeq(name: String, valueList: Seq[String], valueSet: Set[Str
 class EntityWithSeqSrv(implicit db: Database) extends VertexSrv[EntityWithSeq, VertexSteps[EntityWithSeq]] {
   override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): VertexSteps[EntityWithSeq] = new VertexSteps[EntityWithSeq](raw)
 
+  def create(e: EntityWithSeq)(implicit graph: Graph, authContext: AuthContext): Try[EntityWithSeq with Entity] = createEntity(e)
+
   def getFromKey(key: String, value: String)(implicit graph: Graph): Try[EntityWithSeq] =
     new VertexSteps[EntityWithSeq](initSteps.raw.has(Key(key) of value)).getOrFail()
 }

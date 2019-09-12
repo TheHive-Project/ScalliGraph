@@ -28,7 +28,7 @@ abstract class VertexSrv[V <: Product: ru.TypeTag, S <: BaseVertexSteps[V, S]](i
       .headOption()
       .fold[Try[V with Entity]](Failure(NotFoundError(s"${model.label} ${vertex.id()} not found")))(Success.apply)
 
-  def create(e: V)(implicit graph: Graph, authContext: AuthContext): Try[V with Entity] =
+  def createEntity(e: V)(implicit graph: Graph, authContext: AuthContext): Try[V with Entity] =
     Success(db.createVertex[V](graph, authContext, model, e))
 
   val initialValues: Seq[V] = Nil
