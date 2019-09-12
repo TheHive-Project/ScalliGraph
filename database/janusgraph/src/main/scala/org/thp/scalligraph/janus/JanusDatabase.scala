@@ -304,7 +304,7 @@ class JanusDatabase(
     if (mgmt.getGraphIndex(indexName) != null) {
       logger.info(s"Index $indexName already exists, ignore it")
     } else {
-      val index = mgmt.buildIndex(indexName, elementClass).indexOnly(elementLabel)
+      val index = mgmt.buildIndex(indexName, elementClass) //.indexOnly(elementLabel)
       val propertyKeys = (properties :+ "_label").map { p =>
         val propertyKey = mgmt.getPropertyKey(p)
         if (propertyKey == null) throw InternalError(s"Property $p in ${elementLabel.name} not found")
@@ -313,7 +313,10 @@ class JanusDatabase(
       indexType match {
         case IndexType.unique =>
           logger.debug(s"Creating unique index on fields $elementLabel:${propertyKeys.mkString(",")}")
-          propertyKeys.foreach(index.addKey)
+          propertyKeys.foreach { k =>
+            index.addKey(k)
+            mgmt.setConsistency(k, ConsistencyModifier.LOCK)
+          }
           index.unique()
           val i = index.buildCompositeIndex()
           mgmt.setConsistency(i, ConsistencyModifier.LOCK)
