@@ -55,7 +55,7 @@ abstract class QueryExecutor { executor =>
         Output(value, lOutput.toJson)
       case _ =>
         allQueries
-          .find(q => q.checkFrom(tpe) && q.toType(tpe) <:< ru.typeOf[Output[_]] && q.paramType == ru.typeOf[Unit])
+          .find(q => q.checkFrom(tpe) && SubType(q.toType(tpe), ru.typeOf[Output[_]]) && q.paramType == ru.typeOf[Unit])
           .map(q => q.asInstanceOf[Query]((), value, authContext))
           .getOrElse {
             throw BadRequestError(s"Value of type $tpe ($value) can't be output")

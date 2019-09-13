@@ -13,8 +13,11 @@ import org.thp.scalligraph.models.{BaseVertexSteps, Database, ScalliSteps}
 import org.thp.scalligraph.BadRequestError
 import org.thp.scalligraph.utils.RichType
 
-/* Global lock because scala reflection subtype operator <:< is not thread safe (scala/bug#10766) */
-object ScalaReflectionLock
+// Use global lock because scala reflection subtype operator <:< is not thread safe (scala/bug#10766)
+// https://stackoverflow.com/questions/56854716/inconsistent-result-when-checking-type-subtype
+object SubType {
+  def apply(t1: ru.Type, t2: ru.Type): Boolean = synchronized(t1 <:< t2)
+}
 
 abstract class ParamQuery[P: ru.TypeTag] { q =>
   val paramType: ru.Type = ru.typeOf[P]
@@ -49,7 +52,7 @@ object Query {
 
   def init[T: ru.TypeTag](queryName: String, f: (Graph, AuthContext) => T): Query = new Query {
     override val name: String                                                 = queryName
-    override def checkFrom(t: ru.Type): Boolean                               = t <:< ru.typeOf[Graph]
+    override def checkFrom(t: ru.Type): Boolean                               = SubType(t, ru.typeOf[Graph])
     override def toType(t: ru.Type): ru.Type                                  = ru.typeOf[T]
     override def apply(param: Unit, from: Any, authContext: AuthContext): Any = f(from.asInstanceOf[Graph], authContext)
   }
@@ -58,14 +61,14 @@ object Query {
     new ParamQuery[P] {
       override def paramParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[P] = parser
       override val name: String                                                                      = queryName
-      override def checkFrom(t: ru.Type): Boolean                                                    = t <:< ru.typeOf[Graph]
+      override def checkFrom(t: ru.Type): Boolean                                                    = SubType(t, ru.typeOf[Graph])
       override def toType(t: ru.Type): ru.Type                                                       = ru.typeOf[T]
       override def apply(param: P, from: Any, authContext: AuthContext): Any                         = f(param, from.asInstanceOf[Graph], authContext)
     }
 
   def apply[F: ru.TypeTag, T: ru.TypeTag](queryName: String, f: (F, AuthContext) => T): Query = new Query {
     override val name: String                                                 = queryName
-    override def checkFrom(t: ru.Type): Boolean                               = t <:< ru.typeOf[F]
+    override def checkFrom(t: ru.Type): Boolean                               = SubType(t, ru.typeOf[F])
     override def toType(t: ru.Type): ru.Type                                  = ru.typeOf[T]
     override def apply(param: Unit, from: Any, authContext: AuthContext): Any = f(from.asInstanceOf[F], authContext)
   }
@@ -74,14 +77,14 @@ object Query {
     new ParamQuery[P] {
       override def paramParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[P] = parser
       override val name: String                                                                      = queryName
-      override def checkFrom(t: ru.Type): Boolean                                                    = t <:< ru.typeOf[F]
+      override def checkFrom(t: ru.Type): Boolean                                                    = SubType(t, ru.typeOf[F])
       override def toType(t: ru.Type): ru.Type                                                       = ru.typeOf[T]
       override def apply(param: P, from: Any, authContext: AuthContext): Any                         = f(param, from.asInstanceOf[F], authContext)
     }
 
   def output[F: ru.TypeTag, T: ru.TypeTag](implicit toOutput: F => Output[T]): Query = new Query {
     override val name: String                                                 = "toOutput"
-    override def checkFrom(t: ru.Type): Boolean                               = t <:< ru.typeOf[F]
+    override def checkFrom(t: ru.Type): Boolean                               = SubType(t, ru.typeOf[F])
     override def toType(t: ru.Type): ru.Type                                  = ru.appliedType(ru.typeOf[Output[_]].typeConstructor, ru.typeOf[T])
     override def apply(param: Unit, from: Any, authContext: AuthContext): Any = toOutput(from.asInstanceOf[F])
   }
@@ -90,10 +93,8 @@ object Query {
 class SortQuery(db: Database, publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[InputSort] {
   override def paramParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[InputSort] = InputSort.fieldsParser
   override val name: String                                                                              = "sort"
-  // FIXME https://stackoverflow.com/questions/56854716/inconsistent-result-when-checking-type-subtype
-  override def checkFrom(t: ru.Type): Boolean =
-    t <:< ru.typeOf[ScalliSteps[_, _, _]] || ScalaReflectionLock.synchronized(t <:< ru.typeOf[ScalliSteps[_, _, _]])
-  override def toType(t: ru.Type): ru.Type = t
+  override def checkFrom(t: ru.Type): Boolean                                                            = SubType(t, ru.typeOf[ScalliSteps[_, _, _]])
+  override def toType(t: ru.Type): ru.Type                                                               = t
   override def apply(inputSort: InputSort, from: Any, authContext: AuthContext): Any =
     inputSort(
       db,
@@ -107,11 +108,9 @@ class SortQuery(db: Database, publicProperties: List[PublicProperty[_, _]]) exte
 class FilterQuery(db: Database, publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[InputFilter] {
   override def paramParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[InputFilter] =
     InputFilter.fieldsParser(tpe, properties)
-  override val name: String = "filter"
-  // FIXME https://stackoverflow.com/questions/56854716/inconsistent-result-when-checking-type-subtype
-  override def checkFrom(t: ru.Type): Boolean =
-    t <:< ru.typeOf[BaseVertexSteps[_, _]] || ScalaReflectionLock.synchronized(t <:< ru.typeOf[BaseVertexSteps[_, _]])
-  override def toType(t: ru.Type): ru.Type = t
+  override val name: String                   = "filter"
+  override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[BaseVertexSteps[_, _]])
+  override def toType(t: ru.Type): ru.Type    = t
   override def apply(inputFilter: InputFilter, from: Any, authContext: AuthContext): Any =
     inputFilter(
       db,
@@ -125,11 +124,9 @@ class FilterQuery(db: Database, publicProperties: List[PublicProperty[_, _]]) ex
 class AggregationQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[GroupAggregation[_, _]] {
   override def paramParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[GroupAggregation[_, _]] =
     GroupAggregation.fieldsParser
-  override val name: String = "aggregation"
-  // FIXME https://stackoverflow.com/questions/56854716/inconsistent-result-when-checking-type-subtype
-  override def checkFrom(t: ru.Type): Boolean =
-    t <:< ru.typeOf[BaseVertexSteps[_, _]] || ScalaReflectionLock.synchronized(t <:< ru.typeOf[BaseVertexSteps[_, _]])
-  override def toType(t: ru.Type): ru.Type = ru.typeOf[JsValue]
+  override val name: String                   = "aggregation"
+  override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[BaseVertexSteps[_, _]])
+  override def toType(t: ru.Type): ru.Type    = ru.typeOf[JsValue]
   override def apply(aggregation: GroupAggregation[_, _], from: Any, authContext: AuthContext): Any =
     aggregation.get(publicProperties, rm.classSymbol(from.getClass).toType, from.asInstanceOf[BaseVertexSteps[_, _]], authContext)
 }
@@ -137,12 +134,12 @@ class AggregationQuery(publicProperties: List[PublicProperty[_, _]]) extends Par
 object ToListQuery extends Query {
   override val name: String = "toList"
 
-  override def checkFrom(t: ru.Type): Boolean = t <:< ru.typeOf[ScalliSteps[_, _, _]] || t <:< ru.typeOf[GremlinScala[_]]
+  override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[ScalliSteps[_, _, _]]) || SubType(t, ru.typeOf[GremlinScala[_]])
 
   override def toType(t: ru.Type): ru.Type = {
-    val subType = if (t <:< ru.typeOf[ScalliSteps[_, _, _]]) {
+    val subType = if (SubType(t, ru.typeOf[ScalliSteps[_, _, _]])) {
       RichType.getTypeArgs(t, ru.typeOf[ScalliSteps[_, _, _]]).head
-    } else if (t <:< ru.typeOf[GremlinScala[_]]) {
+    } else if (SubType(t, ru.typeOf[GremlinScala[_]])) {
       RichType.getTypeArgs(t, ru.typeOf[GremlinScala[_]]).head
     } else {
       throw BadRequestError(s"toList can't be used with $t. It must be a ScalliSteps or a GremlinScala")
