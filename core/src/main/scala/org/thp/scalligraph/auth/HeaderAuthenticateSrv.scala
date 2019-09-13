@@ -16,7 +16,7 @@ class HeaderAuthSrv(userHeader: String, requestOrganisation: RequestOrganisation
       override def invokeBlock[A](request: Request[A], block: AuthenticatedRequest[A] => Future[Result]): Future[Result] =
         request
           .headers
-          .get("user")
+          .get(userHeader)
           .flatMap(userSrv.getFromId(request, _, requestOrganisation(request)).toOption)
           .fold(nextFunction.invokeBlock(request, block)) { authContext =>
             block(new AuthenticatedRequest[A](authContext, request))
