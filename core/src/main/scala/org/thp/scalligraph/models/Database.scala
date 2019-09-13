@@ -33,7 +33,9 @@ trait Database {
   def tryTransaction[A](body: Graph => Try[A]): Try[A]
   def currentTransactionId(graph: Graph): AnyRef
   def addCallback(callback: () => Try[Unit])(implicit graph: Graph): Unit
-  protected def takeCallbacks(graph: Graph): List[() => Try[Unit]]
+
+  /** Must not be used outside the database */
+  def takeCallbacks(graph: Graph): List[() => Try[Unit]]
   def addTransactionListener(listener: Consumer[Status])(implicit graph: Graph): Unit
 
   def version(module: String): Int
@@ -124,7 +126,7 @@ abstract class BaseDatabase extends Database {
     callbacks = (currentTransactionId(graph) -> callback) :: callbacks
   }
 
-  protected def takeCallbacks(graph: Graph): List[() => Try[Unit]] = {
+  def takeCallbacks(graph: Graph): List[() => Try[Unit]] = {
     val tx = currentTransactionId(graph)
     synchronized {
       val (cb, updatedCallbacks) = callbacks.partition(_._1 == tx)
