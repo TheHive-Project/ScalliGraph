@@ -6,8 +6,8 @@ import akka.actor.ActorSystem
 import com.typesafe.config.ConfigFactory
 import javax.inject.{Inject, Provider}
 import org.thp.scalligraph.janus.JanusDatabase
-import org.thp.scalligraph.neo4j.Neo4jDatabase
-import org.thp.scalligraph.orientdb.OrientDatabase
+//import org.thp.scalligraph.neo4j.Neo4jDatabase
+//import org.thp.scalligraph.orientdb.OrientDatabase
 
 class DatabaseProviders @Inject()(config: Configuration, system: ActorSystem) {
 
@@ -24,9 +24,9 @@ class DatabaseProviders @Inject()(config: Configuration, system: ActorSystem) {
 
   lazy val janus: DatabaseProvider = new DatabaseProvider("janus", new JanusDatabase(config, system))
 
-  lazy val orientdb: DatabaseProvider = new DatabaseProvider("orientdb", new OrientDatabase(config, system))
-
-  lazy val neo4j: DatabaseProvider = new DatabaseProvider("neo4j", new Neo4jDatabase(config, system))
+//  lazy val orientdb: DatabaseProvider = new DatabaseProvider("orientdb", new OrientDatabase(config, system))
+//
+//  lazy val neo4j: DatabaseProvider = new DatabaseProvider("neo4j", new Neo4jDatabase(config, system))
 
   lazy val list: Seq[DatabaseProvider] = janus /* :: orientdb :: neo4j*/ :: Nil
 }

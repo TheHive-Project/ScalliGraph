@@ -13,7 +13,7 @@ import org.specs2.mutable.Specification
 import org.specs2.specification.core.{Fragment, Fragments}
 import org.thp.scalligraph.janus.JanusDatabase
 import org.thp.scalligraph.models.{Database, DatabaseProvider, DatabaseProviders}
-import org.thp.scalligraph.orientdb.{OrientDatabase, OrientDatabaseStorageSrv}
+//import org.thp.scalligraph.orientdb.{OrientDatabase, OrientDatabaseStorageSrv}
 
 class AttachmentTest extends Specification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
@@ -32,8 +32,8 @@ class AttachmentTest extends Specification {
   val dbProviders = new DatabaseProviders(actorSystem)
 
   val dbProvStorageSrv: Seq[(DatabaseProvider, StorageSrv)] = dbProviders.list.map {
-    case db if db.name == "orientdb" => db -> new OrientDatabaseStorageSrv(db.get().asInstanceOf[OrientDatabase], 32 * 1024)
-    case db                          => db -> new DatabaseStorageSrv(db.get(), 32 * 1024)
+//    case db if db.name == "orientdb" => db -> new OrientDatabaseStorageSrv(db.get().asInstanceOf[OrientDatabase], 32 * 1024)
+    case db => db -> new DatabaseStorageSrv(db.get(), 32 * 1024)
   } :+ (new DatabaseProvider("janus", new JanusDatabase(actorSystem)) -> new LocalFileSystemStorageSrv(storageDirectory))
 
   Fragments.foreach(dbProvStorageSrv) {

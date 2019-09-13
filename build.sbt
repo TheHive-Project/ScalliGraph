@@ -55,9 +55,9 @@ lazy val commonSettings = Seq(
 // format: on
 
 lazy val scalligraph = (project in file("."))
-  .dependsOn(core, /*graphql, */ janus, orientdb /*, neo4j, coreTest*/ )
+  .dependsOn(core, /*graphql, */ janus /* , orientdb , neo4j, coreTest*/ )
   .dependsOn(coreTest % "test -> test")
-  .aggregate(core, /*graphql, */ janus, orientdb, neo4j, coreTest)
+  .aggregate(core, /*graphql, */ janus /* , orientdb, neo4j */, coreTest)
   .settings(commonSettings)
   .settings(
     name := "scalligraph"
@@ -91,8 +91,8 @@ lazy val core = (project in file("core"))
 lazy val coreTest = (project in file("core-test"))
   .dependsOn(core)
   .dependsOn(janus)
-  .dependsOn(orientdb)
-  .dependsOn(neo4j)
+//  .dependsOn(orientdb)
+//  .dependsOn(neo4j)
   .settings(commonSettings)
   .settings(
     name := "scalligraph-core-test",
