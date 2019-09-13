@@ -15,11 +15,9 @@ abstract class GenericError(val `type`: String, message: String, cause: Throwabl
 
 case class AuthenticationError(message: String, cause: Throwable = null) extends GenericError("AuthenticationError", message, cause)
 case class AuthorizationError(message: String, cause: Throwable = null)  extends GenericError("AuthorizationError", message, cause)
-case class CreateError(message: String, attributes: JsObject, cause: Throwable = null) extends GenericError("CreateError", message, cause) {
-  override def toJson: JsObject = super.toJson + ("object" -> attributes)
-}
-case class GetError(message: String, cause: Throwable = null)    extends GenericError("GetError", message, cause)
-case class SearchError(message: String, cause: Throwable = null) extends GenericError("SearchError", message, cause)
+case class CreateError(message: String, cause: Throwable = null)         extends GenericError("CreateError", message, cause)
+case class GetError(message: String, cause: Throwable = null)            extends GenericError("GetError", message, cause)
+case class SearchError(message: String, cause: Throwable = null)         extends GenericError("SearchError", message, cause)
 case class UpdateError(status: Option[String], message: String, attributes: JsObject, cause: Throwable = null)
     extends GenericError("UpdateError", message, cause) {
   override def toJson: JsObject = super.toJson + ("object" -> attributes)

@@ -28,7 +28,7 @@ class ErrorHandler extends HttpErrorHandler {
     ex match {
       case e: AuthenticationError    => Some(Status.UNAUTHORIZED          -> e.toJson)
       case e: AuthorizationError     => Some(Status.FORBIDDEN             -> e.toJson)
-      case e: CreateError            => Some(Status.INTERNAL_SERVER_ERROR -> e.toJson)
+      case e: CreateError            => Some(Status.BAD_REQUEST           -> e.toJson)
       case e: GetError               => Some(Status.INTERNAL_SERVER_ERROR -> e.toJson)
       case e: SearchError            => Some(Status.BAD_REQUEST           -> e.toJson)
       case e: UpdateError            => Some(Status.INTERNAL_SERVER_ERROR -> e.toJson)
