@@ -95,6 +95,8 @@ abstract class ScalliSteps[EndDomain, EndGraph, ThisStep <: ScalliSteps[EndDomai
 
   def hasNot[A](key: Key[A], predicate: P[A])(implicit ev: EndGraph <:< Element): ThisStep = newInstance(raw.hasNot(key, predicate))
 
+  def hasNot[A](key: Key[A])(implicit ev: EndGraph <:< Element): ThisStep = newInstance(raw.hasNot(key))
+
   def map[NewEndDomain: ClassTag](f: EndDomain => NewEndDomain): ScalarSteps[NewEndDomain] =
     new ScalarSteps[NewEndDomain](raw.map(x => f(converter.toDomain(x))))
 
