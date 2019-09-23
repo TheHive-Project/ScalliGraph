@@ -22,7 +22,7 @@ class ADAuthSrv(adConfig: ADConfig, userSrv: UserSrv) extends AuthSrv {
 
   override def authenticate(username: String, password: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
     connect(adConfig.winDomain + "\\" + username, password)(_ => Success(()))
-      .flatMap(_ => userSrv.getFromId(request, username, organisation))
+      .flatMap(_ => userSrv.getAuthContext(request, username, organisation))
       .recoverWith {
         case t =>
           logger.error("AD authentication failure", t)

@@ -85,7 +85,7 @@ class PkiAuthSrv(certificateField: String, requestOrganisation: RequestOrganisat
       .flatMap { cert =>
         extractFieldFromSubject(cert)
           .orElse(extractFieldFromSAN(cert))
-          .flatMap(userId => userSrv.getFromId(request, userId, requestOrganisation(request)).toOption)
+          .flatMap(userId => userSrv.getAuthContext(request, userId, requestOrganisation(request)).toOption)
       }
 }
 

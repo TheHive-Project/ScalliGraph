@@ -17,7 +17,7 @@ class HeaderAuthSrv(userHeader: String, requestOrganisation: RequestOrganisation
         request
           .headers
           .get(userHeader)
-          .flatMap(userSrv.getFromId(request, _, requestOrganisation(request)).toOption)
+          .flatMap(userSrv.getAuthContext(request, _, requestOrganisation(request)).toOption)
           .fold(nextFunction.invokeBlock(request, block)) { authContext =>
             block(new AuthenticatedRequest[A](authContext, request))
           }

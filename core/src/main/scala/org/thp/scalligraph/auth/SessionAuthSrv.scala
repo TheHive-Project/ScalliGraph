@@ -20,6 +20,8 @@ object ExpirationStatus {
 class SessionAuthSrv(
     maxSessionInactivity: FiniteDuration,
     sessionWarning: FiniteDuration,
+    userSrv: UserSrv,
+    requestOrganisation: RequestOrganisation,
     val ec: ExecutionContext
 ) extends AuthSrvWithActionFunction {
   override val name: String = "session"
@@ -65,17 +67,22 @@ class SessionAuthSrv(
         .get("authContext")
       if expirationStatus(request) != ExpirationStatus.Error
       authContext <- AuthContext.fromJson(request, authSession).toOption
-    } yield authContext
+      orgAuthContext <- requestOrganisation(request) match {
+        case Some(organisation) if organisation != authContext.organisation =>
+          userSrv.getAuthContext(request, authContext.userId, Some(organisation)).toOption
+        case _ => Some(authContext)
+      }
+    } yield orgAuthContext
 
   override def transformResult[A](request: Request[A], authContext: AuthContext): Result => Result = setSessionUser(authContext)
 }
 
 @Singleton
-class SessionAuthProvider @Inject()(ec: ExecutionContext) extends AuthSrvProvider {
+class SessionAuthProvider @Inject()(userSrv: UserSrv, requestOrganisation: RequestOrganisation, ec: ExecutionContext) extends AuthSrvProvider {
   override val name: String = "session"
   override def apply(config: Configuration): Try[AuthSrv] =
     for {
       maxSessionInactivity <- config.getOrFail[FiniteDuration]("inactivity") // TODO rename settings
       sessionWarning       <- config.getOrFail[FiniteDuration]("warning")
-    } yield new SessionAuthSrv(maxSessionInactivity, sessionWarning, ec)
+    } yield new SessionAuthSrv(maxSessionInactivity, sessionWarning, userSrv, requestOrganisation, ec)
 }

@@ -91,6 +91,16 @@ abstract class ScalliSteps[EndDomain, EndGraph, ThisStep <: ScalliSteps[EndDomai
 
   def where(f: ThisStep => ScalliSteps[_, _, _]): ThisStep = newInstance(raw.filter(g => f(newInstance(g)).raw))
 
+  def or(f: (ThisStep => ScalliSteps[_, _, _])*): ThisStep = {
+    val filters = f.map(r => (g: GremlinScala[EndGraph]) => r(newInstance(g)).raw)
+    newInstance(raw.or(filters: _*))
+  }
+
+  def and(f: (ThisStep => ScalliSteps[_, _, _])*): ThisStep = {
+    val filters = f.map(r => (g: GremlinScala[EndGraph]) => r(newInstance(g)).raw)
+    newInstance(raw.and(filters: _*))
+  }
+
   def has[A](key: Key[A], predicate: P[A])(implicit ev: EndGraph <:< Element): ThisStep = newInstance(raw.has(key, predicate))
 
   def hasNot[A](key: Key[A], predicate: P[A])(implicit ev: EndGraph <:< Element): ThisStep = newInstance(raw.hasNot(key, predicate))

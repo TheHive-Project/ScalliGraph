@@ -10,7 +10,7 @@ import javax.inject.{Inject, Provider, Singleton}
 import org.thp.scalligraph.controllers.AuthenticatedRequest
 import org.thp.scalligraph.services.config.{ApplicationConfig, ConfigItem}
 import org.thp.scalligraph.services.config.ApplicationConfig.configurationFormat
-import org.thp.scalligraph.{AuthenticationError, BadConfigurationError, OAuth2Redirect, RichSeq}
+import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError, OAuth2Redirect, RichSeq}
 
 class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, availableAuthProviders: immutable.Set[AuthSrvProvider])
     extends AuthSrv {
@@ -54,9 +54,9 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
   override def capabilities: Set[AuthCapability.Value] = authProviders.flatMap(_.capabilities).toSet
 
   private def forAllAuthProvider[A](providers: Seq[AuthSrv])(body: AuthSrv => Try[A]): Try[A] =
-    providers.foldLeft[Try[A]](Failure(new Exception("no authentication provider found"))) { (f, a) =>
+    providers.foldLeft[Try[A]](Failure(AuthorizationError("no authentication provider found"))) { (f, a) =>
       f.recoverWith {
-        case _ =>
+        case _: AuthorizationError | _: AuthenticationError =>
           val r = body(a)
           r.failed.foreach(error => logger.debug(s"${a.name} ${error.getClass.getSimpleName} ${error.getMessage}")) // FIXME
           r

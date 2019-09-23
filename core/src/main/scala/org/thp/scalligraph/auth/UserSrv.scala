@@ -21,10 +21,13 @@ trait AuthContext {
   def organisation: String
   def requestId: String
   def permissions: Set[Permission]
+  def changeOrganisation(newOrganisation: String): AuthContext
 }
 
 case class AuthContextImpl(userId: String, userName: String, organisation: String, requestId: String, permissions: Set[Permission])
-    extends AuthContext
+    extends AuthContext {
+  override def changeOrganisation(newOrganisation: String): AuthContext = copy(organisation = newOrganisation)
+}
 
 object AuthContext {
 
@@ -51,7 +54,7 @@ object AuthContext {
 }
 
 trait UserSrv {
-  def getFromId(request: RequestHeader, userId: String, organisationName: Option[String]): Try[AuthContext]
+  def getAuthContext(request: RequestHeader, userId: String, organisationName: Option[String]): Try[AuthContext]
   def getSystemAuthContext: AuthContext
 }
 
