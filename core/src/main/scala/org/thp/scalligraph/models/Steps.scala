@@ -25,7 +25,7 @@ abstract class ScalliSteps[EndDomain, EndGraph, ThisStep <: ScalliSteps[EndDomai
   def typeName: String
   override def clone(): ThisStep = newInstance(raw.clone())
   def newInstance(raw: GremlinScala[EndGraph]): ThisStep
-  val converter: Converter.Aux[EndDomain, EndGraph]
+  def converter: Converter.Aux[EndDomain, EndGraph]
   val raw: GremlinScala[EndGraph]
 
   lazy val logger: Logger = Logger(getClass)
@@ -105,7 +105,7 @@ abstract class ScalliSteps[EndDomain, EndGraph, ThisStep <: ScalliSteps[EndDomai
 
   def hasNot[A](key: Key[A], predicate: P[A])(implicit ev: EndGraph <:< Element): ThisStep = newInstance(raw.hasNot(key, predicate))
 
-  def hasNot[A](key: Key[A])(implicit ev: EndGraph <:< Element): ThisStep = newInstance(raw.hasNot(key))
+  def hasNot[A](key: Key[A]): ThisStep = newInstance(raw.hasNot(key))
 
   def map[NewEndDomain: ClassTag](f: EndDomain => NewEndDomain): ScalarSteps[NewEndDomain] =
     new ScalarSteps[NewEndDomain](raw.map(x => f(converter.toDomain(x))))
@@ -169,8 +169,8 @@ object ValueMap {
 
 final class ScalarSteps[T: ClassTag](val raw: GremlinScala[T]) extends ScalliSteps[T, T, ScalarSteps[T]] {
 
-  override val converter: Converter.Aux[T, T] = Converter.identityConverter[T]
-  lazy val typeName: String                   = implicitly[ClassTag[T]].runtimeClass.getSimpleName
+  override lazy val converter: Converter.Aux[T, T] = Converter.identityConverter[T]
+  lazy val typeName: String                        = implicitly[ClassTag[T]].runtimeClass.getSimpleName
 
   override def newInstance(raw: GremlinScala[T]): ScalarSteps[T] = new ScalarSteps[T](raw)
 }
@@ -185,7 +185,7 @@ abstract class ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisS
     val raw: GremlinScala[EndGraph]
 )(implicit val db: Database, graph: Graph)
     extends ScalliSteps[E with Entity, EndGraph, ThisStep] { _: ThisStep =>
-  override val converter: Converter.Aux[E with Entity, EndGraph] =
+  override lazy val converter: Converter.Aux[E with Entity, EndGraph] =
     db.getModel[E].converter(db, graph).asInstanceOf[Converter.Aux[E with Entity, EndGraph]]
 
   lazy val typeName: String = ru.typeOf[E].toString
@@ -208,7 +208,9 @@ abstract class BaseVertexSteps[E <: Product: ru.TypeTag, ThisStep <: BaseVertexS
     val graph: Graph
 ) extends ElementSteps[E, Vertex, ThisStep](raw) { _: ThisStep =>
 
-  def get(vertex: Vertex): ThisStep = newInstance(raw.V(vertex))
+  def get(vertex: Vertex): ThisStep = newInstance(raw.hasId(vertex.id()))
+
+  def get(entity: Entity): ThisStep = newInstance(raw.hasId(entity._id))
 
   private[scalligraph] def updateProperties(propertyUpdaters: Seq[PropertyUpdater])(implicit authContext: AuthContext): Try[(ThisStep, JsObject)] = {
     val myClone = clone()
