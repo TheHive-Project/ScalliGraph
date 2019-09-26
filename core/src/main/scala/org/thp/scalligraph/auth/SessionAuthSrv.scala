@@ -1,14 +1,15 @@
 package org.thp.scalligraph.auth
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.{DurationLong, FiniteDuration}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 
 import play.api.libs.json.Json
-import play.api.mvc.{Request, RequestHeader, Result, Session}
+import play.api.mvc._
 import play.api.{Configuration, Logger}
 
 import javax.inject.{Inject, Singleton}
+import org.thp.scalligraph.controllers.AuthenticatedRequest
 
 object ExpirationStatus {
   sealed abstract class Type
@@ -23,7 +24,7 @@ class SessionAuthSrv(
     userSrv: UserSrv,
     requestOrganisation: RequestOrganisation,
     val ec: ExecutionContext
-) extends AuthSrvWithActionFunction {
+) extends AuthSrv {
   override val name: String = "session"
   lazy val logger           = Logger(getClass)
 
@@ -60,7 +61,7 @@ class SessionAuthSrv(
     } else result
   }
 
-  override def getAuthContext[A](request: Request[A]): Option[AuthContext] =
+  def getAuthContext[A](request: Request[A]): Option[(AuthContext, AuthContext)] =
     for {
       authSession <- request
         .session
@@ -72,9 +73,19 @@ class SessionAuthSrv(
           userSrv.getAuthContext(request, authContext.userId, Some(organisation)).toOption
         case _ => Some(authContext)
       }
-    } yield orgAuthContext
+    } yield authContext -> orgAuthContext
 
-  override def transformResult[A](request: Request[A], authContext: AuthContext): Result => Result = setSessionUser(authContext)
+  override def actionFunction(nextFunction: ActionFunction[Request, AuthenticatedRequest]): ActionFunction[Request, AuthenticatedRequest] =
+    new ActionFunction[Request, AuthenticatedRequest] {
+      override def invokeBlock[A](request: Request[A], block: AuthenticatedRequest[A] => Future[Result]): Future[Result] =
+        getAuthContext(request)
+          .fold(nextFunction.invokeBlock(request, block)) {
+            case (originalAuthContext, authContext) =>
+              block(new AuthenticatedRequest(authContext, request))
+                .map(setSessionUser(originalAuthContext))(ec)
+          }
+      override protected def executionContext: ExecutionContext = ec
+    }
 }
 
 @Singleton
