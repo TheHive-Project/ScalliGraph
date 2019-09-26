@@ -12,6 +12,7 @@ import play.api.libs.json.JsObject
 
 import gremlin.scala._
 import gremlin.scala.dsl._
+import org.apache.tinkerpop.gremlin.structure.T
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.query.PropertyUpdater
 import org.thp.scalligraph.services.RichElement
@@ -102,6 +103,8 @@ abstract class ScalliSteps[EndDomain, EndGraph, ThisStep <: ScalliSteps[EndDomai
   }
 
   def has[A](key: Key[A], predicate: P[A])(implicit ev: EndGraph <:< Element): ThisStep = newInstance(raw.has(key, predicate))
+
+  def hasId(id: String)(implicit ev: EndGraph <:< Element): ThisStep = newInstance(raw.has(T.id, id))
 
   def hasNot[A](key: Key[A], predicate: P[A])(implicit ev: EndGraph <:< Element): ThisStep = newInstance(raw.hasNot(key, predicate))
 
