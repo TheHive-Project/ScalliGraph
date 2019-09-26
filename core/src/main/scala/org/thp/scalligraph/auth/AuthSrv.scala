@@ -1,6 +1,7 @@
 package org.thp.scalligraph.auth
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.matching.Regex
 import scala.util.{Failure, Success, Try}
 
 import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
@@ -15,9 +16,17 @@ object AuthCapability extends Enumeration {
 }
 
 @Singleton
-class RequestOrganisation(organisationHeader: String) extends (Request[_] => Option[String]) {
-  @Inject() def this(configuration: Configuration) = this(configuration.get[String]("auth.organisationHeader"))
-  override def apply(request: Request[_]): Option[String] = request.headers.get(organisationHeader)
+class RequestOrganisation(header: Option[String], parameter: Option[String], pathSegment: Option[Regex]) extends (Request[_] => Option[String]) {
+  @Inject() def this(configuration: Configuration) =
+    this(
+      configuration.getOptional[String]("auth.organisationHeader"),
+      configuration.getOptional[String]("auth.organisationParameter"),
+      configuration.getOptional[String]("auth.organisationPathExtractor").map(_.r)
+    )
+  override def apply(request: Request[_]): Option[String] =
+    header.flatMap(request.headers.get(_)) orElse
+      parameter.flatMap(request.queryString.getOrElse(_, Nil).headOption) orElse
+      pathSegment.flatMap(r => r.findFirstMatchIn(request.path).flatMap(m => Option(m.group(0))))
 }
 
 trait AuthSrvProvider extends (Configuration => Try[AuthSrv]) {
