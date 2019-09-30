@@ -1,21 +1,20 @@
 package org.thp.scalligraph.controllers
 
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Try
-
+import gremlin.scala.Graph
+import javax.inject.{Inject, Singleton}
+import org.thp.scalligraph.auth.{AuthSrv, Permission}
+import org.thp.scalligraph.models.Database
+import org.thp.scalligraph.record.Record
+import org.thp.scalligraph.{AttributeCheckingError, AuthorizationError, DiagnosticContext}
 import play.api.Logger
 import play.api.http.HttpErrorHandler
 import play.api.libs.json.Json
 import play.api.mvc._
-
-import gremlin.scala.Graph
-import javax.inject.{Inject, Singleton}
-import org.thp.scalligraph.{AttributeCheckingError, DiagnosticContext}
-import org.thp.scalligraph.auth.AuthSrv
-import org.thp.scalligraph.models.Database
-import org.thp.scalligraph.record.Record
 import shapeless.labelled.FieldType
 import shapeless.{::, labelled, HList, HNil, Witness}
+
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Try}
 
 /**
   * API entry point. This class create a controller action which parse request and check authentication
@@ -56,6 +55,13 @@ class EntryPoint @Inject()(
       fieldsParser: FieldsParser[V]
   ) {
 
+    val AuthenticationFailureActionFunction: ActionFunction[Request, AuthenticatedRequest] =
+      new ActionFunction[Request, AuthenticatedRequest] {
+        override def invokeBlock[A](request: Request[A], block: AuthenticatedRequest[A] => Future[Result]): Future[Result] =
+          Future.successful(Results.Unauthorized(Json.obj("type" -> "AuthenticationError", "message" -> "Authentication failure")))
+        override protected def executionContext: ExecutionContext = ec
+      }
+
     /**
       * Extract a field from request.
       *
@@ -66,12 +72,10 @@ class EntryPoint @Inject()(
     def extract[T](fieldName: Witness, fp: FieldsParser[T]): EntryPointBuilder[FieldType[fieldName.T, T] :: V] =
       EntryPointBuilder(name, fieldsParser.andThen(fieldName.toString)(fp)(labelled.field[fieldName.T](_) :: _))
 
-    val AuthenticationFailureActionFunction: ActionFunction[Request, AuthenticatedRequest] =
-      new ActionFunction[Request, AuthenticatedRequest] {
-        override def invokeBlock[A](request: Request[A], block: AuthenticatedRequest[A] => Future[Result]): Future[Result] =
-          Future.successful(Results.Unauthorized(Json.obj("type" -> "AuthenticationError", "message" -> "Authentication failure")))
-        override protected def executionContext: ExecutionContext = ec
-      }
+    def authTransaction(
+        db: Database
+    )(block: AuthenticatedRequest[Record[V]] => Graph => Try[Result]): Action[AnyContent] =
+      auth(request => db.tryTransaction(graph => block(request)(graph)))
 
     /**
       * Add an authentication check to this entry point.
@@ -99,10 +103,21 @@ class EntryPoint @Inject()(
           }
         }
 
-    def authTransaction(
-        db: Database
+    /**
+      *
+      * @param db necessary db instance for transaction
+      * @param permissions set of permissions to check
+      * @param block business login function that transforms request into response
+      * @return
+      */
+    def authPermittedTransaction(
+        db: Database,
+        permissions: Set[Permission]
     )(block: AuthenticatedRequest[Record[V]] => Graph => Try[Result]): Action[AnyContent] =
-      auth(request => db.tryTransaction(graph => block(request)(graph)))
+      auth(request => {
+        if (request.permissions.intersect(permissions) != permissions) Failure(AuthorizationError("Permission missing"))
+        else db.tryTransaction(graph => block(request)(graph))
+      })
 
     def authRoTransaction(
         db: Database
