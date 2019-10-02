@@ -217,6 +217,7 @@ abstract class BaseVertexSteps[E <: Product: ru.TypeTag, ThisStep <: BaseVertexS
 
   private[scalligraph] def updateProperties(propertyUpdaters: Seq[PropertyUpdater])(implicit authContext: AuthContext): Try[(ThisStep, JsObject)] = {
     val myClone = clone()
+    logger.debug(s"Execution of $raw")
     raw.headOption().fold[Try[(ThisStep, JsObject)]](Failure(NotFoundError(s"$typeName not found"))) { vertex =>
       logger.trace(s"Update ${vertex.id()} by ${authContext.userId}")
       propertyUpdaters
