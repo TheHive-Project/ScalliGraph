@@ -13,13 +13,13 @@ import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
 
 class PropertyBuilder[S <: BaseVertexSteps, D, SD, G](stepType: ru.Type, propertyName: String, mapping: Mapping[D, SD, G]) {
 
-  def simple =
+  def field =
     new SimpleUpdatePropertyBuilder[D, SD, G](
       stepType,
       propertyName,
       propertyName,
       mapping,
-      Seq((_: BaseVertexSteps).property(propertyName, mapping)) // FIXME doesn't work with optional properties ?
+      Seq((_: BaseVertexSteps).property(propertyName, mapping))
     )
 
   def rename(newName: String) =
@@ -28,10 +28,10 @@ class PropertyBuilder[S <: BaseVertexSteps, D, SD, G](stepType: ru.Type, propert
       propertyName,
       newName,
       mapping,
-      Seq((_: BaseVertexSteps).property(newName, mapping)) // FIXME doesn't work with optional properties ?
+      Seq((_: BaseVertexSteps).property(newName, mapping))
     )
 
-  def derived(definition: (S => Traversal[SD, G])*) =
+  def select(definition: (S => Traversal[SD, G])*) =
     new UpdatePropertyBuilder[D, SD, G](stepType, propertyName, mapping, definition.asInstanceOf[Seq[BaseVertexSteps => Traversal[SD, G]]])
 }
 

@@ -20,6 +20,9 @@ class PublicProperty[D, G](
     val updateFieldsParser: Option[FieldsParser[PropertyUpdater]]
 ) {
 
+  type Graph  = G
+  type Domain = D
+
   def get(steps: BaseVertexSteps, authContext: AuthContext): Traversal[D, G] =
     if (definition.lengthCompare(1) == 0)
       definition.head.apply(steps)

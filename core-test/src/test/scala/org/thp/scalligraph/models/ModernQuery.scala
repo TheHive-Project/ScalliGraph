@@ -48,15 +48,15 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
     PublicPropertyListBuilder[PersonSteps]
       .property("createdBy", UniMapping.string)(_.rename("_createdBy").readonly)
       .property("label", labelMapping)(_.rename("name").updatable)
-      .property("name", UniMapping.string)(_.simple.updatable)
-      .property("age", UniMapping.int)(_.simple.updatable)
+      .property("name", UniMapping.string)(_.field.updatable)
+      .property("age", UniMapping.int)(_.field.updatable)
       .build :::
       PublicPropertyListBuilder[SoftwareSteps]
         .property("createdBy", UniMapping.string)(_.rename("_createdBy").readonly)
-        .property("name", UniMapping.string)(_.simple.updatable)
-        .property("lang", UniMapping.string)(_.simple.updatable)
+        .property("name", UniMapping.string)(_.field.updatable)
+        .property("lang", UniMapping.string)(_.field.updatable)
         .property("any", UniMapping.string)(
-          _.derived(_.property("_createdBy", UniMapping.string), _.property("name", UniMapping.string), _.property("lang", UniMapping.string)).readonly
+          _.select(_.property("_createdBy", UniMapping.string), _.property("name", UniMapping.string), _.property("lang", UniMapping.string)).readonly
         )
         .build
   }
