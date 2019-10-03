@@ -11,7 +11,7 @@ import org.thp.scalligraph.controllers.{FPath, FieldsParser}
 import org.thp.scalligraph.models.{Database, Mapping}
 import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
 
-class PropertyBuilder[S <: BaseVertexSteps, D, SD, G](stepType: ru.Type, propertyName: String, mapping: Mapping[D, SD, G]) {
+class PropertyBuilder[S <: BaseVertexSteps, D, SD, G](stepType: ru.Type, propertyName: String, mapping: Mapping[D, SD, G], noValue: NoValue[G]) {
 
   def field =
     new SimpleUpdatePropertyBuilder[D, SD, G](
@@ -19,6 +19,7 @@ class PropertyBuilder[S <: BaseVertexSteps, D, SD, G](stepType: ru.Type, propert
       propertyName,
       propertyName,
       mapping,
+      noValue,
       Seq((_: BaseVertexSteps).property(propertyName, mapping))
     )
 
@@ -28,26 +29,29 @@ class PropertyBuilder[S <: BaseVertexSteps, D, SD, G](stepType: ru.Type, propert
       propertyName,
       newName,
       mapping,
+      noValue,
       Seq((_: BaseVertexSteps).property(newName, mapping))
     )
 
   def select(definition: (S => Traversal[SD, G])*) =
-    new UpdatePropertyBuilder[D, SD, G](stepType, propertyName, mapping, definition.asInstanceOf[Seq[BaseVertexSteps => Traversal[SD, G]]])
+    new UpdatePropertyBuilder[D, SD, G](stepType, propertyName, mapping, noValue, definition.asInstanceOf[Seq[BaseVertexSteps => Traversal[SD, G]]])
 }
 
 class SimpleUpdatePropertyBuilder[D, SD, G](
     stepType: ru.Type,
     propertyName: String,
     fieldName: String,
-    val mapping: Mapping[D, SD, G],
+    mapping: Mapping[D, SD, G],
+    noValue: NoValue[G],
     definition: Seq[BaseVertexSteps => Traversal[SD, G]]
-) extends UpdatePropertyBuilder[D, SD, G](stepType, propertyName, mapping, definition) {
+) extends UpdatePropertyBuilder[D, SD, G](stepType, propertyName, mapping, noValue, definition) {
 
   def updatable(implicit fieldsParser: FieldsParser[SD], updateFieldsParser: FieldsParser[D]): PublicProperty[SD, G] =
     new PublicProperty[SD, G](
       stepType,
       propertyName,
       mapping,
+      noValue,
       definition,
       fieldsParser,
       Some(PropertyUpdater(updateFieldsParser, propertyName) { (_: FPath, value: D, vertex: Vertex, db: Database, _: Graph, _: AuthContext) =>
@@ -61,6 +65,7 @@ class UpdatePropertyBuilder[D, SD, G](
     stepType: ru.Type,
     propertyName: String,
     mapping: Mapping[D, SD, G],
+    noValue: NoValue[G],
     definition: Seq[BaseVertexSteps => Traversal[SD, G]]
 ) {
 
@@ -69,6 +74,7 @@ class UpdatePropertyBuilder[D, SD, G](
       stepType,
       propertyName,
       mapping,
+      noValue,
       definition,
       fieldsParser,
       None
@@ -81,6 +87,7 @@ class UpdatePropertyBuilder[D, SD, G](
       stepType,
       propertyName,
       mapping,
+      noValue,
       definition,
       fieldsParser,
       Some(PropertyUpdater(updateFieldsParser, propertyName)(f))
@@ -93,9 +100,9 @@ class PublicPropertyListBuilder[S <: BaseVertexSteps: ru.TypeTag](properties: Li
   def property[D, SD, G](
       name: String,
       mapping: Mapping[D, SD, G]
-  )(prop: PropertyBuilder[S, D, SD, G] => PublicProperty[SD, G]): PublicPropertyListBuilder[S] =
+  )(prop: PropertyBuilder[S, D, SD, G] => PublicProperty[SD, G])(implicit noValue: NoValue[G]): PublicPropertyListBuilder[S] =
     new PublicPropertyListBuilder(
-      prop(new PropertyBuilder(ru.typeOf[S], name, mapping)) :: properties
+      prop(new PropertyBuilder(ru.typeOf[S], name, mapping, noValue)) :: properties
     )
 }
 

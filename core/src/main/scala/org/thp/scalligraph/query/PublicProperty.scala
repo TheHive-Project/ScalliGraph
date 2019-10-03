@@ -15,6 +15,7 @@ class PublicProperty[D, G](
     val stepType: ru.Type,
     val propertyName: String,
     val mapping: Mapping[_, D, G],
+    val noValue: NoValue[G],
     val definition: Seq[BaseVertexSteps => Traversal[D, G]],
     val fieldsParser: FieldsParser[D],
     val updateFieldsParser: Option[FieldsParser[PropertyUpdater]]

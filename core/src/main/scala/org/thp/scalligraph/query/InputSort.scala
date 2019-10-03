@@ -26,20 +26,17 @@ case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
       step: S,
       authContext: AuthContext
   ): S = {
-    val orderBys = fieldOrder.flatMap {
+    val orderBys = fieldOrder.map {
       case (fieldName, order) =>
         val property = getProperty(publicProperties, stepType, fieldName)
 
         val noValue: GremlinScala[Vertex] => GremlinScala[property.Graph] =
-          (_: GremlinScala[Vertex]).constant("property.mapping.noValue".asInstanceOf[property.Graph]) // FIXME
+          (_: GremlinScala[Vertex]).constant(property.noValue().asInstanceOf[property.Graph])
         val orderDefs: Seq[GremlinScala[Vertex] => GremlinScala[property.Graph]] = property
           .definition
           .map(d => (g: GremlinScala[Vertex]) => d(step.newInstance(g).asInstanceOf[S]).raw.asInstanceOf[GremlinScala[property.Graph]]) :+ noValue
         val orderDef = (_: GremlinScala[Vertex]).coalesce(orderDefs: _*)
         orderby(orderDef, order)
-        property
-          .definition
-          .map(d => orderby((g: GremlinScala[Vertex]) => d(step.newInstance(g).asInstanceOf[BaseVertexSteps]).raw, order))
     }
     step
       .sort(orderBys: _*)
