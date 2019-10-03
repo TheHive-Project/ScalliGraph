@@ -1,9 +1,5 @@
 package org.thp.scalligraph.query
 
-import scala.reflect.runtime.{universe => ru}
-
-import play.api.Logger
-
 import gremlin.scala.P
 import org.apache.tinkerpop.gremlin.process.traversal.TextP
 import org.scalactic.Accumulation._
@@ -12,6 +8,9 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.{Database, Mapping}
 import org.thp.scalligraph.steps.BaseVertexSteps
+import play.api.Logger
+
+import scala.reflect.runtime.{universe => ru}
 
 trait InputFilter extends InputQuery {
 
@@ -35,8 +34,8 @@ case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilt
     getProperty(publicProperties, stepType, fieldName)
       .definition
       .map(_.andThen(t => t.is(db.mapPredicate(predicate.asInstanceOf[P[t.EndGraph]])))) match {
-//      case Seq()  => step.where(_.is(null)) // TODO need checks FIXME
       case Seq(f) => step.filter(f)
+      case Seq()  => step.filter(_.not(identity))
       case f      => step.filter(t => t.or(f: _*))
     }
 }
@@ -63,8 +62,8 @@ case class OrFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
       authContext: AuthContext
   ): S =
     inputFilters.map(ff => (s: S) => ff(db, publicProperties, stepType, s, authContext)) match {
-//      case Seq()  => step.filter(_.is(null)) // TODO need checks
       case Seq(f) => step.filter(f)
+      case Seq()  => step.filter(_.not(identity))
       case f      => step.filter(_.or(f: _*))
     }
 }
@@ -78,10 +77,9 @@ case class AndFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
       authContext: AuthContext
   ): S =
     inputFilters.map(ff => (s: S) => ff(db, publicProperties, stepType, s, authContext)) match {
-      case Seq()       => step
       case Seq(f)      => step.filter(f)
+      case Seq()       => step.filter(_.not(identity))
       case Seq(f @ _*) => step.filter(_.and(f: _*))
-
     }
 }
 
