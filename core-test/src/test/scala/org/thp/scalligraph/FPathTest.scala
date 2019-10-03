@@ -1,7 +1,7 @@
 package org.thp.scalligraph
 
 import org.specs2.mutable.Specification
-import org.thp.scalligraph.controllers.{FPath, FPathElem, FPathElemInSeq, FPathEmpty, FPathSeq}
+import org.thp.scalligraph.controllers._
 
 class FPathTest extends Specification {
 

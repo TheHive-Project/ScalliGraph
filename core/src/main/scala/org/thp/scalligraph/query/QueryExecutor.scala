@@ -10,7 +10,8 @@ import org.scalactic._
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
-import org.thp.scalligraph.models.{Database, PagedResult}
+import org.thp.scalligraph.models.Database
+import org.thp.scalligraph.steps.PagedResult
 import org.thp.scalligraph.utils.RichType
 
 abstract class QueryExecutor { executor =>

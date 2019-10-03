@@ -86,18 +86,9 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
         val entityFields = entityClassType match {
           case CaseClassType(fields @ _*) =>
             fields.map { field =>
-              val mapping     = getMapping(field, field.typeSignature)
-              val mappingName = TermName(c.freshName(s"${field.name}Mapping"))
-              q"""
-                def ${TermName(field.name.toString)} = {
-                  val $mappingName = $mapping
-                  org.thp.scalligraph.models.ScalarSteps(raw.properties(${field
-                .name
-                .decodedName
-                .toString
-                .trim}).map(_.value.asInstanceOf[$mappingName.GraphType]))
-                }
-              """
+              val mapping   = getMapping(field, field.typeSignature)
+              val fieldName = field.name.decodedName.toString.trim
+              q"def ${TermName(field.name.toString)} = this.property($fieldName, $mapping)"
             }
         }
         ClassDef(classMods, className, tparams, Template(classTemplate.parents, classTemplate.self, classTemplate.body ++ entityFields))

@@ -12,6 +12,7 @@ import org.specs2.specification.core.Fragments
 import org.thp.scalligraph.VertexEntity
 import org.thp.scalligraph.auth.{AuthContext, UserSrv}
 import org.thp.scalligraph.services.VertexSrv
+import org.thp.scalligraph.steps.VertexSteps
 
 @VertexEntity
 case class EntityWithSeq(name: String, valueList: Seq[String], valueSet: Set[String])

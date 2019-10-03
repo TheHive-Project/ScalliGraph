@@ -8,8 +8,8 @@ import play.api.{Configuration, Logger}
 
 import javax.inject.{Inject, Provider, Singleton}
 import org.thp.scalligraph.controllers.AuthenticatedRequest
-import org.thp.scalligraph.services.config.{ApplicationConfig, ConfigItem}
 import org.thp.scalligraph.services.config.ApplicationConfig.configurationFormat
+import org.thp.scalligraph.services.config.{ApplicationConfig, ConfigItem}
 import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError, OAuth2Redirect, RichSeq}
 
 class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, availableAuthProviders: immutable.Set[AuthSrvProvider])

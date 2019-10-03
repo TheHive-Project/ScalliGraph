@@ -6,6 +6,7 @@ import scala.util.Try
 import gremlin.scala._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
+import org.thp.scalligraph.steps.EdgeSteps
 
 class EdgeSrv[E <: Product: ru.TypeTag, FROM <: Product: ru.TypeTag, TO <: Product: ru.TypeTag](implicit val db: Database)
     extends ElementSrv[E, EdgeSteps[E, FROM, TO]] {

@@ -9,17 +9,12 @@ import scala.util.control.NonFatal
 import scala.util.{ Failure, Try }
 
 import play.api.libs.json.{ JsObject, JsValue, Json }
-import play.api.libs.logback.LogbackLoggerConfigurator
-import play.api.test.PlaySpecification
 import play.api.{ Configuration, Environment }
 
 import gremlin.scala._
-import org.specs2.matcher.MatchResult
-import org.specs2.specification.core.{ Fragment, Fragments }
 import org.thp.scalligraph.auth.{ AuthContext, AuthContextImpl }
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.query.AuthGraph
-import org.thp.scalligraph.AppBuilder
 import org.thp.scalligraph.utils.UnthreadedExecutionContext
 
 class SangriaTest extends PlaySpecification {
@@ -28,7 +23,8 @@ class SangriaTest extends PlaySpecification {
 
   def executeQuery(query: Document, expected: JsValue, variables: JsValue = JsObject.empty)(
       implicit graph: Graph,
-      schema: SangriaSchema[AuthGraph, Unit]): MatchResult[_] = {
+      schema: SangriaSchema[AuthGraph, Unit]
+  ): MatchResult[_] = {
     implicit val ec: ExecutionContext = UnthreadedExecutionContext
 
     val futureResult = Executor.execute(schema, query, AuthGraph(authContext, graph), variables = variables)
@@ -40,9 +36,10 @@ class SangriaTest extends PlaySpecification {
     Try(Source.fromResource(resource).mkString)
       .recoverWith { case NonFatal(_) => Failure(new FileNotFoundException(resource)) }
 
-  def executeQueryFile(testName: String, variables: JsObject = JsObject.empty)(
-      implicit graph: Graph,
-      schema: SangriaSchema[AuthGraph, Unit]): MatchResult[_] = {
+  def executeQueryFile(
+      testName: String,
+      variables: JsObject = JsObject.empty
+  )(implicit graph: Graph, schema: SangriaSchema[AuthGraph, Unit]): MatchResult[_] = {
     val query    = QueryParser.parse(readResource(s"graphql/$testName.graphql").get).get
     val expected = Json.parse(readResource(s"graphql/$testName.expected.json").get)
     val vars     = readResource(s"graphql/$testName.vars.json").fold(_ => variables, Json.parse)

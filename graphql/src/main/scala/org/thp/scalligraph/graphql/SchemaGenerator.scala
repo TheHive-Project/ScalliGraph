@@ -7,12 +7,12 @@ import scala.reflect.runtime.{ currentMirror => rm, universe => ru }
 import play.api.Logger
 
 import gremlin.scala.{ Element, Graph, GremlinScala, P }
-import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__
+import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
+import org.thp.scalligraph.controllers.Output
 import org.thp.scalligraph.models.{ Schema => _, _ }
 import org.thp.scalligraph.query._
-import org.thp.scalligraph._
-import org.thp.scalligraph.controllers.Output
+import org.thp.scalligraph.steps.BaseElementSteps
 import org.thp.scalligraph.utils.{ CaseClassType, RichType }
 
 object SchemaGenerator {
@@ -33,7 +33,8 @@ object SchemaGenerator {
       property: PublicProperty[Element, _, _],
       fieldSuffix: String,
       inputType: InputType[V],
-      filter: V => GremlinScala[_] => GremlinScala[_]) {
+      filter: V => GremlinScala[_] => GremlinScala[_]
+  ) {
     lazy val fieldName: String = property.propertyName + fieldSuffix
 
     def inputField: InputField[Option[V]] = InputField(fieldName, OptionInputType(inputType))
@@ -80,15 +81,17 @@ object SchemaGenerator {
 
   abstract class CacheFunction[T] extends (() => T) { lf =>
     def fn: T
-    private lazy val value                     = fn
-    override def apply(): T                    = value
+    private lazy val value                      = fn
+    override def apply(): T                     = value
     def andThen[U](f: T => U): CacheFunction[U] = CacheFunction[U](f(lf.value))
   }
 
   object CacheFunction {
+
     def sequence[T](s: Seq[CacheFunction[T]]): CacheFunction[Seq[T]] = new CacheFunction[Seq[T]] {
       override def fn: Seq[T] = s.map(_.apply())
     }
+
     def apply[T](f: => T): CacheFunction[T] = new CacheFunction[T] {
       override def fn: T = f
     }
@@ -96,6 +99,7 @@ object SchemaGenerator {
 
   class TypeCatalog[T] {
     private var content: List[(ru.Type, T)] = Nil
+
     def getOrElseUpdate(tpe: ru.Type)(value: T): T =
       content
         .find(_._1 =:= tpe)
@@ -104,6 +108,7 @@ object SchemaGenerator {
           content ::= tpe -> value
           value
         }
+
     def +(entry: (ru.Type, T)): TypeCatalog[T] = {
       content ::= entry
       this
@@ -111,8 +116,8 @@ object SchemaGenerator {
   }
 
   def duplicate[A](value: A): A = value match {
-    case step: ScalliSteps[_, _, _] => step.clone().asInstanceOf[A]
-    case _                          => value
+    case step: Traversal => step.clone().asInstanceOf[A]
+    case _               => value
   }
 
   def getScalarField(name: String, tpe: ru.Type): InputField[_] =
@@ -127,7 +132,8 @@ object SchemaGenerator {
 
   def getField(tpe: ru.Type, query: ParamQuery[_])(
       implicit executor: QueryExecutor,
-      objectCatalog: TypeCatalog[CacheFunction[Option[OutputType[_]]]]): CacheFunction[Option[Field[AuthGraph, Any]]] = {
+      objectCatalog: TypeCatalog[CacheFunction[Option[OutputType[_]]]]
+  ): CacheFunction[Option[Field[AuthGraph, Any]]] = {
     val pq = query.asInstanceOf[ParamQuery[Any]]
     logger.debug(s"$tpe : query ${query.name} found, no param")
     getObject(query.toType(tpe)).andThen(_.map { o =>
@@ -140,7 +146,8 @@ object SchemaGenerator {
 
   def getParamField(tpe: ru.Type, query: ParamQuery[_], symbols: Seq[ru.Symbol])(
       implicit executor: QueryExecutor,
-      objectCatalog: TypeCatalog[CacheFunction[Option[OutputType[_]]]]): CacheFunction[Option[Field[AuthGraph, Any]]] = {
+      objectCatalog: TypeCatalog[CacheFunction[Option[OutputType[_]]]]
+  ): CacheFunction[Option[Field[AuthGraph, Any]]] = {
     val pq = query.asInstanceOf[ParamQuery[Any]]
     logger.debug(s"$tpe : query ${query.name} found, with param ${query.paramType}")
     val inputFields = symbols.map(s => getScalarField(s.name.decodedName.toString.trim, s.typeSignature)).toList
@@ -156,8 +163,10 @@ object SchemaGenerator {
 
   def getOutputFields(tpe: ru.Type)(
       implicit executor: QueryExecutor,
-      objectCatalog: TypeCatalog[CacheFunction[Option[OutputType[_]]]]): Seq[CacheFunction[Option[Field[AuthGraph, Any]]]] =
-    executor.queries
+      objectCatalog: TypeCatalog[CacheFunction[Option[OutputType[_]]]]
+  ): Seq[CacheFunction[Option[Field[AuthGraph, Any]]]] =
+    executor
+      .queries
       .find(_.checkFrom(tpe))
       .collectFirst {
         case q if q.toType(tpe) <:< outputType =>
@@ -165,26 +174,30 @@ object SchemaGenerator {
             case CaseClassType(symbols @ _*) =>
               symbols.map { s =>
                 getObject(s.typeSignature)
-                  .andThen(_.map(o =>
-                    Field[AuthGraph, Any, Any, Any](
-                      s.name.toString,
-                      o,
-                      resolve = { ctx =>
-                        val output = q
-                          .asInstanceOf[Query]((), duplicate(ctx.value), ctx.ctx.auth) // TODO check if q requires param
-                          .asInstanceOf[Output[_]]
-                          .toOutput
-                        output.getClass.getMethod(s.name.toString).invoke(output)
-                      }
-                  )))
+                  .andThen(
+                    _.map(
+                      o =>
+                        Field[AuthGraph, Any, Any, Any](
+                          s.name.toString,
+                          o,
+                          resolve = { ctx =>
+                            val output = q
+                              .asInstanceOf[Query]((), duplicate(ctx.value), ctx.ctx.auth) // TODO check if q requires param
+                              .asInstanceOf[Output[_]]
+                              .toOutput
+                            output.getClass.getMethod(s.name.toString).invoke(output)
+                          }
+                        )
+                    )
+                  )
               }
           }
       }
       .getOrElse(Nil)
 
-  def getObject(tpe: ru.Type)(
-      implicit executor: QueryExecutor,
-      objectCatalog: TypeCatalog[CacheFunction[Option[OutputType[_]]]]): CacheFunction[Option[OutputType[_]]] = {
+  def getObject(
+      tpe: ru.Type
+  )(implicit executor: QueryExecutor, objectCatalog: TypeCatalog[CacheFunction[Option[OutputType[_]]]]): CacheFunction[Option[OutputType[_]]] = {
     logger.debug(s"getObject($tpe)")
     objectCatalog.getOrElseUpdate(tpe) {
       if (tpe <:< ru.typeOf[Seq[_]]) // TODO add Set type ?
@@ -208,7 +221,8 @@ object SchemaGenerator {
                   logger.debug(s"fields of $objectName are: ${x.map(_.name).mkString(",")}")
                   x
                 }
-              ))
+              )
+            )
           }
         }
       }
@@ -217,7 +231,8 @@ object SchemaGenerator {
 
   def getSortField(tpe: ru.Type, stepObjectType: OutputType[_])(implicit executor: QueryExecutor): Option[Field[AuthGraph, Any]] = {
     val objectName = tpe.typeSymbol.name.decodedName.toString.trim
-    val inputFields = executor.publicProperties
+    val inputFields = executor
+      .publicProperties
       .filter(_.stepType =:= tpe)
       .map(prop => InputField(prop.propertyName, OptionInputType(orderEnumeration)))
     if (inputFields.isEmpty) None
@@ -251,14 +266,18 @@ object SchemaGenerator {
                   executor.publicProperties,
                   rm.classSymbol(ctx.value.getClass).toType,
                   duplicate(ctx.value).asInstanceOf[ScalliSteps[_, _, _ <: AnyRef]],
-                  ctx.ctx.auth))
-        ))
+                  ctx.ctx.auth
+                )
+            )
+        )
+      )
     }
   }
 
   def getFilterField(tpe: ru.Type, stepObjectType: OutputType[_])(implicit executor: QueryExecutor): Option[Field[AuthGraph, Any]] = {
     val objectName = tpe.typeSymbol.name.decodedName.toString.trim
-    val fieldFilters: List[FieldFilter[_]] = executor.publicProperties
+    val fieldFilters: List[FieldFilter[_]] = executor
+      .publicProperties
       .filter(_.stepType =:= tpe)
       .flatMap {
         case prop if prop.mapping.domainTypeClass == classOf[String] => stringFilters(prop.asInstanceOf[PublicProperty[Element, _, _]])
@@ -297,15 +316,19 @@ object SchemaGenerator {
             Value(
               ctx
                 .arg(arg)
-                .apply(ctx.ctx.auth, duplicate(ctx.value).asInstanceOf[ScalliSteps[_, _, _ <: AnyRef]]))
-        ))
+                .apply(ctx.ctx.auth, duplicate(ctx.value).asInstanceOf[ScalliSteps[_, _, _ <: AnyRef]])
+            )
+        )
+      )
     }
   }
 
   def getQueryFields(tpe: ru.Type, currentObject: CacheFunction[Option[OutputType[_]]])(
       implicit executor: QueryExecutor,
-      objectCatalog: TypeCatalog[CacheFunction[Option[OutputType[_]]]]): Seq[CacheFunction[Option[Field[AuthGraph, Any]]]] =
-    executor.allQueries
+      objectCatalog: TypeCatalog[CacheFunction[Option[OutputType[_]]]]
+  ): Seq[CacheFunction[Option[Field[AuthGraph, Any]]]] =
+    executor
+      .allQueries
       .filter(_.checkFrom(tpe))
       .flatMap {
         case q if q.toType(tpe) <:< outputType => Seq.empty
@@ -327,7 +350,8 @@ object SchemaGenerator {
 
   def getPropertyFields[A <: Element, B](property: PublicProperty[A, _, B])(
       implicit executor: QueryExecutor,
-      objectCatalog: TypeCatalog[CacheFunction[Option[OutputType[_]]]]): CacheFunction[Option[Field[AuthGraph, Any]]] = {
+      objectCatalog: TypeCatalog[CacheFunction[Option[OutputType[_]]]]
+  ): CacheFunction[Option[Field[AuthGraph, Any]]] = {
     val t          = rm.classSymbol(property.mapping.domainTypeClass).toType // FIXME domainType or graphType ?
     val optionType = ru.typeOf[Option[_]].typeConstructor
     val seqType    = ru.typeOf[Seq[_]].typeConstructor
@@ -337,19 +361,23 @@ object SchemaGenerator {
       case MappingCardinality.list   => ru.appliedType(seqType, t)
       case MappingCardinality.set    => ru.appliedType(seqType, t)
     }
-    val stepType   = ru.appliedType(ru.typeOf[ScalarSteps[Any]].typeConstructor, propertyType)
+    val stepType   = ru.appliedType(ru.typeOf[Traversal[Any]].typeConstructor, propertyType)
     val objectType = getObject(stepType).apply().get
     CacheFunction(
       Some(
-        Field[AuthGraph, ScalliSteps[A, _, _ <: AnyRef], ScalarSteps[B], Any]( // FIXME should be ElementStep instead of ScalliSteps. Property can be applied only on element step.
+        Field[AuthGraph, ScalliSteps[A, _, _ <: AnyRef], Traversal[B], Any]( // FIXME should be ElementStep instead of ScalliSteps. Property can be applied only on element step.
           property.propertyName,
           objectType,
           resolve = ctx =>
-            Value(duplicate(ctx.value) // ScalliSteps[EndDomain, EndGraph => B, ThisStep <: AnyRef]
-              .asInstanceOf[ElementSteps[_, A, _]] // ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisStep <: ElementSteps[E, EndGraph, ThisStep]] ScalliSteps[E with Entity, EndGraph, ThisStep]
-              .getByIds[B](ctx.ctx.auth, property))
-        ) // def get[A](authContext: AuthContext, property: PublicProperty[EndGraph, _, A]): ScalarSteps[A] = {
-          .asInstanceOf[Field[AuthGraph, Any]]))
+            Value(
+              duplicate(ctx.value)                       // ScalliSteps[EndDomain, EndGraph => B, ThisStep <: AnyRef]
+                .asInstanceOf[BaseElementSteps[_, A, _]] // ElementSteps[E <: Product: ru.TypeTag, EndGraph <: Element, ThisStep <: ElementSteps[E, EndGraph, ThisStep]] ScalliSteps[E with Entity, EndGraph, ThisStep]
+                .getByIds[B](ctx.ctx.auth, property)
+            )
+        ) // def get[A](authContext: AuthContext, property: PublicProperty[EndGraph, _, A]): Traversal[A] = {
+          .asInstanceOf[Field[AuthGraph, Any]]
+      )
+    )
   }
 
   def typeName(tpe: ru.Type): String = {
