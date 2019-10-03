@@ -3,7 +3,6 @@ package org.thp.scalligraph
 import scala.reflect.runtime.{universe => ru}
 
 import gremlin.scala.{Edge, Element, Graph, GremlinScala, Vertex}
-import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
 import org.thp.scalligraph.models.{Database, Entity, Schema}
 
 package object services {
@@ -26,13 +25,6 @@ package object services {
         .converter(db, graph)
         .toDomain(e.asInstanceOf[model.ElementType])
     }
-  }
-
-  implicit class RichGraphTraversal[G, D](g: GraphTraversal[G, D]) {
-    def outTo[E <: Product: ru.TypeTag]: GraphTraversal[G, Vertex] = g.out(ru.typeOf[E].typeSymbol.name.toString)
-    def outToE[E <: Product: ru.TypeTag]: GraphTraversal[G, Edge]  = g.outE(ru.typeOf[E].typeSymbol.name.toString)
-    def inTo[E <: Product: ru.TypeTag]: GraphTraversal[G, Vertex]  = g.in(ru.typeOf[E].typeSymbol.name.toString)
-    def inToE[E <: Product: ru.TypeTag]: GraphTraversal[G, Edge]   = g.inE(ru.typeOf[E].typeSymbol.name.toString)
   }
 
   implicit class RichVertexGremlinScala[End <: Vertex](val g: GremlinScala[End]) {

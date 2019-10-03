@@ -5,12 +5,13 @@ import scala.util.{Success, Try}
 
 import play.api.libs.json.{JsObject, Json}
 
-import gremlin.scala.{Graph, GremlinScala, Vertex}
+import gremlin.scala.{Graph, Vertex}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FieldsParser}
-import org.thp.scalligraph.models.{BaseVertexSteps, Database, Mapping}
+import org.thp.scalligraph.models.{Database, Mapping}
+import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
 
-class PropertyBuilder[D, SD, G](stepType: ru.Type, propertyName: String, mapping: Mapping[D, SD, G]) {
+class PropertyBuilder[S <: BaseVertexSteps, D, SD, G](stepType: ru.Type, propertyName: String, mapping: Mapping[D, SD, G]) {
 
   def simple =
     new SimpleUpdatePropertyBuilder[D, SD, G](
@@ -18,7 +19,7 @@ class PropertyBuilder[D, SD, G](stepType: ru.Type, propertyName: String, mapping
       propertyName,
       propertyName,
       mapping,
-      Seq((_: GremlinScala[Vertex]).value[G](propertyName))
+      Seq((_: BaseVertexSteps).property(propertyName, mapping)) // FIXME doesn't work with optional properties ?
     )
 
   def rename(newName: String) =
@@ -27,11 +28,11 @@ class PropertyBuilder[D, SD, G](stepType: ru.Type, propertyName: String, mapping
       propertyName,
       newName,
       mapping,
-      Seq((_: GremlinScala[Vertex]).value(newName))
+      Seq((_: BaseVertexSteps).property(newName, mapping)) // FIXME doesn't work with optional properties ?
     )
 
-  def derived(definition: (GremlinScala[Vertex] => GremlinScala[G])*) =
-    new UpdatePropertyBuilder[D, SD, G](stepType, propertyName, mapping, definition)
+  def derived(definition: (S => Traversal[SD, G])*) =
+    new UpdatePropertyBuilder[D, SD, G](stepType, propertyName, mapping, definition.asInstanceOf[Seq[BaseVertexSteps => Traversal[SD, G]]])
 }
 
 class SimpleUpdatePropertyBuilder[D, SD, G](
@@ -39,7 +40,7 @@ class SimpleUpdatePropertyBuilder[D, SD, G](
     propertyName: String,
     fieldName: String,
     val mapping: Mapping[D, SD, G],
-    definition: Seq[GremlinScala[Vertex] => GremlinScala[G]]
+    definition: Seq[BaseVertexSteps => Traversal[SD, G]]
 ) extends UpdatePropertyBuilder[D, SD, G](stepType, propertyName, mapping, definition) {
 
   def updatable(implicit fieldsParser: FieldsParser[SD], updateFieldsParser: FieldsParser[D]): PublicProperty[SD, G] =
@@ -60,7 +61,7 @@ class UpdatePropertyBuilder[D, SD, G](
     stepType: ru.Type,
     propertyName: String,
     mapping: Mapping[D, SD, G],
-    definition: Seq[GremlinScala[Vertex] => GremlinScala[G]]
+    definition: Seq[BaseVertexSteps => Traversal[SD, G]]
 ) {
 
   def readonly(implicit fieldsParser: FieldsParser[SD]): PublicProperty[SD, G] =
@@ -86,18 +87,18 @@ class UpdatePropertyBuilder[D, SD, G](
     )
 }
 
-class PublicPropertyListBuilder[S <: BaseVertexSteps[_, S]: ru.TypeTag](properties: List[PublicProperty[_, _]]) {
+class PublicPropertyListBuilder[S <: BaseVertexSteps: ru.TypeTag](properties: List[PublicProperty[_, _]]) {
   def build: List[PublicProperty[_, _]] = properties
 
   def property[D, SD, G](
       name: String,
       mapping: Mapping[D, SD, G]
-  )(prop: PropertyBuilder[D, SD, G] => PublicProperty[SD, G]): PublicPropertyListBuilder[S] =
+  )(prop: PropertyBuilder[S, D, SD, G] => PublicProperty[SD, G]): PublicPropertyListBuilder[S] =
     new PublicPropertyListBuilder(
       prop(new PropertyBuilder(ru.typeOf[S], name, mapping)) :: properties
     )
 }
 
 object PublicPropertyListBuilder {
-  def apply[S <: BaseVertexSteps[_, S]: ru.TypeTag] = new PublicPropertyListBuilder[S](Nil)
+  def apply[S <: BaseVertexSteps: ru.TypeTag] = new PublicPropertyListBuilder[S](Nil)
 }

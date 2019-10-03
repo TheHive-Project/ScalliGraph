@@ -112,7 +112,7 @@ abstract class BaseDatabase extends Database {
   val updatedByMapping: OptionMapping[String, String] = UniMapping.string.optional
 
   val binaryMapping: SingleMapping[Array[Byte], String] =
-    SingleMapping[Array[Byte], String]("", data => Some(Base64.getEncoder.encodeToString(data)), Base64.getDecoder.decode)
+    SingleMapping[Array[Byte], String](data => Some(Base64.getEncoder.encodeToString(data)), Base64.getDecoder.decode)
 
   override def version(module: String): Int = roTransaction(graph => graph.variables.get[Int](s"${module}_version").orElse(0))
 

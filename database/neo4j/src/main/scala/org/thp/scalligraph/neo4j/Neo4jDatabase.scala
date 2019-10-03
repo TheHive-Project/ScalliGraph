@@ -148,7 +148,7 @@ class Neo4jDatabase(
 
   override def drop(): Unit = graph.getBaseGraph.shutdown() // FIXME this is not a real drop
 
-  val dateMapping: SingleMapping[Date, Long] = SingleMapping[Date, Long](0, d => Some(d.getTime), new Date(_))
+  val dateMapping: SingleMapping[Date, Long] = SingleMapping[Date, Long](d => Some(d.getTime), new Date(_))
 
   def fixMapping[M <: Mapping[_, _, _]](mapping: M): M =
     if (mapping.domainTypeClass == classOf[Date]) {

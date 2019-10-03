@@ -10,8 +10,9 @@ import org.thp.scalligraph.NotFoundError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.query.PropertyUpdater
+import org.thp.scalligraph.steps.VertexSteps
 
-abstract class VertexSrv[V <: Product: ru.TypeTag, S <: BaseVertexSteps[V, S]](implicit db: Database) extends ElementSrv[V, S] {
+abstract class VertexSrv[V <: Product: ru.TypeTag, S <: VertexSteps[V]](implicit db: Database) extends ElementSrv[V, S] {
 
   override val model: Model.Vertex[V] = db.getVertexModel[V]
 
@@ -22,6 +23,11 @@ abstract class VertexSrv[V <: Product: ru.TypeTag, S <: BaseVertexSteps[V, S]](i
   override def getByIds(ids: String*)(implicit graph: Graph): S = steps(db.labelFilter(model)(graph.V(ids: _*)))
 
   def get(vertex: Vertex)(implicit graph: Graph): S = steps(db.labelFilter(model)(graph.V(vertex)))
+
+  def getOrFail(id: String)(implicit graph: Graph): Try[V with Entity] =
+    get(id)
+      .headOption()
+      .fold[Try[V with Entity]](Failure(NotFoundError(s"${model.label} $id not found")))(Success.apply)
 
   def getOrFail(vertex: Vertex)(implicit graph: Graph): Try[V with Entity] =
     steps(db.labelFilter(model)(graph.V(vertex)))

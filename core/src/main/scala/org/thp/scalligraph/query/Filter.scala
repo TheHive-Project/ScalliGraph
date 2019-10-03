@@ -4,17 +4,18 @@ import scala.reflect.runtime.{universe => ru}
 
 import play.api.Logger
 
-import gremlin.scala.{GremlinScala, P, Vertex}
+import gremlin.scala.P
 import org.apache.tinkerpop.gremlin.process.traversal.TextP
 import org.scalactic.Accumulation._
 import org.scalactic.Good
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
-import org.thp.scalligraph.models.{BaseVertexSteps, Database, Mapping}
+import org.thp.scalligraph.models.{Database, Mapping}
+import org.thp.scalligraph.steps.BaseVertexSteps
 
 trait InputFilter extends InputQuery {
 
-  def apply[S <: BaseVertexSteps[_, S]](
+  def apply[S <: BaseVertexSteps](
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
@@ -24,7 +25,7 @@ trait InputFilter extends InputQuery {
 }
 
 case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilter {
-  override def apply[S <: BaseVertexSteps[_, S]](
+  override def apply[S <: BaseVertexSteps](
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
@@ -33,51 +34,50 @@ case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilt
   ): S =
     getProperty(publicProperties, stepType, fieldName)
       .definition
-      .map(f => f.andThen(_.is(db.mapPredicate(predicate))))
-      .asInstanceOf[Seq[GremlinScala[_] => GremlinScala[_]]] match {
-      case Seq()  => step.filter(_.is(null)) // TODO need checks
+      .map(_.andThen(t => t.is(db.mapPredicate(predicate.asInstanceOf[P[t.EndGraph]])))) match {
+//      case Seq()  => step.where(_.is(null)) // TODO need checks FIXME
       case Seq(f) => step.filter(f)
-      case f      => step.filter(_.or(f: _*))
+      case f      => step.filter(t => t.or(f: _*))
     }
 }
 
 case class IsDefinedFilter(fieldName: String) extends InputFilter {
-  override def apply[S <: BaseVertexSteps[_, S]](
+  override def apply[S <: BaseVertexSteps](
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
       authContext: AuthContext
   ): S = {
-    val prop = getProperty(publicProperties, stepType, fieldName)
-    step.filter(prop.get(_, authContext))
+    val filter = (s: BaseVertexSteps) => getProperty(publicProperties, stepType, fieldName).get(s, authContext)
+    step.filter(filter)
   }
 }
 
 case class OrFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
-  override def apply[S <: BaseVertexSteps[_, S]](
+  override def apply[S <: BaseVertexSteps](
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
       authContext: AuthContext
   ): S =
-    inputFilters.map(ff => (g: GremlinScala[Vertex]) => ff(db, publicProperties, stepType, step.newInstance(g), authContext).raw) match {
-      case Seq()  => step.filter(_.is(null)) // TODO need checks
+    inputFilters.map(ff => (s: S) => ff(db, publicProperties, stepType, s, authContext)) match {
+//      case Seq()  => step.filter(_.is(null)) // TODO need checks
       case Seq(f) => step.filter(f)
       case f      => step.filter(_.or(f: _*))
     }
 }
 
 case class AndFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
-  override def apply[S <: BaseVertexSteps[_, S]](
+  override def apply[S <: BaseVertexSteps](
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
       authContext: AuthContext
   ): S =
-    inputFilters.map(ff => (g: GremlinScala[Vertex]) => ff(db, publicProperties, stepType, step.newInstance(g), authContext).raw) match {
+    inputFilters.map(ff => (s: S) => ff(db, publicProperties, stepType, s, authContext)) match {
       case Seq()       => step
       case Seq(f)      => step.filter(f)
       case Seq(f @ _*) => step.filter(_.and(f: _*))
@@ -86,20 +86,20 @@ case class AndFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
 }
 
 case class NotFilter(inputFilter: InputFilter) extends InputFilter {
-  override def apply[S <: BaseVertexSteps[_, S]](
+  override def apply[S <: BaseVertexSteps](
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       step: S,
       authContext: AuthContext
   ): S = {
-    val criteria = (g: GremlinScala[Vertex]) => inputFilter(db, publicProperties, stepType, step.newInstance(g), authContext).raw
+    val criteria: BaseVertexSteps => BaseVertexSteps = (s: BaseVertexSteps) => inputFilter(db, publicProperties, stepType, s, authContext)
     step.filter(_.not(criteria))
   }
 }
 
 object YesFilter extends InputFilter {
-  override def apply[S <: BaseVertexSteps[_, S]](
+  override def apply[S <: BaseVertexSteps](
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
@@ -109,7 +109,7 @@ object YesFilter extends InputFilter {
 }
 
 class IdFilter(id: String) extends InputFilter {
-  override def apply[S <: BaseVertexSteps[_, S]](
+  override def apply[S <: BaseVertexSteps](
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,

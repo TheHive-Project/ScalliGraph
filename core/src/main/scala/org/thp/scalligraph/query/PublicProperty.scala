@@ -5,25 +5,26 @@ import scala.util.Try
 
 import play.api.libs.json.JsObject
 
-import gremlin.scala.{Graph, GremlinScala, Vertex}
+import gremlin.scala.{Graph, Vertex}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FieldsParser}
 import org.thp.scalligraph.models.{Database, Mapping}
+import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
 
 class PublicProperty[D, G](
     val stepType: ru.Type,
     val propertyName: String,
     val mapping: Mapping[_, D, G],
-    val definition: Seq[GremlinScala[Vertex] => GremlinScala[G]],
+    val definition: Seq[BaseVertexSteps => Traversal[D, G]],
     val fieldsParser: FieldsParser[D],
     val updateFieldsParser: Option[FieldsParser[PropertyUpdater]]
 ) {
 
-  def get(elementTraversal: GremlinScala[Vertex], authContext: AuthContext): GremlinScala[G] =
+  def get(steps: BaseVertexSteps, authContext: AuthContext): Traversal[D, G] =
     if (definition.lengthCompare(1) == 0)
-      definition.head.apply(elementTraversal)
+      definition.head.apply(steps)
     else
-      elementTraversal.coalesce(definition: _*)
+      steps.coalesce[D, G](mapping, definition: _*)
 }
 
 object PropertyUpdater {

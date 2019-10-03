@@ -7,6 +7,7 @@ import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.services._
+import org.thp.scalligraph.steps.VertexSteps
 
 @VertexEntity
 case class Person(name: String, age: Int)
@@ -21,32 +22,33 @@ case class Knows(weight: Double)
 case class Created(weight: Double)
 
 @EntitySteps[Person]
-class PersonSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph) extends BaseVertexSteps[Person, PersonSteps](raw) {
-  override def getByIds(ids: String*): PersonSteps = new PersonSteps(graph.V().has(Key[String]("name"), P.within(ids)))
+class PersonSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph) extends VertexSteps[Person](raw) {
+  def getByIds(ids: String*): PersonSteps = new PersonSteps(graph.V().has(Key[String]("name"), P.within(ids)))
 
-  def created = new SoftwareSteps(raw.outTo[Created])
+  def created = new SoftwareSteps(this.outTo[Created].raw)
 
-  def created(predicate: P[Double]) = new SoftwareSteps(raw.outToE[Created].has(Key[Double]("weight"), predicate).inV())
+  def created(predicate: P[Double]) = new SoftwareSteps(this.outToE[Created].has(Key[Double]("weight"), predicate).inV().raw)
 
-  def connectedEdge: List[String] = raw.outE().label().toList
+  def connectedEdge: List[String] = this.outE().label.toList
 
-  def knownLevels: List[Double] = raw.outToE[Knows].value[Double]("weight").toList()
+  def knownLevels: List[Double] = this.outToE[Knows].value[Double](Key("weight")).toList
 
-  def knows: PersonSteps = new PersonSteps(raw.outTo[Knows])
+  def knows: PersonSteps = new PersonSteps(this.outTo[Knows].raw)
 
-  def friends(threshold: Double = 0.8): PersonSteps = new PersonSteps(raw.outToE[Knows].has(Key[Double]("weight"), P.gte(threshold)).inV())
+  def friends(threshold: Double = 0.8): PersonSteps = new PersonSteps(this.outToE[Knows].has(Key[Double]("weight"), P.gte(threshold)).inV().raw)
 
-  override def newInstance(raw: GremlinScala[Vertex]): PersonSteps = new PersonSteps(raw)
+  override def newInstance(newRaw: GremlinScala[Vertex]): PersonSteps = new PersonSteps(newRaw)
 }
 
 @EntitySteps[Software]
-class SoftwareSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph) extends BaseVertexSteps[Software, SoftwareSteps](raw) {
+class SoftwareSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph) extends VertexSteps[Software](raw) {
   def createdBy = new PersonSteps(raw.in("Created"))
 
   def isRipple = new SoftwareSteps(raw.has(Key("name") of "ripple"))
 
-  override def newInstance(raw: GremlinScala[Vertex]): SoftwareSteps = new SoftwareSteps(raw)
-  override def getByIds(ids: String*): SoftwareSteps                 = new SoftwareSteps(graph.V().has(Key[String]("name"), P.within(ids)))
+  override def newInstance(newRaw: GremlinScala[Vertex]): SoftwareSteps = new SoftwareSteps(newRaw)
+  override def newInstance(): SoftwareSteps                             = new SoftwareSteps(raw.clone())
+  def getByIds(ids: String*): SoftwareSteps                             = new SoftwareSteps(graph.V().has(Key[String]("name"), P.within(ids)))
 }
 
 @Singleton

@@ -39,7 +39,6 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
 
   override lazy val publicProperties: List[PublicProperty[_, _]] = {
     val labelMapping = SingleMapping[String, String](
-      "",
       toGraphOptFn = {
         case d if d startsWith "Mister " => Some(d.drop(7))
         case d                           => Some(d)
@@ -57,7 +56,7 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
         .property("name", UniMapping.string)(_.simple.updatable)
         .property("lang", UniMapping.string)(_.simple.updatable)
         .property("any", UniMapping.string)(
-          _.derived(_.value[String]("_createdBy"), _.value[String]("name"), _.value[String]("lang")).readonly
+          _.derived(_.property("_createdBy", UniMapping.string), _.property("name", UniMapping.string), _.property("lang", UniMapping.string)).readonly
         )
         .build
   }

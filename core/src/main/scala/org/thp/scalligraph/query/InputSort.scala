@@ -2,7 +2,7 @@ package org.thp.scalligraph.query
 
 import scala.reflect.runtime.{universe => ru}
 
-import gremlin.scala.{__, GremlinScala, OrderBy}
+import gremlin.scala.{__, GremlinScala, OrderBy, Vertex}
 import org.apache.tinkerpop.gremlin.process.traversal.Order
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
 import org.scalactic.Accumulation._
@@ -10,15 +10,16 @@ import org.scalactic.{Bad, Good, One}
 import org.thp.scalligraph.InvalidFormatAttributeError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FSeq, FString, FieldsParser}
-import org.thp.scalligraph.models.{Database, ScalliSteps}
+import org.thp.scalligraph.models.Database
+import org.thp.scalligraph.steps.BaseVertexSteps
 
 case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
 
-  def orderby[A, F, T](f: GremlinScala[F] => GremlinScala[T], order: Order): OrderBy[A] = new OrderBy[A] {
+  def orderby[A](f: GremlinScala[Vertex] => GremlinScala[_], order: Order): OrderBy[A] = new OrderBy[A] {
     override def apply[End](traversal: GraphTraversal[_, End]): GraphTraversal[_, End] =
-      traversal.by(f(__[F]).traversal, order)
+      traversal.by(f(__[Vertex]).traversal, order)
   }
-  override def apply[S <: ScalliSteps[_, _, S]](
+  override def apply[S <: BaseVertexSteps](
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
@@ -28,15 +29,19 @@ case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
     val orderBys = fieldOrder.flatMap {
       case (fieldName, order) =>
         val property = getProperty(publicProperties, stepType, fieldName)
+
+        val noValue: GremlinScala[Vertex] => GremlinScala[property.Graph] =
+          (_: GremlinScala[Vertex]).constant("property.mapping.noValue".asInstanceOf[property.Graph]) // FIXME
+        val orderDefs: Seq[GremlinScala[Vertex] => GremlinScala[property.Graph]] = property
+          .definition
+          .map(d => (g: GremlinScala[Vertex]) => d(step.newInstance(g).asInstanceOf[S]).raw.asInstanceOf[GremlinScala[property.Graph]]) :+ noValue
+        val orderDef = (_: GremlinScala[Vertex]).coalesce(orderDefs: _*)
+        orderby(orderDef, order)
         property
           .definition
-          .map {
-            case f: (GremlinScala[a] => GremlinScala[b]) =>
-              orderby[Any, a, b](_.coalesce(f, _.constant(property.mapping.noValue.asInstanceOf[b])), order)
-          }
+          .map(d => orderby((g: GremlinScala[Vertex]) => d(step.newInstance(g).asInstanceOf[BaseVertexSteps]).raw, order))
     }
     step
-      .asInstanceOf[ScalliSteps[_, _, S]]
       .sort(orderBys: _*)
   }
 }

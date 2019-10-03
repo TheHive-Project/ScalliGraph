@@ -69,7 +69,7 @@ trait MappingMacroHelper extends MacroUtil with MacroLogger {
               "Wrong value " + other +
               " for numeration " + ${symbol.toString} +
               ". Possible values are " + ${members.map(_._1).mkString(",")})"""
-        Some(q"""org.thp.scalligraph.models.SingleMapping[$eType, String]("", e ⇒ Some(e.toString), g ⇒ g match { case ..$valueCases })""")
+        Some(q"""org.thp.scalligraph.models.SingleMapping[$eType, String](e ⇒ Some(e.toString), g ⇒ g match { case ..$valueCases })""")
       case _ => None
     }
 }
