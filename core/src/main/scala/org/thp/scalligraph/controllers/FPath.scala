@@ -75,11 +75,11 @@ object FPath {
 
   def apply(path: String): FPath =
     path.split("\\.").foldRight[FPath](FPathEmpty) {
-      case (elemRegex(p), pathElem) => FPathElem(p, pathElem)
-      case (seqRegex(p), pathElem)  => FPathSeq(p, pathElem)
-      case (elemInSeqRegex(p, index), pathElem) =>
-        FPathElemInSeq(p, index.toInt, pathElem)
-      case (other, pathElem) => sys.error(s"ERROR: FPath($other) / $pathElem")
+      case (elemRegex(p), pathElem)             => FPathElem(p, pathElem)
+      case (seqRegex(p), pathElem)              => FPathSeq(p, pathElem)
+      case (elemInSeqRegex(p, index), pathElem) => FPathElemInSeq(p, index.toInt, pathElem)
+      case (other, pathElem) if other.isEmpty   => pathElem
+      case (other, pathElem)                    => sys.error(s"ERROR: FPath($other) / $pathElem")
     }
 
   def unapplySeq(path: FPath): Option[Seq[String]] =

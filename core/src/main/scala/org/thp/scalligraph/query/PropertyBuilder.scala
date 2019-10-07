@@ -20,7 +20,7 @@ class PropertyBuilder[S <: BaseVertexSteps, D, SD, G](stepType: ru.Type, propert
       propertyName,
       mapping,
       noValue,
-      Seq((_: BaseVertexSteps).property(propertyName, mapping))
+      Seq((_, s: BaseVertexSteps) => s.property(propertyName, mapping))
     )
 
   def rename(newName: String) =
@@ -30,11 +30,26 @@ class PropertyBuilder[S <: BaseVertexSteps, D, SD, G](stepType: ru.Type, propert
       newName,
       mapping,
       noValue,
-      Seq((_: BaseVertexSteps).property(newName, mapping))
+      Seq((_, s: BaseVertexSteps) => s.property(newName, mapping))
     )
 
   def select(definition: (S => Traversal[SD, G])*) =
-    new UpdatePropertyBuilder[D, SD, G](stepType, propertyName, mapping, noValue, definition.asInstanceOf[Seq[BaseVertexSteps => Traversal[SD, G]]])
+    new UpdatePropertyBuilder[D, SD, G](
+      stepType,
+      propertyName,
+      mapping,
+      noValue,
+      definition.map(d => (_: FPath, s: BaseVertexSteps) => d(s.asInstanceOf[S]))
+    )
+
+  def subSelect(definition: ((FPath, S) => Traversal[SD, G])*) =
+    new UpdatePropertyBuilder[D, SD, G](
+      stepType,
+      propertyName,
+      mapping,
+      noValue,
+      definition.asInstanceOf[Seq[(FPath, BaseVertexSteps) => Traversal[SD, G]]]
+    )
 }
 
 class SimpleUpdatePropertyBuilder[D, SD, G](
@@ -43,7 +58,7 @@ class SimpleUpdatePropertyBuilder[D, SD, G](
     fieldName: String,
     mapping: Mapping[D, SD, G],
     noValue: NoValue[G],
-    definition: Seq[BaseVertexSteps => Traversal[SD, G]]
+    definition: Seq[(FPath, BaseVertexSteps) => Traversal[SD, G]]
 ) extends UpdatePropertyBuilder[D, SD, G](stepType, propertyName, mapping, noValue, definition) {
 
   def updatable(implicit fieldsParser: FieldsParser[SD], updateFieldsParser: FieldsParser[D]): PublicProperty[SD, G] =
@@ -66,7 +81,7 @@ class UpdatePropertyBuilder[D, SD, G](
     propertyName: String,
     mapping: Mapping[D, SD, G],
     noValue: NoValue[G],
-    definition: Seq[BaseVertexSteps => Traversal[SD, G]]
+    definition: Seq[(FPath, BaseVertexSteps) => Traversal[SD, G]]
 ) {
 
   def readonly(implicit fieldsParser: FieldsParser[SD]): PublicProperty[SD, G] =

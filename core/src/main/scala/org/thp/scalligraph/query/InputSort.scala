@@ -7,10 +7,9 @@ import org.scalactic.Accumulation._
 import org.scalactic.{Bad, Good, One}
 import org.thp.scalligraph.InvalidFormatAttributeError
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.controllers.{FSeq, FString, FieldsParser}
+import org.thp.scalligraph.controllers.{FPath, FSeq, FString, FieldsParser}
 import org.thp.scalligraph.models.{Database, MappingCardinality}
 import org.thp.scalligraph.steps.BaseVertexSteps
-
 import scala.reflect.runtime.{universe => ru}
 
 case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
@@ -28,19 +27,16 @@ case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
   ): S = {
     val orderBys = fieldOrder.map {
       case (fieldName, order) =>
-        val property = getProperty(publicProperties, stepType, fieldName)
-        val orderDefs: Seq[GremlinScala[Vertex] => GremlinScala[property.Graph]] = property
-          .definition
-          .map(d => (g: GremlinScala[Vertex]) => d(step.newInstance(g).asInstanceOf[S]).raw.asInstanceOf[GremlinScala[property.Graph]])
-
+        val property = PublicProperty.getProperty(publicProperties, stepType, fieldName)
+        val subField = FPath(fieldName.dropWhile(_ != '.').dropWhile(_ == '.'))
+        val orderDefs: GremlinScala[Vertex] => GremlinScala[property.Graph] =
+          (g: GremlinScala[Vertex]) => property.get(step.newInstance(g), subField, authContext).raw.asInstanceOf[GremlinScala[property.Graph]]
         if (property.mapping.cardinality == MappingCardinality.single) {
-          if (orderDefs.size == 1) orderby(orderDefs.head, order)
-          else orderby((_: GremlinScala[Vertex]).coalesce(orderDefs: _*), order)
+          orderby(orderDefs, order)
         } else {
           val noValue: GremlinScala[Vertex] => GremlinScala[property.Graph] =
             (_: GremlinScala[Vertex]).constant(property.noValue().asInstanceOf[property.Graph])
-          val orderDef = (_: GremlinScala[Vertex]).coalesce(orderDefs :+ noValue: _*)
-          orderby(orderDef, order)
+          orderby(_.coalesce(orderDefs, noValue), order)
         }
     }
     step

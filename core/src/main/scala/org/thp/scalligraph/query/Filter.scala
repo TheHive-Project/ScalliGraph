@@ -7,9 +7,8 @@ import org.scalactic.Good
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.{Database, Mapping}
-import org.thp.scalligraph.steps.BaseVertexSteps
+import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
 import play.api.Logger
-
 import scala.reflect.runtime.{universe => ru}
 
 trait InputFilter extends InputQuery {
@@ -31,12 +30,10 @@ case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilt
       step: S,
       authContext: AuthContext
   ): S =
-    getProperty(publicProperties, stepType, fieldName)
-      .definition
-      .map(_.andThen(t => t.is(db.mapPredicate(predicate.asInstanceOf[P[t.EndGraph]])))) match {
-      case Seq(f) => step.filter(f)
-      case Seq()  => step.filter(_.not(identity))
-      case f      => step.filter(t => t.or(f: _*))
+    step.filter { s =>
+      val property: Traversal[Any, Any] =
+        PublicProperty.getPropertyTraversal(publicProperties, stepType, s, fieldName, authContext).asInstanceOf[Traversal[Any, Any]]
+      property.is(db.mapPredicate(predicate.asInstanceOf[P[Any]]))
     }
 }
 
@@ -48,7 +45,7 @@ case class IsDefinedFilter(fieldName: String) extends InputFilter {
       step: S,
       authContext: AuthContext
   ): S = {
-    val filter = (s: BaseVertexSteps) => getProperty(publicProperties, stepType, fieldName).get(s, authContext)
+    val filter = (s: BaseVertexSteps) => PublicProperty.getPropertyTraversal(publicProperties, stepType, s, fieldName, authContext)
     step.filter(filter)
   }
 }

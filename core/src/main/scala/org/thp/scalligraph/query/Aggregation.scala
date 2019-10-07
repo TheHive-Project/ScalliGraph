@@ -148,11 +148,6 @@ abstract class GroupAggregation[TD, TG, R](name: String) extends Aggregation[TD,
 
 abstract class Aggregation[TD, TG, R](val name: String) {
 
-  def getProperty(properties: Seq[PublicProperty[_, _]], stepType: ru.Type, fieldName: String): PublicProperty[_, _] =
-    properties
-      .find(p => p.stepType =:= stepType && p.propertyName == fieldName)
-      .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))
-
   def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
@@ -179,7 +174,7 @@ case class AggSum(fieldName: String) extends AggFunction[Number, Number, Number]
       fromStep: BaseVertexSteps,
       authContext: AuthContext
   ): Traversal[Number, Number] = {
-    val property = getProperty(publicProperties, stepType, fieldName).get(fromStep, authContext)
+    val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
 
     property
       .cast(UniMapping.int)
@@ -200,7 +195,7 @@ case class AggAvg(aggName: Option[String], fieldName: String) extends AggFunctio
       fromStep: BaseVertexSteps,
       authContext: AuthContext
   ): Traversal[Double, JDouble] = {
-    val property = getProperty(publicProperties, stepType, fieldName).get(fromStep, authContext)
+    val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
 
     property
       .cast(UniMapping.int)
@@ -221,7 +216,7 @@ case class AggMin(aggName: Option[String], fieldName: String) extends AggFunctio
       fromStep: BaseVertexSteps,
       authContext: AuthContext
   ): Traversal[Number, Number] = {
-    val property = getProperty(publicProperties, stepType, fieldName).get(fromStep, authContext)
+    val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
 
     property
       .cast(UniMapping.int)
@@ -242,7 +237,7 @@ case class AggMax(fieldName: String) extends AggFunction[Number, Number, Number]
       fromStep: BaseVertexSteps,
       authContext: AuthContext
   ): Traversal[Number, Number] = {
-    val property = getProperty(publicProperties, stepType, fieldName).get(fromStep, authContext)
+    val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
 
     property
       .cast(UniMapping.int)
@@ -277,12 +272,10 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs:
       fromStep: BaseVertexSteps,
       authContext: AuthContext
   ): Traversal[JList[JCollection[Any]], JList[JCollection[Any]]] = {
-    val property = getProperty(publicProperties, stepType, fieldName).asInstanceOf[PublicProperty[_, Any]]
-
     val elementLabel = StepLabel[Vertex]()
     val groupedVertices: Traversal[JMap.Entry[Any, JCollection[Any]], JMap.Entry[Any, JCollection[Any]]] =
-      property
-        .get(fromStep.as(elementLabel), authContext)
+      PublicProperty
+        .getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
         .group(By(), By(__.select(elementLabel).fold()))
         .unfold[JMap.Entry[Any, JCollection[Any]]](null) // Map.Entry[K, List[V]]
 
@@ -376,10 +369,9 @@ case class TimeAggregation(aggName: Option[String], fieldName: String, interval:
       fromStep: BaseVertexSteps,
       authContext: AuthContext
   ): Traversal[JList[JCollection[Any]], JList[JCollection[Any]]] = {
-    val property     = getProperty(publicProperties, stepType, fieldName).asInstanceOf[PublicProperty[_, Any]]
     val elementLabel = StepLabel[Vertex]()
-    val groupedVertices = property
-      .get(fromStep.as(elementLabel), authContext)
+    val groupedVertices = PublicProperty
+      .getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
       .map(date => dateToKey(date.asInstanceOf[Date]))
       .group(By[Long](), By(__.select(elementLabel).fold()))
       .unfold[JMap.Entry[Long, JCollection[Any]]](null) // Map.Entry[K, List[V]]

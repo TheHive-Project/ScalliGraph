@@ -6,6 +6,7 @@ import scala.util.Try
 import play.api.libs.json.JsObject
 
 import gremlin.scala.{Graph, Vertex}
+import org.thp.scalligraph.BadRequestError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FieldsParser}
 import org.thp.scalligraph.models.{Database, Mapping}
@@ -16,19 +17,53 @@ class PublicProperty[D, G](
     val propertyName: String,
     val mapping: Mapping[_, D, G],
     val noValue: NoValue[G],
-    val definition: Seq[BaseVertexSteps => Traversal[D, G]],
+    definition: Seq[(FPath, BaseVertexSteps) => Traversal[D, G]],
     val fieldsParser: FieldsParser[D],
     val updateFieldsParser: Option[FieldsParser[PropertyUpdater]]
 ) {
-
   type Graph  = G
   type Domain = D
 
-  def get(steps: BaseVertexSteps, authContext: AuthContext): Traversal[D, G] =
+  lazy val propertyPath = FPath(propertyName)
+
+  def get(steps: BaseVertexSteps, path: FPath, authContext: AuthContext): Traversal[D, G] =
     if (definition.lengthCompare(1) == 0)
-      definition.head.apply(steps)
+      definition.head.apply(path, steps)
     else
-      steps.coalesce[D, G](mapping, definition: _*)
+      steps.coalesce(mapping)(definition.map(d => d.apply(path, _)): _*)
+}
+
+object PublicProperty {
+
+  def getPropertyTraversal(
+      properties: Seq[PublicProperty[_, _]],
+      stepType: ru.Type,
+      step: BaseVertexSteps,
+      fieldName: String,
+      authContext: AuthContext
+  ): Traversal[_, _] = {
+    val path = FPath(fieldName)
+    properties
+      .iterator
+      .collectFirst {
+        case p if p.stepType =:= stepType && path.startsWith(p.propertyPath).isDefined => p.get(step, path, authContext)
+      }
+      .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))
+  }
+
+  def getProperty(
+      properties: Seq[PublicProperty[_, _]],
+      stepType: ru.Type,
+      fieldName: String
+  ): PublicProperty[_, _] = {
+    val path = FPath(fieldName)
+    properties
+      .iterator
+      .collectFirst {
+        case p if p.stepType =:= stepType && path.startsWith(p.propertyPath).isDefined => p
+      }
+      .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))
+  }
 }
 
 object PropertyUpdater {
