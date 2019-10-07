@@ -49,7 +49,12 @@ trait BaseTraversalOps {
 
     def filter(f: T => BaseTraversal): T = newInstance0(raw.filter(g => f(newInstance0(g)).raw))
 
-    def coalesce[D, G](mapping: Mapping[_, D, G], f: (T => Traversal[D, G])*): Traversal[D, G] = {
+    def coalesce[A: ClassTag](f: (T => Traversal[_, A])*): Traversal[A, A] = {
+      val ff = f.map(t => (g: GremlinScala[traversal.EndGraph]) => t(newInstance0(g)).raw)
+      new Traversal[A, A](raw.coalesce(ff: _*), UniMapping.identity)
+    }
+
+    def coalesce[G, D](mapping: Mapping[_, D, G])(f: (T => Traversal[D, G])*): Traversal[D, G] = {
       val ff = f.map(t => (g: GremlinScala[traversal.EndGraph]) => t(newInstance0(g)).raw)
       new Traversal[D, G](raw.coalesce(ff: _*), mapping)
     }
