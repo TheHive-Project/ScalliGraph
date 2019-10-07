@@ -108,7 +108,11 @@ trait TraversalOps extends BaseTraversalOps {
       Traversal(raw.in(ru.typeOf[E].typeSymbol.name.toString))
     def inToE[E <: Product: ru.TypeTag](implicit ev: G <:< Vertex): Traversal[Edge, Edge] = Traversal(raw.inE(ru.typeOf[E].typeSymbol.name.toString))
 
-    def inV()(implicit ev: G <:< Edge): Traversal[Vertex, Vertex] = Traversal(raw.inV())
+    def inV()(implicit ev: G <:< Edge): Traversal[Vertex, Vertex]  = Traversal(raw.inV())
+    def outV()(implicit ev: G <:< Edge): Traversal[Vertex, Vertex] = Traversal(raw.outV())
+
+    def in()(implicit ev: G <:< Vertex): Traversal[Vertex, Vertex]  = Traversal(raw.in())
+    def out()(implicit ev: G <:< Vertex): Traversal[Vertex, Vertex] = Traversal(raw.out())
 
     def otherV()(implicit ev: G <:< Edge): Traversal[Vertex, Vertex] = Traversal(raw.otherV())
 

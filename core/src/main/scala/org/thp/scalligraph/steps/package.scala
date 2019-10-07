@@ -20,7 +20,7 @@ package object steps extends TraversalOps {
   implicit class BaseVertexStepsOps[S <: BaseVertexSteps](val steps: S) {
     type EndDomain = steps.EndDomain
     def raw: GremlinScala[Vertex]                             = steps.raw.asInstanceOf[GremlinScala[Vertex]]
-    def converter: Converter.Aux[EndDomain, Vertex]           = steps.converter.asInstanceOf[Converter.Aux[EndDomain, Vertex]]
+    def converter: Converter.Aux[EndDomain, Vertex]           = steps.converter
     private def newInstance0(newRaw: GremlinScala[Vertex]): S = steps.newInstance(newRaw).asInstanceOf[S]
 
     def getByIds(ids: String*): S = newInstance0(raw.hasId(ids: _*))

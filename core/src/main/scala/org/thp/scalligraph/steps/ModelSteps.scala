@@ -39,6 +39,8 @@ abstract class BaseElementSteps extends BaseTraversal {
 
 abstract class BaseVertexSteps extends BaseElementSteps {
   override type EndGraph = Vertex
+  override def newInstance(newRaw: GremlinScala[Vertex]): BaseVertexSteps
+  override def newInstance(): BaseVertexSteps
 }
 
 class VertexSteps[E <: Product: ru.TypeTag](val raw: GremlinScala[Vertex])(implicit val db: Database, val graph: Graph)
@@ -57,7 +59,7 @@ class VertexSteps[E <: Product: ru.TypeTag](val raw: GremlinScala[Vertex])(impli
 
 abstract class BaseEdgeSteps extends BaseElementSteps
 
-final class EdgeSteps[E <: Product: ru.TypeTag, FROM <: Product, TO <: Product](val raw: GremlinScala[Edge])(
+class EdgeSteps[E <: Product: ru.TypeTag, FROM <: Product, TO <: Product](val raw: GremlinScala[Edge])(
     implicit val db: Database,
     val graph: Graph
 ) extends BaseEdgeSteps
