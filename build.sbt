@@ -112,6 +112,7 @@ lazy val janus = (project in file("database/janusgraph"))
       janusGraphBerkeleyDB,
       janusGraphHBase,
       janusGraphLucene,
+      janusGraphElasticSearch,
       cassandra,
       specs % Test
     )
