@@ -18,7 +18,7 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.UniMapping
 import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
-import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError}
+import org.thp.scalligraph.InvalidFormatAttributeError
 
 object GroupAggregation {
 
@@ -275,7 +275,7 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs:
     val elementLabel = StepLabel[Vertex]()
     val groupedVertices: Traversal[JMap.Entry[Any, JCollection[Any]], JMap.Entry[Any, JCollection[Any]]] =
       PublicProperty
-        .getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
+        .getPropertyTraversal(publicProperties, stepType, fromStep.as(elementLabel), fieldName, authContext)
         .group(By(), By(__.select(elementLabel).fold()))
         .unfold[JMap.Entry[Any, JCollection[Any]]](null) // Map.Entry[K, List[V]]
 
