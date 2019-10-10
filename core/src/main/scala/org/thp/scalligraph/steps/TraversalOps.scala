@@ -66,9 +66,6 @@ trait TraversalOps extends BaseTraversalOps {
       newInstance0(raw.and(filters: _*))
     }
 
-    def not(t: Traversal[D, G] => BaseTraversal): Traversal[D, G] =
-      newInstance0(raw.not((g: GremlinScala[G]) => t(newInstance0(g)).raw))
-
     def sum[N <: Number: ClassTag]()(implicit toNumber: G => N): Traversal[N, N] =
       new Traversal(raw.sum[N]()(toNumber), UniMapping.identity)
 
