@@ -7,11 +7,30 @@ import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
 
 import gremlin.scala.dsl.Converter
-import gremlin.scala.{By, GremlinScala, Key, OrderBy, P, ProjectionBuilder, StepLabel}
+import gremlin.scala.{__, BranchOption, By, GremlinScala, Key, OrderBy, P, ProjectionBuilder, StepLabel, Vertex}
+import org.apache.tinkerpop.gremlin.process.traversal.Traversal
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{GraphTraversal}
+import org.apache.tinkerpop.gremlin.process.traversal.step.TraversalOptionParent.Pick
 import org.apache.tinkerpop.gremlin.structure.Element
 import org.thp.scalligraph.AuthorizationError
 import org.thp.scalligraph.models.{Mapping, UniMapping}
 import shapeless.HNil
+
+trait BranchOption[T <: BaseTraversal, R <: BaseTraversal] {
+  def traversal: T => R
+  def pickToken: Any
+}
+
+case class BranchCase[BranchOn, T <: BaseTraversal, R <: BaseTraversal](pickToken: BranchOn, traversal: T => R) extends BranchOption[T, R]
+
+case class BranchMatchAll[T <: BaseTraversal, R <: BaseTraversal](traversal: T => R) extends BranchOption[T, R] {
+  override def pickToken = Pick.any
+}
+
+/* if nothing else matched in branch/choose step */
+case class BranchOtherwise[T <: BaseTraversal, R <: BaseTraversal](traversal: T => R) extends BranchOption[T, R] {
+  override def pickToken = Pick.none
+}
 
 trait BaseTraversalOps {
 
@@ -20,6 +39,8 @@ trait BaseTraversalOps {
     def raw: GremlinScala[traversal.EndGraph] = traversal.raw
 
     def converter: Converter.Aux[traversal.EndDomain, traversal.EndGraph] = traversal.converter
+
+    def start(): T = newInstance0(__[traversal.EndGraph])
 
     private def newInstance0(newRaw: GremlinScala[traversal.EndGraph]): T = traversal.newInstance(newRaw).asInstanceOf[T]
 
@@ -123,6 +144,17 @@ trait BaseTraversalOps {
         ),
         UniMapping.identity[A]
       )
+
+    def choose[A, B <: BaseTraversal: TraversalBuilder](on: T => Traversal[_, A], options: BranchOption[T, B]*) = {
+      var jTraversal: GraphTraversal[_, A] = raw.traversal.choose(newInstance0(__[traversal.EndGraph]).raw.traversal)
+      options.foreach { option =>
+        /* cast needed because of the way types are defined in tp3 */
+        val jTraversalOption =
+          option.traversal(newInstance0(__[traversal.EndGraph])).raw.traversal //.asInstanceOf[Traversal[NewEnd, _]]
+        jTraversal = jTraversal.option(option.pickToken, jTraversalOption)
+      }
+      implicitly[TraversalBuilder[B]].newInstance(GremlinScala(jTraversal))
+    }
 
     def has[A](key: Key[A], predicate: P[A])(implicit ev: traversal.EndGraph <:< Element): T = newInstance0(raw.has(key, predicate))
     def has[A](key: Key[A])(implicit ev: traversal.EndGraph <:< Element): T                  = newInstance0(raw.has(key))
