@@ -7,9 +7,8 @@ import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
 
 import gremlin.scala.dsl.Converter
-import gremlin.scala.{__, BranchOption, By, GremlinScala, Key, OrderBy, P, ProjectionBuilder, StepLabel, Vertex}
-import org.apache.tinkerpop.gremlin.process.traversal.Traversal
-import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{GraphTraversal}
+import gremlin.scala.{__, By, GremlinScala, Key, OrderBy, P, ProjectionBuilder, StepLabel}
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
 import org.apache.tinkerpop.gremlin.process.traversal.step.TraversalOptionParent.Pick
 import org.apache.tinkerpop.gremlin.structure.Element
 import org.thp.scalligraph.AuthorizationError
@@ -145,15 +144,11 @@ trait BaseTraversalOps {
         UniMapping.identity[A]
       )
 
-    def choose[A, B <: BaseTraversal: TraversalBuilder](on: T => Traversal[_, A], options: BranchOption[T, B]*) = {
-      var jTraversal: GraphTraversal[_, A] = raw.traversal.choose(newInstance0(__[traversal.EndGraph]).raw.traversal)
-      options.foreach { option =>
-        /* cast needed because of the way types are defined in tp3 */
-        val jTraversalOption =
-          option.traversal(newInstance0(__[traversal.EndGraph])).raw.traversal //.asInstanceOf[Traversal[NewEnd, _]]
-        jTraversal = jTraversal.option(option.pickToken, jTraversalOption)
+    def choose[A, B: ClassTag](on: T => Traversal[_, A], options: BranchOption[T, TraversalLike[B, B]]*): Traversal[B, B] = {
+      val jTraversal = options.foldLeft[GraphTraversal[_, B]](raw.traversal.choose(on(this.start()).raw.traversal)) { (tr, option) =>
+        tr.option(option.pickToken, option.traversal(this.start()).raw.traversal)
       }
-      implicitly[TraversalBuilder[B]].newInstance(GremlinScala(jTraversal))
+      Traversal[B](GremlinScala(jTraversal))
     }
 
     def has[A](key: Key[A], predicate: P[A])(implicit ev: traversal.EndGraph <:< Element): T = newInstance0(raw.has(key, predicate))
