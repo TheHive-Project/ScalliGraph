@@ -82,14 +82,6 @@ object Query {
       override def apply(param: P, from: Any, authContext: AuthContext): Any                         = f(param, from.asInstanceOf[F], authContext)
     }
 
-  @deprecated("use output[F, T](F => Output[T]) methods", "0.1")
-  def deprecatedOutput[F: ru.TypeTag, T: ru.TypeTag](implicit toOutput: F => Output[T]): Query = new Query {
-    override val name: String                                                 = "toOutput"
-    override def checkFrom(t: ru.Type): Boolean                               = SubType(t, ru.typeOf[F])
-    override def toType(t: ru.Type): ru.Type                                  = ru.appliedType(ru.typeOf[Output[_]].typeConstructor, ru.typeOf[T])
-    override def apply(param: Unit, from: Any, authContext: AuthContext): Any = toOutput(from.asInstanceOf[F])
-  }
-
   def output[F: ru.TypeTag, T: ru.TypeTag](toOutput: F => Output[T]): Query = new Query {
     override val name: String                                                 = "toOutput"
     override def checkFrom(t: ru.Type): Boolean                               = SubType(t, ru.typeOf[F])
