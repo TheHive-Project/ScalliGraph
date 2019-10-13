@@ -10,6 +10,8 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FSeq, FString, FieldsParser}
 import org.thp.scalligraph.models.{Database, MappingCardinality}
 import org.thp.scalligraph.steps.BaseVertexSteps
+import org.thp.scalligraph.steps.StepsOps._
+
 import scala.reflect.runtime.{universe => ru}
 
 case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {

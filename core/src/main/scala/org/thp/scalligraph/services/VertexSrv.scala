@@ -1,16 +1,18 @@
 package org.thp.scalligraph.services
 
-import scala.reflect.runtime.{universe => ru}
-import scala.util.{Failure, Success, Try}
-
-import play.api.libs.json.JsObject
+import java.util.Date
 
 import gremlin.scala._
 import org.thp.scalligraph.NotFoundError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.query.PropertyUpdater
+import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.VertexSteps
+import play.api.libs.json.JsObject
+
+import scala.reflect.runtime.{universe => ru}
+import scala.util.{Failure, Success, Try}
 
 abstract class VertexSrv[V <: Product: ru.TypeTag, S <: VertexSteps[V]](implicit db: Database) extends ElementSrv[V, S] {
 
@@ -44,6 +46,19 @@ abstract class VertexSrv[V <: Product: ru.TypeTag, S <: VertexSteps[V]](implicit
   def update(steps: S => S, propertyUpdaters: Seq[PropertyUpdater])(implicit graph: Graph, authContext: AuthContext): Try[(S, JsObject)] =
     update(steps(initSteps), propertyUpdaters)
 
-  def update(steps: S, propertyUpdaters: Seq[PropertyUpdater])(implicit graph: Graph, authContext: AuthContext): Try[(S, JsObject)] =
-    steps.updateProperties(propertyUpdaters)
+  def update(steps: S, propertyUpdaters: Seq[PropertyUpdater])(implicit graph: Graph, authContext: AuthContext): Try[(S, JsObject)] = {
+    val myClone = steps.newInstance().asInstanceOf[S]
+    logger.debug(s"Execution of ${steps.raw}")
+    steps.raw.headOption().fold[Try[(S, JsObject)]](Failure(NotFoundError(s"${steps.typeName} not found"))) { vertex =>
+      logger.trace(s"Update ${vertex.id()} by ${authContext.userId}")
+      val db = steps.db
+      propertyUpdaters
+        .toTry(u => u(vertex, db, steps.graph, authContext))
+        .map { o =>
+          db.setOptionProperty(vertex, "_updatedAt", Some(new Date), db.updatedAtMapping)
+          db.setOptionProperty(vertex, "_updatedBy", Some(authContext.userId), db.updatedByMapping)
+          myClone -> o.reduceOption(_ ++ _).getOrElse(JsObject.empty)
+        }
+    }
+  }
 }

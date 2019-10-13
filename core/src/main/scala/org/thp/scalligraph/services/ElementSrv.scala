@@ -3,6 +3,7 @@ package org.thp.scalligraph.services
 import gremlin.scala.Graph
 import org.thp.scalligraph.models.{Entity, Model}
 import org.thp.scalligraph.steps.BaseElementSteps
+import org.thp.scalligraph.steps.StepsOps._
 
 abstract class ElementSrv[E <: Product, S <: BaseElementSteps] {
   val model: Model.Base[E]

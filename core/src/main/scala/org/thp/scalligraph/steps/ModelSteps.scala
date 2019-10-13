@@ -2,12 +2,12 @@ package org.thp.scalligraph.steps
 
 import java.util.{List => JList, Map => JMap}
 
-import scala.collection.JavaConverters._
-import scala.reflect.runtime.{universe => ru}
-
 import gremlin.scala._
 import gremlin.scala.dsl._
 import org.thp.scalligraph.models._
+
+import scala.collection.JavaConverters._
+import scala.reflect.runtime.{universe => ru}
 
 case class PagedResult[R](result: Seq[R], totalSize: Option[Long]) {
   def map[T](f: R => T): PagedResult[T] = PagedResult(result.map(f), totalSize)
@@ -20,7 +20,7 @@ class ValueMap(m: Map[String, Seq[AnyRef]]) {
 object ValueMap {
 
   def unapply(m: JMap[_, _]): Option[ValueMap] =
-    Some(new ValueMap(m.asScala.map { case (k, v) => k.toString -> v.asInstanceOf[JList[AnyRef]].asScala.toSeq }.toMap))
+    Some(new ValueMap(m.asScala.map { case (k, v) => k.toString -> v.asInstanceOf[JList[AnyRef]].asScala }.toMap))
 }
 
 object IdMapping extends Mapping[String, String, AnyRef] {
@@ -37,8 +37,7 @@ abstract class BaseElementSteps extends BaseTraversal {
   val graph: Graph
 }
 
-abstract class BaseVertexSteps extends BaseElementSteps {
-  override type EndGraph = Vertex
+abstract class BaseVertexSteps extends BaseElementSteps with TraversalGraph[Vertex] {
   override def newInstance(newRaw: GremlinScala[Vertex]): BaseVertexSteps
   override def newInstance(): BaseVertexSteps
 }
@@ -57,7 +56,10 @@ class VertexSteps[E <: Product: ru.TypeTag](val raw: GremlinScala[Vertex])(impli
   override def typeName: String = ru.typeOf[E].toString
 }
 
-abstract class BaseEdgeSteps extends BaseElementSteps
+abstract class BaseEdgeSteps extends BaseElementSteps with TraversalGraph[Edge] {
+  override def newInstance(newRaw: GremlinScala[Edge]): BaseEdgeSteps
+  override def newInstance(): BaseEdgeSteps
+}
 
 class EdgeSteps[E <: Product: ru.TypeTag, FROM <: Product, TO <: Product](val raw: GremlinScala[Edge])(
     implicit val db: Database,

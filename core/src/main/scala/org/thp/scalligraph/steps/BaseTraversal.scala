@@ -2,14 +2,13 @@ package org.thp.scalligraph.steps
 
 import java.util.{List => JList}
 
-import scala.reflect.{classTag, ClassTag}
-
-import play.api.Logger
-
-import gremlin.scala.{__, GremlinScala}
+import gremlin.scala.GremlinScala
 import gremlin.scala.dsl.Converter
 import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.models.{Mapping, UniMapping}
+import play.api.Logger
+
+import scala.reflect.{classTag, ClassTag}
 
 trait TraversalBuilder[T <: BaseTraversal] {
   def newInstance(raw: GremlinScala[_]): T
@@ -50,21 +49,24 @@ trait BaseTraversal {
   }
 }
 
-trait TraversalLike[D, G] extends BaseTraversal {
-  type EndDomain = D
-  type EndGraph  = G
-  def typeName: String
-  def newInstance(newRaw: GremlinScala[EndGraph]): TraversalLike[D, G]
-  def newInstance(): TraversalLike[D, G]
-  def converter: Converter.Aux[EndDomain, EndGraph]
-  val raw: GremlinScala[EndGraph]
+trait TraversalGraph[G] extends BaseTraversal {
+  override type EndGraph = G
+}
+
+trait TraversalLike[D, G] extends TraversalGraph[G] {
+  override type EndDomain = D
+  override def typeName: String
+  override def newInstance(newRaw: GremlinScala[EndGraph]): TraversalLike[D, G]
+  override def newInstance(): TraversalLike[D, G]
+  override def converter: Converter.Aux[EndDomain, EndGraph]
+  override val raw: GremlinScala[EndGraph]
 }
 
 object Traversal {
   def apply[T: ClassTag](raw: GremlinScala[T]) = new Traversal[T, T](raw, UniMapping.identity[T])
 }
 
-class Traversal[D, G](val raw: GremlinScala[G], mapping: Mapping[_, D, G]) extends TraversalLike[D, G] {
+class Traversal[D, G](val raw: GremlinScala[G], mapping: Mapping[_, D, G]) extends TraversalLike[D, G] with TraversalGraph[G] {
   override def typeName: String                                      = mapping.domainTypeClass.getSimpleName
   override def newInstance(newRaw: GremlinScala[G]): Traversal[D, G] = new Traversal[D, G](newRaw, mapping)
   override def newInstance(): Traversal[D, G]                        = new Traversal[D, G](raw, mapping)

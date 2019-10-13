@@ -4,21 +4,21 @@ import java.lang.{Double => JDouble, Float => JFloat, Integer => JInt, Long => J
 import java.time.temporal.ChronoUnit
 import java.util.{Calendar, Date, Collection => JCollection, List => JList, Map => JMap}
 
+import gremlin.scala.{__, By, StepLabel, Vertex}
+import org.scalactic.Accumulation.withGood
+import org.scalactic.{Bad, Good, One, Or}
+import org.thp.scalligraph.InvalidFormatAttributeError
+import org.thp.scalligraph.auth.AuthContext
+import org.thp.scalligraph.controllers._
+import org.thp.scalligraph.models.UniMapping
+import org.thp.scalligraph.steps.StepsOps._
+import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
+import play.api.libs.json.{JsNumber, JsObject, Json, Writes}
+
 import scala.collection.JavaConverters._
 import scala.reflect.runtime.{universe => ru}
 import scala.util.Try
 import scala.util.matching.Regex
-
-import play.api.libs.json.{JsNumber, JsObject, Json, Writes}
-
-import gremlin.scala.{__, By, StepLabel, Vertex}
-import org.scalactic.Accumulation.withGood
-import org.scalactic.{Bad, Good, One, Or}
-import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.controllers._
-import org.thp.scalligraph.models.UniMapping
-import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
-import org.thp.scalligraph.InvalidFormatAttributeError
 
 object GroupAggregation {
 

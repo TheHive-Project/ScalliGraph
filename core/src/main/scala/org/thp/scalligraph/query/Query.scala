@@ -1,17 +1,17 @@
 package org.thp.scalligraph.query
 
-import scala.reflect.runtime.{currentMirror => rm, universe => ru}
-
-import play.api.libs.json.JsValue
-
 import gremlin.scala.{Graph, GremlinScala}
 import org.scalactic.Good
 import org.thp.scalligraph.BadRequestError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.Database
+import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.{BaseTraversal, BaseVertexSteps, TraversalLike}
 import org.thp.scalligraph.utils.RichType
+import play.api.libs.json.JsValue
+
+import scala.reflect.runtime.{currentMirror => rm, universe => ru}
 
 // Use global lock because scala reflection subtype operator <:< is not thread safe (scala/bug#10766)
 // https://stackoverflow.com/questions/56854716/inconsistent-result-when-checking-type-subtype

@@ -7,8 +7,10 @@ import org.scalactic.Good
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.{Database, Mapping}
+import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
 import play.api.Logger
+
 import scala.reflect.runtime.{universe => ru}
 
 trait InputFilter extends InputQuery {
