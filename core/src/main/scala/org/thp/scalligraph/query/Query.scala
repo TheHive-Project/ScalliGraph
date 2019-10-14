@@ -82,6 +82,8 @@ object Query {
       override def apply(param: P, from: Any, authContext: AuthContext): Any                         = f(param, from.asInstanceOf[F], authContext)
     }
 
+  def output[F: ru.TypeTag: Outputer](): Query = output(implicitly[Outputer[F]].toOutput)
+
   def output[F: ru.TypeTag, T: ru.TypeTag](toOutput: F => Output[T]): Query = new Query {
     override val name: String                                                 = "toOutput"
     override def checkFrom(t: ru.Type): Boolean                               = SubType(t, ru.typeOf[F])
