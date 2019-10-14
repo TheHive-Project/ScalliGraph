@@ -51,7 +51,7 @@ class VertexSteps[E <: Product: ru.TypeTag](val raw: GremlinScala[Vertex])(impli
   override def converter: Converter.Aux[E with Entity, Vertex] = model.converter(db, graph)
 
   override def newInstance(newRaw: GremlinScala[Vertex]): VertexSteps[E] = new VertexSteps[E](newRaw)
-  override def newInstance(): VertexSteps[E]                             = new VertexSteps[E](raw.clone())
+  override def newInstance(): VertexSteps[E]                             = newInstance(raw.clone())
 
   override def typeName: String = ru.typeOf[E].toString
 }
@@ -73,7 +73,7 @@ class EdgeSteps[E <: Product: ru.TypeTag, FROM <: Product, TO <: Product](val ra
   override def converter: Converter.Aux[E with Entity, Edge] = db.getModel[E].converter(db, graph).asInstanceOf[Converter.Aux[E with Entity, Edge]]
 
   override def newInstance(newRaw: GremlinScala[Edge]): EdgeSteps[E, FROM, TO] = new EdgeSteps[E, FROM, TO](newRaw)
-  override def newInstance(): EdgeSteps[E, FROM, TO]                           = new EdgeSteps[E, FROM, TO](raw.clone())
+  override def newInstance(): EdgeSteps[E, FROM, TO]                           = newInstance(raw.clone())
 
   override def typeName: String = ru.typeOf[E].toString
 }
