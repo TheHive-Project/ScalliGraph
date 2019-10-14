@@ -2,6 +2,11 @@ package org.thp.scalligraph.services
 
 import java.util.Date
 
+import scala.reflect.runtime.{universe => ru}
+import scala.util.{Failure, Success, Try}
+
+import play.api.libs.json.JsObject
+
 import gremlin.scala._
 import org.thp.scalligraph.NotFoundError
 import org.thp.scalligraph.auth.AuthContext
@@ -9,10 +14,6 @@ import org.thp.scalligraph.models._
 import org.thp.scalligraph.query.PropertyUpdater
 import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.VertexSteps
-import play.api.libs.json.JsObject
-
-import scala.reflect.runtime.{universe => ru}
-import scala.util.{Failure, Success, Try}
 
 abstract class VertexSrv[V <: Product: ru.TypeTag, S <: VertexSteps[V]](implicit db: Database) extends ElementSrv[V, S] {
 

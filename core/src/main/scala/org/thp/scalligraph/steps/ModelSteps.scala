@@ -2,12 +2,12 @@ package org.thp.scalligraph.steps
 
 import java.util.{List => JList, Map => JMap}
 
+import scala.collection.JavaConverters._
+import scala.reflect.runtime.{universe => ru}
+
 import gremlin.scala._
 import gremlin.scala.dsl._
 import org.thp.scalligraph.models._
-
-import scala.collection.JavaConverters._
-import scala.reflect.runtime.{universe => ru}
 
 case class PagedResult[R](result: Seq[R], totalSize: Option[Long]) {
   def map[T](f: R => T): PagedResult[T] = PagedResult(result.map(f), totalSize)

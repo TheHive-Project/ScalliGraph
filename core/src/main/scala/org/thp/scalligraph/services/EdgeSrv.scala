@@ -1,14 +1,14 @@
 package org.thp.scalligraph.services
 
+import scala.reflect.runtime.{universe => ru}
+import scala.util.{Failure, Success, Try}
+
 import gremlin.scala._
 import org.thp.scalligraph.NotFoundError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.steps.EdgeSteps
 import org.thp.scalligraph.steps.StepsOps._
-
-import scala.reflect.runtime.{universe => ru}
-import scala.util.{Failure, Success, Try}
 
 class EdgeSrv[E <: Product: ru.TypeTag, FROM <: Product: ru.TypeTag, TO <: Product: ru.TypeTag](implicit val db: Database)
     extends ElementSrv[E, EdgeSteps[E, FROM, TO]] {

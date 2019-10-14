@@ -3,6 +3,13 @@ package org.thp.scalligraph.steps
 import java.lang.{Double => JDouble, Long => JLong}
 import java.util.{Date, UUID, Collection => JCollection, List => JList, Map => JMap}
 
+import scala.collection.JavaConverters._
+import scala.reflect.ClassTag
+import scala.reflect.runtime.{universe => ru}
+import scala.util.{Failure, Success, Try}
+
+import play.api.Logger
+
 import gremlin.scala.dsl.Converter
 import gremlin.scala.{__, By, Edge, GremlinScala, Key, OrderBy, P, ProjectionBuilder, StepLabel, Vertex}
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
@@ -11,13 +18,7 @@ import org.apache.tinkerpop.gremlin.structure.Element
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.{Entity, Mapping, UniMapping}
 import org.thp.scalligraph.{AuthorizationError, NotFoundError}
-import play.api.Logger
 import shapeless.HNil
-
-import scala.collection.JavaConverters._
-import scala.reflect.ClassTag
-import scala.reflect.runtime.{universe => ru}
-import scala.util.{Failure, Success, Try}
 
 trait BranchOption[T <: BaseTraversal, R <: BaseTraversal] {
   def traversal: T => R

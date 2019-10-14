@@ -1,5 +1,10 @@
 package org.thp.scalligraph.query
 
+import scala.reflect.runtime.{universe => ru}
+import scala.util.Try
+
+import play.api.libs.json.JsObject
+
 import gremlin.scala.{Graph, Vertex}
 import org.thp.scalligraph.BadRequestError
 import org.thp.scalligraph.auth.AuthContext
@@ -7,10 +12,6 @@ import org.thp.scalligraph.controllers.{FPath, FieldsParser}
 import org.thp.scalligraph.models.{Database, Mapping}
 import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
-import play.api.libs.json.JsObject
-
-import scala.reflect.runtime.{universe => ru}
-import scala.util.Try
 
 class PublicProperty[D, G](
     val stepType: ru.Type,

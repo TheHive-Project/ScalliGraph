@@ -2,13 +2,14 @@ package org.thp.scalligraph.steps
 
 import java.util.{List => JList}
 
+import scala.reflect.{classTag, ClassTag}
+
+import play.api.Logger
+
 import gremlin.scala.GremlinScala
 import gremlin.scala.dsl.Converter
 import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.models.{Mapping, UniMapping}
-import play.api.Logger
-
-import scala.reflect.{classTag, ClassTag}
 
 trait TraversalBuilder[T <: BaseTraversal] {
   def newInstance(raw: GremlinScala[_]): T
