@@ -67,7 +67,7 @@ object Traversal {
   def apply[T: ClassTag](raw: GremlinScala[T]) = new Traversal[T, T](raw, UniMapping.identity[T])
 }
 
-class Traversal[D, G](val raw: GremlinScala[G], mapping: Mapping[_, D, G]) extends TraversalLike[D, G] with TraversalGraph[G] {
+class Traversal[D, G](val raw: GremlinScala[G], val mapping: Mapping[_, D, G]) extends TraversalLike[D, G] with TraversalGraph[G] {
   override def typeName: String                                      = mapping.domainTypeClass.getSimpleName
   override def newInstance(newRaw: GremlinScala[G]): Traversal[D, G] = new Traversal[D, G](newRaw, mapping)
   override def newInstance(): Traversal[D, G]                        = new Traversal[D, G](raw, mapping)

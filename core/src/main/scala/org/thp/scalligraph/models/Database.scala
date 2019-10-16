@@ -100,6 +100,7 @@ trait Database {
   }
 
   def mapPredicate[T](predicate: P[T]): P[T]
+  def toId(id: Any): Any
   def labelFilter[E <: Element](model: Model): GremlinScala[E] => GremlinScala[E]
 
   val extraModels: Seq[Model]
@@ -359,6 +360,7 @@ abstract class BaseDatabase extends Database {
 
   override def labelFilter[E <: Element](model: Model): GremlinScala[E] => GremlinScala[E] = _.hasLabel(model.label)
   override def mapPredicate[T](predicate: P[T]): P[T]                                      = predicate
+  override def toId(id: Any): Any                                                          = id
 
   override val extraModels: Seq[Model] = Seq(binaryModel, binaryLinkModel)
 

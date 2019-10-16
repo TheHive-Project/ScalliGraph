@@ -1,5 +1,6 @@
 package org.thp.scalligraph.janus
 
+import java.lang.{Long => JLong}
 import java.nio.file.{Files, Paths}
 import java.util.function.Consumer
 import java.util.{Date, Properties}
@@ -384,6 +385,7 @@ class JanusDatabase(
       case Text.notStartingWith => JanusText.textPrefix(predicate.getValue).negate()
       case _                    => predicate
     }
+  override def toId(id: Any): JLong = id.toString.toLong
 
   override def drop(): Unit = JanusGraphFactory.drop(janusGraph)
 }

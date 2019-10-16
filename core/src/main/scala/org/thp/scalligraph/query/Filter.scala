@@ -12,7 +12,7 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.{Database, Mapping}
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
+import org.thp.scalligraph.steps.{BaseVertexSteps, IdMapping, Traversal}
 
 trait InputFilter extends InputQuery {
 
@@ -36,6 +36,8 @@ case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilt
     step.filter { s =>
       val property: Traversal[Any, Any] =
         PublicProperty.getPropertyTraversal(publicProperties, stepType, s, fieldName, authContext).asInstanceOf[Traversal[Any, Any]]
+      if (property.mapping == IdMapping)
+        predicate.asInstanceOf[P[Any]].setValue(db.toId(predicate.getValue))
       property.is(db.mapPredicate(predicate.asInstanceOf[P[Any]]))
     }
 }
