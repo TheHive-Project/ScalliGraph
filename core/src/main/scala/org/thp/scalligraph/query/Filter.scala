@@ -139,17 +139,9 @@ object InputFilter {
 
   def in(field: String, values: Any*): PredicateFilter = PredicateFilter(field, P.within(values))
 
-  def has(field: String, value: String): PredicateFilter = PredicateFilter(field, stringContains(value))
+  def startsWith(field: String, value: String): PredicateFilter = PredicateFilter(field, TextP.startingWith(value))
 
-  def stringContains(value: String): P[String] = TextP.containing(value)
-
-  def startsWith(field: String, value: String): PredicateFilter = PredicateFilter(field, stringStartsWith(value))
-
-  def stringStartsWith(value: String): P[String] = P.fromPredicate[String]((v, r) => v startsWith r, value)
-
-  def endsWith(field: String, value: String): PredicateFilter = PredicateFilter(field, stringEndsWith(value))
-
-  def stringEndsWith(value: String): P[String] = P.fromPredicate[String]((v, r) => v endsWith r, value)
+  def endsWith(field: String, value: String): PredicateFilter = PredicateFilter(field, TextP.endingWith(value))
 
   def or(filters: Seq[InputFilter]): OrFilter = OrFilter(filters)
 
@@ -161,7 +153,14 @@ object InputFilter {
 
   def withId(id: String): InputFilter = new IdFilter(id)
 
-  //  def in(field: String, values: Seq[Any]) = OrFilter(values.map(v ⇒ PredicateFilter(field, P.is(v))))
+  def like(field: String, value: String): PredicateFilter = {
+    val s = value.headOption.contains('*')
+    val e = value.lastOption.contains('*')
+    if (s && e) PredicateFilter(field, TextP.containing(value))
+    else if (s) PredicateFilter(field, TextP.endingWith(value))
+    else if (e) PredicateFilter(field, TextP.startingWith(value))
+    else PredicateFilter(field, P.eq(value))
+  }
 
   def fieldsParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[InputFilter] = {
     val props = properties.filter(_.stepType =:= tpe)
@@ -183,7 +182,6 @@ object InputFilter {
       case (_, FObjOne("_lte", FObjOne(key, field)))                 => propParser(key)(field).map(value => lte(key, value))
       case (_, FObjOne("_gte", FObjOne(key, field)))                 => propParser(key)(field).map(value => gte(key, value))
       case (_, FObjOne("_is", FObjOne(key, field)))                  => propParser(key)(field).map(value => is(key, value))
-      case (_, FObjOne("_has", FObjOne(key, FString(value))))        => Good(has(key, value))
       case (_, FObjOne("_startsWith", FObjOne(key, FString(value)))) => Good(startsWith(key, value))
       case (_, FObjOne("_endsWith", FObjOne(key, FString(value))))   => Good(endsWith(key, value))
       case (_, FObjOne("_id", FString(id)))                          => Good(withId(id))
@@ -199,8 +197,9 @@ object InputFilter {
           valueParser = propParser(key)
           values <- s.values.validatedBy(valueParser.apply)
         } yield in(key, values: _*)
-      case (_, FObjOne("_contains", FString(path))) => Good(isDefined(path))
-      case (_, FFieldValue(key, field))             => propParser(key)(field).map(value => is(key, value))
+      case (_, FObjOne("_contains", FString(path)))            => Good(isDefined(path))
+      case (_, FObjOne("_like", FObjOne(key, FString(value)))) => Good(like(key, value))
+      case (_, FFieldValue(key, field))                        => propParser(key)(field).map(value => is(key, value))
       case (_, FObjOne(key, field)) =>
         logger.warn(s"""Use of filter {"$key": "$field"} is deprecated. Please use {"_is":{"$key":"$field"}}""")
         propParser(key)(field).map(value => is(key, value))
