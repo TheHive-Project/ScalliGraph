@@ -1,21 +1,22 @@
 package org.thp.scalligraph
 
-import scala.collection.immutable
-import scala.util.Success
-
+import com.google.inject.Provider
+import javax.inject.{Inject, Singleton}
+import org.thp.scalligraph.auth.AuthSrv
+import org.thp.scalligraph.controllers.{AuthenticatedRequest, EntryPoint}
+import org.thp.scalligraph.models.Database
+import org.thp.scalligraph.query.{AuthGraph, Query, QueryExecutor}
 import play.api.Logger
 import play.api.cache.AsyncCacheApi
 import play.api.http.HttpConfiguration
-import play.api.mvc.{Handler, RequestHeader, Results}
+import play.api.mvc._
 import play.api.routing.Router.Routes
 import play.api.routing.sird._
 import play.api.routing.{Router, SimpleRouter}
 
-import com.google.inject.Provider
-import javax.inject.{Inject, Singleton}
-import org.thp.scalligraph.controllers.EntryPoint
-import org.thp.scalligraph.models.Database
-import org.thp.scalligraph.query.{AuthGraph, Query, QueryExecutor}
+import scala.collection.immutable
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Success
 
 object DebugRouter {
   lazy val logger = Logger(getClass)
@@ -55,9 +56,23 @@ class ScalligraphRouter @Inject()(
     routers: immutable.Set[Router],
     entryPoint: EntryPoint,
     db: Database,
-    globalQueryExecutor: GlobalQueryExecutor
+    globalQueryExecutor: GlobalQueryExecutor,
+    actionBuilder: DefaultActionBuilder,
+    authSrv: AuthSrv,
+    implicit val ec: ExecutionContext
 ) extends Provider[Router] {
-  lazy val logger = Logger(getClass)
+  lazy val logger                   = Logger(getClass)
+  lazy val routerList: List[Router] = routers.toList
+  override lazy val get: Router = {
+    val prefix = httpConfig.context
+
+    routerList
+      .reduceOption(_ orElse _)
+      .getOrElse(Router.empty)
+      .orElse(SimpleRouter(queryRoutes))
+      .orElse(SimpleRouter(authRoutes))
+      .withPrefix(prefix)
+  }
 
   val queryRoutes: Routes = {
     case POST(p"/api/v${int(version)}/query") =>
@@ -73,14 +88,19 @@ class ScalligraphRouter @Inject()(
         }
   }
 
-  lazy val routerList: List[Router] = routers.toList
-  override lazy val get: Router = {
-    val prefix = httpConfig.context
+  val defaultAction: ActionFunction[Request, AuthenticatedRequest] = new ActionFunction[Request, AuthenticatedRequest] {
+    override def invokeBlock[A](request: Request[A], block: AuthenticatedRequest[A] => Future[Result]): Future[Result] =
+      Future.failed(NotFoundError(request.path))
+    override protected def executionContext: ExecutionContext = ec
+  }
 
-    routerList
-      .reduceOption(_ orElse _)
-      .getOrElse(Router.empty)
-      .orElse(SimpleRouter(queryRoutes))
-      .withPrefix(prefix)
+  val authRoutes: Routes = {
+    case _ =>
+      actionBuilder.async { request =>
+        authSrv
+          .actionFunction(defaultAction)
+          .invokeBlock(request, (_: AuthenticatedRequest[AnyContent]) => Future.failed(NotFoundError(request.path)))
+
+      }
   }
 }
