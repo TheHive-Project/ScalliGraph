@@ -50,6 +50,8 @@ object HadoopStorageSrv {
   def loadConfiguration(conf: Configuration): HadoopConfig = {
     val hadoopConfig = new HadoopConfig()
     conf.entrySet.foreach {
+      case ("username", username) =>
+        System.setProperty("HADOOP_USER_NAME", username.unwrapped().toString)
       case (name, value) =>
         value.unwrapped() match {
           case s: String => hadoopConfig.set(name, s)
@@ -73,12 +75,13 @@ class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
     )
 
   override def loadBinary(id: String): InputStream =
-    fs.open(new HDPath(id)).getWrappedStream
+    fs.open(new HDPath(location, id)).getWrappedStream
 
   override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit] =
     Try {
       val os = fs.create(new HDPath(location, id), false)
       IOUtils.copyBytes(is, os, 4096)
+      os.close()
     }
 
   override def exists(id: String): Boolean = fs.exists(new HDPath(id))
