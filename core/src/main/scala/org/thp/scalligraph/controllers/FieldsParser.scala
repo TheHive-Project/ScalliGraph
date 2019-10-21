@@ -4,6 +4,7 @@ import java.util.Date
 
 import scala.language.experimental.macros
 import scala.util.Try
+import scala.xml.{Elem, XML}
 
 import play.api.libs.json.{JsObject, JsValue}
 
@@ -192,6 +193,9 @@ object FieldsParser extends FieldsParserLowerPrio {
   implicit val jsObject: FieldsParser[JsObject] = FieldsParser[JsObject]("jsObject") {
     case (_, FObject(f)) => Good(JsObject(f.map { case (k, v) => k -> v.toJson }))
   }
+  implicit val xml: FieldsParser[Elem] = FieldsParser[Elem]("xml")(unlift {
+    case (_, FString(s)) => Try(Good(XML.loadString(s))).toOption
+  })
   implicit def seq[A](implicit fp: FieldsParser[A]): FieldsParser[Seq[A]]       = fp.sequence
   implicit def set[A](implicit fp: FieldsParser[A]): FieldsParser[Set[A]]       = fp.set
   implicit def option[A](implicit fp: FieldsParser[A]): FieldsParser[Option[A]] = fp.optional

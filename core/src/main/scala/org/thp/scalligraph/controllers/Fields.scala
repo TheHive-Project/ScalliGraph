@@ -53,8 +53,7 @@ object Field {
         logger.warn(s"Request body has unrecognized format (text), it is ignored:\n$txt")
         FObject()
       case AnyContentAsXml(xml) =>
-        logger.warn(s"Request body has unrecognized format (xml), it is ignored:\n$xml")
-        FObject()
+        FObject("xml" -> FString(xml.toString()))
       case AnyContentAsJson(json: JsObject) =>
         Field(json).asInstanceOf[FObject]
       case AnyContentAsMultipartFormData(MultipartFormData(dataParts, files, badParts)) =>
