@@ -1,21 +1,19 @@
 package org.thp.scalligraph.controllers
 
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Try}
-
-import play.api.Logger
-import play.api.http.HttpErrorHandler
-import play.api.libs.json.Json
-import play.api.mvc._
-
 import gremlin.scala.Graph
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.auth.{AuthSrv, Permission}
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.record.Record
-import org.thp.scalligraph.{AttributeCheckingError, AuthorizationError, DiagnosticContext}
+import org.thp.scalligraph.{AttributeCheckingError, AuthenticationError, AuthorizationError, DiagnosticContext}
+import play.api.Logger
+import play.api.http.HttpErrorHandler
+import play.api.mvc._
 import shapeless.labelled.FieldType
 import shapeless.{::, labelled, HList, HNil, Witness}
+
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Try}
 
 /**
   * API entry point. This class create a controller action which parse request and check authentication
@@ -59,7 +57,7 @@ class EntryPoint @Inject()(
     val AuthenticationFailureActionFunction: ActionFunction[Request, AuthenticatedRequest] =
       new ActionFunction[Request, AuthenticatedRequest] {
         override def invokeBlock[A](request: Request[A], block: AuthenticatedRequest[A] => Future[Result]): Future[Result] =
-          Future.successful(Results.Unauthorized(Json.obj("type" -> "AuthenticationError", "message" -> "Authentication failure")))
+          Future.failed(AuthenticationError("Authentication failure"))
         override protected def executionContext: ExecutionContext = ec
       }
 
