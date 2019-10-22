@@ -1,30 +1,25 @@
 package org.thp.scalligraph.auth
 
-import com.google.inject.Provider
-import javax.inject.{Inject, Singleton}
-import org.thp.scalligraph.auth.GrantType.GrantType
-import org.thp.scalligraph.auth.ResponseType.ResponseType
-import org.thp.scalligraph.controllers.AuthenticatedRequest
-import org.thp.scalligraph.{AuthenticationError, BadConfigurationError}
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success, Try}
+
 import play.api.libs.json.JsObject
-import play.api.libs.ws.{WSClient, WSResponse}
+import play.api.libs.ws.WSClient
 import play.api.mvc._
 import play.api.{Configuration, Logger}
 
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Try
+import com.google.inject.Provider
+import javax.inject.{Inject, Singleton}
+import org.thp.scalligraph.controllers.AuthenticatedRequest
+import org.thp.scalligraph.{AuthenticationError, BadConfigurationError, BadRequestError}
 
 object GrantType extends Enumeration {
-  type GrantType = Value
-
-  val authorizationCode: GrantType = Value("authorization_code")
+  val authorizationCode: Value = Value("authorization_code")
   // Only this supported atm
 }
 
 object ResponseType extends Enumeration {
-  type ResponseType = Value
-
-  val code: ResponseType = Value("code")
+  val code: Value = Value("code")
   // Only this supported atm
 }
 
@@ -32,18 +27,19 @@ case class OAuth2Config(
     clientId: String,
     clientSecret: String,
     redirectUri: String,
-    responseType: ResponseType,
-    grantType: GrantType,
+    responseType: ResponseType.Value,
+    grantType: GrantType.Value,
     authorizationUrl: String,
     tokenUrl: String,
     userUrl: String,
     scope: Seq[String],
-    autoCreate: Boolean,
-    autoUpdate: Boolean
+    userIdField: String,
+    userOrganisationField: Option[String],
+    defaultOrganisation: Option[String]
 )
 
-class TokenizedRequest[A](val token: Option[String], request: Request[A])                extends WrappedRequest[A](request)
-class OAuthenticatedRequest[A](val user: Option[JsObject], request: TokenizedRequest[A]) extends WrappedRequest[A](request)
+class TokenizedRequest[A](val token: Option[String], request: Request[A])        extends WrappedRequest[A](request)
+class OAuthenticatedRequest[A](val user: JsObject, request: TokenizedRequest[A]) extends WrappedRequest[A](request)
 
 class OAuth2Srv(
     OAuth2Config: OAuth2Config,
@@ -57,7 +53,9 @@ class OAuth2Srv(
   lazy val logger                  = Logger(getClass)
   lazy val sessionAuthSrv: AuthSrv = sessionAuthProvider.get()
   val name: String                 = "oauth2"
-  val endpoint: String             = "ssoLogin"
+  val endpoint: String             = "/ssoLogin"
+
+  def isSSO(request: Request[_]): Boolean = request.path.endsWith(endpoint)
 
   /**
     * Main Auth action
@@ -66,7 +64,7 @@ class OAuth2Srv(
   override def actionFunction(nextFunction: ActionFunction[Request, AuthenticatedRequest]): ActionFunction[Request, AuthenticatedRequest] =
     new ActionFunction[Request, AuthenticatedRequest] {
       override def invokeBlock[A](request: Request[A], block: AuthenticatedRequest[A] => Future[Result]): Future[Result] =
-        if (request.uri.contains(endpoint)) {
+        if (isSSO(request)) {
           OAuth2Config.grantType match {
             case GrantType.authorizationCode =>
               if (!request.queryString.contains(ResponseType.code.toString)) {
@@ -75,7 +73,7 @@ class OAuth2Srv(
                 for {
                   tokenizedRequest <- authTokenFromCode(request)
                   oauth2Req        <- userFromToken(tokenizedRequest)
-                  authReq          <- authenticate(oauth2Req)
+                  authReq          <- Future.fromTry(authenticate(oauth2Req))
                 } yield sessionAuthSrv.setSessionUser(authReq.authContext)(Results.Ok)
               }
 
@@ -91,7 +89,7 @@ class OAuth2Srv(
     * and redirecting to OAuth2 server if necessary
     * @return
     */
-  private def authRedirect[A](input: Request[A]) = {
+  private def authRedirect[A](input: Request[A]): Future[Result] = {
     val queryStringParams = Map[String, Seq[String]](
       "scope"         -> Seq(OAuth2Config.scope.mkString(" ")),
       "response_type" -> Seq(ResponseType.code.toString),
@@ -108,17 +106,18 @@ class OAuth2Srv(
     * from OAuth2 code
     * @return
     */
-  private def authTokenFromCode[A](request: Request[A]) =
-    if (!request.uri.contains(endpoint)) {
+  private def authTokenFromCode[A](request: Request[A]): Future[TokenizedRequest[A]] =
+    if (!isSSO(request)) {
       Future.successful(new TokenizedRequest[A](None, request))
-    } else if (!request.queryString.contains(ResponseType.code.toString)) {
-      Future.failed(AuthenticationError(s"OAuth2 server code missing ${request.queryString.get("error")}"))
     } else {
-      val code = request.queryString(ResponseType.code.toString).headOption.getOrElse("")
-
-      logger.debug(s"Attempting to retrieve OAuth2 token from ${OAuth2Config.tokenUrl} with code $code")
-      getAuthTokenFromCode(code)
-        .map(t => new TokenizedRequest[A](Some(t), request))
+      request.queryString.get(ResponseType.code.toString) match {
+        case Some(code) =>
+          logger.debug(s"Attempting to retrieve OAuth2 token from ${OAuth2Config.tokenUrl} with code $code")
+          getAuthTokenFromCode(code.head)
+            .map(t => new TokenizedRequest[A](Some(t), request))
+        case None =>
+          Future.failed(AuthenticationError(s"OAuth2 server code missing ${request.queryString.get("error")}"))
+      }
     }
 
   /**
@@ -138,30 +137,21 @@ class OAuth2Srv(
           "client_id"     -> OAuth2Config.clientId
         )
       )
-      .recoverWith {
-        case error => Future.failed(AuthenticationError(s"OAuth2 token verification failure ${error.getMessage}"))
-      }
-      .flatMap {
-        case r: WSResponse if r.status == 200 => Future.successful((r.json \ "access_token").asOpt[String].getOrElse(""))
-        case _                                => Future.failed(AuthenticationError("OAuth2 unexpected response from server"))
+      .transform {
+        case Success(r) if r.status == 200 => Success((r.json \ "access_token").asOpt[String].getOrElse(""))
+        case Failure(error)                => Failure(AuthenticationError(s"OAuth2 token verification failure ${error.getMessage}"))
+        case Success(r)                    => Failure(AuthenticationError(s"OAuth2 unexpected response from server (${r.status} ${r.statusText})"))
       }
 
   /**
     * Enriched action with OAuth2 server user data
     * @return
     */
-  private def userFromToken[A](request: TokenizedRequest[A]) = {
+  private def userFromToken[A](request: TokenizedRequest[A]): Future[OAuthenticatedRequest[A]] =
     for {
       token    <- Future.fromTry(Try(request.token.get))
       userJson <- getUserDataFromToken(token)
-    } yield new OAuthenticatedRequest[A](Some(userJson), request)
-  } recoverWith {
-    case e =>
-      if (request.token.isDefined)
-        logger.error(s"OAuth2 failed to fetch user data ${e.getMessage} with token ${request.token} at ${OAuth2Config.userUrl}")
-
-      Future.successful(new OAuthenticatedRequest[A](None, request))
-  }
+    } yield new OAuthenticatedRequest[A](userJson, request)
 
   /**
     * Client query for user data with OAuth2 token
@@ -173,20 +163,47 @@ class OAuth2Srv(
       .url(OAuth2Config.userUrl)
       .addHttpHeaders("Authorization" -> s"Bearer $token")
       .get()
-      .recoverWith {
-        case error => Future.failed(AuthenticationError(s"OAuth2 user data fetch failure ${error.getMessage}"))
-      }
-      .flatMap {
-        case r: WSResponse if r.status == 200 => Future.successful(r.json.as[JsObject])
-
-        case _ => Future.failed(AuthenticationError("OAuth2 user data fetch unexpected response from server"))
+      .transform {
+        case Success(r) if r.status == 200 => Success(r.json.as[JsObject])
+        case Failure(error)                => Failure(AuthenticationError(s"OAuth2 user data fetch failure ${error.getMessage}"))
+        case Success(r)                    => Failure(AuthenticationError(s"OAuth2 unexpected response from server (${r.status} ${r.statusText})"))
       }
 
-  private def authenticate[A](request: OAuthenticatedRequest[A]) =
+  case class SimpleUser(id: String, name: String, organisation: Option[String]) extends User {
+    override def getUserName: String = name
+  }
+
+  object SimpleUser {
+
+    def apply(jsObject: JsObject, configuration: Configuration): SimpleUser = {
+      val idField           = configuration.getOptional[String]("auth.sso.attributes.userId").getOrElse("")
+      val nameField         = configuration.getOptional[String]("auth.sso.attributes.userName").getOrElse("")
+      val organisationField = configuration.getOptional[String]("auth.sso.attributes.organisation").getOrElse("")
+
+      SimpleUser(
+        (jsObject \ idField).asOpt[String].getOrElse(""),
+        (jsObject \ nameField).asOpt[String].getOrElse("noname"),
+        (jsObject \ organisationField).asOpt[String].orElse(configuration.getOptional[String]("auth.sso.defaultOrganisation"))
+      )
+    }
+  }
+
+  private def getUserId(jsonUser: JsObject): Try[String] =
+    (jsonUser \ OAuth2Config.userIdField).asOpt[String] match {
+      case Some(userId) => Success(userId)
+      case None         => Failure(BadRequestError(s"OAuth2 user data doesn't contain user ID field (${OAuth2Config.userIdField})"))
+    }
+
+  private def getUserOrganisation(jsonUser: JsObject): Option[String] =
+    OAuth2Config
+      .userOrganisationField
+      .flatMap(orgField => (jsonUser \ orgField).asOpt[String])
+      .orElse(OAuth2Config.defaultOrganisation)
+
+  private def authenticate[A](request: OAuthenticatedRequest[A]): Try[AuthenticatedRequest[A]] =
     for {
-      jsonUser <- Future.fromTry(Try(request.user.get))
-      user = SimpleUser.apply(jsonUser, configuration)
-      authContext <- Future.fromTry(userSrv.getAuthContext(request, user.id, user.organisation))
+      userId      <- getUserId(request.user)
+      authContext <- userSrv.getAuthContext(request, userId, getUserOrganisation(request.user))
     } yield new AuthenticatedRequest[A](authContext, request)
 
   case class SimpleUser(id: String, name: String, organisation: Option[String]) extends User {
@@ -229,10 +246,24 @@ class OAuth2Provider @Inject()(
       userUrl          <- configuration.getOrFail[String]("userUrl")
       tokenUrl         <- configuration.getOrFail[String]("tokenUrl")
       scope            <- configuration.getOrFail[Seq[String]]("scope")
-      autoCreate = config.getOptional[Boolean]("auth.sso.autocreate").getOrElse(false)
-      autoUpdate = config.getOptional[Boolean]("auth.sso.autoupdate").getOrElse(false)
+      userIdField      <- configuration.getOrFail[String]("userIdField")
+      userOrganisationField = configuration.getOptional[String]("userOrganisation")
+      defaultOrganisation   = configuration.getOptional[String]("defaultOrganisation")
     } yield new OAuth2Srv(
-      OAuth2Config(clientId, clientSecret, redirectUri, responseType, grantType, authorizationUrl, tokenUrl, userUrl, scope, autoCreate, autoUpdate),
+      OAuth2Config(
+        clientId,
+        clientSecret,
+        redirectUri,
+        responseType,
+        grantType,
+        authorizationUrl,
+        tokenUrl,
+        userUrl,
+        scope,
+        userIdField,
+        userOrganisationField,
+        defaultOrganisation
+      ),
       userSrv,
       WSClient,
       config,
