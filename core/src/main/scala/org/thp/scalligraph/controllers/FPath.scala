@@ -68,9 +68,9 @@ case class FPathElemInSeq(head: String, index: Int, tail: FPath) extends FPath {
 }
 
 object FPath {
-  private val elemInSeqRegex = "([^.\\d]+)\\[(\\d+)\\]".r
-  private val seqRegex       = "([^.\\d]+)\\[\\]".r
-  private val elemRegex      = "([^.\\d]+)".r
+  private val elemInSeqRegex = "(\\w[^.\\[\\]]*)\\[(\\d+)\\]".r
+  private val seqRegex       = "(\\w[^.\\[\\]]*)\\[\\]".r
+  private val elemRegex      = "(\\w[^.\\[\\]]*)".r
   val empty: FPath           = FPathEmpty
 
   def apply(path: String): FPath =
