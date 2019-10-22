@@ -1,12 +1,11 @@
 package org.thp.scalligraph.auth
 
-import scala.util.Try
-
+import org.thp.scalligraph.utils.Instance
 import play.api.libs.functional.syntax._
 import play.api.libs.json.{JsPath, Json, Reads, Writes}
 import play.api.mvc.RequestHeader
 
-import org.thp.scalligraph.utils.Instance
+import scala.util.Try
 
 trait PermissionTag
 
