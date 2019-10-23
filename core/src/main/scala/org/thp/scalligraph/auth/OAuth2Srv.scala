@@ -57,6 +57,8 @@ class OAuth2Srv(
   val name: String                 = "oauth2"
   val endpoint: String             = "/ssoLogin"
 
+  override def capabilities: Set[AuthCapability.Value] = super.capabilities ++ Set(AuthCapability.sso)
+
   /**
     * Main Auth action
     * @return
@@ -85,7 +87,9 @@ class OAuth2Srv(
     }
 
   def isSSO(request: Request[_]): Boolean = request.path.endsWith(endpoint)
-  def isSecuredAuthCode(request: Request[_]): Boolean = request.queryString.contains(ResponseType.code.toString) && request.queryString.contains("state")
+
+  def isSecuredAuthCode(request: Request[_]): Boolean =
+    request.queryString.contains(ResponseType.code.toString) && request.queryString.contains("state")
 
   /**
     * Filter checking whether we initiate the OAuth2 process
