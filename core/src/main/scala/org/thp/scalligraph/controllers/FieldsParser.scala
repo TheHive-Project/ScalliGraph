@@ -176,7 +176,7 @@ object FieldsParser extends FieldsParserLowerPrio {
       case _                 => None
     })
   implicit val date: FieldsParser[Date] = FieldsParser[Date]("date")(unlift {
-    case (_, FNumber(n))   => Some(Good(new Date(n)))
+    case (_, FNumber(n))   => Some(Good(new Date(n.toLong)))
     case (_, FAny(Seq(s))) => Try(Good(new Date(s.toLong))).toOption
     case _                 => None
   })

@@ -28,7 +28,7 @@ object Field {
 
   def apply(json: JsValue): Field = json match {
     case JsString(s)  => FString(s)
-    case JsNumber(n)  => FNumber(n.toLong)
+    case JsNumber(n)  => FNumber(n.toDouble)
     case JsBoolean(b) => FBoolean(b)
     case JsObject(o)  => FObject(o.map { case (k, v) => k -> Field(v) }.toMap)
     case JsArray(a)   => FSeq(a.map(Field.apply).toList)
@@ -102,7 +102,7 @@ object FString {
   }
 }
 
-case class FNumber(value: Long) extends Field {
+case class FNumber(value: Double) extends Field {
   override def toJson: JsValue = JsNumber(value)
 }
 
