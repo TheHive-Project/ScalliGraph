@@ -84,7 +84,8 @@ lazy val core = (project in file("core"))
       specs       % Test,
       playLogback % Test,
       scalaCompiler(scalaVersion.value),
-      scalaReflect(scalaVersion.value)
+      scalaReflect(scalaVersion.value),
+      ws
     )
   )
 
