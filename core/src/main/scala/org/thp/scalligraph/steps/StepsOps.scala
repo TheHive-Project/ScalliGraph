@@ -280,16 +280,6 @@ object StepsOps {
 
     def orFail(ex: Exception): Try[D] = headOption().fold[Try[D]](Failure(ex))(Success.apply)
 
-    def or(f: (Traversal[D, G] => BaseTraversal)*): Traversal[D, G] = {
-      val filters = f.map(r => (g: GremlinScala[G]) => r(newInstance0(g)).raw)
-      newInstance0(raw.or(filters: _*))
-    }
-
-    def and(f: (Traversal[D, G] => BaseTraversal)*): Traversal[D, G] = {
-      val filters = f.map(r => (g: GremlinScala[G]) => r(newInstance0(g)).raw)
-      newInstance0(raw.and(filters: _*))
-    }
-
     def sum[N <: Number: ClassTag]()(implicit toNumber: G => N): Traversal[N, N] =
       new Traversal(raw.sum[N]()(toNumber), UniMapping.identity)
 
