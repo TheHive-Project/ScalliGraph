@@ -55,7 +55,7 @@ object UniMapping extends MappingLowerPrio {
   implicit def option[D, G](implicit subMapping: SingleMapping[D, G]): OptionMapping[D, G] = subMapping.optional
   implicit def seq[D, G](implicit subMapping: SingleMapping[D, G]): ListMapping[D, G]      = subMapping.sequence
   implicit def set[D, G](implicit subMapping: SingleMapping[D, G]): SetMapping[D, G]       = subMapping.set
-  def enum[E <: Enumeration](e: E): SingleMapping[E#Value, String]                         = SingleMapping[E#Value, String](e => Some(e.toString), e.withName)
+  def enum[E <: Enumeration](e: E): SingleMapping[E#Value, String]                         = SingleMapping[E#Value, String](e => Some(e.toString), e.withName(_))
 
   val jlong: SingleMapping[Long, JLong]          = SingleMapping[Long, JLong]() //, toGraphOptFn = l => Some(l), toDomainFn = _.longValue())
   val jint: SingleMapping[Int, JInt]             = SingleMapping[Int, JInt]()

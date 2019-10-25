@@ -44,7 +44,6 @@ class Retry(maxTries: Int, exceptions: Seq[Class[_]]) {
   def delayed(delay: FiniteDuration)(implicit scheduler: Scheduler, ec: ExecutionContext) =
     new DelayRetry(maxTries, exceptions, scheduler, _ => delay, ec)
 
-  @scala.annotation.tailrec
   private def run[T](currentTry: Int, f: => T): T =
     try f
     catch {

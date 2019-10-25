@@ -1,7 +1,7 @@
 package org.thp.scalligraph
 
 import scala.annotation.{compileTimeOnly, StaticAnnotation}
-import scala.language.experimental.macros
+import scala.language.experimental.{macros => enableMacro}
 
 import org.thp.scalligraph.macros.AnnotationMacro
 
