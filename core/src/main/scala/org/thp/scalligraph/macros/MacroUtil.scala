@@ -93,6 +93,7 @@ trait MacroUtil extends MacroLogger {
 
   def traverseEntity[E: WeakTypeTag, A](init: A)(f: (Tree, Symbol, A) => (List[(Tree, Symbol)], A)): A = {
 
+    @scala.annotation.tailrec
     def unfold(pathSymbolQueue: List[(Tree, Symbol)], currentAcc: A)(f: (Tree, Symbol, A) => (List[(Tree, Symbol)], A)): A =
       if (pathSymbolQueue.isEmpty) currentAcc
       else {

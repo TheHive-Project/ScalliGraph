@@ -185,7 +185,7 @@ object FieldsParser extends FieldsParserLowerPrio {
     case (_, FAny(Seq(s))) => Try(Good(s.toFloat)).toOption
     case _                 => None
   })
-  implicit val double: FieldsParser[Double] = FieldsParser[Double]("float")(unlift {
+  implicit val double: FieldsParser[Double] = FieldsParser[Double]("double")(unlift {
     case (_, FNumber(n))   => Some(Good(n.toDouble))
     case (_, FAny(Seq(s))) => Try(Good(s.toDouble)).toOption
     case _                 => None

@@ -14,7 +14,7 @@ import play.api.libs.json.{JsNumber, JsObject, Json, Writes}
 import gremlin.scala.{__, By, StepLabel, Vertex}
 import org.scalactic.Accumulation.withGood
 import org.scalactic.{Bad, Good, One, Or}
-import org.thp.scalligraph.InvalidFormatAttributeError
+import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.UniMapping
@@ -161,9 +161,10 @@ abstract class Aggregation[TD, TG, R](val name: String) {
 
 abstract class AggFunction[TD, TG, R](name: String) extends Aggregation[TD, TG, R](name) {
   implicit val numberWrites: Writes[Number] = Writes[Number] {
-    case i: Integer => JsNumber(i.toInt)
+    case i: JInt    => JsNumber(i.toInt)
     case l: JLong   => JsNumber(l.toLong)
     case f: JFloat  => JsNumber(f.toDouble)
+    case d: JDouble => JsNumber(d.doubleValue())
     case o: Number  => JsNumber(o.doubleValue())
   }
 }
@@ -183,7 +184,7 @@ case class AggSum(fieldName: String) extends AggFunction[Number, Number, Number]
       .orElse(property.cast(UniMapping.long).map(_.sum[Number]()))
       .orElse(property.cast(UniMapping.float).map(_.sum[Number]()))
       .orElse(property.cast(UniMapping.double).map(_.sum[Number]()))
-      .getOrElse(???)
+      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Sum aggregation is not applicable"))
   }
   override def output(t: Number): Output[Number] = Output(t) // TODO add aggregation name
 
@@ -204,7 +205,7 @@ case class AggAvg(aggName: Option[String], fieldName: String) extends AggFunctio
       .orElse(property.cast(UniMapping.long).map(_.mean))
       .orElse(property.cast(UniMapping.float).map(_.mean))
       .orElse(property.cast(UniMapping.double).map(_.mean))
-      .getOrElse(???)
+      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Avg aggregation is not applicable"))
   }
 
   override def output(t: Double): Output[Double] = Output(t) // TODO add aggregation name
@@ -225,7 +226,7 @@ case class AggMin(aggName: Option[String], fieldName: String) extends AggFunctio
       .orElse(property.cast(UniMapping.long).flatMap(_.min[JLong]().cast(UniMapping.jlong)))
       .orElse(property.cast(UniMapping.float).flatMap(_.min[JFloat]().cast(UniMapping.jfloat)))
       .orElse(property.cast(UniMapping.double).flatMap(_.min[JDouble]().cast(UniMapping.jdouble)))
-      .getOrElse(???)
+      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Min aggregation is not applicable"))
       .asInstanceOf[Traversal[Number, Number]]
   }
   override def output(t: Number): Output[Number] = Output(t)(Writes(v => Json.obj(name -> v)))
@@ -246,7 +247,7 @@ case class AggMax(fieldName: String) extends AggFunction[Number, Number, Number]
       .orElse(property.cast(UniMapping.long).flatMap(_.max[JLong]().cast(UniMapping.jlong)))
       .orElse(property.cast(UniMapping.float).flatMap(_.max[JFloat]().cast(UniMapping.jfloat)))
       .orElse(property.cast(UniMapping.double).flatMap(_.max[JDouble]().cast(UniMapping.jdouble)))
-      .getOrElse(???)
+      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Max aggregation is not applicable"))
       .asInstanceOf[Traversal[Number, Number]]
   }
   override def output(t: Number): Output[Number] = Output(t)(Writes(v => Json.obj(name -> v)))
@@ -289,7 +290,7 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs:
                 a.apply(
                     publicProperties,
                     stepType,
-                    fromStep.newInstance(__[JMap[Any, Any]].selectValues.unfold()).asInstanceOf[BaseVertexSteps],
+                    fromStep.newInstance(__[JMap[Any, Any]].selectValues.unfold()),
                     authContext
                   )
                   .raw
@@ -328,7 +329,7 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs:
       .toMap
 
     val native: Map[Any, Map[String, Any]] = subMap.map { case (k, v) => k -> v.toOutput }
-    val json: JsObject                     = JsObject(subMap.map { case (k, v) => k.toString -> v.toJson }.toMap)
+    val json: JsObject                     = JsObject(subMap.map { case (k, v) => k.toString -> v.toJson })
     //Json.obj(name -> JsObject(subMap.map { case (k, v) ⇒ k.toString -> v.toJson }))
     Output(native, json)
   }
@@ -387,7 +388,7 @@ case class TimeAggregation(aggName: Option[String], fieldName: String, interval:
                   a.apply(
                       publicProperties,
                       stepType,
-                      fromStep.newInstance(__[JMap[Long, Any]].selectValues.unfold()).asInstanceOf[BaseVertexSteps],
+                      fromStep.newInstance(__[JMap[Long, Any]].selectValues.unfold()),
                       authContext
                     )
                     .raw
@@ -427,7 +428,7 @@ case class TimeAggregation(aggName: Option[String], fieldName: String, interval:
       .toMap
 
     val native: Map[Any, Map[String, Any]] = subMap.map { case (k, v) => k -> v.toOutput }
-    val json: JsObject                     = JsObject(subMap.map { case (k, v) => k.getTime.toString -> Json.obj(fieldName -> v.toJson) }.toMap)
+    val json: JsObject                     = JsObject(subMap.map { case (k, v) => k.getTime.toString -> Json.obj(fieldName -> v.toJson) })
     Output(native, json)
   }
 

@@ -12,7 +12,7 @@ import org.apache.commons.configuration.{Configuration => ApacheConfig}
 
 class Config(config: PlayConfig) extends ApacheConfig {
   override def subset(prefix: String): ApacheConfig                               = new Config(config.getOptional[PlayConfig](prefix).getOrElse(PlayConfig.empty))
-  override def isEmpty: Boolean                                                   = ???
+  override def isEmpty: Boolean                                                   = config.underlying.isEmpty
   override def containsKey(key: String): Boolean                                  = config.keys.contains(key)
   override def addProperty(key: String, value: scala.Any): Unit                   = ???
   override def setProperty(key: String, value: scala.Any): Unit                   = ???

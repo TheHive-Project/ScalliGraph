@@ -123,6 +123,7 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
       var state = State(id)
       var index = 0
 
+      @scala.annotation.tailrec
       override def read(): Int =
         state match {
           case Some(State(_, b)) if b.length > index =>

@@ -42,13 +42,12 @@ object Field {
         .collect {
           case (k, v) if k.nonEmpty => k -> FAny(v)
         }
-        .toMap
     )
 
   def apply(body: AnyContent): FObject =
     body match {
       case AnyContentAsFormUrlEncoded(data) =>
-        FObject(data.map { case (k, v) => k -> FAny(v) }.toMap)
+        FObject(data.map { case (k, v) => k -> FAny(v) })
       case AnyContentAsText(txt) =>
         logger.warn(s"Request body has unrecognized format (text), it is ignored:\n$txt")
         FObject()
