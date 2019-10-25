@@ -2,7 +2,7 @@ package org.thp.scalligraph.auth
 
 import org.thp.scalligraph.utils.Instance
 import play.api.libs.functional.syntax._
-import play.api.libs.json.{JsPath, Json, Reads, Writes}
+import play.api.libs.json.{JsObject, JsPath, Json, Reads, Writes}
 import play.api.mvc.RequestHeader
 
 import scala.util.Try
@@ -55,6 +55,7 @@ object AuthContext {
 trait UserSrv {
   def getAuthContext(request: RequestHeader, userId: String, organisationName: Option[String]): Try[AuthContext]
   def getSystemAuthContext: AuthContext
+  def createUser(userId: String, userInfo: JsObject): Try[User]
 }
 
 trait User {

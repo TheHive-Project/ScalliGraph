@@ -5,7 +5,7 @@ import java.util.UUID
 import com.google.inject.Provider
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.controllers.AuthenticatedRequest
-import org.thp.scalligraph.{AuthenticationError, BadConfigurationError, BadRequestError}
+import org.thp.scalligraph.{AuthenticationError, BadConfigurationError, BadRequestError, NotFoundError}
 import play.api.libs.json.JsObject
 import play.api.libs.ws.WSClient
 import play.api.mvc._
@@ -75,7 +75,11 @@ class OAuth2Srv(
                 for {
                   tokenizedRequest <- authTokenFromCode(request)
                   oauth2Req        <- userFromToken(tokenizedRequest)
-                  authReq          <- Future.fromTry(authenticate(oauth2Req))
+                  authReq <- Future
+                    .fromTry(authenticate(oauth2Req))
+                    .recoverWith {
+                      case _: NotFoundError => Future.fromTry(createUser(oauth2Req))
+                    }
                 } yield sessionAuthSrv.setSessionUser(authReq.authContext)(Results.Ok)
               }
 
@@ -198,36 +202,24 @@ class OAuth2Srv(
       authContext <- userSrv.getAuthContext(request, userId, getUserOrganisation(request.user))
     } yield new AuthenticatedRequest[A](authContext, request)
 
-  private def getUserId(jsonUser: JsObject): Try[String] =
-    (jsonUser \ OAuth2Config.userIdField).asOpt[String] match {
-      case Some(userId) => Success(userId)
-      case None         => Failure(BadRequestError(s"OAuth2 user data doesn't contain user ID field (${OAuth2Config.userIdField})"))
-    }
-
   private def getUserOrganisation(jsonUser: JsObject): Option[String] =
     OAuth2Config
       .userOrganisationField
       .flatMap(orgField => (jsonUser \ orgField).asOpt[String])
       .orElse(OAuth2Config.defaultOrganisation)
 
-  case class SimpleUser(id: String, name: String, organisation: Option[String]) extends User {
-    override def getUserName: String = name
-  }
-
-  object SimpleUser {
-
-    def apply(jsObject: JsObject, configuration: Configuration): SimpleUser = {
-      val idField           = configuration.getOptional[String]("auth.sso.attributes.userId").getOrElse("")
-      val nameField         = configuration.getOptional[String]("auth.sso.attributes.userName").getOrElse("")
-      val organisationField = configuration.getOptional[String]("auth.sso.attributes.organisation").getOrElse("")
-
-      SimpleUser(
-        (jsObject \ idField).asOpt[String].getOrElse(""),
-        (jsObject \ nameField).asOpt[String].getOrElse("noname"),
-        (jsObject \ organisationField).asOpt[String].orElse(configuration.getOptional[String]("auth.sso.defaultOrganisation"))
-      )
+  private def getUserId(jsonUser: JsObject): Try[String] =
+    (jsonUser \ OAuth2Config.userIdField).asOpt[String] match {
+      case Some(userId) => Success(userId)
+      case None         => Failure(BadRequestError(s"OAuth2 user data doesn't contain user ID field (${OAuth2Config.userIdField})"))
     }
-  }
+
+  private def createUser[A](request: OAuthenticatedRequest[A]): Try[AuthenticatedRequest[A]] =
+    for {
+      userId      <- getUserId(request.user)
+      createdUser <- userSrv.createUser(userId, request.user)
+      authContext <- userSrv.getAuthContext(request, createdUser.id, None)
+    } yield new AuthenticatedRequest[A](authContext, request)
 }
 
 @Singleton
