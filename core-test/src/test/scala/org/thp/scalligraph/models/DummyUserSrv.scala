@@ -2,9 +2,10 @@ package org.thp.scalligraph.models
 
 import scala.util.{Success, Try}
 
+import play.api.libs.json.JsObject
 import play.api.mvc.RequestHeader
 
-import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl, Permission, UserSrv}
+import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl, Permission, User, UserSrv}
 
 case class DummyUserSrv(
     userId: String = "admin",
@@ -18,4 +19,6 @@ case class DummyUserSrv(
   override def getAuthContext(request: RequestHeader, userId: String, organisationName: Option[String]): Try[AuthContext] = Success(authContext)
 
   override def getSystemAuthContext: AuthContext = authContext
+
+  override def createUser(userId: String, userInfo: JsObject): Try[User] = ???
 }
