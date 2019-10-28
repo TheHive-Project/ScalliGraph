@@ -4,6 +4,7 @@ import java.io.{ByteArrayInputStream, InputStream}
 import java.net.URI
 import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
 import java.util.Base64
+import org.apache.hadoop.fs.{FileAlreadyExistsException => HadoopFileAlreadyExistsException}
 
 import scala.util.{Success, Try}
 
@@ -82,6 +83,8 @@ class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
       val os = fs.create(new HDPath(location, id), false)
       IOUtils.copyBytes(is, os, 4096)
       os.close()
+    }.recover {
+      case _: HadoopFileAlreadyExistsException => ()
     }
 
   override def exists(id: String): Boolean = fs.exists(new HDPath(id))
