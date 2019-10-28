@@ -158,9 +158,9 @@ object InputFilter {
   def like(field: String, value: String): PredicateFilter = {
     val s = value.headOption.contains('*')
     val e = value.lastOption.contains('*')
-    if (s && e) PredicateFilter(field, TextP.containing(value))
-    else if (s) PredicateFilter(field, TextP.endingWith(value))
-    else if (e) PredicateFilter(field, TextP.startingWith(value))
+    if (s && e) PredicateFilter(field, TextP.containing(value.tail.dropRight(1)))
+    else if (s) PredicateFilter(field, TextP.endingWith(value.tail))
+    else if (e) PredicateFilter(field, TextP.startingWith(value.dropRight(1)))
     else PredicateFilter(field, P.eq(value))
   }
 
