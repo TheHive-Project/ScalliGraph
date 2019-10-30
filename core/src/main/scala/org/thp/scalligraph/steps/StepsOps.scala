@@ -146,6 +146,8 @@ object StepsOps {
 
     def filter(f: T => BaseTraversal): T = newInstance0(raw.filter(g => f(newInstance0(g)).raw))
 
+    def filterNot(f: T => BaseTraversal): T = newInstance0(raw.filterNot(g => f(newInstance0(g)).raw))
+
     def coalesce[A: ClassTag](f: (T => Traversal[_, A])*): Traversal[A, A] = {
       val ff = f.map(t => (g: GremlinScala[traversal.EndGraph]) => t(newInstance0(g)).raw)
       new Traversal[A, A](raw.coalesce(ff: _*), UniMapping.identity)
