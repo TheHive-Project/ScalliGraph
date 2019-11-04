@@ -111,11 +111,11 @@ class EntryPoint @Inject()(
       */
     def authPermittedTransaction(
         db: Database,
-        permissions: Set[Permission]
+        permissions: Permission*
     )(block: AuthenticatedRequest[Record[V]] => Graph => Try[Result]): Action[AnyContent] =
       auth(request => {
-        if (request.permissions.intersect(permissions) != permissions) Failure(AuthorizationError("Permission missing"))
-        else db.tryTransaction(graph => block(request)(graph))
+        if (permissions.forall(request.permissions.contains)) db.tryTransaction(graph => block(request)(graph))
+        else Failure(AuthorizationError(s"Your are not authorized to $name, you haven't the permission ${permissions.mkString(",")}"))
       })
 
     def authRoTransaction(
