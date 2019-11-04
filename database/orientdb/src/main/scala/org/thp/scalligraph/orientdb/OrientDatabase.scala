@@ -130,6 +130,7 @@ class OrientDatabase(
           .setMandatory(false)
           .setNotNull(false)
           .setReadonly(sm.isReadonly)
+      case (field, mapping) => throw InternalError(s"Unknown mapping for $field ($mapping)")
     }
     clazz.createProperty("_id", OType.STRING).setMandatory(strict).setNotNull(true).setReadonly(true)
     clazz.createProperty("_createdBy", OType.STRING).setMandatory(strict).setNotNull(true).setReadonly(true)
@@ -187,7 +188,6 @@ class OrientDatabase(
       .value[JList[G]](key)
       .asScala
       .map(mapping.toDomain)
-      .toSeq
 
   override def getSetProperty[D, G](element: Element, key: String, mapping: SetMapping[D, G]): Set[D] =
     element
@@ -208,7 +208,7 @@ class OrientDatabase(
 
 //  override def loadBinary(id: String)(implicit graph: Graph): InputStream =
 //    new InputStream {
-//      val vertex = graph.V().has(Key("_id") of id).head()
+//      val vertex = graph.V().has("_id" of id).head()
 //      private var recordIds                   = vertex.value[JList[OIdentifiable]]("binary").asScala.toList
 //      private var buffer: Option[Array[Byte]] = _
 //      private var index                       = 0

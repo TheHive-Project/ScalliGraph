@@ -231,12 +231,12 @@ object StepsOps {
       Traversal[B](GremlinScala(jTraversal))
     }
 
-    def has[A](key: Key[A], predicate: P[A])(implicit ev: traversal.EndGraph <:< Element): T = newInstance0(raw.has(key, predicate))
-    def has[A](key: Key[A])(implicit ev: traversal.EndGraph <:< Element): T                  = newInstance0(raw.has(key))
-
-    def hasNot[A](key: Key[A], predicate: P[A])(implicit ev: traversal.EndGraph <:< Element): T = newInstance0(raw.hasNot(key, predicate))
-
-    def hasNot[A](key: Key[A]): T = newInstance0(raw.hasNot(key))
+    def has[A](key: String, value: A)(implicit ev: traversal.EndGraph <:< Element): T           = newInstance0(raw.has(Key[A](key), P.eq(value)))
+    def has[A](key: String, predicate: P[A])(implicit ev: traversal.EndGraph <:< Element): T    = newInstance0(raw.has(Key[A](key), predicate))
+    def has[A](key: String)(implicit ev: traversal.EndGraph <:< Element): T                     = newInstance0(raw.has(Key[A](key)))
+    def hasNot[A](key: String, predicate: P[A])(implicit ev: traversal.EndGraph <:< Element): T = newInstance0(raw.hasNot(Key[A](key), predicate))
+    def hasNot[A](key: String, value: A)(implicit ev: traversal.EndGraph <:< Element): T        = newInstance0(raw.hasNot(Key[A](key), P.eq(value)))
+    def hasNot[A](key: String): T                                                               = newInstance0(raw.hasNot(Key[A](key)))
 
     def hasId(ids: String*)(implicit ev: traversal.EndGraph <:< Element): T = newInstance0(raw.hasId(ids: _*))
   }

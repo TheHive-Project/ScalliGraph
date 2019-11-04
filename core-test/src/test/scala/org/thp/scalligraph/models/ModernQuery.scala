@@ -4,7 +4,7 @@ import scala.language.implicitConversions
 
 import play.api.libs.json.{Json, OWrites}
 
-import gremlin.scala.{Key, P}
+import gremlin.scala.P
 import org.thp.scalligraph.controllers.{FieldsParser, Output}
 import org.thp.scalligraph.query._
 import org.thp.scalligraph.steps.StepsOps._
@@ -68,7 +68,7 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
     Query.initWithParam[SeniorAgeThreshold, PersonSteps](
       "seniorPeople",
       FieldsParser[SeniorAgeThreshold], { (seniorAgeThreshold, graph, _) =>
-        personSrv.initSteps(graph).has(Key[Int]("age"), P.gte(seniorAgeThreshold.age))
+        personSrv.initSteps(graph).has("age", P.gte(seniorAgeThreshold.age))
       }
     ),
     Query[PersonSteps, SoftwareSteps]("created", (personSteps, _) => personSteps.created),

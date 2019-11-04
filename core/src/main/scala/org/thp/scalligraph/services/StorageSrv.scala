@@ -4,7 +4,6 @@ import java.io.{ByteArrayInputStream, InputStream}
 import java.net.URI
 import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
 import java.util.Base64
-import org.apache.hadoop.fs.{FileAlreadyExistsException => HadoopFileAlreadyExistsException}
 
 import scala.util.{Success, Try}
 
@@ -13,7 +12,7 @@ import play.api.{Configuration, Logger}
 import gremlin.scala._
 import javax.inject.{Inject, Singleton}
 import org.apache.hadoop.conf.{Configuration => HadoopConfig}
-import org.apache.hadoop.fs.{FileSystem => HDFileSystem, Path => HDPath}
+import org.apache.hadoop.fs.{FileAlreadyExistsException => HadoopFileAlreadyExistsException, FileSystem => HDFileSystem, Path => HDPath}
 import org.apache.hadoop.io.IOUtils
 import org.thp.scalligraph.models.{Database, UniMapping}
 
@@ -115,6 +114,7 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
     def apply(id: String): Option[State] = db.roTransaction { implicit graph =>
       graph
         .V()
+        .hasLabel("binary")
         .has(Key("attachmentId") of id)
         .headOption()
         .map(vertex => State(vertex.id(), b64decoder.decode(vertex.value[String]("binary"))))

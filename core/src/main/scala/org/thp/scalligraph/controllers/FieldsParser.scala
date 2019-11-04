@@ -195,6 +195,7 @@ object FieldsParser extends FieldsParserLowerPrio {
   }
   implicit val xml: FieldsParser[Elem] = FieldsParser[Elem]("xml")(unlift {
     case (_, FString(s)) => Try(Good(XML.loadString(s))).toOption
+    case _               => None
   })
   implicit def seq[A](implicit fp: FieldsParser[A]): FieldsParser[Seq[A]]       = fp.sequence
   implicit def set[A](implicit fp: FieldsParser[A]): FieldsParser[Set[A]]       = fp.set
