@@ -10,7 +10,7 @@ import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl, Permission, User,
 case class DummyUserSrv(
     userId: String = "admin",
     userName: String = "default admin user",
-    organisation: String = "default",
+    organisation: String = "admin",
     permissions: Set[Permission] = Set.empty,
     requestId: String = "testRequest"
 ) extends UserSrv { userSrv =>
