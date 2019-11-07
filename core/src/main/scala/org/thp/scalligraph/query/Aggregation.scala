@@ -373,7 +373,7 @@ case class TimeAggregation(aggName: Option[String], fieldName: String, interval:
   ): Traversal[JList[JCollection[Any]], JList[JCollection[Any]]] = {
     val elementLabel = StepLabel[Vertex]()
     val groupedVertices = PublicProperty
-      .getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
+      .getPropertyTraversal(publicProperties, stepType, fromStep.as(elementLabel), fieldName, authContext)
       .map(date => dateToKey(date.asInstanceOf[Date]))
       .group(By[Long](), By(__.select(elementLabel).fold()))
       .unfold[JMap.Entry[Long, JCollection[Any]]](null) // Map.Entry[K, List[V]]
