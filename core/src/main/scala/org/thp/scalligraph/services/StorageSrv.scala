@@ -1,14 +1,12 @@
 package org.thp.scalligraph.services
 
-import java.io.{ByteArrayInputStream, InputStream}
+import java.io.{ByteArrayInputStream, InputStream, SequenceInputStream}
 import java.net.URI
 import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
 import java.util.Base64
 
 import scala.util.{Success, Try}
-
 import play.api.{Configuration, Logger}
-
 import gremlin.scala._
 import javax.inject.{Inject, Singleton}
 import org.apache.hadoop.conf.{Configuration => HadoopConfig}
@@ -21,6 +19,14 @@ trait StorageSrv {
   def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit]
   def saveBinary(id: String, data: Array[Byte])(implicit graph: Graph): Try[Unit] = saveBinary(id, new ByteArrayInputStream(data))
   def exists(id: String): Boolean
+}
+
+trait StreamUtils {
+  implicit def toRichInputStream(str: InputStream): RichInputStream = new RichInputStream(str)
+
+  class RichInputStream(str: InputStream) {
+    def ++(str2: InputStream): InputStream = new SequenceInputStream(str, str2)
+  }
 }
 
 @Singleton
