@@ -1,3 +1,5 @@
+import sbt._
+
 object Dependencies {
   val janusVersion = "0.4.0"
   val akkaVersion  = "2.5.23" // https://github.com/playframework/playframework/pull/9444
