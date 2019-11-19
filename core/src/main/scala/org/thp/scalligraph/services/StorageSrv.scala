@@ -92,7 +92,7 @@ class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
       case _: HadoopFileAlreadyExistsException => ()
     }
 
-  override def exists(id: String): Boolean = fs.exists(new HDPath(id))
+  override def exists(id: String): Boolean = fs.exists(new HDPath(location, id))
 }
 
 @Singleton
