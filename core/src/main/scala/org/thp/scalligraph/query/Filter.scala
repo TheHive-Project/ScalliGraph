@@ -165,13 +165,11 @@ object InputFilter {
   }
 
   def fieldsParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[InputFilter] = {
-    val props = properties.filter(_.stepType =:= tpe)
-    def propParser(name: String): FieldsParser[Any] =
-      props
-        .find(_.propertyName == name)
-        .fold(FieldsParser.unknownAttribute[Any](name)) { prop =>
-          prop.fieldsParser.map(prop.fieldsParser.formatName)(v => prop.mapping.asInstanceOf[Mapping[_, Any, Any]].toGraph(v))
-        }
+    def propParser(name: String): FieldsParser[Any] = {
+      val prop = PublicProperty.getProperty(properties, tpe, name)
+      prop.fieldsParser.map(prop.fieldsParser.formatName)(v => prop.mapping.asInstanceOf[Mapping[_, Any, Any]].toGraph(v))
+    }
+
     FieldsParser("query") {
       case (path, FObjOne("_and", FSeq(fields))) =>
         fields.zipWithIndex.validatedBy { case (field, index) => fieldsParser(tpe, properties)((path :/ "_and").toSeq(index), field) }.map(and)
