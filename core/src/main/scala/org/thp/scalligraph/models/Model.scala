@@ -33,12 +33,12 @@ trait HasEdgeModel[E <: Product, FROM <: Product, TO <: Product] extends HasMode
 }
 
 trait Entity extends DomainRoot {
-  val _id: String
-  val _model: Model
-  val _createdBy: String
-  val _updatedBy: Option[String]
-  val _createdAt: Date
-  val _updatedAt: Option[Date]
+  def _id: String
+  def _model: Model
+  def _createdBy: String
+  def _updatedBy: Option[String]
+  def _createdAt: Date
+  def _updatedAt: Option[Date]
 }
 
 object Model {
