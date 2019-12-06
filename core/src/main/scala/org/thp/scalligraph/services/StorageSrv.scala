@@ -6,7 +6,14 @@ import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
 import java.util.Base64
 
 import scala.util.{Success, Try}
+import scala.concurrent.duration.DurationInt
+
 import play.api.{Configuration, Logger}
+
+import akka.NotUsed
+import akka.stream.Materializer
+import akka.stream.scaladsl.{Source, StreamConverters}
+import akka.util.ByteString
 import gremlin.scala._
 import javax.inject.{Inject, Singleton}
 import org.apache.hadoop.conf.{Configuration => HadoopConfig}
@@ -18,6 +25,9 @@ trait StorageSrv {
   def loadBinary(id: String): InputStream
   def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit]
   def saveBinary(id: String, data: Array[Byte])(implicit graph: Graph): Try[Unit] = saveBinary(id, new ByteArrayInputStream(data))
+
+  def saveBinary(id: String, data: Source[ByteString, NotUsed])(implicit graph: Graph, mat: Materializer): Try[Unit] =
+    saveBinary(id, data.runWith(StreamConverters.asInputStream(5.minutes)))
   def exists(id: String): Boolean
 }
 
@@ -129,8 +139,8 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
 
   override def loadBinary(id: String): InputStream =
     new InputStream {
-      var state = State(id)
-      var index = 0
+      var state: Option[State] = State(id)
+      var index                = 0
 
       @scala.annotation.tailrec
       override def read(): Int =

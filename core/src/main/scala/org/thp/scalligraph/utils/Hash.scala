@@ -5,7 +5,8 @@ import java.nio.charset.Charset
 import java.nio.file.{Files, Path, Paths}
 import java.security.MessageDigest
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.duration.DurationInt
 
 import play.api.libs.json.{Format, JsString, Reads, Writes}
 
@@ -22,7 +23,7 @@ case class Hasher(algorithms: String*) {
 
   def fromInputStream(is: InputStream): Seq[Hash] = {
     val mds = algorithms.map(algo => MessageDigest.getInstance(algo))
-    def readNextBuffer = {
+    def readNextBuffer: Array[Byte] = {
       val buffer = Array.ofDim[Byte](bufferSize)
       val len    = is.read(buffer)
       if (len == bufferSize) buffer else buffer.take(len)
@@ -40,6 +41,12 @@ case class Hasher(algorithms: String*) {
   def fromBinary(data: Array[Byte]): Seq[Hash] = {
     val mds = algorithms.map(algo => MessageDigest.getInstance(algo))
     mds.map(md => Hash(md.digest(data)))
+  }
+
+  def fromBinary(data: Source[ByteString, _])(implicit mat: Materializer): Seq[Hash] = {
+    val mds = algorithms.map(algo => MessageDigest.getInstance(algo))
+    Await.ready(data.runForeach(bs => mds.foreach(_.update(bs.toByteBuffer))), 5.minutes)
+    mds.map(md => Hash(md.digest()))
   }
 }
 
@@ -62,9 +69,7 @@ class MultiHash(algorithms: String)(implicit mat: Materializer, ec: ExecutionCon
 
   def addSource(source: Source[ByteString, _]): Future[Unit] =
     source
-      .runForeach { bs =>
-        md.update(bs.toByteBuffer)
-      }
+      .runForeach(bs => md.update(bs.toByteBuffer))
       .map(_ => ())
   def digest: Hash = Hash(md.digest())
 }
@@ -88,7 +93,7 @@ object Hash {
       .toArray
   }
 
-  val hashReads                         = Reads(json => json.validate[String].map(h => Hash(h)))
+  val hashReads: Reads[Hash]            = Reads(json => json.validate[String].map(h => Hash(h)))
   val hashWrites: Writes[Hash]          = Writes[Hash](h => JsString(h.toString()))
   implicit val hashFormat: Format[Hash] = Format(hashReads, hashWrites)
 }
