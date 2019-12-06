@@ -69,20 +69,20 @@ object GroupAggregation {
       FieldsParser("FieldAggregation") {
         case (_, field) =>
           withGood(
-            FieldsParser.string.optional.on("_aggName")(field),
+            FieldsParser.string.optional.on("_name")(field),
             FieldsParser.string.on("_field")(field),
             aggregationFieldsParser.sequence.on("_select")(field)
           )((aggName, fieldName, subAgg) => FieldAggregation(aggName, fieldName, subAgg))
       }
     case "count" =>
       FieldsParser("CountAggregation") {
-        case (_, field) => FieldsParser.string.optional.on("_aggName")(field).map(aggName => AggCount(aggName))
+        case (_, field) => FieldsParser.string.optional.on("_name")(field).map(aggName => AggCount(aggName))
       }
     case "time" =>
       FieldsParser("TimeAggregation") {
         case (_, field) =>
           withGood(
-            FieldsParser.string.optional.on("_aggName")(field),
+            FieldsParser.string.optional.on("_name")(field),
             FieldsParser.string.sequence.on("_fields")(field),
             mergedIntervalParser.on("_interval").orElse(intervalParser)(field),
             aggregationFieldsParser.sequence.on("_select")(field)
@@ -95,7 +95,7 @@ object GroupAggregation {
       FieldsParser("AvgAggregation") {
         case (_, field) =>
           withGood(
-            FieldsParser.string.optional.on("_aggName")(field),
+            FieldsParser.string.optional.on("_name")(field),
             FieldsParser.string.on("_field")(field)
           )((aggName, fieldName) => AggAvg(aggName, fieldName))
       }
@@ -103,13 +103,13 @@ object GroupAggregation {
       FieldsParser("MinAggregation") {
         case (_, field) =>
           withGood(
-            FieldsParser.string.optional.on("_aggName")(field),
+            FieldsParser.string.optional.on("_name")(field),
             FieldsParser.string.on("_field")(field)
           )((aggName, fieldName) => AggMin(aggName, fieldName))
       }
     case "count" =>
       FieldsParser("CountAggregation") {
-        case (_, field) => FieldsParser.string.optional.on("_aggName")(field).map(aggName => AggCount(aggName))
+        case (_, field) => FieldsParser.string.optional.on("_name")(field).map(aggName => AggCount(aggName))
       }
   }
 
