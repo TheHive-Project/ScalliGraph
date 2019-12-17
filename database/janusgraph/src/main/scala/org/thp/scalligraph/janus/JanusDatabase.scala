@@ -85,8 +85,6 @@ class JanusDatabase(
     val tx                = graph.tx()
     val (oldTx, oldTxMDC) = (localTransaction.get(), Option(MDC.get("tx")))
     try {
-      if (oldTx.nonEmpty)
-        logger.warn("Creating transaction while another transaction is already open")
       localTransaction.set(Some(tx))
       MDC.put("tx", f"${System.identityHashCode(tx)}%08x")
       logger.debug(s"Begin of readonly transaction")
@@ -122,8 +120,6 @@ class JanusDatabase(
         Failure(t)
     }
     val oldTx = localTransaction.get()
-    if (oldTx.isDefined)
-      logger.warn("Creating transaction while another transaction is already open")
     val result =
       Retry(maxAttempts)
         .on[DatabaseException]
