@@ -1,11 +1,4 @@
 package org.thp.scalligraph.services.config
-import scala.compat.java8.OptionConverters._
-import scala.concurrent.ExecutionContext
-import scala.concurrent.duration.DurationInt
-import scala.util.{Failure, Success, Try}
-
-import play.api.Logger
-import play.api.libs.json.{Format, JsObject, JsValue, Json}
 
 import akka.actor.ActorRef
 import akka.pattern.ask
@@ -13,6 +6,13 @@ import org.thp.scalligraph.BadConfigurationError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.services.EventSrv
+import play.api.Logger
+import play.api.libs.json.{Format, JsObject, JsValue, Json}
+
+import scala.compat.java8.OptionConverters._
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration.DurationInt
+import scala.util.{Failure, Success, Try}
 
 trait ConfigItem[B, F] {
   val path: String
@@ -72,7 +72,10 @@ class ConfigItemImpl[B, F](
     }
     configActor
       .ask(WaitNotification(path))(1.hour)
-      .onComplete(invalidateCache)
+      .onComplete { msg =>
+        logger.debug(s"Receive message from config actor: $msg")
+        invalidateCache(msg)
+      }
   }
 
   protected def getValue: Option[B] =

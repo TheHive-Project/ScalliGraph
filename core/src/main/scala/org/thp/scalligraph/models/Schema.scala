@@ -2,10 +2,10 @@ package org.thp.scalligraph.models
 
 import scala.collection.immutable
 import scala.util.{Success, Try}
-
 import gremlin.scala.Graph
 import javax.inject.{Inject, Provider, Singleton}
 import org.thp.scalligraph.auth.AuthContext
+import play.api.Logger
 
 case class InitialValue[V <: Product](model: Model.Vertex[V], value: V) {
 
@@ -35,5 +35,10 @@ object Schema {
 
 @Singleton
 class GlobalSchema @Inject()(schemas: immutable.Set[Schema]) extends Provider[Schema] {
-  override def get(): Schema = schemas.reduceOption(_ + _).getOrElse(Schema.empty)
+  lazy val logger: Logger = Logger(getClass)
+  lazy val schema: Schema = {
+    logger.debug(s"Build global schema from ${schemas.map(_.getClass.getSimpleName).mkString("+")}")
+    schemas.reduceOption(_ + _).getOrElse(Schema.empty)
+  }
+  override def get(): Schema = schema
 }
