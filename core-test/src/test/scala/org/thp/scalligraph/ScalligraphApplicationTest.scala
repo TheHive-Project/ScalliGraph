@@ -55,7 +55,7 @@ object TestModule extends ScalaModule with Mockito {
   }
 }
 
-class ScalligraphApplicationTest extends PlaySpecification with Mockito {
+class ScalligraphApplicationTest extends PlaySpecification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
   "create an application with overridden module" in {

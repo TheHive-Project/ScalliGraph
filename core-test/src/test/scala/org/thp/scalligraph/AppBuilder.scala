@@ -63,6 +63,12 @@ class AppBuilder extends ScalaModule {
     this
   }
 
+  def bindNamedInstance[T: Manifest](name: String, instance: T): AppBuilder = {
+    if (initialized) throw InternalError("Bind is not permitted after app use")
+    init = init.andThen(_ => bind[T].annotatedWith(Names.named(name)).toInstance(instance))
+    this
+  }
+
   def bindEagerly[T: Manifest]: AppBuilder = {
     if (initialized) throw InternalError("Bind is not permitted after app use")
     init = init.andThen(_ => bind[T].asEagerSingleton())
@@ -94,7 +100,7 @@ class AppBuilder extends ScalaModule {
 
   def `override`(m: AppBuilder => AppBuilder): AppBuilder = {
     if (initialized) throw InternalError("Bind is not permitted after app use")
-    overrideModules = m(AppBuilder()) :: overrideModules
+    overrideModules = m(new AppBuilder()) :: overrideModules
     this
   }
 
@@ -103,9 +109,5 @@ class AppBuilder extends ScalaModule {
     GuiceApplicationBuilder(modules = Seq(this), overrides = overrideModules, configuration = configuration).build()
   }
 
-  def instanceOf[T: ClassTag]: T = app.injector.instanceOf[T]
-}
-
-object AppBuilder {
-  def apply() = new AppBuilder
+  def apply[T: ClassTag]: T = app.injector.instanceOf[T]
 }

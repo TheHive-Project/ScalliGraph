@@ -14,19 +14,19 @@ class ModernTest extends PlaySpecification {
   implicit val authContext: AuthContext = AuthContextImpl("me", "", "", "", Set.empty)
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    val app: AppBuilder = AppBuilder()
+    val app: AppBuilder = new AppBuilder()
       .bindToProvider(dbProvider)
     step(setupDatabase(app)) ^ specs(dbProvider.name, app) ^ step(teardownDatabase(app))
   }
 
   def setupDatabase(app: AppBuilder): Try[Unit] =
-    ModernDatabaseBuilder.build(app.instanceOf[ModernSchema])(app.instanceOf[Database], authContext)
+    ModernDatabaseBuilder.build(app.apply[ModernSchema])(app.apply[Database], authContext)
 
-  def teardownDatabase(app: AppBuilder): Unit = app.instanceOf[Database].drop()
+  def teardownDatabase(app: AppBuilder): Unit = app.apply[Database].drop()
 
   def specs(name: String, app: AppBuilder): Fragment = {
-    implicit val db: Database = app.instanceOf[Database]
-    val personSrv             = app.instanceOf[PersonSrv]
+    implicit val db: Database = app.apply[Database]
+    val personSrv             = app.apply[PersonSrv]
 
     s"[$name] graph" should {
 //      "remove connected edge when a vertex is removed" in db.transaction { implicit graph ⇒

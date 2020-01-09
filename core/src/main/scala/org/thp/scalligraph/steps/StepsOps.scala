@@ -125,14 +125,14 @@ object StepsOps {
       else newInstance0(traversal.raw.range(from, to))
 
     def richPage[DD](from: Long, to: Long, withTotal: Boolean)(f: T => TraversalLike[DD, _]): PagedResult[DD] = {
-      logger.debug(s"Execution of $raw")
+      logger.debug(s"Execution of $raw (richPage)")
       val size   = if (withTotal) Some(raw.clone().count().head.toLong) else None
       val values = f(traversal.range(from, to)).toList
       PagedResult(values, size)
     }
 
     def exists(): Boolean = {
-      logger.debug(s"Execution of $raw")
+      logger.debug(s"Execution of $raw (exists)")
       raw.limit(1).traversal.hasNext
     }
 
@@ -249,17 +249,17 @@ object StepsOps {
     private def newInstance0(newRaw: GremlinScala[G]): Traversal[D, G] = traversal.newInstance(newRaw).asInstanceOf[Traversal[D, G]]
 
     def toList: List[D] = {
-      logger.debug(s"Execution of $raw")
+      logger.debug(s"Execution of $raw (toList)")
       raw.toList.map(converter.toDomain)
     }
 
     def toIterator: Iterator[D] = {
-      logger.debug(s"Execution of $raw")
+      logger.debug(s"Execution of $raw (toIterator)")
       raw.traversal.asScala.map(converter.toDomain)
     }
 
     def page(from: Long, to: Long, withTotal: Boolean): PagedResult[D] = {
-      logger.debug(s"Execution of $raw")
+      logger.debug(s"Execution of $raw (page)")
       val size            = if (withTotal) Some(raw.clone().count().head.toLong) else None
       val r               = traversal.range(from, to)
       val values: List[D] = r.toList
@@ -267,12 +267,12 @@ object StepsOps {
     }
 
     def head(): D = {
-      logger.debug(s"Execution of $raw")
+      logger.debug(s"Execution of $raw (head)")
       converter.toDomain(raw.head)
     }
 
     def headOption(): Option[D] = {
-      logger.debug(s"Execution of $raw")
+      logger.debug(s"Execution of $raw (headOption)")
       raw.headOption().map(converter.toDomain)
     }
 

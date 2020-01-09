@@ -9,8 +9,6 @@ import play.api.mvc.MultipartFormData.FilePart
 import play.api.mvc.{AnyContentAsMultipartFormData, Headers, MultipartFormData}
 import play.api.test.{FakeRequest, NoTemporaryFileCreator, PlaySpecification}
 
-import org.specs2.mock.Mockito
-
 case class FakeTemporaryFile(file: File) extends Files.TemporaryFile {
   def path: Path                                 = file.toPath
   def temporaryFileCreator: TemporaryFileCreator = NoTemporaryFileCreator
@@ -22,7 +20,7 @@ object FakeTemporaryFile {
   def fromResource(name: String): Files.TemporaryFile = FakeTemporaryFile(new File(getClass.getResource("/report-templates.zip").toURI))
 }
 
-class FieldsTest extends PlaySpecification with Mockito {
+class FieldsTest extends PlaySpecification {
   "Field" should {
     "be built from HTTP request with file" in {
       val file      = FakeTemporaryFile()

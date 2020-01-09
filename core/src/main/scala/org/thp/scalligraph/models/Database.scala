@@ -225,7 +225,7 @@ abstract class BaseDatabase extends Database {
         .get(key)
         .fold[Try[Mapping[_, _, _]]](Failure(UnknownAttributeError(key, FAny(Seq(value.toString)))))(Success.apply)
 
-    logger.debug(s"Execution of $elementTraversal")
+    logger.debug(s"Execution of $elementTraversal (update)")
     elementTraversal
       .headOption()
       .fold[Try[_ <: Element]](Failure(NotFoundError(s"${model.label} not found")))(Success.apply)

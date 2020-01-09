@@ -1,19 +1,17 @@
 package org.thp.scalligraph.models
 
-import scala.util.Try
-
-import play.api.libs.logback.LogbackLoggerConfigurator
-import play.api.test.PlaySpecification
-import play.api.{Configuration, Environment}
-
 import gremlin.scala.{Graph, GremlinScala, Vertex}
-import org.specs2.mock.Mockito
 import org.specs2.specification.core.Fragments
 import org.thp.scalligraph.VertexEntity
 import org.thp.scalligraph.auth.{AuthContext, UserSrv}
 import org.thp.scalligraph.services.VertexSrv
 import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.VertexSteps
+import play.api.libs.logback.LogbackLoggerConfigurator
+import play.api.test.PlaySpecification
+import play.api.{Configuration, Environment}
+
+import scala.util.Try
 
 @VertexEntity
 case class MyEntity(name: String, value: Int)
@@ -27,7 +25,7 @@ class MyEntitySrv(implicit db: Database) extends VertexSrv[MyEntity, VertexSteps
   def create(e: MyEntity)(implicit graph: Graph, authContext: AuthContext): Try[MyEntity with Entity] = createEntity(e)
 }
 
-class SimpleEntityTest extends PlaySpecification with Mockito {
+class SimpleEntityTest extends PlaySpecification {
 
   val userSrv: UserSrv                  = DummyUserSrv()
   implicit val authContext: AuthContext = userSrv.getSystemAuthContext

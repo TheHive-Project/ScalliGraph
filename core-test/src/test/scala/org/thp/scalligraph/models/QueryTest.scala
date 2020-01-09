@@ -1,40 +1,38 @@
 package org.thp.scalligraph.models
 
-import scala.util.Try
-
-import play.api.libs.json.Json
-import play.api.libs.logback.LogbackLoggerConfigurator
-import play.api.test.PlaySpecification
-import play.api.{Configuration, Environment}
-
 import org.scalactic.Good
-import org.specs2.mock.Mockito
 import org.specs2.specification.core.{Fragment, Fragments}
 import org.thp.scalligraph.AppBuilder
 import org.thp.scalligraph.auth.UserSrv
 import org.thp.scalligraph.controllers.Field
 import org.thp.scalligraph.query.AuthGraph
+import play.api.libs.json.Json
+import play.api.libs.logback.LogbackLoggerConfigurator
+import play.api.test.PlaySpecification
+import play.api.{Configuration, Environment}
 
-class QueryTest extends PlaySpecification with Mockito {
+import scala.util.Try
+
+class QueryTest extends PlaySpecification {
 
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
   val userSrv: UserSrv = new DummyUserSrv
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    val app: AppBuilder = AppBuilder()
+    val app: AppBuilder = new AppBuilder()
       .bindToProvider(dbProvider)
       .addConfiguration("play.modules.disabled = [org.thp.scalligraph.ScalligraphModule]")
     step(setupDatabase(app)) ^ specs(dbProvider.name, app) ^ step(teardownDatabase(app))
   }
 
   def setupDatabase(app: AppBuilder): Try[Unit] =
-    ModernDatabaseBuilder.build(app.instanceOf[ModernSchema])(app.instanceOf[Database], userSrv.getSystemAuthContext)
+    ModernDatabaseBuilder.build(app.apply[ModernSchema])(app.apply[Database], userSrv.getSystemAuthContext)
 
-  def teardownDatabase(app: AppBuilder): Unit = app.instanceOf[Database].drop()
+  def teardownDatabase(app: AppBuilder): Unit = app.apply[Database].drop()
 
   def specs(name: String, app: AppBuilder): Fragment = {
 
-    implicit val db: Database = app.instanceOf[Database]
+    implicit val db: Database = app.apply[Database]
     val queryExecutor         = new ModernQueryExecutor()
 
     s"[$name] Query executor" should {

@@ -49,7 +49,7 @@ abstract class VertexSrv[V <: Product: ru.TypeTag, S <: VertexSteps[V]](implicit
 
   def update(steps: S, propertyUpdaters: Seq[PropertyUpdater])(implicit graph: Graph, authContext: AuthContext): Try[(S, JsObject)] = {
     val myClone = steps.newInstance().asInstanceOf[S]
-    logger.debug(s"Execution of ${steps.raw}")
+    logger.debug(s"Execution of ${steps.raw} (update)")
     steps.raw.headOption().fold[Try[(S, JsObject)]](Failure(NotFoundError(s"${steps.typeName} not found"))) { vertex =>
       logger.trace(s"Update ${vertex.id()} by ${authContext.userId}")
       val db = steps.db
