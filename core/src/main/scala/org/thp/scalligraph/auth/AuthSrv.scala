@@ -53,10 +53,6 @@ trait AuthSrv {
   def authenticate(key: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
     Failure(AuthenticationError("Operation not supported"))
 
-  @deprecated("should not be useful any longer. Use ActionFunction", "0.2")
-  def authenticate(organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
-    Failure(AuthenticationError("Operation not supported"))
-
   def setSessionUser(authContext: AuthContext): Result => Result = identity
 
   def changePassword(username: String, oldPassword: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] =

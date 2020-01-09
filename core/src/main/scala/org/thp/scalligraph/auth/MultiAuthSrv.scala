@@ -1,16 +1,15 @@
 package org.thp.scalligraph.auth
 
-import scala.collection.immutable
-import scala.util.{Failure, Try}
-
-import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
-import play.api.{Configuration, Logger}
-
 import javax.inject.{Inject, Provider, Singleton}
 import org.thp.scalligraph.controllers.AuthenticatedRequest
 import org.thp.scalligraph.services.config.ApplicationConfig.configurationFormat
 import org.thp.scalligraph.services.config.{ApplicationConfig, ConfigItem}
-import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError, OAuth2Redirect, RichSeq}
+import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError, RichSeq}
+import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
+import play.api.{Configuration, Logger}
+
+import scala.collection.immutable
+import scala.util.{Failure, Try}
 
 class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, availableAuthProviders: immutable.Set[AuthSrvProvider])
     extends AuthSrv {
@@ -77,15 +76,6 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
   override def authenticate(key: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
     forAllAuthProvider(authProviders)(_.authenticate(key, organisation))
       .recoverWith {
-        case authError =>
-          logger.error("Authentication failure", authError)
-          Failure(AuthenticationError("Authentication failure"))
-      }
-
-  override def authenticate(organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
-    forAllAuthProvider(authProviders)(_.authenticate(organisation: Option[String]))
-      .recoverWith {
-        case e: OAuth2Redirect => Failure(e)
         case authError =>
           logger.error("Authentication failure", authError)
           Failure(AuthenticationError("Authentication failure"))
