@@ -13,8 +13,8 @@ import scala.util.{Failure, Try}
 
 class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, availableAuthProviders: immutable.Set[AuthSrvProvider])
     extends AuthSrv {
-  val name: String = "multi"
-  lazy val logger  = Logger(getClass)
+  val name: String        = "multi"
+  lazy val logger: Logger = Logger(getClass)
 
   val authSrvProviderConfigsConfig: ConfigItem[Seq[Configuration], Seq[Configuration]] =
     appConfig.validatedItem[Seq[Configuration]](
@@ -65,8 +65,10 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
   override def actionFunction(nextFunction: ActionFunction[Request, AuthenticatedRequest]): ActionFunction[Request, AuthenticatedRequest] =
     authProviders.foldRight(nextFunction)((authSrv, af) => authSrv.actionFunction(af))
 
-  override def authenticate(username: String, password: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
-    forAllAuthProvider(authProviders)(_.authenticate(username, password, organisation))
+  override def authenticate(username: String, password: String, organisation: Option[String], code: Option[String])(
+      implicit request: RequestHeader
+  ): Try[AuthContext] =
+    forAllAuthProvider(authProviders)(_.authenticate(username, password, organisation, code))
       .recoverWith {
         case authError =>
           logger.error("Authentication failure", authError)

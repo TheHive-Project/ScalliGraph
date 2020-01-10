@@ -20,7 +20,9 @@ class LdapAuthSrv(ldapConfig: LdapConfig, userSrv: UserSrv) extends AuthSrv {
   val name                                             = "ldap"
   override val capabilities: Set[AuthCapability.Value] = Set(AuthCapability.changePassword)
 
-  override def authenticate(username: String, password: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
+  override def authenticate(username: String, password: String, organisation: Option[String], code: Option[String])(
+      implicit request: RequestHeader
+  ): Try[AuthContext] =
     connect(ldapConfig.bindDN, ldapConfig.bindPW)(ctx => getUserDN(ctx, username))
       .flatMap(userDN => connect(userDN, password)(_ => Success(())))
       .flatMap(_ => userSrv.getAuthContext(request, username, organisation))

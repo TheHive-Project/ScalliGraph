@@ -26,18 +26,19 @@ class ErrorHandler extends HttpErrorHandler {
 
   def toErrorResult(ex: Throwable): Option[(Int, JsValue)] =
     ex match {
-      case e: AuthenticationError    => Some(Status.UNAUTHORIZED          -> e.toJson)
-      case e: AuthorizationError     => Some(Status.FORBIDDEN             -> e.toJson)
-      case e: CreateError            => Some(Status.BAD_REQUEST           -> e.toJson)
-      case e: GetError               => Some(Status.INTERNAL_SERVER_ERROR -> e.toJson)
-      case e: SearchError            => Some(Status.BAD_REQUEST           -> e.toJson)
-      case e: UpdateError            => Some(Status.INTERNAL_SERVER_ERROR -> e.toJson)
-      case e: NotFoundError          => Some(Status.NOT_FOUND             -> e.toJson)
-      case e: BadRequestError        => Some(Status.BAD_REQUEST           -> e.toJson)
-      case e: MultiError             => Some(Status.MULTI_STATUS          -> e.toJson)
-      case e: AttributeCheckingError => Some(Status.BAD_REQUEST           -> e.toJson)
-      case e: InternalError          => Some(Status.INTERNAL_SERVER_ERROR -> e.toJson)
-      case e: BadConfigurationError  => Some(Status.BAD_REQUEST           -> e.toJson)
+      case e: AuthenticationError     => Some(Status.UNAUTHORIZED          -> e.toJson)
+      case e: AuthorizationError      => Some(Status.FORBIDDEN             -> e.toJson)
+      case e: MultiFactorCodeRequired => Some(Status.PAYMENT_REQUIRED      -> e.toJson)
+      case e: CreateError             => Some(Status.BAD_REQUEST           -> e.toJson)
+      case e: GetError                => Some(Status.INTERNAL_SERVER_ERROR -> e.toJson)
+      case e: SearchError             => Some(Status.BAD_REQUEST           -> e.toJson)
+      case e: UpdateError             => Some(Status.INTERNAL_SERVER_ERROR -> e.toJson)
+      case e: NotFoundError           => Some(Status.NOT_FOUND             -> e.toJson)
+      case e: BadRequestError         => Some(Status.BAD_REQUEST           -> e.toJson)
+      case e: MultiError              => Some(Status.MULTI_STATUS          -> e.toJson)
+      case e: AttributeCheckingError  => Some(Status.BAD_REQUEST           -> e.toJson)
+      case e: InternalError           => Some(Status.INTERNAL_SERVER_ERROR -> e.toJson)
+      case e: BadConfigurationError   => Some(Status.BAD_REQUEST           -> e.toJson)
 //      case e: OAuth2Redirect
       case nfe: NumberFormatException =>
         Some(Status.BAD_REQUEST -> Json.obj("type" -> "NumberFormatException", "message" -> ("Invalid format " + nfe.getMessage)))

@@ -16,11 +16,13 @@ import org.thp.scalligraph.{AuthenticationError, AuthorizationError}
 case class ADConfig(dnsDomain: String, winDomain: String, hosts: Seq[String], useSSL: Boolean)
 
 class ADAuthSrv(adConfig: ADConfig, userSrv: UserSrv) extends AuthSrv {
-  lazy val logger                                      = Logger(getClass)
+  lazy val logger: Logger                              = Logger(getClass)
   val name: String                                     = "ad"
   override val capabilities: Set[AuthCapability.Value] = Set(AuthCapability.changePassword)
 
-  override def authenticate(username: String, password: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
+  override def authenticate(username: String, password: String, organisation: Option[String], code: Option[String])(
+      implicit request: RequestHeader
+  ): Try[AuthContext] =
     connect(adConfig.winDomain + "\\" + username, password)(_ => Success(()))
       .flatMap(_ => userSrv.getAuthContext(request, username, organisation))
       .recoverWith {

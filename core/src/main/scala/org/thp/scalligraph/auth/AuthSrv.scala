@@ -12,7 +12,7 @@ import org.thp.scalligraph.controllers.AuthenticatedRequest
 import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError}
 
 object AuthCapability extends Enumeration {
-  val changePassword, setPassword, authByKey, sso = Value
+  val changePassword, setPassword, authByKey, sso, mfa = Value
 }
 
 @Singleton
@@ -47,7 +47,9 @@ trait AuthSrv {
   def actionFunction(nextFunction: ActionFunction[Request, AuthenticatedRequest]): ActionFunction[Request, AuthenticatedRequest] =
     nextFunction
 
-  def authenticate(username: String, password: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
+  def authenticate(username: String, password: String, organisation: Option[String], code: Option[String])(
+      implicit request: RequestHeader
+  ): Try[AuthContext] =
     Failure(AuthenticationError("Operation not supported"))
 
   def authenticate(key: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
