@@ -17,7 +17,7 @@ import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.services.EventSrv
 
 @Singleton
-class ApplicationConfig @Inject()(
+class ApplicationConfig @Inject() (
     configuration: Configuration,
     db: Database,
     system: ActorSystem,

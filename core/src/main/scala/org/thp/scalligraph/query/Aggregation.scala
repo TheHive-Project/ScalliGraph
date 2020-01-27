@@ -284,17 +284,16 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs:
     groupedVertices
       .project[Any](
         By(__[JMap.Entry[Any, Any]].selectKeys) +: subAggs
-          .map(
-            a =>
-              By(
-                a.apply(
-                    publicProperties,
-                    stepType,
-                    fromStep.newInstance(__[JMap[Any, Any]].selectValues.unfold()),
-                    authContext
-                  )
-                  .raw
-              )
+          .map(a =>
+            By(
+              a.apply(
+                  publicProperties,
+                  stepType,
+                  fromStep.newInstance(__[JMap[Any, Any]].selectValues.unfold()),
+                  authContext
+                )
+                .raw
+            )
           ): _*
       )
       .fold
@@ -382,17 +381,16 @@ case class TimeAggregation(aggName: Option[String], fieldName: String, interval:
       .project[Any](
         By(__[JMap.Entry[Any, Any]].selectKeys)
           +: subAggs
-            .map(
-              a =>
-                By(
-                  a.apply(
-                      publicProperties,
-                      stepType,
-                      fromStep.newInstance(__[JMap[Long, Any]].selectValues.unfold()),
-                      authContext
-                    )
-                    .raw
-                )
+            .map(a =>
+              By(
+                a.apply(
+                    publicProperties,
+                    stepType,
+                    fromStep.newInstance(__[JMap[Long, Any]].selectValues.unfold()),
+                    authContext
+                  )
+                  .raw
+              )
             ): _*
       )
       .fold

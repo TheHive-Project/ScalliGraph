@@ -65,9 +65,8 @@ object Model {
     e +
       e.keys()
         .asScala
-        .map(
-          key =>
-            s"\n - $key = ${e.properties[Any](key).asScala.map(_.value()).mkString(",")} (${e.properties[Any](key).asScala.toSeq.headOption.fold("empty")(_.value.getClass.toString)})"
+        .map(key =>
+          s"\n - $key = ${e.properties[Any](key).asScala.map(_.value()).mkString(",")} (${e.properties[Any](key).asScala.toSeq.headOption.fold("empty")(_.value.getClass.toString)})"
         )
         .mkString
 }

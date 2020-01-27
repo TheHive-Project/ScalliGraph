@@ -9,7 +9,7 @@ import play.api.mvc._
 import akka.stream.Materializer
 import javax.inject.Inject
 
-class AccessLogFilter @Inject()(implicit val mat: Materializer, ec: ExecutionContext) extends EssentialFilter {
+class AccessLogFilter @Inject() (implicit val mat: Materializer, ec: ExecutionContext) extends EssentialFilter {
 
   val logger = Logger(getClass)
 
@@ -35,5 +35,5 @@ class AccessLogFilter @Inject()(implicit val mat: Materializer, ec: ExecutionCon
   }
 }
 
-class Filters @Inject()(enabledFilters: EnabledFilters, accessLogFilter: AccessLogFilter)
+class Filters @Inject() (enabledFilters: EnabledFilters, accessLogFilter: AccessLogFilter)
     extends DefaultHttpFilters(enabledFilters.filters :+ accessLogFilter: _*)

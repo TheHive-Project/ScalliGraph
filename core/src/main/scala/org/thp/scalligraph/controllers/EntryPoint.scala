@@ -23,7 +23,7 @@ import scala.util.{Failure, Try}
   * @param ec            ExecutionContext
   */
 @Singleton
-class EntryPoint @Inject()(
+class EntryPoint @Inject() (
     authSrv: AuthSrv,
     actionBuilder: DefaultActionBuilder,
     errorHandler: HttpErrorHandler,
@@ -113,10 +113,10 @@ class EntryPoint @Inject()(
         db: Database,
         permissions: Permission*
     )(block: AuthenticatedRequest[Record[V]] => Graph => Try[Result]): Action[AnyContent] =
-      auth(request => {
+      auth { request =>
         if (permissions.forall(request.permissions.contains)) db.tryTransaction(graph => block(request)(graph))
         else Failure(AuthorizationError(s"Your are not authorized to $name, you haven't the permission ${permissions.mkString(",")}"))
-      })
+      }
 
     def authRoTransaction(
         db: Database

@@ -26,6 +26,7 @@ trait InputFilter extends InputQuery {
 }
 
 case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilter {
+
   override def apply[S <: BaseVertexSteps](
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
@@ -43,6 +44,7 @@ case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilt
 }
 
 case class IsDefinedFilter(fieldName: String) extends InputFilter {
+
   override def apply[S <: BaseVertexSteps](
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
@@ -56,6 +58,7 @@ case class IsDefinedFilter(fieldName: String) extends InputFilter {
 }
 
 case class OrFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
+
   override def apply[S <: BaseVertexSteps](
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
@@ -71,6 +74,7 @@ case class OrFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
 }
 
 case class AndFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
+
   override def apply[S <: BaseVertexSteps](
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
@@ -86,6 +90,7 @@ case class AndFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
 }
 
 case class NotFilter(inputFilter: InputFilter) extends InputFilter {
+
   override def apply[S <: BaseVertexSteps](
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
@@ -99,6 +104,7 @@ case class NotFilter(inputFilter: InputFilter) extends InputFilter {
 }
 
 object YesFilter extends InputFilter {
+
   override def apply[S <: BaseVertexSteps](
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
@@ -109,6 +115,7 @@ object YesFilter extends InputFilter {
 }
 
 class IdFilter(id: String) extends InputFilter {
+
   override def apply[S <: BaseVertexSteps](
       db: Database,
       publicProperties: List[PublicProperty[_, _]],

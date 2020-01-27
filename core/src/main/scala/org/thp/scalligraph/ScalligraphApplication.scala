@@ -93,7 +93,7 @@ class ScalligraphModule extends ScalaModule {
   }
 }
 
-class ParentProvider[T] @Inject()(instances: Provider[JSet[T]]) extends Provider[Option[T]] {
+class ParentProvider[T] @Inject() (instances: Provider[JSet[T]]) extends Provider[Option[T]] {
 
   def get(): Option[T] = {
     val callerClassName = new Exception().getStackTrace.tail.head.getClassName

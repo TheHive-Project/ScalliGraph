@@ -25,7 +25,7 @@ class HeaderAuthSrv(userHeader: String, requestOrganisation: RequestOrganisation
     }
 }
 
-class HeaderAuthProvider @Inject()(requestOrganisation: RequestOrganisation, userSrv: UserSrv, ec: ExecutionContext) extends AuthSrvProvider {
+class HeaderAuthProvider @Inject() (requestOrganisation: RequestOrganisation, userSrv: UserSrv, ec: ExecutionContext) extends AuthSrvProvider {
   override val name: String = "header"
   override def apply(config: Configuration): Try[AuthSrv] =
     for {

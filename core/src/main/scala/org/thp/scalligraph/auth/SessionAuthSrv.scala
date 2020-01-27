@@ -89,7 +89,7 @@ class SessionAuthSrv(
 }
 
 @Singleton
-class SessionAuthProvider @Inject()(userSrv: UserSrv, requestOrganisation: RequestOrganisation, ec: ExecutionContext) extends AuthSrvProvider {
+class SessionAuthProvider @Inject() (userSrv: UserSrv, requestOrganisation: RequestOrganisation, ec: ExecutionContext) extends AuthSrvProvider {
   override val name: String = "session"
   override def apply(config: Configuration): Try[AuthSrv] =
     for {

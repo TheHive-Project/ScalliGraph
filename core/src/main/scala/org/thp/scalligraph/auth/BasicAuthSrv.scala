@@ -1,4 +1,5 @@
 package org.thp.scalligraph.auth
+
 import java.util.Base64
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -56,7 +57,7 @@ class BasicAuthSrv(realm: Option[String], authSrv: AuthSrv, requestOrganisation:
 }
 
 @Singleton
-class BasicAuthProvider @Inject()(authSrvProvider: Provider[AuthSrv], requestOrganisation: RequestOrganisation, ec: ExecutionContext)
+class BasicAuthProvider @Inject() (authSrvProvider: Provider[AuthSrv], requestOrganisation: RequestOrganisation, ec: ExecutionContext)
     extends AuthSrvProvider {
   lazy val authSrv: AuthSrv = authSrvProvider.get
   override val name: String = "basic"

@@ -103,7 +103,7 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
 }
 
 @Singleton
-class MultiAuthSrvProvider @Inject()(configuration: Configuration, appConfig: ApplicationConfig, authProviders: immutable.Set[AuthSrvProvider])
+class MultiAuthSrvProvider @Inject() (configuration: Configuration, appConfig: ApplicationConfig, authProviders: immutable.Set[AuthSrvProvider])
     extends Provider[AuthSrv] {
   override def get(): AuthSrv = new MultiAuthSrv(configuration, appConfig, authProviders)
 }

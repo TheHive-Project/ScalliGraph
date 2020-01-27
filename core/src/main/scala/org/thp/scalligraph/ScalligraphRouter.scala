@@ -37,7 +37,7 @@ object DebugRouter {
 }
 
 @Singleton
-class GlobalQueryExecutor @Inject()(queryExecutors: immutable.Set[QueryExecutor], cache: AsyncCacheApi) {
+class GlobalQueryExecutor @Inject() (queryExecutors: immutable.Set[QueryExecutor], cache: AsyncCacheApi) {
 
   def get(version: Int): QueryExecutor =
     cache.sync.getOrElseUpdate(s"QueryExecutor.$version") {
@@ -51,7 +51,7 @@ class GlobalQueryExecutor @Inject()(queryExecutors: immutable.Set[QueryExecutor]
 }
 
 @Singleton
-class ScalligraphRouter @Inject()(
+class ScalligraphRouter @Inject() (
     httpConfig: HttpConfiguration,
     routers: immutable.Set[Router],
     entryPoint: EntryPoint,

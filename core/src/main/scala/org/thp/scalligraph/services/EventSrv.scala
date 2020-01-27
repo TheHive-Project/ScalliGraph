@@ -12,7 +12,7 @@ import akka.util.Timeout
 import javax.inject.{Inject, Singleton}
 
 @Singleton
-class EventSrv @Inject()(system: ActorSystem) {
+class EventSrv @Inject() (system: ActorSystem) {
   lazy val logger      = Logger(getClass)
   private val mediator = DistributedPubSub(system).mediator
 

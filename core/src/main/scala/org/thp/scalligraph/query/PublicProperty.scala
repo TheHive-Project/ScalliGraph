@@ -76,12 +76,12 @@ object PropertyUpdater {
       fieldsParser.formatName,
       fieldsParser.acceptedInput.map(propertyName + "/" + _), {
         case (path, field) =>
-          fieldsParser(path, field).map(
-            fieldValue =>
-              new PropertyUpdater(propertyName /: path, fieldValue) {
-                override def apply(vertex: Vertex, db: Database, graph: Graph, authContext: AuthContext): Try[JsObject] =
-                  f(path, fieldValue, vertex, db, graph, authContext)
-              }
+          fieldsParser(path, field).map(fieldValue =>
+            new PropertyUpdater(propertyName /: path, fieldValue) {
+
+              override def apply(vertex: Vertex, db: Database, graph: Graph, authContext: AuthContext): Try[JsObject] =
+                f(path, fieldValue, vertex, db, graph, authContext)
+            }
           )
       }
     )

@@ -20,7 +20,7 @@ trait ConfigContext[C] {
 }
 
 @Singleton
-class GlobalConfigContext @Inject()(db: Database) extends ConfigContext[Unit] {
+class GlobalConfigContext @Inject() (db: Database) extends ConfigContext[Unit] {
   override def defaultPath(path: String): String = path
 
   override def getValue(context: Unit, path: String): Option[JsValue] =

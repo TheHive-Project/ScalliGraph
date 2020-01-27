@@ -87,7 +87,7 @@ class LdapAuthSrv(ldapConfig: LdapConfig, userSrv: UserSrv) extends AuthSrv {
 }
 
 @Singleton
-class LdapAuthProvider @Inject()(userSrv: UserSrv) extends AuthSrvProvider {
+class LdapAuthProvider @Inject() (userSrv: UserSrv) extends AuthSrvProvider {
   override val name: String = "ldap"
   override def apply(config: Configuration): Try[AuthSrv] =
     for {

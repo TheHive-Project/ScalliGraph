@@ -223,7 +223,7 @@ class OAuth2Srv(
 }
 
 @Singleton
-class OAuth2Provider @Inject()(
+class OAuth2Provider @Inject() (
     userSrv: UserSrv,
     config: Configuration,
     WSClient: WSClient,

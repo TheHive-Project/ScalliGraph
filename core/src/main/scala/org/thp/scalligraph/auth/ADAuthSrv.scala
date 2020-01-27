@@ -93,7 +93,7 @@ class ADAuthSrv(adConfig: ADConfig, userSrv: UserSrv) extends AuthSrv {
 }
 
 @Singleton
-class ADAuthProvider @Inject()(userSrv: UserSrv) extends AuthSrvProvider {
+class ADAuthProvider @Inject() (userSrv: UserSrv) extends AuthSrvProvider {
   override val name: String = "ad"
   override def apply(config: Configuration): Try[AuthSrv] =
     for {

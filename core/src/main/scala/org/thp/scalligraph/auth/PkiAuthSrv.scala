@@ -1,4 +1,5 @@
 package org.thp.scalligraph.auth
+
 import java.io.ByteArrayInputStream
 import java.security.cert.X509Certificate
 import java.util.{List => JList}
@@ -90,7 +91,7 @@ class PkiAuthSrv(certificateField: String, requestOrganisation: RequestOrganisat
 }
 
 @Singleton
-class PkiAuthProvider @Inject()(requestOrganisation: RequestOrganisation, userSrv: UserSrv, ec: ExecutionContext) extends AuthSrvProvider {
+class PkiAuthProvider @Inject() (requestOrganisation: RequestOrganisation, userSrv: UserSrv, ec: ExecutionContext) extends AuthSrvProvider {
   override val name: String = "pki"
   override def apply(config: Configuration): Try[AuthSrv] =
     for {

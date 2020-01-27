@@ -34,7 +34,7 @@ object Schema {
 }
 
 @Singleton
-class GlobalSchema @Inject()(schemas: immutable.Set[Schema]) extends Provider[Schema] {
+class GlobalSchema @Inject() (schemas: immutable.Set[Schema]) extends Provider[Schema] {
   lazy val logger: Logger = Logger(getClass)
   lazy val schema: Schema = {
     logger.debug(s"Build global schema from ${schemas.map(_.getClass.getSimpleName).mkString("+")}")

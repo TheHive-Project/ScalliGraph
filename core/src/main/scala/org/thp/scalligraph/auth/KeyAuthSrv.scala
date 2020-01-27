@@ -1,4 +1,5 @@
 package org.thp.scalligraph.auth
+
 import scala.concurrent.ExecutionContext
 import scala.util.{Success, Try}
 
@@ -21,7 +22,7 @@ class KeyAuthSrv(authSrv: AuthSrv, requestOrganisation: RequestOrganisation, val
       .flatMap(key => authSrv.authenticate(key, requestOrganisation(request))(request).toOption)
 }
 
-class KeyAuthProvider @Inject()(authSrv: AuthSrv, requestOrganisation: RequestOrganisation, ec: ExecutionContext) extends AuthSrvProvider {
+class KeyAuthProvider @Inject() (authSrv: AuthSrv, requestOrganisation: RequestOrganisation, ec: ExecutionContext) extends AuthSrvProvider {
   override val name: String                               = "key"
   override def apply(config: Configuration): Try[AuthSrv] = Success(new KeyAuthSrv(authSrv, requestOrganisation, ec))
 }
