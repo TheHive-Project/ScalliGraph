@@ -100,7 +100,8 @@ trait Database {
 
   def mapPredicate[T](predicate: P[T]): P[T]
   def toId(id: Any): Any
-  def labelFilter[E <: Element](model: Model): GremlinScala[E] => GremlinScala[E]
+  def labelFilter[E <: Element](model: Model): GremlinScala[E] => GremlinScala[E] = labelFilter(model.label)
+  def labelFilter[E <: Element](label: String): GremlinScala[E] => GremlinScala[E]
 
   val extraModels: Seq[Model]
 }
@@ -349,7 +350,7 @@ abstract class BaseDatabase extends Database {
     override def toDomain(element: Vertex)(implicit db: Database): Binary with Entity = {
       val base64Data = getSingleProperty[String, String](element, "binary", UniMapping.string)
       val data       = Base64.getDecoder.decode(base64Data)
-      new Binary(data) with Entity {
+      new Binary(None, None, data) with Entity {
         override val _id: String                = element.id().toString
         override val _model: Model              = binaryModel
         override val _createdBy: String         = "system"
@@ -360,11 +361,11 @@ abstract class BaseDatabase extends Database {
     }
   }
 
-  override def labelFilter[E <: Element](model: Model): GremlinScala[E] => GremlinScala[E] = _.hasLabel(model.label)
-  override def mapPredicate[T](predicate: P[T]): P[T]                                      = predicate
-  override def toId(id: Any): Any                                                          = id
+  override def labelFilter[E <: Element](label: String): GremlinScala[E] => GremlinScala[E] = _.hasLabel(label)
+  override def mapPredicate[T](predicate: P[T]): P[T]                                       = predicate
+  override def toId(id: Any): Any                                                           = id
 
   override val extraModels: Seq[Model] = Seq(binaryModel, binaryLinkModel)
 
 }
-case class Binary(data: Array[Byte])
+case class Binary(attachmentId: Option[String], folder: Option[String], data: Array[Byte])

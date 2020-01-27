@@ -369,7 +369,7 @@ class JanusDatabase(
     }
   }
 
-  override def labelFilter[E <: Element](model: Model): GremlinScala[E] => GremlinScala[E] = _.has(Key("_label") of model.label)
+  override def labelFilter[E <: Element](label: String): GremlinScala[E] => GremlinScala[E] = _.has(Key("_label") of label)
 
   override def mapPredicate[T](predicate: P[T]): P[T] =
     predicate.getBiPredicate match {

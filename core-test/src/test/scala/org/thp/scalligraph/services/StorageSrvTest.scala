@@ -15,7 +15,7 @@ import org.thp.scalligraph.janus.JanusDatabase
 import org.thp.scalligraph.models.{Database, DatabaseProvider, DatabaseProviders}
 //import org.thp.scalligraph.orientdb.{OrientDatabase, OrientDatabaseStorageSrv}
 
-class AttachmentTest extends Specification {
+class StorageSrvTest extends Specification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
   @tailrec
@@ -28,12 +28,12 @@ class AttachmentTest extends Specification {
 
   val storageDirectory: Path = Paths.get(s"target/AttachmentTest-${math.random()}")
   Files.createDirectory(storageDirectory)
-  val actorSystem = ActorSystem("AttachmentTest")
-  val dbProviders = new DatabaseProviders(actorSystem)
+  val actorSystem: ActorSystem = ActorSystem("AttachmentTest")
+  val dbProviders              = new DatabaseProviders(actorSystem)
 
-  val dbProvStorageSrv: Seq[(DatabaseProvider, StorageSrv)] = dbProviders.list.map {
+  val dbProvStorageSrv: Seq[(DatabaseProvider, StorageSrv)] = dbProviders.list.map { db =>
+    db -> new DatabaseStorageSrv(db.get(), 32 * 1024)
 //    case db if db.name == "orientdb" => db -> new OrientDatabaseStorageSrv(db.get().asInstanceOf[OrientDatabase], 32 * 1024)
-    case db => db -> new DatabaseStorageSrv(db.get(), 32 * 1024)
   } :+ (new DatabaseProvider("janus", new JanusDatabase(actorSystem)) -> new LocalFileSystemStorageSrv(storageDirectory))
 
   Fragments.foreach(dbProvStorageSrv) {
@@ -52,15 +52,15 @@ class AttachmentTest extends Specification {
         val is       = Files.newInputStream(filePath)
         val fId      = "build.sbt-custom-id"
         db.tryTransaction { implicit graph =>
-          storageSrv.saveBinary(fId, is)
+          storageSrv.saveBinary("test", fId, is)
         } must beSuccessfulTry(())
         is.close()
 
-        val is1 = storageSrv.loadBinary(fId)
+        val is1 = storageSrv.loadBinary("test", fId)
         val is2 = Files.newInputStream(filePath)
         try {
           streamCompare(is1, is2) must beTrue
-          storageSrv.exists(fId) must beTrue
+          storageSrv.exists("test", fId) must beTrue
         } finally {
           is1.close()
           is2.close()

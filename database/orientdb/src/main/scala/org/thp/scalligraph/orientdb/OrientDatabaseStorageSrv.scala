@@ -49,7 +49,7 @@ class OrientDatabaseStorageSrv(db: OrientDatabase, chunkSize: Int) extends Stora
   @Inject
   def this(db: OrientDatabase, configuration: Configuration) = this(db, configuration.underlying.getBytes("storage.database.chunkSize").toInt)
 
-  override def loadBinary(id: String): InputStream =
+  override def loadBinary(folder: String, id: String): InputStream =
     new InputStream {
       private var state = State(id)
       private var index = 0
@@ -69,11 +69,11 @@ class OrientDatabaseStorageSrv(db: OrientDatabase, chunkSize: Int) extends Stora
         }
     }
 
-  override def exists(id: String): Boolean = db.roTransaction { implicit graph =>
+  override def exists(folder: String, id: String): Boolean = db.roTransaction { implicit graph =>
     graph.V(id).exists()
   }
 
-  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit] = {
+  override def saveBinary(folder: String, id: String, is: InputStream)(implicit graph: Graph): Try[Unit] = {
     val odb = graph.asInstanceOf[OrientGraph].database()
 
     odb.declareIntent(new OIntentMassiveInsert)

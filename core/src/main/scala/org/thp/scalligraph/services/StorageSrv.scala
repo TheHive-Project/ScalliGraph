@@ -1,6 +1,6 @@
 package org.thp.scalligraph.services
 
-import java.io.{ByteArrayInputStream, InputStream, SequenceInputStream}
+import java.io.{ByteArrayInputStream, InputStream}
 import java.net.URI
 import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
 import java.util.Base64
@@ -22,21 +22,16 @@ import org.apache.hadoop.io.IOUtils
 import org.thp.scalligraph.models.{Database, UniMapping}
 
 trait StorageSrv {
-  def loadBinary(id: String): InputStream
-  def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit]
-  def saveBinary(id: String, data: Array[Byte])(implicit graph: Graph): Try[Unit] = saveBinary(id, new ByteArrayInputStream(data))
+  def loadBinary(folder: String, id: String): InputStream
+  def source(folder: String, id: String): Source[ByteString, _] = StreamConverters.fromInputStream(() => loadBinary(folder, id))
+  def saveBinary(folder: String, id: String, is: InputStream)(implicit graph: Graph): Try[Unit]
 
-  def saveBinary(id: String, data: Source[ByteString, NotUsed])(implicit graph: Graph, mat: Materializer): Try[Unit] =
-    saveBinary(id, data.runWith(StreamConverters.asInputStream(5.minutes)))
-  def exists(id: String): Boolean
-}
+  def saveBinary(folder: String, id: String, data: Array[Byte])(implicit graph: Graph): Try[Unit] =
+    saveBinary(folder: String, id, new ByteArrayInputStream(data))
 
-trait StreamUtils {
-  implicit def toRichInputStream(str: InputStream): RichInputStream = new RichInputStream(str)
-
-  class RichInputStream(str: InputStream) {
-    def ++(str2: InputStream): InputStream = new SequenceInputStream(str, str2)
-  }
+  def saveBinary(folder: String, id: String, data: Source[ByteString, NotUsed])(implicit graph: Graph, mat: Materializer): Try[Unit] =
+    saveBinary(folder, id, data.runWith(StreamConverters.asInputStream(5.minutes)))
+  def exists(folder: String, id: String): Boolean
 }
 
 @Singleton
@@ -47,18 +42,18 @@ class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
   @Inject()
   def this(configuration: Configuration) = this(Paths.get(configuration.get[String]("storage.localfs.location")))
 
-  override def loadBinary(id: String): InputStream =
-    Files.newInputStream(directory.resolve(id))
+  override def loadBinary(folder: String, id: String): InputStream =
+    Files.newInputStream(directory.resolve(folder).resolve(id))
 
-  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit] =
+  override def saveBinary(folder: String, id: String, is: InputStream)(implicit graph: Graph): Try[Unit] =
     Try {
-      Files.copy(is, directory.resolve(id))
+      Files.copy(is, directory.resolve(folder).resolve(id))
       ()
     }.recover {
       case _: FileAlreadyExistsException => ()
     }
 
-  override def exists(id: String): Boolean = Files.exists(directory.resolve(id))
+  override def exists(folder: String, id: String): Boolean = Files.exists(directory.resolve(folder).resolve(id))
 }
 
 object HadoopStorageSrv {
@@ -90,19 +85,19 @@ class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
       new HDPath(configuration.get[String]("storage.hdfs.location"))
     )
 
-  override def loadBinary(id: String): InputStream =
-    fs.open(new HDPath(location, id)).getWrappedStream
+  override def loadBinary(folder: String, id: String): InputStream =
+    fs.open(new HDPath(new HDPath(location, folder), id)).getWrappedStream
 
-  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit] =
+  override def saveBinary(folder: String, id: String, is: InputStream)(implicit graph: Graph): Try[Unit] =
     Try {
-      val os = fs.create(new HDPath(location, id), false)
+      val os = fs.create(new HDPath(new HDPath(location, folder), id), false)
       IOUtils.copyBytes(is, os, 4096)
       os.close()
     }.recover {
       case _: HadoopFileAlreadyExistsException => ()
     }
 
-  override def exists(id: String): Boolean = fs.exists(new HDPath(location, id))
+  override def exists(folder: String, id: String): Boolean = fs.exists(new HDPath(new HDPath(location, folder), id))
 }
 
 @Singleton
@@ -117,8 +112,7 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
 
     def next: Option[State] = db.roTransaction { implicit graph =>
       graph
-        .V()
-        .hasId(vertexId)
+        .V(vertexId)
         .out("nextChunk")
         .headOption()
         .map(vertex => State(vertex.id(), b64decoder.decode(vertex.value[String]("binary"))))
@@ -127,19 +121,18 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
 
   object State {
 
-    def apply(id: String): Option[State] = db.roTransaction { implicit graph =>
-      graph
-        .V()
-        .hasLabel("binary")
+    def apply(folder: String, id: String): Option[State] = db.roTransaction { implicit graph =>
+      db.labelFilter("Binary")(graph.V())
+        .has(Key("folder") of folder)
         .has(Key("attachmentId") of id)
         .headOption()
         .map(vertex => State(vertex.id(), b64decoder.decode(vertex.value[String]("binary"))))
     }
   }
 
-  override def loadBinary(id: String): InputStream =
+  override def loadBinary(folder: String, id: String): InputStream =
     new InputStream {
-      var state: Option[State] = State(id)
+      var state: Option[State] = State(folder, id)
       var index                = 0
 
       @scala.annotation.tailrec
@@ -157,13 +150,17 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
         }
     }
 
-  override def exists(id: String): Boolean = db.roTransaction { implicit graph =>
-    graph.V().has(Key("attachmentId") of id).exists()
+  override def exists(folder: String, id: String): Boolean = db.roTransaction { implicit graph =>
+    db.labelFilter("Binary")(graph.V())
+      .has(Key("folder") of folder)
+      .has(Key("attachmentId") of id)
+      .exists()
   }
 
-  override def saveBinary(id: String, is: InputStream)(implicit graph: Graph): Try[Unit] = {
+  override def saveBinary(folder: String, id: String, is: InputStream)(implicit graph: Graph): Try[Unit] = {
 
     lazy val logger = Logger(getClass)
+
     def readNextChunk: String = {
       val buffer = new Array[Byte](chunkSize)
       val len    = is.read(buffer)
@@ -176,28 +173,33 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
         ""
     }
 
-    val chunks: Iterator[Vertex] = Iterator
-      .continually(readNextChunk)
-      .takeWhile(_.nonEmpty)
-      .map { data =>
+    if (exists(folder, id)) Success(())
+    else {
+      val chunks: Iterator[Vertex] = Iterator
+        .continually(readNextChunk)
+        .takeWhile(_.nonEmpty)
+        .map { data =>
+          val v = graph.addVertex("binary")
+          db.setSingleProperty(v, "binary", data, UniMapping.string)
+          v
+        }
+      if (chunks.isEmpty) {
+        logger.debug("Saving empty file")
         val v = graph.addVertex("binary")
-        db.setSingleProperty(v, "binary", data, UniMapping.string)
-        v
+        db.setSingleProperty(v, "binary", "", UniMapping.string)
+        db.setSingleProperty(v, "attachmentId", id, UniMapping.string)
+        db.setSingleProperty(v, "folder", folder, UniMapping.string)
+      } else {
+        val firstVertex = chunks.next
+        db.setSingleProperty(firstVertex, "attachmentId", id, UniMapping.string)
+        db.setSingleProperty(firstVertex, "folder", folder, UniMapping.string)
+        chunks.foldLeft(firstVertex) {
+          case (previousVertex, currentVertex) =>
+            previousVertex.addEdge("nextChunk", currentVertex)
+            currentVertex
+        }
       }
-    if (chunks.isEmpty) {
-      logger.debug("Saving empty file")
-      val v = graph.addVertex("binary")
-      db.setSingleProperty(v, "binary", "", UniMapping.string)
-      db.setSingleProperty(v, "attachmentId", id, UniMapping.string)
-    } else {
-      val firstVertex = chunks.next
-      db.setSingleProperty(firstVertex, "attachmentId", id, UniMapping.string)
-      chunks.foldLeft(firstVertex) {
-        case (previousVertex, currentVertex) =>
-          previousVertex.addEdge("nextChunk", currentVertex)
-          currentVertex
-      }
+      Success(())
     }
-    Success(())
   }
 }
