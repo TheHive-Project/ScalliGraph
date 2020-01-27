@@ -44,7 +44,7 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
           name     <- config.getOptional[String]("name").toRight(BadConfigurationError("Name missing in authentication provider configuration")).toTry
           provider <- availableAuthProviders.find(_.name == name).toRight(BadConfigurationError(s"Authentication provider $name not found")).toTry
           defaultConfig = configuration.getOptional[Configuration](s"auth.defaults.$name").getOrElse(Configuration.empty)
-          authSrv <- provider(defaultConfig ++ config)
+          authSrv <- provider(config withFallback defaultConfig)
         } yield authSrv
       }
 

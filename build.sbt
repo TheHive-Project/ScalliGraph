@@ -10,7 +10,7 @@ lazy val commonSettings = Seq(
   crossScalaVersions := supportedScalaVersions,
   resolvers ++= Seq(
     Resolver.mavenLocal,
-    "Oracle Released Java Packages" at "http://download.oracle.com/maven",
+    "Oracle Released Java Packages" at "https://download.oracle.com/maven",
     "TheHive project repository" at "https://dl.bintray.com/thehive-project/maven/"
   ),
   scalacOptions ++= Seq(
@@ -93,8 +93,8 @@ lazy val core = (project in file("core"))
 lazy val coreTest = (project in file("core-test"))
   .dependsOn(core)
   .dependsOn(janus)
-//  .dependsOn(orientdb)
-//  .dependsOn(neo4j)
+  //  .dependsOn(orientdb)
+  //  .dependsOn(neo4j)
   .settings(commonSettings)
   .settings(
     name := "scalligraph-core-test",

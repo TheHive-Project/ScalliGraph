@@ -26,7 +26,7 @@ class AppBuilder extends ScalaModule {
   }
 
   def addConfiguration(config: Configuration): AppBuilder = {
-    configuration = configuration ++ config
+    configuration = config withFallback configuration
     this
   }
 

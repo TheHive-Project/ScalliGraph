@@ -9,12 +9,12 @@ import org.thp.scalligraph.janus.JanusDatabase
 //import org.thp.scalligraph.neo4j.Neo4jDatabase
 //import org.thp.scalligraph.orientdb.OrientDatabase
 
-class DatabaseProviders @Inject()(config: Configuration, system: ActorSystem) {
+class DatabaseProviders @Inject() (config: Configuration, system: ActorSystem) {
 
   def this(system: ActorSystem) =
     this(
-      Configuration.load(Environment.simple()) ++
-        Configuration(ConfigFactory.parseString(s"db.janusgraph.storage.directory = target/janusgraph-test-database-${math.random}.db")),
+      Configuration(ConfigFactory.parseString(s"db.janusgraph.storage.directory = target/janusgraph-test-database-${math.random}.db")) withFallback
+        Configuration.load(Environment.simple()),
       system
     )
 

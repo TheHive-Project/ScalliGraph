@@ -52,7 +52,7 @@ class Neo4jDatabase(
 
   def this(configuration: Configuration, system: ActorSystem) =
     this(
-      Neo4jGraph.open(new Config(Neo4jDatabase.defaultConfiguration ++ configuration)),
+      Neo4jGraph.open(new Config(configuration withFallback Neo4jDatabase.defaultConfiguration)),
       configuration.get[Int]("db.onConflict.maxAttempts"),
       configuration.get[FiniteDuration]("db.onConflict.minBackoff"),
       configuration.get[FiniteDuration]("db.onConflict.maxBackoff"),

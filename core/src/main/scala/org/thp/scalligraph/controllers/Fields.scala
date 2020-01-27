@@ -85,7 +85,7 @@ object Field {
         FObject()
     }
 
-  implicit val fieldWrites: Writes[Field] = Writes[Field](field => JsString(field.toString))
+  implicit val fieldWrites: Writes[Field] = Writes[Field](field => JsString(field.toString)) // TODO need check if it is correct
   implicit val parser: FieldsParser[Field] = FieldsParser[Field]("Field") {
     case (_, field) => Good(field)
   }
@@ -99,6 +99,7 @@ object FString {
   implicit val parser: FieldsParser[FString] = FieldsParser[FString]("FString") {
     case (_, field: FString) => Good(field)
   }
+  implicit val writes: Writes[FString] = Writes[FString](_.toJson)
 }
 
 case class FNumber(value: Double) extends Field {
@@ -109,10 +110,14 @@ object FNumber {
   implicit val parser: FieldsParser[FNumber] = FieldsParser[FNumber]("FNumber") {
     case (_, field: FNumber) => Good(field)
   }
+  implicit val writes: Writes[FNumber] = Writes[FNumber](_.toJson)
 }
 
 case class FBoolean(value: Boolean) extends Field {
   override def toJson: JsValue = JsBoolean(value)
+}
+object FBoolean {
+  implicit val writes: Writes[FBoolean] = Writes[FBoolean](_.toJson)
 }
 
 case class FSeq(values: List[Field]) extends Field {
@@ -130,6 +135,7 @@ object FSeq {
   implicit val parser: FieldsParser[FSeq] = FieldsParser[FSeq]("FSeq") {
     case (_, field: FSeq) => Good(field)
   }
+  implicit val writes: Writes[FSeq] = Writes[FSeq](_.toJson)
 }
 case object FNull extends Field {
   override def toJson: JsValue = JsNull
@@ -145,6 +151,9 @@ case class FAny(value: Seq[String]) extends Field {
 
 case class FFile(filename: String, filepath: Path, contentType: String) extends Field {
   override def toJson: JsValue = Json.obj("filename" -> filename, "filepath" -> filepath.toString, "contentType" -> contentType)
+}
+object FFile {
+  implicit val writes: Writes[FFile] = Writes[FFile](_.toJson)
 }
 
 object FObject {
