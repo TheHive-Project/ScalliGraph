@@ -25,8 +25,10 @@ class EdgeSrv[E <: Product: ru.TypeTag, FROM <: Product: ru.TypeTag, TO <: Produ
       .headOption()
       .fold[Try[E with Entity]](Failure(NotFoundError(s"${model.label} $id not found")))(Success.apply)
 
+  def get(edge: Edge)(implicit graph: Graph): EdgeSteps[E, FROM, TO] = steps(db.labelFilter(model)(graph.E(edge)))
+
   def getOrFail(edge: Edge)(implicit graph: Graph): Try[E with Entity] =
-    steps(db.labelFilter(model)(graph.E(edge)))
+    get(edge)
       .headOption()
       .fold[Try[E with Entity]](Failure(NotFoundError(s"${model.label} ${edge.id()} not found")))(Success.apply)
 
