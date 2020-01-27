@@ -3,23 +3,22 @@ package org.thp.scalligraph.models
 import java.util.function.Consumer
 import java.util.{Base64, Date}
 
-import scala.collection.JavaConverters._
-import scala.reflect.runtime.{universe => ru}
-import scala.util.{Failure, Success, Try}
-
-import play.api.Logger
-
 import gremlin.scala._
 import org.apache.tinkerpop.gremlin.structure.Transaction.Status
 import org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.FAny
-import org.thp.scalligraph.{InternalError, NotFoundError, RichSeq, UnknownAttributeError}
+import org.thp.scalligraph.{InternalError, RichSeq, UnknownAttributeError}
+import play.api.Logger
+
+import scala.collection.JavaConverters._
+import scala.reflect.runtime.{universe => ru}
+import scala.util.{Failure, Success, Try}
 
 class DatabaseException(message: String = "Violation of database schema", cause: Exception) extends Exception(message, cause)
 
 trait Database {
-  lazy val logger = Logger("org.thp.scalligraph.models.Database")
+  lazy val logger: Logger = Logger("org.thp.scalligraph.models.Database")
   val createdAtMapping: SingleMapping[Date, _]
   val createdByMapping: SingleMapping[String, String]
   val updatedAtMapping: OptionMapping[Date, _]
@@ -69,7 +68,7 @@ trait Database {
       model: Model.Base[E],
       graph: Graph,
       authContext: AuthContext
-  ): Try[E with Entity]
+  ): Try[Seq[E with Entity]]
 
   def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D
   def getOptionProperty[D, G](element: Element, key: String, mapping: OptionMapping[D, G]): Option[D]
@@ -217,7 +216,7 @@ abstract class BaseDatabase extends Database {
       model: Model.Base[E],
       graph: Graph,
       authContext: AuthContext
-  ): Try[E with Entity] = {
+  ): Try[Seq[E with Entity]] = {
 
     def getFieldMapping(key: String, value: Any): Try[Mapping[_, _, _]] =
       model
@@ -227,9 +226,9 @@ abstract class BaseDatabase extends Database {
 
     logger.debug(s"Execution of $elementTraversal (update)")
     elementTraversal
-      .headOption()
-      .fold[Try[_ <: Element]](Failure(NotFoundError(s"${model.label} not found")))(Success.apply)
-      .flatMap { element =>
+      .traversal
+      .asScala
+      .toTry { element =>
         logger.trace(s"Update ${element.id()} by ${authContext.userId}")
         fields
           .toTry {
@@ -320,6 +319,7 @@ abstract class BaseDatabase extends Database {
     override val label: String                                = "nextChunk"
     override val indexes: Seq[(IndexType.Value, Seq[String])] = Nil
     override val fields: Map[String, Mapping[_, _, _]]        = Map.empty
+
     override def toDomain(element: Edge)(implicit db: Database): Product with Entity = new Product with Entity {
       override val _id: String                  = element.id().toString
       override val _model: Model                = binaryLinkModel
@@ -334,6 +334,7 @@ abstract class BaseDatabase extends Database {
   }
 
   val binaryModel: Model.Vertex[Binary] = new VertexModel {
+
     override def create(binary: Binary)(implicit db: Database, graph: Graph): Vertex = {
       val v    = graph.addVertex("binary")
       val data = Base64.getEncoder.encodeToString(binary.data)
@@ -344,6 +345,7 @@ abstract class BaseDatabase extends Database {
     override val label: String                                = "binary"
     override val indexes: Seq[(IndexType.Value, Seq[String])] = Nil
     override val fields: Map[String, Mapping[_, _, _]]        = Map("binary" -> UniMapping.string)
+
     override def toDomain(element: Vertex)(implicit db: Database): Binary with Entity = {
       val base64Data = getSingleProperty[String, String](element, "binary", UniMapping.string)
       val data       = Base64.getDecoder.decode(base64Data)

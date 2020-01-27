@@ -26,7 +26,7 @@ class SessionAuthSrv(
     val ec: ExecutionContext
 ) extends AuthSrv {
   override val name: String = "session"
-  lazy val logger           = Logger(getClass)
+  lazy val logger: Logger   = Logger(getClass)
 
   private def now: Long = System.currentTimeMillis()
 

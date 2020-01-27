@@ -7,9 +7,7 @@ import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
-
 import play.api.Logger
-
 import gremlin.scala.dsl.Converter
 import gremlin.scala.{__, By, Edge, GremlinScala, Key, OrderBy, P, ProjectionBuilder, StepLabel, Vertex}
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
@@ -17,7 +15,7 @@ import org.apache.tinkerpop.gremlin.process.traversal.step.TraversalOptionParent
 import org.apache.tinkerpop.gremlin.structure.Element
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.{Entity, Mapping, UniMapping}
-import org.thp.scalligraph.{AuthorizationError, NotFoundError}
+import org.thp.scalligraph.{AuthorizationError, InternalError, NotFoundError}
 import shapeless.HNil
 
 trait BranchOption[T <: BaseTraversal, R <: BaseTraversal] {
@@ -38,7 +36,7 @@ case class BranchOtherwise[T <: BaseTraversal, R <: BaseTraversal](traversal: T 
 
 object StepsOps {
 
-  lazy val logger = Logger(classOf[Traversal[_, _]])
+  lazy val logger: Logger = Logger(classOf[Traversal[_, _]])
 
   implicit class TraversalGraphOps[G](val steps: TraversalGraph[G]) {
     type EndDomain = steps.EndDomain
@@ -90,13 +88,20 @@ object StepsOps {
 
   implicit class VertexStepsOps[E <: Product](val steps: VertexSteps[E]) {
 
-    def update(fields: (String, Any)*)(implicit authContext: AuthContext): Try[E with Entity] =
+    def update(fields: (String, Any)*)(implicit authContext: AuthContext): Try[Seq[E with Entity]] =
       steps.db.update[E](steps.raw, fields, steps.model, steps.graph, authContext)
+
+    def updateOne(fields: (String, Any)*)(implicit authContext: AuthContext): Try[E with Entity] =
+      steps.db.update[E](steps.raw, fields, steps.model, steps.graph, authContext).flatMap {
+        case e if e.size == 1 => Success(e.head)
+        case e if e.isEmpty   => Failure(NotFoundError(s"${steps.model.label} not found"))
+        case _                => Failure(InternalError("Multiple entities present while only one is expected"))
+      }
   }
 
   implicit class EdgeStepsOps[E <: Product](val steps: EdgeSteps[E, _, _]) {
 
-    def update(fields: (String, Any)*)(implicit authContext: AuthContext): Try[E with Entity] =
+    def update(fields: (String, Any)*)(implicit authContext: AuthContext): Try[Seq[E with Entity]] =
       steps.db.update[E](steps.raw, fields, steps.model, steps.graph, authContext)
   }
 
