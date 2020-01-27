@@ -5,14 +5,10 @@ import java.net.URI
 import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
 import java.util.Base64
 
-import scala.util.{Success, Try}
-import scala.concurrent.duration.DurationInt
-
-import play.api.{Configuration, Logger}
-
 import akka.NotUsed
 import akka.stream.Materializer
-import akka.stream.scaladsl.{Source, StreamConverters}
+import akka.stream.alpakka.s3.scaladsl.S3
+import akka.stream.scaladsl.{Sink, Source, StreamConverters}
 import akka.util.ByteString
 import gremlin.scala._
 import javax.inject.{Inject, Singleton}
@@ -20,6 +16,11 @@ import org.apache.hadoop.conf.{Configuration => HadoopConfig}
 import org.apache.hadoop.fs.{FileAlreadyExistsException => HadoopFileAlreadyExistsException, FileSystem => HDFileSystem, Path => HDPath}
 import org.apache.hadoop.io.IOUtils
 import org.thp.scalligraph.models.{Database, UniMapping}
+import play.api.{Configuration, Logger}
+
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
+import scala.concurrent.{Await, ExecutionContext}
+import scala.util.{Success, Try}
 
 trait StorageSrv {
   def loadBinary(folder: String, id: String): InputStream
@@ -202,4 +203,30 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
       Success(())
     }
   }
+}
+
+@Singleton
+class S3StorageSrv @Inject() (configuration: Configuration, implicit val ec: ExecutionContext, implicit val mat: Materializer) extends StorageSrv {
+  val bucketName: String           = configuration.get[String]("storage.s3.bucket")
+  val readTimeout: FiniteDuration  = configuration.get[FiniteDuration]("storage.s3.readTimeout")
+  val writeTimeout: FiniteDuration = configuration.get[FiniteDuration]("storage.s3.writeTimeout")
+  val chunkSize: Int               = configuration.get[Int]("storage.s3.chunkSize")
+
+  override def loadBinary(folder: String, id: String): InputStream =
+    S3.download(bucketName, s"$folder/$id")
+      .flatMapConcat(_.get._1)
+      .runWith(
+        StreamConverters.asInputStream(readTimeout)
+      )
+
+  override def saveBinary(folder: String, id: String, is: InputStream)(implicit graph: Graph): Try[Unit] =
+    Try {
+      Await.ready(StreamConverters.fromInputStream(() => is, chunkSize).runWith(S3.multipartUpload(bucketName, s"$folder/$id")), writeTimeout)
+      ()
+    }
+
+  override def exists(folder: String, id: String): Boolean =
+    Try {
+      Await.result(S3.getObjectMetadata(bucketName, s"$folder/$id").runWith(Sink.head).map(_.isDefined), readTimeout)
+    }.getOrElse(false)
 }

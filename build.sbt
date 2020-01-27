@@ -73,6 +73,7 @@ lazy val core = (project in file("core"))
       playGuice,
       scalaGuice,
       hadoopClient,
+      alpakkaS3,
       playCore,
       apacheConfiguration,
       reflections,
