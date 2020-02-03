@@ -9,13 +9,15 @@ import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.{Configuration, Environment}
 
 import akka.actor.ActorSystem
+import org.specs2.mock.Mockito
 import org.specs2.mutable.Specification
 import org.specs2.specification.core.{Fragment, Fragments}
+import org.thp.scalligraph.auth.{AuthContextImpl, UserSrv}
 import org.thp.scalligraph.janus.JanusDatabase
 import org.thp.scalligraph.models.{Database, DatabaseProvider, DatabaseProviders}
 //import org.thp.scalligraph.orientdb.{OrientDatabase, OrientDatabaseStorageSrv}
 
-class StorageSrvTest extends Specification {
+class StorageSrvTest extends Specification with Mockito {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
   @tailrec
@@ -30,11 +32,13 @@ class StorageSrvTest extends Specification {
   Files.createDirectory(storageDirectory)
   val actorSystem: ActorSystem = ActorSystem("AttachmentTest")
   val dbProviders              = new DatabaseProviders(actorSystem)
+  val userSrv: UserSrv         = mock[UserSrv]
+  userSrv.getSystemAuthContext returns AuthContextImpl("test", "Test user", "test", "test-request-id", Set.empty)
 
   val dbProvStorageSrv: Seq[(DatabaseProvider, StorageSrv)] = dbProviders.list.map { db =>
-    db -> new DatabaseStorageSrv(db.get(), 32 * 1024)
+    db -> new DatabaseStorageSrv(32 * 1024, userSrv, db.get())
 //    case db if db.name == "orientdb" => db -> new OrientDatabaseStorageSrv(db.get().asInstanceOf[OrientDatabase], 32 * 1024)
-  } :+ (new DatabaseProvider("janus", new JanusDatabase(actorSystem)) -> new LocalFileSystemStorageSrv(storageDirectory))
+  } // :+ (new DatabaseProvider("janus", new JanusDatabase(actorSystem)) -> new LocalFileSystemStorageSrv(storageDirectory))
 
   Fragments.foreach(dbProvStorageSrv) {
     case (dbProvider, storageSrv) =>

@@ -1,7 +1,13 @@
 package org.thp.scalligraph.models
 
+import java.util.Date
 import java.util.function.Consumer
-import java.util.{Base64, Date}
+
+import scala.collection.JavaConverters._
+import scala.reflect.runtime.{universe => ru}
+import scala.util.{Failure, Success, Try}
+
+import play.api.Logger
 
 import gremlin.scala._
 import org.apache.tinkerpop.gremlin.structure.Transaction.Status
@@ -9,11 +15,6 @@ import org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.FAny
 import org.thp.scalligraph.{InternalError, RichSeq, UnknownAttributeError}
-import play.api.Logger
-
-import scala.collection.JavaConverters._
-import scala.reflect.runtime.{universe => ru}
-import scala.util.{Failure, Success, Try}
 
 class DatabaseException(message: String = "Violation of database schema", cause: Exception) extends Exception(message, cause)
 
@@ -104,16 +105,17 @@ trait Database {
   def labelFilter[E <: Element](label: String): GremlinScala[E] => GremlinScala[E]
 
   val extraModels: Seq[Model]
+  val binaryLinkModel: Model.Edge[BinaryLink, Binary, Binary]
+  val binaryModel: Model.Vertex[Binary]
 }
 
 abstract class BaseDatabase extends Database {
-  val createdAtMapping: SingleMapping[Date, Date]     = UniMapping.date
-  val createdByMapping: SingleMapping[String, String] = UniMapping.string
-  val updatedAtMapping: OptionMapping[Date, Date]     = UniMapping.date.optional
-  val updatedByMapping: OptionMapping[String, String] = UniMapping.string.optional
+  override val createdAtMapping: SingleMapping[Date, Date]     = UniMapping.date
+  override val createdByMapping: SingleMapping[String, String] = UniMapping.string
+  override val updatedAtMapping: OptionMapping[Date, Date]     = UniMapping.date.optional
+  override val updatedByMapping: OptionMapping[String, String] = UniMapping.string.optional
 
-  val binaryMapping: SingleMapping[Array[Byte], String] =
-    SingleMapping[Array[Byte], String](data => Some(Base64.getEncoder.encodeToString(data)), Base64.getDecoder.decode)
+  override val binaryMapping: SingleMapping[Array[Byte], String] = UniMapping.binary
 
   override def version(module: String): Int = roTransaction(graph => graph.variables.get[Int](s"${module}_version").orElse(0))
 
@@ -312,55 +314,8 @@ abstract class BaseDatabase extends Database {
 
   val chunkSize: Int = 32 * 1024
 
-  val binaryLinkModel: EdgeModel[Binary, Binary] = new EdgeModel[Binary, Binary] {
-    override val fromLabel: String                                                                       = "binaryData"
-    override val toLabel: String                                                                         = "binaryData"
-    override def create(e: Product, from: Vertex, to: Vertex)(implicit db: Database, graph: Graph): Edge = from.addEdge(label, to)
-    override type E = Product
-    override val label: String                                = "nextChunk"
-    override val indexes: Seq[(IndexType.Value, Seq[String])] = Nil
-    override val fields: Map[String, Mapping[_, _, _]]        = Map.empty
-
-    override def toDomain(element: Edge)(implicit db: Database): Product with Entity = new Product with Entity {
-      override val _id: String                  = element.id().toString
-      override val _model: Model                = binaryLinkModel
-      override val _createdBy: String           = "system"
-      override val _updatedBy: Option[String]   = None
-      override val _createdAt: Date             = new Date
-      override val _updatedAt: Option[Date]     = None
-      override def productElement(n: Int): Any  = ()
-      override def productArity: Int            = 0
-      override def canEqual(that: Any): Boolean = false
-    }
-  }
-
-  val binaryModel: Model.Vertex[Binary] = new VertexModel {
-
-    override def create(binary: Binary)(implicit db: Database, graph: Graph): Vertex = {
-      val v    = graph.addVertex("binary")
-      val data = Base64.getEncoder.encodeToString(binary.data)
-      setSingleProperty(v, "binary", data, UniMapping.string)
-      v
-    }
-    override type E = Binary
-    override val label: String                                = "binary"
-    override val indexes: Seq[(IndexType.Value, Seq[String])] = Nil
-    override val fields: Map[String, Mapping[_, _, _]]        = Map("binary" -> UniMapping.string)
-
-    override def toDomain(element: Vertex)(implicit db: Database): Binary with Entity = {
-      val base64Data = getSingleProperty[String, String](element, "binary", UniMapping.string)
-      val data       = Base64.getDecoder.decode(base64Data)
-      new Binary(None, None, data) with Entity {
-        override val _id: String                = element.id().toString
-        override val _model: Model              = binaryModel
-        override val _createdBy: String         = "system"
-        override val _updatedBy: Option[String] = None
-        override val _createdAt: Date           = new Date
-        override val _updatedAt: Option[Date]   = None
-      }
-    }
-  }
-
+  override val binaryLinkModel: Model.Edge[BinaryLink, Binary, Binary]                      = BinaryLink.model
+  override val binaryModel: Model.Vertex[Binary]                                            = Binary.model
   override def labelFilter[E <: Element](label: String): GremlinScala[E] => GremlinScala[E] = _.hasLabel(label)
   override def mapPredicate[T](predicate: P[T]): P[T]                                       = predicate
   override def toId(id: Any): Any                                                           = id
@@ -369,3 +324,56 @@ abstract class BaseDatabase extends Database {
 
 }
 case class Binary(attachmentId: Option[String], folder: Option[String], data: Array[Byte])
+object Binary extends HasVertexModel[Binary] {
+  override val model: Model.Vertex[Binary] = new VertexModel {
+    override type E = Binary
+    override val label: String                                = "Binary"
+    override val indexes: Seq[(IndexType.Value, Seq[String])] = Nil
+    override val fields: Map[String, Mapping[_, _, _]] =
+      Map("data" -> UniMapping.binary, "folder" -> UniMapping.string.optional, "attachmentId" -> UniMapping.string.optional)
+
+    override def create(binary: Binary)(implicit db: Database, graph: Graph): Vertex = {
+      val v = graph.addVertex(label)
+      db.setSingleProperty(v, "data", binary.data, UniMapping.binary)
+      db.setOptionProperty(v, "folder", binary.folder, UniMapping.string.optional)
+      db.setOptionProperty(v, "attachmentId", binary.attachmentId, UniMapping.string.optional)
+      v
+    }
+
+    override def toDomain(element: Vertex)(implicit db: Database): Binary with Entity = {
+      val data         = db.getSingleProperty(element, "data", UniMapping.binary)
+      val folder       = db.getOptionProperty(element, "folder", UniMapping.string.optional)
+      val attachmentId = db.getOptionProperty(element, "attachmentId", UniMapping.string.optional)
+
+      new Binary(attachmentId, folder, data) with Entity {
+        override def _id: String                = element.id().toString
+        override val _model: Model              = model
+        override def _createdBy: String         = ???
+        override def _updatedBy: Option[String] = None
+        override def _createdAt: Date           = ???
+        override def _updatedAt: Option[Date]   = None
+      }
+    }
+  }
+}
+case class BinaryLink()
+object BinaryLink extends HasEdgeModel[BinaryLink, Binary, Binary] {
+  override val model: Model.Edge[BinaryLink, Binary, Binary] = new EdgeModel[Binary, Binary] {
+    override val fromLabel: String                                                                          = "Binary"
+    override val toLabel: String                                                                            = "Binary"
+    override def create(e: BinaryLink, from: Vertex, to: Vertex)(implicit db: Database, graph: Graph): Edge = from.addEdge(label, to)
+    override type E = BinaryLink
+    override val label: String                                = "NextChunk"
+    override val indexes: Seq[(IndexType.Value, Seq[String])] = Nil
+    override val fields: Map[String, Mapping[_, _, _]]        = Map.empty
+
+    override def toDomain(element: Edge)(implicit db: Database): BinaryLink with Entity = new BinaryLink with Entity {
+      override def _id: String                = element.id().toString
+      override val _model: Model              = model
+      override def _createdBy: String         = ???
+      override def _updatedBy: Option[String] = None
+      override def _createdAt: Date           = ???
+      override def _updatedAt: Option[Date]   = None
+    }
+  }
+}

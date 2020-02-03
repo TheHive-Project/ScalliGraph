@@ -2,8 +2,14 @@ package org.thp.scalligraph.services
 
 import java.io.{ByteArrayInputStream, InputStream}
 import java.net.URI
-import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
+import java.nio.file._
 import java.util.Base64
+
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
+import scala.concurrent.{Await, ExecutionContext}
+import scala.util.{Success, Try}
+
+import play.api.{Configuration, Logger}
 
 import akka.NotUsed
 import akka.stream.Materializer
@@ -15,12 +21,10 @@ import javax.inject.{Inject, Singleton}
 import org.apache.hadoop.conf.{Configuration => HadoopConfig}
 import org.apache.hadoop.fs.{FileAlreadyExistsException => HadoopFileAlreadyExistsException, FileSystem => HDFileSystem, Path => HDPath}
 import org.apache.hadoop.io.IOUtils
-import org.thp.scalligraph.models.{Database, UniMapping}
-import play.api.{Configuration, Logger}
-
-import scala.concurrent.duration.{DurationInt, FiniteDuration}
-import scala.concurrent.{Await, ExecutionContext}
-import scala.util.{Success, Try}
+import org.thp.scalligraph.auth.UserSrv
+import org.thp.scalligraph.models.{Binary, BinaryLink, Database, Entity}
+import org.thp.scalligraph.steps.StepsOps._
+import org.thp.scalligraph.steps.VertexSteps
 
 trait StorageSrv {
   def loadBinary(folder: String, id: String): InputStream
@@ -51,6 +55,10 @@ class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
       Files.copy(is, directory.resolve(folder).resolve(id))
       ()
     }.recover {
+      case _: NoSuchFileException =>
+        Files.createDirectories(directory.resolve(folder))
+        Files.copy(is, directory.resolve(folder).resolve(id))
+        ()
       case _: FileAlreadyExistsException => ()
     }
 
@@ -102,32 +110,36 @@ class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
 }
 
 @Singleton
-class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
+class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Database) extends StorageSrv {
 
   val b64decoder: Base64.Decoder = Base64.getDecoder
+  val binaryLinkSrv              = new EdgeSrv[BinaryLink, Binary, Binary]()
 
   @Inject
-  def this(db: Database, configuration: Configuration) = this(db, configuration.underlying.getBytes("storage.database.chunkSize").toInt)
+  def this(configuration: Configuration, userSrv: UserSrv, db: Database) =
+    this(configuration.underlying.getBytes("storage.database.chunkSize").toInt, userSrv, db)
 
-  case class State(vertexId: AnyRef, buffer: Array[Byte]) {
+  case class State(binary: Binary with Entity) {
 
     def next: Option[State] = db.roTransaction { implicit graph =>
-      graph
-        .V(vertexId)
-        .out("nextChunk")
-        .headOption()
-        .map(vertex => State(vertex.id(), b64decoder.decode(vertex.value[String]("binary"))))
+      new VertexSteps[Binary](
+        graph
+          .V(binary._id)
+          .out("nextChunk")
+      ).headOption()
+        .map(State.apply)
     }
+    def data: Array[Byte] = binary.data
   }
 
   object State {
 
     def apply(folder: String, id: String): Option[State] = db.roTransaction { implicit graph =>
-      db.labelFilter("Binary")(graph.V())
-        .has(Key("folder") of folder)
-        .has(Key("attachmentId") of id)
+      new VertexSteps[Binary](graph.V)
+        .has("folder", folder)
+        .has("attachmentId", id)
         .headOption()
-        .map(vertex => State(vertex.id(), b64decoder.decode(vertex.value[String]("binary"))))
+        .map(State.apply)
     }
   }
 
@@ -139,10 +151,10 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
       @scala.annotation.tailrec
       override def read(): Int =
         state match {
-          case Some(State(_, b)) if b.length > index =>
-            val d = b(index)
+          case Some(state) if state.data.length > index =>
+            val data = state.data(index)
             index += 1
-            d.toInt & 0xff
+            data.toInt & 0xff
           case None => -1
           case Some(s) =>
             state = s.next
@@ -152,9 +164,9 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
     }
 
   override def exists(folder: String, id: String): Boolean = db.roTransaction { implicit graph =>
-    db.labelFilter("Binary")(graph.V())
-      .has(Key("folder") of folder)
-      .has(Key("attachmentId") of id)
+    new VertexSteps[Binary](graph.V)
+      .has("folder", folder)
+      .has("attachmentId", id)
       .exists()
   }
 
@@ -162,41 +174,38 @@ class DatabaseStorageSrv(db: Database, chunkSize: Int) extends StorageSrv {
 
     lazy val logger = Logger(getClass)
 
-    def readNextChunk: String = {
+    def readNextChunk: Array[Byte] = {
       val buffer = new Array[Byte](chunkSize)
       val len    = is.read(buffer)
       logger.trace(s"$len bytes read")
-      if (len == chunkSize)
-        Base64.getEncoder.encodeToString(buffer)
-      else if (len > 0)
-        Base64.getEncoder.encodeToString(buffer.take(len))
-      else
-        ""
+      if (len == chunkSize) buffer
+      else if (len > 0) buffer.take(len)
+      else Array.emptyByteArray
     }
 
     if (exists(folder, id)) Success(())
     else {
-      val chunks: Iterator[Vertex] = Iterator
+      val chunks: Iterator[Binary with Entity] = Iterator
         .continually(readNextChunk)
         .takeWhile(_.nonEmpty)
         .map { data =>
-          val v = graph.addVertex("binary")
-          db.setSingleProperty(v, "binary", data, UniMapping.string)
-          v
+          db.createVertex[Binary](graph, userSrv.getSystemAuthContext, db.binaryModel, Binary(Some(id), Some(folder), data))
         }
       if (chunks.isEmpty) {
         logger.debug("Saving empty file")
-        val v = graph.addVertex("binary")
-        db.setSingleProperty(v, "binary", "", UniMapping.string)
-        db.setSingleProperty(v, "attachmentId", id, UniMapping.string)
-        db.setSingleProperty(v, "folder", folder, UniMapping.string)
+        db.createVertex(graph, userSrv.getSystemAuthContext, db.binaryModel, Binary(None, None, Array.emptyByteArray))
       } else {
-        val firstVertex = chunks.next
-        db.setSingleProperty(firstVertex, "attachmentId", id, UniMapping.string)
-        db.setSingleProperty(firstVertex, "folder", folder, UniMapping.string)
-        chunks.foldLeft(firstVertex) {
+        logger.debug(s"Save file $folder/$id")
+        chunks.foldLeft(chunks.next) {
           case (previousVertex, currentVertex) =>
-            previousVertex.addEdge("nextChunk", currentVertex)
+            db.createEdge[BinaryLink, Binary, Binary](
+              graph,
+              userSrv.getSystemAuthContext,
+              db.binaryLinkModel,
+              BinaryLink(),
+              previousVertex,
+              currentVertex
+            )
             currentVertex
         }
       }

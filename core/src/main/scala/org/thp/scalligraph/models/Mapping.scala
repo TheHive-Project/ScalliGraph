@@ -1,7 +1,7 @@
 package org.thp.scalligraph.models
 
 import java.lang.{Boolean => JBoolean, Byte => JByte, Double => JDouble, Float => JFloat, Integer => JInt, Long => JLong, Short => JShort}
-import java.util.Date
+import java.util.{Base64, Date}
 
 import scala.language.experimental.macros
 import scala.reflect.{classTag, ClassTag}
@@ -51,6 +51,10 @@ object UniMapping extends MappingLowerPrio {
   implicit val hash: SingleMapping[Hash, String] = SingleMapping[Hash, String](
     toGraphOptFn = h => Some(h.toString),
     toDomainFn = Hash(_)
+  )
+  implicit val binary: SingleMapping[Array[Byte], String] = SingleMapping[Array[Byte], String](
+    toGraphOptFn = b => Some(Base64.getEncoder.encodeToString(b)),
+    toDomainFn = s => Base64.getDecoder.decode(s)
   )
   implicit def option[D, G](implicit subMapping: SingleMapping[D, G]): OptionMapping[D, G] = subMapping.optional
   implicit def seq[D, G](implicit subMapping: SingleMapping[D, G]): ListMapping[D, G]      = subMapping.sequence
