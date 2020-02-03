@@ -16,7 +16,7 @@ object Retry {
   def exceptionCheck(exceptions: Seq[Class[_]])(t: Throwable): Boolean =
     exceptions.isEmpty || exceptions.contains(t.getClass) || Option(t.getCause).exists(exceptionCheck(exceptions))
 
-  val logger = Logger(getClass)
+  val logger: Logger = Logger(getClass)
 
   def apply[T](maxTries: Int) = new Retry(maxTries, Nil)
 }
@@ -51,7 +51,7 @@ class Retry(maxTries: Int, exceptions: Seq[Class[_]]) {
         logger.warn(s"An error occurs (${e.getMessage}), retrying ($currentTry)")
         run(currentTry + 1, f)
       case e: Throwable if currentTry < maxTries =>
-        logger.error(s"uncaught error, not retrying", e)
+        logger.error("uncaught error, not retrying", e)
         throw e
     }
 
@@ -61,7 +61,7 @@ class Retry(maxTries: Int, exceptions: Seq[Class[_]]) {
         logger.warn(s"An error occurs (${e.getMessage}), retrying ($currentTry)")
         runTry(currentTry + 1, fn)
       case e: Throwable if currentTry < maxTries =>
-        logger.error(s"uncaught error, not retrying", e)
+        logger.error("uncaught error, not retrying", e)
         Failure(e)
     }
 }
@@ -80,7 +80,7 @@ class DelayRetry(maxTries: Int, exceptions: Seq[Class[_]], scheduler: Scheduler,
           Await.result(run(2, Future(fn)), Duration.Inf)
         }
       case e: Throwable if 1 < maxTries =>
-        logger.error(s"uncaught error, not retrying", e)
+        logger.error("uncaught error, not retrying", e)
         throw e
     }
 
@@ -92,7 +92,7 @@ class DelayRetry(maxTries: Int, exceptions: Seq[Class[_]], scheduler: Scheduler,
           Try(Await.result(run(2, Future(fn.get)), Duration.Inf))
         }
       case e: Throwable if 1 < maxTries =>
-        logger.error(s"uncaught error, not retrying", e)
+        logger.error("uncaught error, not retrying", e)
         Failure(e)
     }
 
@@ -104,7 +104,7 @@ class DelayRetry(maxTries: Int, exceptions: Seq[Class[_]], scheduler: Scheduler,
         logger.warn(s"An error occurs (${e.getMessage}), retrying ($currentTry)")
         after(delay(currentTry), scheduler)(run(currentTry + 1, fn))
       case e: Throwable if currentTry < maxTries =>
-        logger.error(s"uncaught error, not retrying", e)
+        logger.error("uncaught error, not retrying", e)
         Future.failed(e)
     }
 }

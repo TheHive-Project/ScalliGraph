@@ -6,7 +6,6 @@ import scala.util.{Failure, Try}
 
 import play.api.libs.json.{Format, JsObject, JsValue, Json}
 
-import akka.actor.ActorRef
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.BadConfigurationError
 import org.thp.scalligraph.auth.AuthContext
@@ -77,9 +76,7 @@ class ContextConfigItemImpl[T, C](
     val defaultValue: T,
     val jsonFormat: Format[T],
     val validationFunction: T => Try[T],
-    db: Database,
     eventSrv: EventSrv,
-    configActor: ActorRef,
     implicit val ec: ExecutionContext
 ) extends ContextConfigItem[T, C] {
 

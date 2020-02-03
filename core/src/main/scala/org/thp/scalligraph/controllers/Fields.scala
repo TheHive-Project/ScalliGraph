@@ -35,7 +35,7 @@ object Field {
     case JsNull       => FNull
   }
 
-  def apply(request: Request[AnyContent]): Field =
+  def apply(request: Request[AnyContent]): FObject =
     apply(request.body) ++ FObject(
       request
         .queryString

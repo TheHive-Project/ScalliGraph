@@ -5,7 +5,7 @@ import org.thp.scalligraph.controllers._
 object FObjOne {
 
   def unapply(field: Field): Option[(String, Field)] = field match {
-    case FObject(f) if f.size == 1 => Some(f.head)
+    case FObject(f) if f.size == 1 => f.headOption
     case _                         => None
   }
 }

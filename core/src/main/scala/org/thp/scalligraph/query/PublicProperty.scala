@@ -25,9 +25,9 @@ class PublicProperty[D, G](
   type Graph  = G
   type Domain = D
 
-  lazy val propertyPath = FPath(propertyName)
+  lazy val propertyPath: FPath = FPath(propertyName)
 
-  def get(steps: BaseVertexSteps, path: FPath, authContext: AuthContext): Traversal[D, G] =
+  def get(steps: BaseVertexSteps, path: FPath): Traversal[D, G] =
     if (definition.lengthCompare(1) == 0)
       definition.head.apply(path, steps)
     else
@@ -47,7 +47,7 @@ object PublicProperty {
     properties
       .iterator
       .collectFirst {
-        case p if p.stepType =:= stepType && path.startsWith(p.propertyPath).isDefined => p.get(step, path, authContext)
+        case p if p.stepType =:= stepType && path.startsWith(p.propertyPath).isDefined => p.get(step, path)
       }
       .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))
   }

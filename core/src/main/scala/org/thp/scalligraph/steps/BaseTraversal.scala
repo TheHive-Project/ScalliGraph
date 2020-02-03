@@ -28,7 +28,7 @@ object TraversalBuilder {
 trait BaseTraversal {
   type EndDomain
   type EndGraph
-  lazy val logger = Logger(getClass)
+  lazy val logger: Logger = Logger(getClass)
   def typeName: String
   def newInstance(newRaw: GremlinScala[EndGraph]): BaseTraversal
   def newInstance(): BaseTraversal
@@ -39,7 +39,7 @@ trait BaseTraversal {
     val size = elements.size
     if (size == 1) elements.get(0)
     else if (size > 1) throw InternalError(s"Too many elements in result ($size found)")
-    else throw InternalError(s"No element found")
+    else throw InternalError("No element found")
   }
 
   def atMostOneOf[A](elements: JList[A]): Option[A] = {

@@ -47,12 +47,11 @@ class OAuth2Srv(
     OAuth2Config: OAuth2Config,
     userSrv: UserSrv,
     WSClient: WSClient,
-    configuration: Configuration,
     sessionAuthProvider: Provider[AuthSrv]
 )(
     implicit ec: ExecutionContext
 ) extends AuthSrv {
-  lazy val logger                  = Logger(getClass)
+  lazy val logger: Logger          = Logger(getClass)
   lazy val sessionAuthSrv: AuthSrv = sessionAuthProvider.get()
   val name: String                 = "oauth2"
   val endpoint: String             = "/ssoLogin"
@@ -70,7 +69,7 @@ class OAuth2Srv(
           OAuth2Config.grantType match {
             case GrantType.authorizationCode =>
               if (!isSecuredAuthCode(request)) {
-                authRedirect(request)
+                Future.successful(authRedirect())
               } else {
                 for {
                   tokenizedRequest <- authTokenFromCode(request)
@@ -100,7 +99,7 @@ class OAuth2Srv(
     * and redirecting to OAuth2 server if necessary
     * @return
     */
-  private def authRedirect[A](input: Request[A]): Future[Result] = {
+  private def authRedirect(): Result = {
     val state = UUID.randomUUID().toString
     val queryStringParams = Map[String, Seq[String]](
       "scope"         -> Seq(OAuth2Config.scope.mkString(" ")),
@@ -111,11 +110,9 @@ class OAuth2Srv(
     )
 
     logger.debug(s"Redirecting to ${OAuth2Config.redirectUri} with $queryStringParams and state $state")
-    Future.successful(
-      Results
-        .Redirect(OAuth2Config.authorizationUrl, queryStringParams, status = 200)
-        .withSession("state" -> state)
-    )
+    Results
+      .Redirect(OAuth2Config.authorizationUrl, queryStringParams, status = 200)
+      .withSession("state" -> state)
   }
 
   /**
@@ -264,7 +261,6 @@ class OAuth2Provider @Inject() (
       ),
       userSrv,
       WSClient,
-      config,
       provider
     )
 }

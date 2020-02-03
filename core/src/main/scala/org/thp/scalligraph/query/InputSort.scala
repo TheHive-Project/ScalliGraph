@@ -32,7 +32,7 @@ case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
         val property = PublicProperty.getProperty(publicProperties, stepType, fieldName)
         val subField = FPath(fieldName.dropWhile(_ != '.').dropWhile(_ == '.'))
         val orderDefs: GremlinScala[Vertex] => GremlinScala[property.Graph] =
-          (g: GremlinScala[Vertex]) => property.get(step.newInstance(g), subField, authContext).raw.asInstanceOf[GremlinScala[property.Graph]]
+          (g: GremlinScala[Vertex]) => property.get(step.newInstance(g), subField).raw.asInstanceOf[GremlinScala[property.Graph]]
         if (property.mapping.cardinality == MappingCardinality.single) {
           orderby(orderDefs, order)
         } else {

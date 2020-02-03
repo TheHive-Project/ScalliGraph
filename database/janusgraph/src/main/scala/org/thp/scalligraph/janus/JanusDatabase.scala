@@ -87,9 +87,9 @@ class JanusDatabase(
     try {
       localTransaction.set(Some(tx))
       MDC.put("tx", f"${System.identityHashCode(tx)}%08x")
-      logger.debug(s"Begin of readonly transaction")
+      logger.debug("Begin of readonly transaction")
       val r = body(graph)
-      logger.debug(s"End of readonly transaction")
+      logger.debug("End of readonly transaction")
       tx.commit()
       r
     } finally {

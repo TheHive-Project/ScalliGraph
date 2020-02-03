@@ -8,7 +8,7 @@ import play.api.libs.functional.syntax._
 import play.api.libs.json._
 import play.api.{ConfigLoader, Configuration, Logger}
 
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.ActorRef
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import javax.inject.{Inject, Named, Singleton}
 import org.thp.scalligraph.NotFoundError
@@ -20,12 +20,11 @@ import org.thp.scalligraph.services.EventSrv
 class ApplicationConfig @Inject() (
     configuration: Configuration,
     db: Database,
-    system: ActorSystem,
     eventSrv: EventSrv,
     @Named("config-actor") configActor: ActorRef,
     implicit val ec: ExecutionContext
 ) {
-  lazy val logger                          = Logger(getClass)
+  lazy val logger: Logger                  = Logger(getClass)
   val ignoreDatabaseConfiguration: Boolean = configuration.get[Boolean]("ignoreDatabaseConfiguration")
   if (ignoreDatabaseConfiguration) logger.warn("Emit warning !") // TODO
   private val itemsLock                                = new Object
@@ -88,7 +87,7 @@ class ContextApplicationConfig[C](
     configActor: ActorRef,
     implicit val ec: ExecutionContext
 ) {
-  lazy val logger = Logger(getClass)
+  lazy val logger: Logger = Logger(getClass)
 
   def item[T: Format](path: String, description: String): ContextConfigItem[T, C] =
     validatedItem[T](path, description, Success.apply)
@@ -104,9 +103,7 @@ class ContextApplicationConfig[C](
       configuration.get[T](context.defaultPath(path)),
       implicitly[Format[T]],
       validation,
-      db,
       eventSrv,
-      configActor,
       ec
     )
   }
