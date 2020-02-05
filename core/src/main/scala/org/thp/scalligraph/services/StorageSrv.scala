@@ -172,7 +172,7 @@ class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Data
 
   override def saveBinary(folder: String, id: String, is: InputStream)(implicit graph: Graph): Try[Unit] = {
 
-    lazy val logger = Logger(getClass)
+    lazy val logger: Logger = Logger(getClass)
 
     def readNextChunk: Array[Byte] = {
       val buffer = new Array[Byte](chunkSize)

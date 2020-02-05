@@ -20,7 +20,7 @@ class DatabaseProviders @Inject() (config: Configuration, system: ActorSystem) {
 
   def this() = this(ActorSystem("DatabaseProviders"))
 
-  lazy val logger = Logger(getClass)
+  lazy val logger: Logger = Logger(getClass)
 
   lazy val janus: DatabaseProvider = new DatabaseProvider("janus", new JanusDatabase(config, system))
 

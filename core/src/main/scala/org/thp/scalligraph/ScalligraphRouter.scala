@@ -19,7 +19,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Success
 
 object DebugRouter {
-  lazy val logger = Logger(getClass)
+  lazy val logger: Logger = Logger(getClass)
 
   def apply(name: String, router: Router): Router = new Router {
     override def routes: Routes = new Routes {
@@ -61,7 +61,7 @@ class ScalligraphRouter @Inject() (
     authSrv: AuthSrv,
     implicit val ec: ExecutionContext
 ) extends Provider[Router] {
-  lazy val logger                   = Logger(getClass)
+  lazy val logger: Logger           = Logger(getClass)
   lazy val routerList: List[Router] = routers.toList
   override lazy val get: Router = {
     val prefix = httpConfig.context

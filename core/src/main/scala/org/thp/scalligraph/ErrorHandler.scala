@@ -12,7 +12,7 @@ import play.api.mvc.{RequestHeader, ResponseHeader, Result}
   * This class handles errors. It traverses all causes of exception to find known error and shows the appropriate message
   */
 class ErrorHandler extends HttpErrorHandler {
-  lazy val logger = Logger(getClass)
+  lazy val logger: Logger = Logger(getClass)
 
   def onClientError(request: RequestHeader, statusCode: Int, message: String): Future[Result] = {
     val tpe = statusCode match {
@@ -47,7 +47,7 @@ class ErrorHandler extends HttpErrorHandler {
       case t: Throwable => Option(t.getCause).flatMap(toErrorResult)
     }
 
-  def toResult[C](status: Int, c: C)(implicit writeable: Writeable[C]) =
+  def toResult[C](status: Int, c: C)(implicit writeable: Writeable[C]): Result =
     Result(header = ResponseHeader(status), body = writeable.toEntity(c))
 
   def onServerError(request: RequestHeader, exception: Throwable): Future[Result] = {

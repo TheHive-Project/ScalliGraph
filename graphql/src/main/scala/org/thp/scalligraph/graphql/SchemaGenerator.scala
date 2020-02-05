@@ -16,7 +16,7 @@ import org.thp.scalligraph.steps.BaseElementSteps
 import org.thp.scalligraph.utils.{ CaseClassType, RichType }
 
 object SchemaGenerator {
-  lazy val logger = Logger(getClass)
+  lazy val logger : Logger = Logger(getClass)
 
   lazy val orderEnumeration = EnumType(
     "Order",

@@ -13,8 +13,8 @@ import javax.inject.{Inject, Singleton}
 
 @Singleton
 class EventSrv @Inject() (system: ActorSystem) {
-  lazy val logger      = Logger(getClass)
-  private val mediator = DistributedPubSub(system).mediator
+  lazy val logger: Logger = Logger(getClass)
+  private val mediator    = DistributedPubSub(system).mediator
 
   def publish(topicName: String)(message: Any): Unit = {
     logger.debug(s"publish $topicName $message")

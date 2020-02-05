@@ -53,7 +53,7 @@ class ConfigItemImpl[B, F](
     configActor: ActorRef,
     implicit val ec: ExecutionContext
 ) extends ConfigItem[B, F] {
-  lazy val logger                                   = Logger(getClass)
+  lazy val logger: Logger                           = Logger(getClass)
   private var fValue: F                             = _
   private var bValue: B                             = _
   @volatile private var flag                        = false

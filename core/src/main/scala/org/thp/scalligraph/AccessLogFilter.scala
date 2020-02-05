@@ -11,7 +11,7 @@ import javax.inject.Inject
 
 class AccessLogFilter @Inject() (implicit val mat: Materializer, ec: ExecutionContext) extends EssentialFilter {
 
-  val logger = Logger(getClass)
+  val logger: Logger = Logger(getClass)
 
   override def apply(next: EssentialAction): EssentialAction = (requestHeader: RequestHeader) => {
     val startTime = System.currentTimeMillis

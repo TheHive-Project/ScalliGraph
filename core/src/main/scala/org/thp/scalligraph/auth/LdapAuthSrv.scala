@@ -16,7 +16,7 @@ import org.thp.scalligraph.{AuthenticationError, AuthorizationError}
 case class LdapConfig(hosts: Seq[String], useSSL: Boolean, bindDN: String, bindPW: String, baseDN: String, filter: String)
 
 class LdapAuthSrv(ldapConfig: LdapConfig, userSrv: UserSrv) extends AuthSrv {
-  lazy val logger                                      = Logger(getClass)
+  lazy val logger: Logger                              = Logger(getClass)
   val name                                             = "ldap"
   override val capabilities: Set[AuthCapability.Value] = Set(AuthCapability.changePassword)
 

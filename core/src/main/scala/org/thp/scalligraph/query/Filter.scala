@@ -126,7 +126,7 @@ class IdFilter(id: String) extends InputFilter {
 }
 
 object InputFilter {
-  lazy val logger = Logger(getClass)
+  lazy val logger: Logger = Logger(getClass)
 
   def is(field: String, value: Any): PredicateFilter = PredicateFilter(field, P.is(value))
 

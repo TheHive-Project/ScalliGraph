@@ -43,27 +43,27 @@ class PersonSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph
 class SoftwareSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph) extends VertexSteps[Software](raw) {
   def createdBy = new PersonSteps(raw.in("Created"))
 
-  def isRipple = this.has("name", "ripple")
+  def isRipple: SoftwareSteps = this.has("name", "ripple")
 
   override def newInstance(newRaw: GremlinScala[Vertex]): SoftwareSteps = new SoftwareSteps(newRaw)
   override def newInstance(): SoftwareSteps                             = new SoftwareSteps(raw.clone())
 }
 
 @Singleton
-class PersonSrv @Inject()(implicit db: Database) extends VertexSrv[Person, PersonSteps] {
+class PersonSrv @Inject() (implicit db: Database) extends VertexSrv[Person, PersonSteps] {
   override val initialValues: Seq[Person]                                                         = Seq(Person("marc", 34), Person("franck", 28))
   override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): PersonSteps               = new PersonSteps(raw)
   def create(e: Person)(implicit graph: Graph, authContext: AuthContext): Try[Person with Entity] = createEntity(e)
 }
 
 @Singleton
-class SoftwareSrv @Inject()(implicit db: Database) extends VertexSrv[Software, SoftwareSteps] {
+class SoftwareSrv @Inject() (implicit db: Database) extends VertexSrv[Software, SoftwareSteps] {
   override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): SoftwareSteps                 = new SoftwareSteps(raw)
   def create(e: Software)(implicit graph: Graph, authContext: AuthContext): Try[Software with Entity] = createEntity(e)
 }
 
 @Singleton
-class ModernSchema @Inject()(implicit db: Database) extends Schema {
+class ModernSchema @Inject() (implicit db: Database) extends Schema {
   val personSrv                                    = new PersonSrv
   val softwareSrv                                  = new SoftwareSrv
   val knowsSrv                                     = new EdgeSrv[Knows, Person, Person]

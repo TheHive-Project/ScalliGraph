@@ -71,7 +71,7 @@ class ScalligraphApplicationLoader extends GuiceApplicationLoader {
 
   import ScalligraphApplicationLoader._
 
-  lazy val logger = Logger("ScalligraphApplication")
+  lazy val logger: Logger = Logger("ScalligraphApplication")
   logger.info("Loading application ...")
 
   override protected def builder(context: ApplicationLoader.Context): GuiceApplicationBuilder = {

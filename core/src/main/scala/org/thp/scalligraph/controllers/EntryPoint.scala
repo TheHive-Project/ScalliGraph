@@ -30,7 +30,7 @@ class EntryPoint @Inject() (
     implicit val ec: ExecutionContext
 ) {
 
-  lazy val logger = Logger(getClass)
+  lazy val logger: Logger = Logger(getClass)
 
   /**
     * Create a named entry point

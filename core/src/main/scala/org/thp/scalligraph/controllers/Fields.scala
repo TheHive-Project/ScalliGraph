@@ -24,7 +24,7 @@ sealed trait Field {
 }
 
 object Field {
-  private[Field] lazy val logger = Logger(getClass)
+  private[Field] lazy val logger: Logger = Logger(getClass)
 
   def apply(json: JsValue): Field = json match {
     case JsString(s)  => FString(s)

@@ -18,7 +18,7 @@ abstract class QueryExecutor { executor =>
   val version: (Int, Int)
   lazy val publicProperties: List[PublicProperty[_, _]] = Nil
   lazy val queries: Seq[ParamQuery[_]]                  = Nil
-  lazy val logger                                       = Logger(getClass)
+  lazy val logger: Logger                               = Logger(getClass)
   val db: Database
 
   final lazy val allQueries = queries :+ sortQuery :+ filterQuery :+ aggregationQuery :+ ToListQuery
