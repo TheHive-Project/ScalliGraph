@@ -24,9 +24,9 @@ class ControllerTest(implicit executionEnv: ExecutionEnv) extends PlaySpecificat
     "extract simple class from HTTP request" in {
 
       val actionBuilder = DefaultActionBuilder(Helpers.stubBodyParser())
-      val entryPoint    = new EntryPoint(mock[AuthSrv], actionBuilder, new ErrorHandler, executionEnv.ec)
+      val entrypoint    = new Entrypoint(mock[AuthSrv], actionBuilder, new ErrorHandler, executionEnv.ec)
 
-      val action = entryPoint("model extraction")
+      val action = entrypoint("model extraction")
         .extract("simpleClass", FieldsParser[SimpleClassForFieldsParserMacroTest]) { req =>
           val simpleClass = req.body("simpleClass")
           simpleClass must_=== SimpleClassForFieldsParserMacroTest("myName", 44)
@@ -42,9 +42,9 @@ class ControllerTest(implicit executionEnv: ExecutionEnv) extends PlaySpecificat
 //    "render stream with total number of element in header" in {
 //
 //      val actionBuilder = DefaultActionBuilder(Helpers.stubBodyParser())
-//      val entryPoint    = new EntryPoint(mock[AuthenticateSrv], actionBuilder, new ErrorHandler, ee.ec, mat)
+//      val entrypoint    = new EntryPoint(mock[AuthenticateSrv], actionBuilder, new ErrorHandler, ee.ec, mat)
 //
-//      val action = entryPoint("find entity")
+//      val action = entrypoint("find entity")
 //        .chunked(_ ⇒ Source(0 to 3).mapMaterializedValue(_ ⇒ 10))
 //      val request = FakeRequest("GET", "/")
 //      val result  = Await.result(action(request), 1.second)

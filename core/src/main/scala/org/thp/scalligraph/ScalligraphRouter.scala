@@ -3,7 +3,7 @@ package org.thp.scalligraph
 import com.google.inject.Provider
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.auth.AuthSrv
-import org.thp.scalligraph.controllers.{AuthenticatedRequest, EntryPoint}
+import org.thp.scalligraph.controllers.{AuthenticatedRequest, Entrypoint}
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.query.{AuthGraph, Query, QueryExecutor}
 import play.api.Logger
@@ -54,7 +54,7 @@ class GlobalQueryExecutor @Inject() (queryExecutors: immutable.Set[QueryExecutor
 class ScalligraphRouter @Inject() (
     httpConfig: HttpConfiguration,
     routers: immutable.Set[Router],
-    entryPoint: EntryPoint,
+    entrypoint: Entrypoint,
     db: Database,
     globalQueryExecutor: GlobalQueryExecutor,
     actionBuilder: DefaultActionBuilder,
@@ -77,7 +77,7 @@ class ScalligraphRouter @Inject() (
   val queryRoutes: Routes = {
     case POST(p"/api/v${int(version)}/query") =>
       val queryExecutor = globalQueryExecutor.get(version)
-      entryPoint("query")
+      entrypoint("query")
         .extract("query", queryExecutor.parser.on("query"))
         .authRoTransaction(db) { implicit request => implicit graph =>
           val authGraph = AuthGraph(request, graph)

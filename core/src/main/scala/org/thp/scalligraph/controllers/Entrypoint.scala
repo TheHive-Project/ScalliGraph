@@ -23,7 +23,7 @@ import scala.util.{Failure, Try}
   * @param ec            ExecutionContext
   */
 @Singleton
-class EntryPoint @Inject() (
+class Entrypoint @Inject() (
     authSrv: AuthSrv,
     actionBuilder: DefaultActionBuilder,
     errorHandler: HttpErrorHandler,
