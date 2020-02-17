@@ -218,5 +218,9 @@ case class FObject(fields: immutable.Map[String, Field]) extends Field {
     case FAny(s :: Nil) => s
   }
 
+  def getNumber(path: String): Option[Double] = fields.get(path).collect {
+    case FNumber(n) => n
+  }
+
   override def toJson: JsValue = JsObject(fields.map { case (k, v) => k -> v.toJson })
 }
