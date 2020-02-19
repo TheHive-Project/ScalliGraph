@@ -105,17 +105,17 @@ class Entrypoint @Inject() (
     /**
       *
       * @param db necessary db instance for transaction
-      * @param permissions set of permissions to check
+      * @param permission permission to check
       * @param block business login function that transforms request into response
       * @return
       */
     def authPermittedTransaction(
         db: Database,
-        permissions: Permission*
+        permission: Permission
     )(block: AuthenticatedRequest[Record[V]] => Graph => Try[Result]): Action[AnyContent] =
       auth { request =>
-        if (permissions.forall(request.permissions.contains)) db.tryTransaction(graph => block(request)(graph))
-        else Failure(AuthorizationError(s"Your are not authorized to $name, you haven't the permission ${permissions.mkString(",")}"))
+        if (request.isPermitted(permission)) db.tryTransaction(graph => block(request)(graph))
+        else Failure(AuthorizationError(s"Your are not authorized to $name, you haven't the permission $permission"))
       }
 
     def authRoTransaction(

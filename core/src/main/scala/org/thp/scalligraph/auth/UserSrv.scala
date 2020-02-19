@@ -7,13 +7,6 @@ import play.api.mvc.RequestHeader
 
 import scala.util.Try
 
-trait PermissionTag
-
-object Permission {
-  def apply(name: String): Permission            = shapeless.tag[PermissionTag][String](name)
-  def apply(names: Set[String]): Set[Permission] = names.map(apply)
-}
-
 trait AuthContext {
   def userId: String
   def userName: String
@@ -21,6 +14,7 @@ trait AuthContext {
   def requestId: String
   def permissions: Set[Permission]
   def changeOrganisation(newOrganisation: String): AuthContext
+  def isPermitted(requiredPermission: Permission): Boolean = permissions.contains(requiredPermission)
 }
 
 case class AuthContextImpl(userId: String, userName: String, organisation: String, requestId: String, permissions: Set[Permission])
