@@ -18,6 +18,31 @@ object Outputer {
     def toJson: JsValue = outputer.toOutput(o).toJson
     def toOutput: D     = outputer.toOutput(o).toOutput
   }
+  implicit def seqOutputer[M](implicit aOutputer: Outputer[M]): Outputer.Aux[Seq[M], Seq[aOutputer.D]] = new Outputer[Seq[M]] {
+    override type D = Seq[aOutputer.D]
+    override def toOutput(m: Seq[M]): Output[D] = {
+      val o = m.map(aOutputer.toOutput(_).toOutput)
+      val j = JsArray(m.map(aOutputer.toOutput(_).toJson))
+      Output[D](o, j)
+    }
+  }
+  implicit def listOutputer[M](implicit aOutputer: Outputer[M]): Outputer.Aux[List[M], List[aOutputer.D]] = new Outputer[List[M]] {
+    override type D = List[aOutputer.D]
+    override def toOutput(m: List[M]): Output[D] = {
+      val o = m.map(aOutputer.toOutput(_).toOutput)
+      val j = JsArray(m.map(aOutputer.toOutput(_).toJson))
+      Output[D](o, j)
+    }
+
+  }
+  implicit def setOutputer[M](implicit aOutputer: Outputer[M]): Outputer.Aux[Set[M], Set[aOutputer.D]] = new Outputer[Set[M]] {
+    override type D = Set[aOutputer.D]
+    override def toOutput(m: Set[M]): Output[D] = {
+      val o = m.map(aOutputer.toOutput(_).toOutput)
+      val j = JsArray(m.map(aOutputer.toOutput(_).toJson).toSeq)
+      Output[D](o, j)
+    }
+  }
 }
 
 class Output[O](_toOutput: => O, _toJson: => JsValue) {
