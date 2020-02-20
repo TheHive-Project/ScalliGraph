@@ -40,7 +40,7 @@ abstract class VertexSrv[V <: Product: ru.TypeTag, S <: VertexSteps[V]](implicit
   def createEntity(e: V)(implicit graph: Graph, authContext: AuthContext): Try[V with Entity] =
     Success(db.createVertex[V](graph, authContext, model, e))
 
-  val initialValues: Seq[V] = Nil
+  def initialValues: Seq[V] = Nil
 
   def getInitialValues: Seq[InitialValue[V]] = initialValues.map(v => InitialValue(model, v))
 

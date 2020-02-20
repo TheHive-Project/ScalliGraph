@@ -236,6 +236,7 @@ object StepsOps {
       Traversal[B](GremlinScala(jTraversal))
     }
 
+    def where(predicate: P[String])(implicit ev: traversal.EndGraph <:< Element): T             = newInstance0(raw.where(predicate))
     def has[A](key: String, value: A)(implicit ev: traversal.EndGraph <:< Element): T           = newInstance0(raw.has(Key[A](key), P.eq(value)))
     def has[A](key: String, predicate: P[A])(implicit ev: traversal.EndGraph <:< Element): T    = newInstance0(raw.has(Key[A](key), predicate))
     def has[A](key: String)(implicit ev: traversal.EndGraph <:< Element): T                     = newInstance0(raw.has(Key[A](key)))
