@@ -84,6 +84,7 @@ abstract class Model {
   def get(id: String)(implicit db: Database, graph: Graph): ElementType
   val fields: Map[String, Mapping[_, _, _]]
   def toDomain(element: ElementType)(implicit db: Database): EEntity
+  def addEntity(e: E, entity: Entity): EEntity
 
   def converter(db: Database, graph: Graph): Converter.Aux[EEntity, ElementType] =
     new Converter[EEntity] {

@@ -336,11 +336,12 @@ class JanusDatabase(
 
   override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
     val createdVertex = model.create(v)(this, graph)
-    setSingleProperty(createdVertex, "_createdAt", new Date, createdAtMapping)
-    setSingleProperty(createdVertex, "_createdBy", authContext.userId, createdByMapping)
+    val entity        = DummyEntity(model, createdVertex.id(), authContext.userId)
+    setSingleProperty(createdVertex, "_createdAt", entity._createdAt, createdAtMapping)
+    setSingleProperty(createdVertex, "_createdBy", entity._createdBy, createdByMapping)
     setSingleProperty(createdVertex, "_label", model.label, UniMapping.string)
     logger.trace(s"Created vertex is ${Model.printElement(createdVertex)}")
-    model.toDomain(createdVertex)(this)
+    model.addEntity(v, entity)
   }
 
   override def createEdge[E <: Product, FROM <: Product, TO <: Product](
@@ -356,11 +357,12 @@ class JanusDatabase(
       t <- graph.V(to._id).headOption()
     } yield {
       val createdEdge = model.create(e, f, t)(this, graph)
-      setSingleProperty(createdEdge, "_createdAt", new Date, createdAtMapping)
-      setSingleProperty(createdEdge, "_createdBy", authContext.userId, createdByMapping)
+      val entity      = DummyEntity(model, createdEdge.id(), authContext.userId)
+      setSingleProperty(createdEdge, "_createdAt", entity._createdAt, createdAtMapping)
+      setSingleProperty(createdEdge, "_createdBy", entity._createdBy, createdByMapping)
       setSingleProperty(createdEdge, "_label", model.label, UniMapping.string)
       logger.trace(s"Create edge ${model.label} from $f to $t: ${Model.printElement(createdEdge)}")
-      model.toDomain(createdEdge)(this)
+      model.addEntity(e, entity)
     }
     edgeMaybe.getOrElse {
       val error = graph.V(from._id).headOption().map(_ => "").getOrElse(s"${from._model.label}:${from._id} not found ") +

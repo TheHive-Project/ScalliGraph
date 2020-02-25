@@ -55,6 +55,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
         }
 
         override val fields: Map[String, Mapping[_, _, _]] = Map(..$fieldMap)
+        
         override def toDomain(element: ElementType)(implicit db: Database): EEntity = new $entityType(..$domainBuilder) with Entity {
           val _id        = element.id().toString
           val _model     = thisModel
@@ -62,6 +63,16 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
           val _createdBy = db.getProperty(element, "_createdBy", UniMapping.string)
           val _updatedAt = db.getProperty(element, "_updatedAt", UniMapping.date.optional)
           val _updatedBy = db.getProperty(element, "_updatedBy", UniMapping.string.optional)
+        }
+      
+        override def addEntity(e: $entityType, entity: Entity): EEntity = new $entityType(..${mappings
+      .map(m => q"e.${TermName(m.name)}")}) with Entity {
+          override def _id: String                = entity._id
+          override def _model: Model              = entity._model
+          override def _createdBy: String         = entity._createdBy
+          override def _updatedBy: Option[String] = entity._updatedBy
+          override def _createdAt: Date           = entity._createdAt
+          override def _updatedAt: Option[Date]   = entity._updatedAt
         }
       }
       """)
@@ -118,7 +129,9 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
           ..$setProperties
           edge
         }
+        
         override val fields: Map[String, Mapping[_, _, _]] = Map(..$fieldMap)
+        
         override def toDomain(element: ElementType)(implicit db: Database): EEntity = new $entityType(..$domainBuilder) with Entity {
           val _id        = element.id().toString
           val _model     = thisModel
@@ -126,8 +139,17 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
           val _createdBy = db.getProperty(element, "_createdBy", UniMapping.string)
           val _updatedAt = db.getProperty(element, "_updatedAt", UniMapping.date.optional)
           val _updatedBy = db.getProperty(element, "_updatedBy", UniMapping.string.optional)
-
         }
+        
+        override def addEntity(e: $entityType, entity: Entity): EEntity =
+          new $entityType(..${mappings.map(m => q"e.${TermName(m.name)}")}) with Entity {
+            override def _id: String                = entity._id
+            override def _model: Model              = entity._model
+            override def _createdBy: String         = entity._createdBy
+            override def _updatedBy: Option[String] = entity._updatedBy
+            override def _createdAt: Date           = entity._createdAt
+            override def _updatedAt: Option[Date]   = entity._updatedAt
+          }
       }
       """)
     ret(s"Edge model $entityType", model)

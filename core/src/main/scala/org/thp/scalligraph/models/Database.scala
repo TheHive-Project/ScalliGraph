@@ -180,12 +180,24 @@ abstract class BaseDatabase extends Database {
 
   override def createSchema(models: Seq[Model]): Try[Unit]
 
+  protected case class DummyEntity(
+      _model: Model,
+      id: AnyRef,
+      _createdBy: String,
+      _createdAt: Date = new Date,
+      _updatedBy: Option[String] = None,
+      _updatedAt: Option[Date] = None
+  ) extends Entity {
+    val _id: String = id.toString
+  }
+
   override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
     val createdVertex = model.create(v)(this, graph)
-    setSingleProperty(createdVertex, "_createdAt", new Date, createdAtMapping)
-    setSingleProperty(createdVertex, "_createdBy", authContext.userId, createdByMapping)
+    val entity        = DummyEntity(model, createdVertex.id(), authContext.userId)
+    setSingleProperty(createdVertex, "_createdAt", entity._createdAt, createdAtMapping)
+    setSingleProperty(createdVertex, "_createdBy", entity._createdBy, createdByMapping)
     logger.trace(s"Created vertex is ${Model.printElement(createdVertex)}")
-    model.toDomain(createdVertex)(this)
+    model.addEntity(v, entity)
   }
 
   override def createEdge[E <: Product, FROM <: Product, TO <: Product](
@@ -201,10 +213,11 @@ abstract class BaseDatabase extends Database {
       t <- graph.V(to._id).headOption()
     } yield {
       val createdEdge = model.create(e, f, t)(this, graph)
-      setSingleProperty(createdEdge, "_createdAt", new Date, createdAtMapping)
-      setSingleProperty(createdEdge, "_createdBy", authContext.userId, createdByMapping)
+      val entity      = DummyEntity(model, createdEdge.id(), authContext.userId)
+      setSingleProperty(createdEdge, "_createdAt", entity._createdAt, createdAtMapping)
+      setSingleProperty(createdEdge, "_createdBy", entity._createdBy, createdByMapping)
       logger.trace(s"Create edge ${model.label} from $f to $t: ${Model.printElement(createdEdge)}")
-      model.toDomain(createdEdge)(this)
+      model.addEntity(e, entity)
     }
     edgeMaybe.getOrElse {
       val error = graph.V(from._id).headOption().map(_ => "").getOrElse(s"${from._model.label}:${from._id} not found ") +
@@ -354,6 +367,16 @@ object Binary extends HasVertexModel[Binary] {
         override def _updatedAt: Option[Date]   = None
       }
     }
+
+    override def addEntity(binary: Binary, entity: Entity): EEntity =
+      new Binary(binary.attachmentId, binary.folder, binary.data) with Entity {
+        override def _id: String                = entity._id
+        override def _model: Model              = entity._model
+        override def _createdBy: String         = entity._createdBy
+        override def _updatedBy: Option[String] = entity._updatedBy
+        override def _createdAt: Date           = entity._createdAt
+        override def _updatedAt: Option[Date]   = entity._updatedAt
+      }
   }
 }
 case class BinaryLink()
@@ -374,6 +397,15 @@ object BinaryLink extends HasEdgeModel[BinaryLink, Binary, Binary] {
       override def _updatedBy: Option[String] = None
       override def _createdAt: Date           = ???
       override def _updatedAt: Option[Date]   = None
+    }
+
+    override def addEntity(binaryLink: BinaryLink, entity: Entity): EEntity = new BinaryLink with Entity {
+      override def _id: String                = entity._id
+      override def _model: Model              = entity._model
+      override def _createdBy: String         = entity._createdBy
+      override def _updatedBy: Option[String] = entity._updatedBy
+      override def _createdAt: Date           = entity._createdAt
+      override def _updatedAt: Option[Date]   = entity._updatedAt
     }
   }
 }
