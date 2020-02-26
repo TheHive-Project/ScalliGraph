@@ -36,7 +36,7 @@ case class BranchOtherwise[T <: BaseTraversal, R <: BaseTraversal](traversal: T 
 
 object StepsOps {
 
-  lazy val logger: Logger = Logger(classOf[Traversal[_, _]])
+  private lazy val logger: Logger = Logger(classOf[Traversal[_, _]])
 
   implicit class TraversalGraphOps[G](val steps: TraversalGraph[G]) {
     type EndDomain = steps.EndDomain
