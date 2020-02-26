@@ -4,6 +4,7 @@ import java.util.Date
 import java.util.function.Consumer
 
 import scala.collection.JavaConverters._
+import scala.collection.{immutable, mutable}
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
 
@@ -71,6 +72,17 @@ trait Database {
       authContext: AuthContext
   ): Try[Seq[E with Entity]]
 
+  def getAllProperties(element: Element): Map[String, Seq[Any]] = {
+    val m = mutable.Map.empty[String, mutable.Builder[Any, Seq[Any]]]
+    for (property <- element.properties[Any]().asScala) {
+      val bldr = m.getOrElseUpdate(property.key(), Seq.newBuilder)
+      bldr += property.value()
+    }
+    val b = immutable.Map.newBuilder[String, Seq[Any]]
+    for ((k, v) <- m)
+      b += ((k, v.result))
+    b.result
+  }
   def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D
   def getOptionProperty[D, G](element: Element, key: String, mapping: OptionMapping[D, G]): Option[D]
   def getListProperty[D, G](element: Element, key: String, mapping: ListMapping[D, G]): Seq[D]

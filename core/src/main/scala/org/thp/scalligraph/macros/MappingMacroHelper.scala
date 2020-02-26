@@ -23,14 +23,16 @@ trait MappingMacroHelper extends MacroUtil with MacroLogger {
 
   import c.universe._
 
-  case class MappingSymbol(name: String, valName: TermName, definition: Tree)
+  case class MappingSymbol(name: String, valName: TermName, definition: Tree, tpe: Type)
 
   def getEntityMappings[E: WeakTypeTag]: Seq[MappingSymbol] = {
 
     val eType = weakTypeOf[E]
     eType match {
       case CaseClassType(symbols @ _*) =>
-        symbols.map(s => MappingSymbol(s.name.decodedName.toString.trim, TermName(c.freshName(s.name + "Mapping")), getMapping(s, s.typeSignature)))
+        symbols.map(s =>
+          MappingSymbol(s.name.decodedName.toString.trim, TermName(c.freshName(s.name + "Mapping")), getMapping(s, s.typeSignature), s.typeSignature)
+        )
     }
   }
 
