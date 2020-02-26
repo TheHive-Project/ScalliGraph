@@ -3,6 +3,7 @@ import sbt._
 object Dependencies {
   val janusVersion        = "0.4.0"
   val akkaVersion: String = play.core.PlayVersion.akkaVersion
+  val elastic4sVersion    = "6.7.4"
 
   lazy val specs                   = "com.typesafe.play"        %% "play-specs2"                        % play.core.PlayVersion.current
   lazy val playLogback             = "com.typesafe.play"        %% "play-logback"                       % play.core.PlayVersion.current
@@ -35,6 +36,9 @@ object Dependencies {
   lazy val macroParadise           = "org.scalamacros"          % "paradise"                            % "2.1.1" cross CrossVersion.full
   lazy val chimney                 = "io.scalaland"             %% "chimney"                            % "0.4.0"
   lazy val elastic4play            = "org.thehive-project"      %% "elastic4play"                       % "1.11.5" /*exclude ("org.apache.logging.log4j", "log4j-core") exclude("org.apache.logging.log4j", "log4j-api") exclude("org.apache.logging.log4j", "log4j-1.2-api") */
+  lazy val elastic4sCore           = "com.sksamuel.elastic4s"   %% "elastic4s-core"                     % elastic4sVersion
+  lazy val elastic4sHttpStreams    = "com.sksamuel.elastic4s"   %% "elastic4s-http-streams"             % elastic4sVersion
+  lazy val elastic4sHttp           = "com.sksamuel.elastic4s"   %% "elastic4s-http"                     % elastic4sVersion
   lazy val log4jOverSlf4j          = "org.slf4j"                % "log4j-over-slf4j"                    % "1.7.25"
   lazy val log4jToSlf4j            = "org.apache.logging.log4j" % "log4j-to-slf4j"                      % "2.9.1"
   lazy val reflections             = "org.reflections"          % "reflections"                         % "0.9.12"
@@ -47,6 +51,8 @@ object Dependencies {
   lazy val jts                     = "com.vividsolutions"       % "jts"                                 % "1.13"
   lazy val pbkdf2                  = "io.github.nremond"        %% "pbkdf2-scala"                       % "0.6.5"
   lazy val alpakkaS3               = "com.lightbend.akka"       %% "akka-stream-alpakka-s3"             % "1.1.2"
+  lazy val commonCodec             = "commons-codec"            % "commons-codec"                       % "1.11"
+  lazy val scopt                   = "com.github.scopt"         %% "scopt"                              % "4.0.0-RC2"
 
   def scalaReflect(scalaVersion: String)  = "org.scala-lang" % "scala-reflect"  % scalaVersion
   def scalaCompiler(scalaVersion: String) = "org.scala-lang" % "scala-compiler" % scalaVersion
