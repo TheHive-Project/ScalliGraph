@@ -1,8 +1,9 @@
 import Dependencies._
 
-lazy val scala212               = "2.12.10"
-lazy val scala213               = "2.13.1"
-lazy val supportedScalaVersions = List(scala212, scala213)
+val scalligraphVersion     = "0.1.0-SNAPSHOT"
+val scala212               = "2.12.10"
+val scala213               = "2.13.1"
+val supportedScalaVersions = List(scala212, scala213)
 
 organization in ThisBuild := "org.thp"
 scalaVersion in ThisBuild := scala212
@@ -56,12 +57,14 @@ lazy val scalligraph = (project in file("."))
   .dependsOn(coreTest % "test -> test")
   .aggregate(core, /*graphql, */ janus /* , orientdb, neo4j */, coreTest)
   .settings(
-    name := "scalligraph"
+    name := "scalligraph",
+    version := scalligraphVersion
   )
 
 lazy val core = (project in file("core"))
   .settings(
     name := "scalligraph-core",
+    version := scalligraphVersion,
     libraryDependencies ++= Seq(
       gremlinScala,
       scalactic,
@@ -94,6 +97,7 @@ lazy val coreTest = (project in file("core-test"))
   //  .dependsOn(neo4j)
   .settings(
     name := "scalligraph-core-test",
+    version := scalligraphVersion,
     libraryDependencies ++= Seq(
       specs       % Test,
       playLogback % Test
@@ -104,6 +108,7 @@ lazy val janus = (project in file("database/janusgraph"))
   .dependsOn(core)
   .settings(
     name := "scalligraph-janusgraph",
+    version := scalligraphVersion,
     libraryDependencies ++= Seq(
       janusGraph,
       janusGraphBerkeleyDB,
@@ -119,6 +124,7 @@ lazy val orientdb = (project in file("database/orientdb"))
   .dependsOn(core)
   .settings(
     name := "scalligraph-orientdb",
+    version := scalligraphVersion,
     libraryDependencies ++= Seq(
       gremlinScala,
       gremlinOrientdb,
@@ -130,6 +136,7 @@ lazy val neo4j = (project in file("database/neo4j"))
   .dependsOn(core)
   .settings(
     name := "scalligraph-neo4j",
+    version := scalligraphVersion,
     libraryDependencies ++= Seq(
       gremlinScala,
       neo4jGremlin,
@@ -144,6 +151,7 @@ lazy val neo4j = (project in file("database/neo4j"))
 //  .dependsOn(janus)
 //  .settings(
 //    name := "scalligraph-graphql",
+//    version := scalligraphVersion,
 //    libraryDependencies ++= Seq(
 //      scalaGuice,
 //      sangria,
