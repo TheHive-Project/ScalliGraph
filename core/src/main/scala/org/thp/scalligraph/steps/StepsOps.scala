@@ -7,14 +7,17 @@ import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
+
 import play.api.Logger
+
 import gremlin.scala.dsl.Converter
-import gremlin.scala.{__, By, Edge, GremlinScala, Key, OrderBy, P, ProjectionBuilder, StepLabel, Vertex}
+import gremlin.scala.{By, Edge, Graph, GremlinScala, Key, OrderBy, P, ProjectionBuilder, StepLabel, Vertex, __, _}
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
 import org.apache.tinkerpop.gremlin.process.traversal.step.TraversalOptionParent.Pick
 import org.apache.tinkerpop.gremlin.structure.Element
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.{Entity, Mapping, UniMapping}
+import org.thp.scalligraph.services.VertexSrv
 import org.thp.scalligraph.{AuthorizationError, InternalError, NotFoundError}
 import shapeless.HNil
 
@@ -37,6 +40,14 @@ case class BranchOtherwise[T <: BaseTraversal, R <: BaseTraversal](traversal: T 
 object StepsOps {
 
   private lazy val logger: Logger = Logger(classOf[Traversal[_, _]])
+
+  def union[T <: VertexSteps[_]](
+      srv: VertexSrv[_, T]
+  )(firstTraversal: GremlinScala[Vertex] => T, otherTraverals: (GremlinScala[Vertex] => T)*)(implicit graph: Graph): T = {
+    val traversals = (firstTraversal +: otherTraverals)
+      .map(t => (g: GremlinScala.Aux[Int, HNil]) => t(GremlinScala[Vertex, HNil](g.traversal.V())).raw)
+    srv.steps(graph.inject(1).unionFlat(traversals: _*))
+  }
 
   implicit class TraversalGraphOps[G](val steps: TraversalGraph[G]) {
     type EndDomain = steps.EndDomain
