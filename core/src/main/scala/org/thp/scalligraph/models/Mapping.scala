@@ -6,7 +6,7 @@ import java.util.{Base64, Date}
 import scala.language.experimental.macros
 import scala.reflect.{classTag, ClassTag}
 
-import play.api.libs.json.{JsObject, JsValue, Json}
+import play.api.libs.json.{JsBoolean, JsNull, JsNumber, JsObject, JsString, JsValue, Json}
 
 import gremlin.scala.dsl.Converter
 import org.thp.scalligraph.InternalError
@@ -66,6 +66,22 @@ object UniMapping extends MappingLowerPrio {
   val jdouble: SingleMapping[Double, JDouble]    = SingleMapping[Double, JDouble]()
   val jfloat: SingleMapping[Float, JFloat]       = SingleMapping[Float, JFloat]()
   def identity[N: ClassTag]: SingleMapping[N, N] = SingleMapping[N, N]()
+  def jsonNative: SingleMapping[JsValue, Any] =
+    SingleMapping[JsValue, Any](
+      toGraphOptFn = {
+        case JsString(s)  => Some(s)
+        case JsBoolean(b) => Some(b)
+        case JsNumber(v)  => Some(v)
+        case _            => None
+      },
+      toDomainFn = {
+        case s: String  => JsString(s)
+        case b: Boolean => JsBoolean(b)
+        case d: Date    => JsNumber(d.getTime)
+        case n: Number  => JsNumber(n.doubleValue())
+        case _          => JsNull
+      }
+    )
 
 }
 
