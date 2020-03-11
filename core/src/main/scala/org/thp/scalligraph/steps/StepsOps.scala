@@ -49,6 +49,20 @@ object StepsOps {
     srv.steps(graph.inject(1).unionFlat(traversals: _*))
   }
 
+  def onlyOneOf[A](elements: JList[A]): A = {
+    val size = elements.size
+    if (size == 1) elements.get(0)
+    else if (size > 1) throw InternalError(s"Too many elements in result ($size found)")
+    else throw InternalError("No element found")
+  }
+
+  def atMostOneOf[A](elements: JList[A]): Option[A] = {
+    val size = elements.size
+    if (size == 1) Some(elements.get(0))
+    else if (size > 1) throw InternalError(s"Too many elements in result ($size found)")
+    else None
+  }
+
   implicit class TraversalGraphOps[G](val steps: TraversalGraph[G]) {
     type EndDomain = steps.EndDomain
     def raw: GremlinScala[G] = steps.raw.asInstanceOf[GremlinScala[G]]
