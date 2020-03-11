@@ -172,7 +172,7 @@ object FieldsParser extends FieldsParserLowerPrio {
   implicit val boolean: FieldsParser[Boolean] =
     FieldsParser[Boolean]("boolean")(unlift {
       case (_, FBoolean(b))  => Some(Good(b))
-      case (_, FAny(Seq(s))) => Try(Good(s.toBoolean)).toOption
+      case (_, FAny(Seq(s))) => Try(Good(s == "1" || (s != "0" && s.toBoolean))).toOption
       case _                 => None
     })
   implicit val date: FieldsParser[Date] = FieldsParser[Date]("date")(unlift {
