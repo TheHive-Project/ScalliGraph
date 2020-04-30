@@ -3,18 +3,16 @@ package org.thp.scalligraph.services
 import java.io.InputStream
 import java.nio.file.{Files, Path, Paths}
 
-import scala.annotation.tailrec
-
-import play.api.libs.logback.LogbackLoggerConfigurator
-import play.api.{Configuration, Environment}
-
 import akka.actor.ActorSystem
 import org.specs2.mock.Mockito
 import org.specs2.mutable.Specification
 import org.specs2.specification.core.{Fragment, Fragments}
 import org.thp.scalligraph.auth.{AuthContextImpl, UserSrv}
-import org.thp.scalligraph.janus.JanusDatabase
 import org.thp.scalligraph.models.{Database, DatabaseProvider, DatabaseProviders}
+import play.api.libs.logback.LogbackLoggerConfigurator
+import play.api.{Configuration, Environment}
+
+import scala.annotation.tailrec
 //import org.thp.scalligraph.orientdb.{OrientDatabase, OrientDatabaseStorageSrv}
 
 class StorageSrvTest extends Specification with Mockito {

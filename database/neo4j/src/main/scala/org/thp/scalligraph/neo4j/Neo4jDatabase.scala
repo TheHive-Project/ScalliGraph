@@ -169,12 +169,10 @@ class Neo4jDatabase(
   override def getOptionProperty[D, G](element: Element, key: String, mapping: OptionMapping[D, G]): Option[D] =
     super.getOptionProperty(element, key, fixMapping(mapping))
 
-  override def getListProperty[D, G](element: Element, key: String, mapping: ListMapping[D, G]): Seq[D] = {
-    implicit val dClassTag: ClassTag[D] = ClassTag(mapping.domainTypeClass)
+  override def getListProperty[D, G](element: Element, key: String, mapping: ListMapping[D, G]): Seq[D] =
     element
       .value[Array[G]](key)
       .map(fixMapping(mapping).toDomain)
-  }
 
   // super.getListProperty(element, key, fixMapping(mapping))
 
