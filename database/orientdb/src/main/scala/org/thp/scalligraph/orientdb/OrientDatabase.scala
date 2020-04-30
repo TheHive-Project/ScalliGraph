@@ -180,6 +180,8 @@ class OrientDatabase(
     clazz.createProperty(attachmentPropertyName, OType.LINKLIST)
     Success(())
   }
+  override def addProperty[T](model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit]    = Failure(new NotImplementedError)
+  override def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit] = Failure(new NotImplementedError)
 
   override def drop(): Unit = graphFactory.drop()
 

@@ -5,12 +5,6 @@ import java.nio.file.{Files, Paths}
 import java.util.function.Consumer
 import java.util.{Date, Properties}
 
-import scala.collection.JavaConverters._
-import scala.concurrent.duration.FiniteDuration
-import scala.util.{Failure, Success, Try}
-
-import play.api.{Configuration, Environment}
-
 import akka.actor.ActorSystem
 import com.typesafe.config.ConfigObject
 import gremlin.scala.{asScalaGraph, Edge, Element, Graph, GremlinScala, Key, P, Vertex}
@@ -19,7 +13,7 @@ import org.apache.tinkerpop.gremlin.process.traversal.Text
 import org.apache.tinkerpop.gremlin.structure.Transaction
 import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
 import org.janusgraph.core.attribute.{Text => JanusText}
-import org.janusgraph.core.schema._
+import org.janusgraph.core.schema.{Mapping => JanusMapping, _}
 import org.janusgraph.core.{Cardinality, JanusGraph, JanusGraphFactory, SchemaViolationException}
 import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
@@ -28,6 +22,11 @@ import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.utils.{Config, Retry}
+import play.api.{Configuration, Environment}
+
+import scala.collection.JavaConverters._
+import scala.concurrent.duration.FiniteDuration
+import scala.util.{Failure, Success, Try}
 
 object JanusDatabase {
 
@@ -119,6 +118,7 @@ class JanusDatabase(
         Try(tx.rollback())
         Failure(t)
     }
+
     val oldTx = localTransaction.get()
     val result =
       Retry(maxAttempts)
@@ -152,6 +152,33 @@ class JanusDatabase(
     result
   }
 
+  def managementTransaction[R](body: JanusGraphManagement => Try[R]): Try[R] = {
+    def commitTransaction(mgmt: JanusGraphManagement): R => R = { r =>
+      logger.debug("Committing transaction")
+      mgmt.commit()
+      logger.debug("End of transaction")
+      r
+    }
+
+    def rollbackTransaction(mgmt: JanusGraphManagement): PartialFunction[Throwable, Failure[R]] = {
+      case t =>
+        Try(mgmt.rollback())
+        Failure(t)
+    }
+
+    Retry(maxAttempts)
+      .on[PermanentLockingException]
+      .withTry {
+        janusGraph.synchronized {
+          val mgmt = janusGraph.openManagement()
+          Try(body(mgmt))
+            .flatten
+            .map(commitTransaction(mgmt))
+            .recoverWith(rollbackTransaction(mgmt))
+        }
+      }
+  }
+
   def currentTransactionId(graph: Graph): AnyRef = graph
 
   override def addTransactionListener(listener: Consumer[Transaction.Status])(implicit graph: Graph): Unit =
@@ -170,7 +197,7 @@ class JanusDatabase(
             val mgmt = janusGraph.openManagement()
             createElementLabels(mgmt, models)
             createEntityProperties(mgmt)
-            createProperties(mgmt, models)
+            addProperties(mgmt, models)
             if (mgmt.getGraphIndex("_label_vertex_index") == null)
               mgmt
                 .buildIndex("_label_vertex_index", classOf[Vertex])
@@ -248,7 +275,7 @@ class JanusDatabase(
         logger.info(s"Model ${m.label} already exists, ignore it")
     }
 
-  private def createProperties(mgmt: JanusGraphManagement, models: Seq[Model]): Unit =
+  private def addProperties(mgmt: JanusGraphManagement, models: Seq[Model]): Unit =
     models
       .flatMap(model => model.fields.map(f => (f._1, model, f._2)))
       .groupBy(_._1)
@@ -264,31 +291,62 @@ class JanusDatabase(
           fieldName -> firstMapping
       }
       .foreach {
-        case (fieldName, mapping) =>
-          logger.debug(s"Create property $fieldName of type ${mapping.graphTypeClass} (${mapping.cardinality})")
-          val cardinality = mapping.cardinality match {
-            case MappingCardinality.single => Cardinality.SINGLE
-            case MappingCardinality.option => Cardinality.SINGLE
-            case MappingCardinality.list   => Cardinality.LIST
-            case MappingCardinality.set    => Cardinality.SET
-          }
-          logger.trace(s"mgmt.makePropertyKey($fieldName).dataType(${mapping.graphTypeClass.getSimpleName}.class).cardinality($cardinality).make()")
-          Option(mgmt.getPropertyKey(fieldName)) match {
-            case None =>
-              mgmt
-                .makePropertyKey(fieldName)
-                .dataType(mapping.graphTypeClass)
-                .cardinality(cardinality)
-                .make()
-            case Some(p) =>
-              if (p.dataType() == mapping.graphTypeClass && p.cardinality() == cardinality)
-                logger.info(s"Property $fieldName $cardinality:${mapping.graphTypeClass} already exists, ignore it")
-              else
-                logger.error(
-                  s"Property $fieldName exists with incompatible type: $cardinality:${mapping.graphTypeClass} Vs ${p.cardinality()}:${p.dataType()}"
-                )
+        case (propertyName, mapping) =>
+          addProperty(mgmt, propertyName, mapping).failed.foreach { error =>
+            logger.error(s"Unable to add property $propertyName", error)
           }
       }
+
+  def addProperty[T](model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit] = managementTransaction { mgmt =>
+    addProperty(mgmt, propertyName, mapping)
+  }
+
+  def addProperty(mgmt: JanusGraphManagement, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit] = {
+    logger.debug(s"Create property $propertyName of type ${mapping.graphTypeClass} (${mapping.cardinality})")
+
+    val cardinality = mapping.cardinality match {
+      case MappingCardinality.single => Cardinality.SINGLE
+      case MappingCardinality.option => Cardinality.SINGLE
+      case MappingCardinality.list   => Cardinality.LIST
+      case MappingCardinality.set    => Cardinality.SET
+    }
+    logger.trace(s"mgmt.makePropertyKey($propertyName).dataType(${mapping.graphTypeClass.getSimpleName}.class).cardinality($cardinality).make()")
+    Option(mgmt.getPropertyKey(propertyName)) match {
+      case None =>
+        Try {
+          mgmt
+            .makePropertyKey(propertyName)
+            .dataType(mapping.graphTypeClass)
+            .cardinality(cardinality)
+            .make()
+          ()
+        }
+      case Some(p) =>
+        if (p.dataType() == mapping.graphTypeClass && p.cardinality() == cardinality) {
+          logger.info(s"Property $propertyName $cardinality:${mapping.graphTypeClass} already exists, ignore it")
+          Success(())
+        } else
+          Failure(
+            InternalError(
+              s"Property $propertyName exists with incompatible type: $cardinality:${mapping.graphTypeClass} Vs ${p.cardinality()}:${p.dataType()}"
+            )
+          )
+    }
+  }
+
+  def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit] =
+    if (usedOnlyByThisModel) {
+      managementTransaction(mgmt => removeProperty(mgmt, propertyName))
+    } else Success(())
+
+  def removeProperty(mgmt: JanusGraphManagement, propertyName: String): Try[Unit] =
+    Try {
+      Option(mgmt.getPropertyKey(propertyName)).fold(logger.info(s"Cannot remove the property $propertyName, it doesn't exist")) { prop =>
+        val newName = s"propertyName-removed-${System.currentTimeMillis()}"
+        logger.info(s"Rename the property $propertyName to $newName")
+        mgmt.changeName(prop, newName)
+      }
+    }
 
   private def createIndex(
       mgmt: JanusGraphManagement,
@@ -327,7 +385,7 @@ class JanusDatabase(
           index.buildMixedIndex("search")
         case IndexType.fulltext =>
           logger.debug(s"Creating fulltext index on fields $elementLabel:${propertyKeys.mkString(",")}")
-          propertyKeys.foreach(k => index.addKey(k, Mapping.TEXT.asParameter()))
+          propertyKeys.foreach(k => index.addKey(k, JanusMapping.TEXT.asParameter()))
           index.buildMixedIndex("search")
       }
       ()
@@ -377,12 +435,13 @@ class JanusDatabase(
     predicate.getBiPredicate match {
       case Text.containing    => JanusText.textContains(predicate.getValue)
       case Text.notContaining => JanusText.textContains(predicate.getValue).negate()
-//      case Text.endingWith      => JanusText.textRegex(s"${predicate.getValue}.*")
-//      case Text.notEndingWith   => JanusText.textRegex(s"${predicate.getValue}.*").negate()
+      //      case Text.endingWith      => JanusText.textRegex(s"${predicate.getValue}.*")
+      //      case Text.notEndingWith   => JanusText.textRegex(s"${predicate.getValue}.*").negate()
       case Text.startingWith    => JanusText.textPrefix(predicate.getValue)
       case Text.notStartingWith => JanusText.textPrefix(predicate.getValue).negate()
       case _                    => predicate
     }
+
   override def toId(id: Any): JLong = id.toString.toLong
 
   override def drop(): Unit = JanusGraphFactory.drop(janusGraph)

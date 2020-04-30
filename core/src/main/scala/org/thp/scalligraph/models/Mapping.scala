@@ -26,6 +26,7 @@ object MappingCardinality extends Enumeration {
 trait UniMapping[D] {
   _: Mapping[D, _, _] =>
   type GraphType
+  def toMapping: Mapping[D, _, _] = this
 }
 
 trait MappingLowestPrio {

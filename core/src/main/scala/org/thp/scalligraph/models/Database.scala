@@ -50,6 +50,8 @@ trait Database {
   def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Try[Unit]
   def createSchema(model: Model, models: Model*): Try[Unit] = createSchema(model +: models)
   def createSchema(models: Seq[Model]): Try[Unit]
+  def addProperty[T](model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit]
+  def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit]
 
   def drop(): Unit
 

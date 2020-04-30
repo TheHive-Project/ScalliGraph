@@ -146,6 +146,9 @@ class Neo4jDatabase(
       Success(())
     }
 
+  override def addProperty[T](model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit]    = Failure(new NotImplementedError)
+  override def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit] = Failure(new NotImplementedError)
+
   override def drop(): Unit = graph.getBaseGraph.shutdown() // FIXME this is not a real drop
 
   val dateMapping: SingleMapping[Date, Long] = SingleMapping[Date, Long](d => Some(d.getTime), new Date(_))

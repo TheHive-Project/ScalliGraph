@@ -1,8 +1,7 @@
 package org.thp.scalligraph
 
-import play.api.libs.json._
-
 import org.thp.scalligraph.controllers.Field
+import play.api.libs.json._
 
 abstract class GenericError(val `type`: String, message: String, cause: Throwable) extends Exception(message, cause) {
 
