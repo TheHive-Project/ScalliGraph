@@ -69,7 +69,7 @@ class ApplicationConfig @Inject() (
   }
 
   def context[C](context: ConfigContext[C]): ContextApplicationConfig[C] =
-    new ContextApplicationConfig[C](context, configuration, db, eventSrv, configActor, ec)
+    new ContextApplicationConfig[C](context, configuration, eventSrv, ec)
 
   def list: Seq[ConfigItem[_, _]] = items.values.toSeq
 
@@ -77,14 +77,14 @@ class ApplicationConfig @Inject() (
     case Some(i) => i.setJson(value)
     case None    => Failure(NotFoundError(s"Configuration $path not found"))
   }
+
+  def get(path: String): Option[ConfigItem[_, _]] = items.get(path)
 }
 
 class ContextApplicationConfig[C](
     context: ConfigContext[C],
     configuration: Configuration,
-    db: Database,
     eventSrv: EventSrv,
-    configActor: ActorRef,
     implicit val ec: ExecutionContext
 ) {
   lazy val logger: Logger = Logger(getClass)
@@ -114,7 +114,7 @@ object ApplicationConfig {
     Reads[Configuration](json => JsSuccess(Configuration(ConfigFactory.parseString(json.toString)))),
     Writes[Configuration](conf => JsObject(conf.entrySet.map { case (k, v) => k -> Json.parse(v.render(ConfigRenderOptions.concise())) }.toSeq))
   )
-  implicit val durationFormat: Format[Duration] = implicitly[Format[String]].inmap(Duration.apply, _.toString)
+  implicit val durationFormat: Format[Duration] = implicitly[Format[String]].inmap(Duration.apply, _.toString.replace("Duration.", ""))
 
   implicit val finiteDurationFormat: Format[FiniteDuration] = Format[FiniteDuration](
     Reads {
