@@ -86,6 +86,12 @@ class Entrypoint @Inject() (
         block(request).fold(errorHandler.onServerError(request, _), Future.successful)
       }
 
+    def authPermitted(permission: Permission)(block: AuthenticatedRequest[Record[V]] => Try[Result]): Action[AnyContent] =
+      auth { request =>
+        if (request.isPermitted(permission)) block(request)
+        else Failure(AuthorizationError(s"Your are not authorized to $name, you haven't the permission $permission"))
+      }
+
     /**
       * Add async auth check to this entry point
       *
