@@ -41,6 +41,7 @@ trait MappingLowerPrio extends MappingLowestPrio {
 object UniMapping extends MappingLowerPrio {
   implicit val jsObject: SingleMapping[JsObject, String] =
     SingleMapping[JsObject, String](toGraphOptFn = j => Some(j.toString), toDomainFn = s => Json.parse(s).as[JsObject])
+  val id: SingleMapping[String, AnyRef]                      = SingleMapping[String, AnyRef](toGraphOptFn = i => Some(i), toDomainFn = _.toString)
   implicit val string: SingleMapping[String, String]         = SingleMapping[String, String]()
   implicit val long: SingleMapping[Long, Long]               = SingleMapping[Long, Long]()
   implicit val int: SingleMapping[Int, Int]                  = SingleMapping[Int, Int]()
