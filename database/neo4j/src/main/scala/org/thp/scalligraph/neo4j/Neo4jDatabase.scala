@@ -148,6 +148,7 @@ class Neo4jDatabase(
 
   override def addProperty[T](model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit]    = Failure(new NotImplementedError)
   override def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit] = Failure(new NotImplementedError)
+  override def addIndex(model: String, indexType: IndexType.Value, properties: Seq[String]): Try[Unit]      = Failure(new NotImplementedError)
 
   override def drop(): Unit = graph.getBaseGraph.shutdown() // FIXME this is not a real drop
 

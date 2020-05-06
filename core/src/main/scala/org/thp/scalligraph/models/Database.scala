@@ -52,6 +52,8 @@ trait Database {
   def createSchema(models: Seq[Model]): Try[Unit]
   def addProperty[T](model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit]
   def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit]
+  def addIndex(model: String, indexType: IndexType.Value, properties: Seq[String]): Try[Unit]
+//  def removeIndex(model: String, properties: Seq[String]): Try[Unit]
 
   def drop(): Unit
 

@@ -221,14 +221,14 @@ class JanusDatabase(
             // TODO add index for labels when it will be possible
             // cf. https://github.com/JanusGraph/janusgraph/issues/283
 
-            val mgmt2 = janusGraph.openManagement()
-            //          mgmt2.getGraphIndexes(classOf[Vertex]).asScala.foreach { index =>
-            //            ManagementSystem.awaitGraphIndexStatus(janusGraph, index.name()).call()
-            //          }
-            mgmt2.getGraphIndexes(classOf[Vertex]).asScala.foreach { index =>
-              mgmt2.updateIndex(index, SchemaAction.REINDEX).get()
-            }
-            mgmt2.commit()
+//            val mgmt2 = janusGraph.openManagement()
+//            //          mgmt2.getGraphIndexes(classOf[Vertex]).asScala.foreach { index =>
+//            //            ManagementSystem.awaitGraphIndexStatus(janusGraph, index.name()).call()
+//            //          }
+//            mgmt2.getGraphIndexes(classOf[Vertex]).asScala.foreach { index =>
+//              mgmt2.updateIndex(index, SchemaAction.REINDEX).get()
+//            }
+//            mgmt2.commit()
           }
         }
       }
@@ -334,7 +334,7 @@ class JanusDatabase(
     }
   }
 
-  def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit] =
+  override def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit] =
     if (usedOnlyByThisModel) {
       managementTransaction(mgmt => removeProperty(mgmt, propertyName))
     } else Success(())
@@ -347,6 +347,27 @@ class JanusDatabase(
         mgmt.changeName(prop, newName)
       }
     }
+
+  override def addIndex(model: String, indexType: IndexType.Value, properties: Seq[String]): Try[Unit] =
+    managementTransaction { mgmt =>
+      Option(mgmt.getVertexLabel(model))
+        .map(_ -> classOf[Vertex])
+        .orElse(Option(mgmt.getEdgeLabel(model)).map(_ -> classOf[Edge]))
+        .fold[Try[Unit]](Failure(InternalError(s"Model $model not found"))) {
+          case (elementLabel, elementClass) =>
+            createIndex(mgmt, elementClass, elementLabel, indexType, properties)
+            Success(())
+        }
+    }
+//      .flatMap {
+//      case (elementLabel, elementClass) =>
+//        managementTransaction { mgmt =>
+//          val indexName = (elementLabel.name +: properties).map(_.replaceAll("[^\\p{Alnum}]", "").toLowerCase().capitalize).mkString
+//          Option(mgmt.getGraphIndex(indexName)).foreach(mgmt.updateIndex(_, SchemaAction.REINDEX).get())
+//          Success(())
+//        }
+//
+//    }
 
   private def createIndex(
       mgmt: JanusGraphManagement,
@@ -370,11 +391,13 @@ class JanusDatabase(
           logger.debug(s"Creating unique index on fields $elementLabel:${propertyKeys.mkString(",")}")
           propertyKeys.foreach { k =>
             index.addKey(k)
-            mgmt.setConsistency(k, ConsistencyModifier.LOCK)
           }
           index.unique()
           val i = index.buildCompositeIndex()
           mgmt.setConsistency(i, ConsistencyModifier.LOCK)
+          propertyKeys.foreach { k =>
+            mgmt.setConsistency(k, ConsistencyModifier.LOCK)
+          }
         case IndexType.basic =>
           logger.debug(s"Creating basic index on fields $elementLabel:${propertyKeys.mkString(",")}")
           propertyKeys.foreach(index.addKey)
