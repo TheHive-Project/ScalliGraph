@@ -1,7 +1,7 @@
 import Dependencies._
 
 val scalligraphVersion     = "0.1.0-SNAPSHOT"
-val scala212               = "2.12.10"
+val scala212               = "2.12.11"
 val scala213               = "2.13.1"
 val supportedScalaVersions = List(scala212, scala213)
 
