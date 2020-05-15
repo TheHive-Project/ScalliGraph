@@ -2,13 +2,9 @@ package org.thp.scalligraph.orientdb
 
 import java.util.{List => JList, Set => JSet}
 
-import scala.collection.JavaConverters._
-import scala.concurrent.duration.FiniteDuration
-import scala.util.{Failure, Success, Try}
-
-import play.api.{Configuration, Environment}
-
+import akka.NotUsed
 import akka.actor.ActorSystem
+import akka.stream.scaladsl.Source
 import com.orientechnologies.orient.core.exception.OConcurrentModificationException
 import com.orientechnologies.orient.core.metadata.schema.OClass.INDEX_TYPE
 import com.orientechnologies.orient.core.metadata.schema.{OClass, OSchema, OType}
@@ -21,6 +17,11 @@ import org.slf4j.MDC
 import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.utils.Retry
+import play.api.{Configuration, Environment}
+
+import scala.collection.JavaConverters._
+import scala.concurrent.duration.FiniteDuration
+import scala.util.{Failure, Success, Try}
 
 @Singleton
 class OrientDatabase(
@@ -94,6 +95,9 @@ class OrientDatabase(
         tx.close()
         r
       }
+
+  override def source[A](query: Graph => Iterator[A]): Source[A, NotUsed]             = ???
+  override def source[A, B](body: Graph => (Iterator[A], B)): (Source[A, NotUsed], B) = ???
 
   private def getVariablesVertex(implicit graph: Graph): Option[Vertex] = graph.traversal().V().hasLabel("variables").headOption()
 

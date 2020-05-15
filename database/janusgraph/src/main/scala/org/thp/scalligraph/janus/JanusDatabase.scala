@@ -5,7 +5,9 @@ import java.nio.file.{Files, Paths}
 import java.util.function.Consumer
 import java.util.{Date, Properties}
 
+import akka.NotUsed
 import akka.actor.ActorSystem
+import akka.stream.scaladsl.{Flow, Source}
 import com.typesafe.config.ConfigObject
 import gremlin.scala.{asScalaGraph, Edge, Element, Graph, GremlinScala, Key, P, Vertex}
 import javax.inject.{Inject, Singleton}
@@ -14,7 +16,7 @@ import org.apache.tinkerpop.gremlin.structure.Transaction
 import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
 import org.janusgraph.core.attribute.{Text => JanusText}
 import org.janusgraph.core.schema.{Mapping => JanusMapping, _}
-import org.janusgraph.core.{Cardinality, JanusGraph, JanusGraphFactory, SchemaViolationException}
+import org.janusgraph.core.{Cardinality, JanusGraph, JanusGraphFactory, JanusGraphTransaction, SchemaViolationException}
 import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
 import org.slf4j.MDC
@@ -96,6 +98,26 @@ class JanusDatabase(
       oldTxMDC.fold(MDC.remove("tx"))(MDC.put("tx", _))
       localTransaction.set(oldTx)
     }
+  }
+
+  override def source[A](query: Graph => Iterator[A]): Source[A, NotUsed] =
+    TransactionHandler[JanusGraphTransaction, A, NotUsed](
+      () => janusGraph.buildTransaction().readOnly().start(),
+      _.commit(),
+      _.rollback(),
+      Flow[Graph].flatMapConcat(g => Source.fromIterator(() => query(g)))
+    )
+
+  override def source[A, B](body: Graph => (Iterator[A], B)): (Source[A, NotUsed], B) = {
+    val tx       = janusGraph.buildTransaction().readOnly().start()
+    val (ite, v) = body(tx)
+    val src = TransactionHandler[Graph, A, NotUsed](
+      () => tx,
+      _.tx().commit(),
+      _.tx().rollback(),
+      Flow[Graph].flatMapConcat(graph => Source.fromIterator(() => ite))
+    )
+    src -> v
   }
 
   override def tryTransaction[R](body: Graph => Try[R]): Try[R] = {
