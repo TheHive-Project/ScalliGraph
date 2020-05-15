@@ -1,18 +1,13 @@
 package org.thp.scalligraph.query
 
-import scala.reflect.runtime.{currentMirror => rm, universe => ru}
-
-import play.api.libs.json.JsValue
-
-import gremlin.scala.{Graph, GremlinScala}
+import gremlin.scala.Graph
 import org.scalactic.Good
-import org.thp.scalligraph.BadRequestError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.Database
-import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{BaseTraversal, BaseVertexSteps, TraversalLike}
-import org.thp.scalligraph.utils.RichType
+import org.thp.scalligraph.steps.{BaseTraversal, BaseVertexSteps, PagedResult, TraversalLike}
+
+import scala.reflect.runtime.{currentMirror => rm, universe => ru}
 
 // Use global lock because scala reflection subtype operator <:< is not thread safe (scala/bug#10766)
 // https://stackoverflow.com/questions/56854716/inconsistent-result-when-checking-type-subtype
@@ -67,12 +62,13 @@ object Query {
       override def apply(param: P, from: Any, authContext: AuthContext): Any                         = f(param, from.asInstanceOf[Graph], authContext)
     }
 
-  def apply[F: ru.TypeTag, T: ru.TypeTag](queryName: String, f: (F, AuthContext) => T): Query = new Query {
-    override val name: String                                                 = queryName
-    override def checkFrom(t: ru.Type): Boolean                               = SubType(t, ru.typeOf[F])
-    override def toType(t: ru.Type): ru.Type                                  = ru.typeOf[T]
-    override def apply(param: Unit, from: Any, authContext: AuthContext): Any = f(from.asInstanceOf[F], authContext)
-  }
+  def apply[F: ru.TypeTag, T: ru.TypeTag](queryName: String, f: (F, AuthContext) => T): Query =
+    new Query {
+      override val name: String                                                 = queryName
+      override def checkFrom(t: ru.Type): Boolean                               = SubType(t, ru.typeOf[F])
+      override def toType(t: ru.Type): ru.Type                                  = ru.typeOf[T]
+      override def apply(param: Unit, from: Any, authContext: AuthContext): Any = f(from.asInstanceOf[F], authContext)
+    }
 
   def withParam[P: ru.TypeTag, F: ru.TypeTag, T: ru.TypeTag](queryName: String, parser: FieldsParser[P], f: (P, F, AuthContext) => T): ParamQuery[P] =
     new ParamQuery[P] {
@@ -83,14 +79,31 @@ object Query {
       override def apply(param: P, from: Any, authContext: AuthContext): Any                         = f(param, from.asInstanceOf[F], authContext)
     }
 
-  def output[F: ru.TypeTag: Outputer](): Query = output(implicitly[Outputer[F]].toOutput)
-
-  def output[F: ru.TypeTag, T: ru.TypeTag](toOutput: F => Output[T]): Query = new Query {
-    override val name: String                                                 = "toOutput"
-    override def checkFrom(t: ru.Type): Boolean                               = SubType(t, ru.typeOf[F])
-    override def toType(t: ru.Type): ru.Type                                  = ru.appliedType(ru.typeOf[Output[_]].typeConstructor, ru.typeOf[T])
-    override def apply(param: Unit, from: Any, authContext: AuthContext): Any = toOutput(from.asInstanceOf[F])
+  def output[E: Renderer: ru.TypeTag]: Query = new Query {
+    override val name: String                                                 = "output"
+    override def checkFrom(t: ru.Type): Boolean                               = SubType(t, ru.typeOf[E])
+    override def toType(t: ru.Type): ru.Type                                  = ru.typeOf[Output[_]]
+    override def apply(param: Unit, from: Any, authContext: AuthContext): Any = implicitly[Renderer[E]].toOutput(from.asInstanceOf[E])
   }
+
+  def output[E: Renderer: ru.TypeTag, F <: TraversalLike[E, _]: ru.TypeTag]: Query = output(identity[F])
+
+  def outputWithContext[E: ru.TypeTag, F: ru.TypeTag](transform: (F, AuthContext) => TraversalLike[E, _])(implicit renderer: Renderer[E]): Query =
+    new Query {
+      override val name: String                   = "output"
+      override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[F])
+      override def toType(t: ru.Type): ru.Type    = ru.appliedType(ru.typeOf[PagedResult[_]].typeConstructor, ru.typeOf[E])
+      override def apply(param: Unit, from: Any, authContext: AuthContext): Any =
+        PagedResult(transform(from.asInstanceOf[F], authContext), None)(renderer)
+    }
+  def output[E: ru.TypeTag, F: ru.TypeTag](transform: F => TraversalLike[E, _])(implicit renderer: Renderer[E]): Query =
+    new Query {
+      override val name: String                   = "output"
+      override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[F])
+      override def toType(t: ru.Type): ru.Type    = ru.appliedType(ru.typeOf[PagedResult[_]].typeConstructor, ru.typeOf[E])
+      override def apply(param: Unit, from: Any, authContext: AuthContext): Any =
+        PagedResult(transform(from.asInstanceOf[F]), None)(renderer)
+    }
 }
 
 class SortQuery(db: Database, publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[InputSort] {
@@ -129,7 +142,7 @@ class AggregationQuery(publicProperties: List[PublicProperty[_, _]]) extends Par
     GroupAggregation.fieldsParser
   override val name: String                   = "aggregation"
   override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[BaseVertexSteps])
-  override def toType(t: ru.Type): ru.Type    = ru.typeOf[JsValue]
+  override def toType(t: ru.Type): ru.Type    = ru.typeOf[Output[_]]
   override def apply(aggregation: GroupAggregation[_, _, _], from: Any, authContext: AuthContext): Any =
     aggregation.get(
       publicProperties,
@@ -139,30 +152,7 @@ class AggregationQuery(publicProperties: List[PublicProperty[_, _]]) extends Par
     )
 }
 
-object ToListQuery extends Query {
-  override val name: String = "toList"
-
-  override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[BaseTraversal]) || SubType(t, ru.typeOf[GremlinScala[_]])
-
-  override def toType(t: ru.Type): ru.Type = {
-    val subType = if (SubType(t, ru.typeOf[TraversalLike[_, _]])) {
-      RichType.getTypeArgs(t, ru.typeOf[TraversalLike[_, _]]).head
-    } else if (SubType(t, ru.typeOf[GremlinScala[_]])) {
-      RichType.getTypeArgs(t, ru.typeOf[GremlinScala[_]]).head
-    } else {
-      throw BadRequestError(s"toList can't be used with $t. It must be a ScalliSteps or a GremlinScala")
-    }
-    ru.appliedType(ru.typeOf[List[_]].typeConstructor, subType)
-  }
-
-  override def apply(param: Unit, from: Any, authContext: AuthContext): Any = from match {
-    case t: TraversalLike[_, _] => t.toList
-    case f: GremlinScala[_]     => f.toList
-  }
-}
-
 trait InputQuery {
-
   def apply[S <: BaseVertexSteps](
       db: Database,
       publicProperties: List[PublicProperty[_, _]],

@@ -3,23 +3,23 @@ package org.thp.scalligraph.steps
 import java.lang.{Double => JDouble, Long => JLong}
 import java.util.{Date, UUID, Collection => JCollection, List => JList, Map => JMap}
 
-import scala.collection.JavaConverters._
-import scala.reflect.ClassTag
-import scala.reflect.runtime.{universe => ru}
-import scala.util.{Failure, Success, Try}
-
-import play.api.Logger
-
 import gremlin.scala.dsl.Converter
 import gremlin.scala.{By, Edge, Graph, GremlinScala, Key, OrderBy, P, ProjectionBuilder, StepLabel, Vertex, __, _}
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
 import org.apache.tinkerpop.gremlin.process.traversal.step.TraversalOptionParent.Pick
 import org.apache.tinkerpop.gremlin.structure.Element
 import org.thp.scalligraph.auth.AuthContext
+import org.thp.scalligraph.controllers.Renderer
 import org.thp.scalligraph.models.{Entity, Mapping, UniMapping}
 import org.thp.scalligraph.services.VertexSrv
 import org.thp.scalligraph.{AuthorizationError, InternalError, NotFoundError}
+import play.api.Logger
 import shapeless.HNil
+
+import scala.collection.JavaConverters._
+import scala.reflect.ClassTag
+import scala.reflect.runtime.{universe => ru}
+import scala.util.{Failure, Success, Try}
 
 trait BranchOption[T <: BaseTraversal, R <: BaseTraversal] {
   def traversal: T => R
@@ -154,10 +154,10 @@ object StepsOps {
       if (from == 0 && to == Long.MaxValue) traversal
       else newInstance0(traversal.raw.range(from, to))
 
-    def richPage[DD](from: Long, to: Long, withTotal: Boolean)(f: T => TraversalLike[DD, _]): PagedResult[DD] = {
+    def richPage[DD: Renderer](from: Long, to: Long, withTotal: Boolean)(f: T => TraversalLike[DD, _]): PagedResult[DD] = {
       logger.debug(s"Execution of $raw (richPage)")
-      val size   = if (withTotal) Some(raw.clone().count().head.toLong) else None
-      val values = f(traversal.range(from, to)).toList
+      val size   = if (withTotal) Some(newInstance0(raw.clone).count) else None
+      val values = f(traversal.range(from, to))
       PagedResult(values, size)
     }
 
@@ -277,7 +277,7 @@ object StepsOps {
 
     def converter: Converter.Aux[D, G] = traversal.converter
 
-    private def newInstance0(newRaw: GremlinScala[G]): Traversal[D, G] = traversal.newInstance(newRaw).asInstanceOf[Traversal[D, G]]
+    private def newInstance0(newRaw: GremlinScala[G]): TraversalLike[D, G] = traversal.newInstance(newRaw) //.asInstanceOf[Traversal[D, G]]
 
     def toList: List[D] = {
       logger.debug(s"Execution of $raw (toList)")
@@ -289,12 +289,11 @@ object StepsOps {
       raw.traversal.asScala.map(converter.toDomain)
     }
 
-    def page(from: Long, to: Long, withTotal: Boolean): PagedResult[D] = {
+    def page(from: Long, to: Long, withTotal: Boolean)(implicit renderer: Renderer[D]): PagedResult[D] = {
       logger.debug(s"Execution of $raw (page)")
-      val size            = if (withTotal) Some(raw.clone().count().head.toLong) else None
-      val r               = traversal.range(from, to)
-      val values: List[D] = r.toList
-      PagedResult(values, size)
+      val size = if (withTotal) Some(newInstance0(raw.clone).count) else None
+      val r    = traversal.range(from, to)
+      PagedResult(r, size)
     }
 
     def head(): D = {
@@ -324,7 +323,7 @@ object StepsOps {
 
     def mean[N <: Number]()(implicit toNumber: G => N): Traversal[Double, JDouble] = new Traversal(raw.mean, UniMapping.jdouble)
 
-    def is(predicate: P[G]): Traversal[D, G] = newInstance0(raw.is(predicate))
+    def is(predicate: P[G]): TraversalLike[D, G] = newInstance0(raw.is(predicate))
 
     def map[A: ClassTag](f: D => A): Traversal[A, A] =
       new Traversal[A, A](raw.map(x => f(converter.toDomain(x))), UniMapping.identity)

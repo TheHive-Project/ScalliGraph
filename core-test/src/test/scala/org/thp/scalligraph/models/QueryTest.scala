@@ -1,6 +1,6 @@
 package org.thp.scalligraph.models
 
-import org.scalactic.Good
+import org.scalactic.{Good, Or}
 import org.specs2.specification.core.{Fragment, Fragments}
 import org.thp.scalligraph.AppBuilder
 import org.thp.scalligraph.auth.UserSrv
@@ -47,8 +47,8 @@ class QueryTest extends PlaySpecification {
                 Json.obj("_name" -> "toList")
               )
             )
-          val result = queryExecutor.parser(input).map { query =>
-            queryExecutor.execute(query)(authGraph).toJson
+          val result = queryExecutor.parser(input).flatMap { query =>
+            Or.from(queryExecutor.execute(query)(authGraph).map(_.toJson))
           }
           result must_=== Good(
             Json.obj(
@@ -74,8 +74,8 @@ class QueryTest extends PlaySpecification {
               Json.obj("_name" -> "aggregation", "_agg" -> "field", "_field" -> "age", "_select" -> Json.arr(Json.obj("_agg" -> "count")))
             )
           )
-          val result = queryExecutor.parser(input).map { query =>
-            queryExecutor.execute(query)(authGraph).toJson
+          val result = queryExecutor.parser(input).flatMap { query =>
+            Or.from(queryExecutor.execute(query)(authGraph).map(_.toJson))
           }
           result must_== Good(
             Json.obj(
@@ -99,8 +99,8 @@ class QueryTest extends PlaySpecification {
               Json.obj("_name" -> "aggregation", "_agg" -> "field", "_field" -> "lang", "_select" -> Json.arr(Json.obj("_agg" -> "count")))
             )
           )
-          val result = queryExecutor.parser(input).map { query =>
-            queryExecutor.execute(query)(authGraph).toJson
+          val result = queryExecutor.parser(input).flatMap { query =>
+            Or.from(queryExecutor.execute(query)(authGraph).map(_.toJson))
           }
           result must_== Good(
             Json.obj(

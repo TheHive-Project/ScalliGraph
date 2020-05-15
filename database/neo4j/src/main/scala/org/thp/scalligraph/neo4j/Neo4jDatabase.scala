@@ -3,13 +3,9 @@ package org.thp.scalligraph.neo4j
 import java.nio.file.{Files, Paths}
 import java.util.Date
 
-import scala.concurrent.duration.FiniteDuration
-import scala.reflect.ClassTag
-import scala.util.{Failure, Success, Try}
-
-import play.api.Configuration
-
+import akka.NotUsed
 import akka.actor.ActorSystem
+import akka.stream.scaladsl.Source
 import gremlin.scala._
 import javax.inject.Singleton
 import org.apache.tinkerpop.gremlin.neo4j.structure.Neo4jGraph
@@ -19,6 +15,11 @@ import org.neo4j.io.fs.FileUtils
 import org.neo4j.tinkerpop.api.impl.Neo4jGraphAPIImpl
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.utils.{Config, Retry}
+import play.api.Configuration
+
+import scala.concurrent.duration.FiniteDuration
+import scala.reflect.ClassTag
+import scala.util.{Failure, Success, Try}
 
 object Neo4jDatabase {
 
@@ -62,6 +63,8 @@ class Neo4jDatabase(
 
   def this(system: ActorSystem) = this(Configuration.empty, system)
 
+  override def close(): Unit = graph.close()
+
   override def roTransaction[A](body: Graph => A): A = graph.synchronized {
     body(graph)
   }
@@ -98,6 +101,9 @@ class Neo4jDatabase(
 
         }
       }
+
+  override def source[A](query: Graph => Iterator[A]): Source[A, NotUsed]             = ???
+  override def source[A, B](body: Graph => (Iterator[A], B)): (Source[A, NotUsed], B) = ???
 
   override def createSchema(models: Seq[Model]): Try[Unit] =
     // Cypher can't be used here to create schema as it is not compatible with scala 2.12
