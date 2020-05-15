@@ -63,6 +63,8 @@ class Neo4jDatabase(
 
   def this(system: ActorSystem) = this(Configuration.empty, system)
 
+  override def close(): Unit = graph.close()
+
   override def roTransaction[A](body: Graph => A): A = graph.synchronized {
     body(graph)
   }

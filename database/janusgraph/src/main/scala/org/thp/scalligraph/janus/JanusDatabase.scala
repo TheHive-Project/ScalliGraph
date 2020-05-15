@@ -79,6 +79,8 @@ class JanusDatabase(
 
   def this(system: ActorSystem) = this(Configuration.load(Environment.simple()), system)
 
+  def close(): Unit = janusGraph.close()
+
   def isValidId(id: String): Boolean = id.forall(_.isDigit)
 
   override def roTransaction[R](body: Graph => R): R = {

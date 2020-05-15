@@ -65,6 +65,8 @@ class OrientDatabase(
 
   def this(system: ActorSystem) = this(Configuration.load(Environment.simple()), system)
 
+  override def close(): Unit = graphFactory.close()
+
   override def roTransaction[A](body: Graph => A): A = body(graphFactory.getNoTx)
 
   override def tryTransaction[A](body: Graph => Try[A]): Try[A] =

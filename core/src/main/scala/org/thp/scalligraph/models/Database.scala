@@ -28,6 +28,7 @@ trait Database {
   val updatedByMapping: OptionMapping[String, String]
   val binaryMapping: SingleMapping[Array[Byte], String]
 
+  def close(): Unit
   def roTransaction[A](body: Graph => A): A
   def source[A](query: Graph => Iterator[A]): Source[A, NotUsed]
   def source[A, B](body: Graph => (Iterator[A], B)): (Source[A, NotUsed], B)
