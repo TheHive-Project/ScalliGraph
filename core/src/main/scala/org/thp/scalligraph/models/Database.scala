@@ -167,24 +167,25 @@ abstract class BaseDatabase extends Database {
   }
 
   override def getVertexModel[E <: Product: ru.TypeTag]: Model.Vertex[E] = {
-    val rm              = ru.runtimeMirror(getClass.getClassLoader)
-    val classMirror     = rm.reflectClass(ru.typeOf[E].typeSymbol.asClass)
-    val companionSymbol = classMirror.symbol.companion
-    val companionMirror = rm.reflectModule(companionSymbol.asModule)
-    companionMirror.instance match {
-      case hm: HasVertexModel[_] => hm.model.asInstanceOf[Model.Vertex[E]]
-      case _                     => throw InternalError(s"Class ${companionMirror.symbol} is not a vertex model")
-    }
+    val rm = ru.runtimeMirror(getClass.getClassLoader)
+    Try(rm.reflectModule(ru.typeOf[E].typeSymbol.companion.asModule).instance)
+      .collect {
+        case hm: HasVertexModel[_] => hm.model.asInstanceOf[Model.Vertex[E]]
+      }
+      .getOrElse {
+        throw InternalError(s"Class ${ru.typeOf[E].typeSymbol} is not a vertex model")
+      }
   }
 
   override def getEdgeModel[E <: Product: ru.TypeTag, FROM <: Product, TO <: Product]: Model.Edge[E, FROM, TO] = {
     val rm = ru.runtimeMirror(getClass.getClassLoader)
-    val companionMirror =
-      rm.reflectModule(ru.typeOf[E].typeSymbol.companion.asModule)
-    companionMirror.instance match {
-      case hm: HasEdgeModel[_, _, _] => hm.model.asInstanceOf[Model.Edge[E, FROM, TO]]
-      case _                         => throw InternalError(s"Class ${companionMirror.symbol} is not an edge model")
-    }
+    Try(rm.reflectModule(ru.typeOf[E].typeSymbol.companion.asModule).instance)
+      .collect {
+        case hm: HasEdgeModel[_, _, _] => hm.model.asInstanceOf[Model.Edge[E, FROM, TO]]
+      }
+      .getOrElse {
+        throw InternalError(s"Class ${ru.typeOf[E].typeSymbol} is not an edge model")
+      }
   }
 
   override def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Try[Unit] =
