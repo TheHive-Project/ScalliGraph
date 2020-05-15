@@ -4,8 +4,7 @@ import com.google.inject.Provider
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.auth.AuthSrv
 import org.thp.scalligraph.controllers.{AuthenticatedRequest, Entrypoint}
-import org.thp.scalligraph.models.Database
-import org.thp.scalligraph.query.{AuthGraph, Query, QueryExecutor}
+import org.thp.scalligraph.query.{Query, QueryExecutor}
 import play.api.Logger
 import play.api.cache.AsyncCacheApi
 import play.api.http.HttpConfiguration
@@ -16,7 +15,6 @@ import play.api.routing.{Router, SimpleRouter}
 
 import scala.collection.immutable
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Success
 
 object DebugRouter {
   lazy val logger: Logger = Logger(getClass)
@@ -79,12 +77,11 @@ class ScalligraphRouter @Inject() (
       val queryExecutor = globalQueryExecutor.get(version)
       entrypoint("query")
         .extract("query", queryExecutor.parser.on("query"))
-        .authRoTransaction(db) { implicit request => implicit graph =>
-          val authGraph = AuthGraph(request, graph)
+        .auth { request =>
           // macro can't be used because it is in the same module
           // val query: Query = request.body("query"
           val query: Query = request.body.list.head
-          Success(Results.Ok(queryExecutor.execute(query)(authGraph).toJson))
+          queryExecutor.execute(query, request)
         }
   }
 

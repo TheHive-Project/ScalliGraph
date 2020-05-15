@@ -2,15 +2,22 @@ package org.thp.scalligraph.steps
 
 import java.util.{List => JList, Map => JMap}
 
-import scala.collection.JavaConverters._
-import scala.reflect.runtime.{universe => ru}
-
 import gremlin.scala._
 import gremlin.scala.dsl._
+import org.thp.scalligraph.controllers.{Output, Renderer}
 import org.thp.scalligraph.models._
+import org.thp.scalligraph.steps.StepsOps._
+import play.api.libs.json.{JsArray, JsValue}
 
-case class PagedResult[R](result: Seq[R], totalSize: Option[Long]) {
-  def map[T](f: R => T): PagedResult[T] = PagedResult(result.map(f), totalSize)
+import scala.collection.JavaConverters._
+import scala.reflect.ClassTag
+import scala.reflect.runtime.{universe => ru}
+
+case class PagedResult[R: Renderer](result: TraversalLike[R, _], totalSize: Option[Traversal[Long, _]]) extends Output[List[R]] {
+  override lazy val toJson: JsValue                         = JsArray(result.toList.map(implicitly[Renderer[R]].toOutput(_).toJson))
+  override lazy val toValue: List[R]                        = result.toList
+  val subRenderer: Renderer[R]                              = implicitly[Renderer[R]]
+  def map[T: Renderer: ClassTag](f: R => T): PagedResult[T] = PagedResult(result.map(f), totalSize)
 }
 
 class ValueMap(m: Map[String, Seq[AnyRef]]) {

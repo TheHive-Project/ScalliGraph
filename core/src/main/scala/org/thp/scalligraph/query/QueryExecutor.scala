@@ -1,18 +1,20 @@
 package org.thp.scalligraph.query
 
-import scala.reflect.runtime.{universe => ru}
-
-import play.api.Logger
-import play.api.libs.json.{JsNull, Json}
-
-import gremlin.scala.Graph
+import gremlin.scala.{Graph, GremlinScala}
 import org.scalactic._
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.Database
-import org.thp.scalligraph.steps.PagedResult
+import org.thp.scalligraph.steps.StepsOps._
+import org.thp.scalligraph.steps.{PagedResult, Traversal, TraversalLike}
 import org.thp.scalligraph.utils.RichType
+import play.api.Logger
+import play.api.libs.json.{JsArray, JsNull, JsValue}
+import play.api.mvc.{Result, Results}
+
+import scala.reflect.runtime.{universe => ru}
+import scala.util.{Failure, Success, Try}
 
 abstract class QueryExecutor { executor =>
   val version: (Int, Int)
@@ -21,48 +23,80 @@ abstract class QueryExecutor { executor =>
   lazy val logger: Logger                               = Logger(getClass)
   val db: Database
 
-  final lazy val allQueries = queries :+ sortQuery :+ filterQuery :+ aggregationQuery :+ ToListQuery
+  final lazy val allQueries = queries :+ sortQuery :+ filterQuery :+ aggregationQuery
   lazy val sortQuery        = new SortQuery(db, publicProperties)
   lazy val filterQuery      = new FilterQuery(db, publicProperties)
   lazy val aggregationQuery = new AggregationQuery(publicProperties)
 
   def versionCheck(v: Int): Boolean = version._1 <= v && v <= version._2
 
-  def execute(q: Query)(implicit authGraph: AuthGraph): Output[_] =
-    execute(q, authGraph.graph, authGraph.auth)
-
-  def execute(q: Query, graph: Graph, authContext: AuthContext): Output[_] = {
-    val outputType  = q.toType(ru.typeOf[Graph])
-    val outputValue = q((), graph, authContext)
-    toOutput(outputValue, outputType, authContext)
+  def execute(query: Query, authContext: AuthContext): Try[Result] = {
+    val outputType = query.toType(ru.typeOf[Graph])
+    getRenderer(outputType, authContext).map {
+      case renderer if renderer.isStreamable =>
+        val (source, totalSize) = db.source[JsValue, Option[Long]] { graph =>
+          val pagedResult = renderer.toOutput(query((), graph, authContext)).asInstanceOf[PagedResult[Any]]
+          pagedResult.result.toIterator.map(pagedResult.subRenderer.toJson) -> pagedResult.totalSize.map(_.head())
+        }
+        val result = Results.Ok.chunked(source.map(_.toString).intersperse("[", ",", "]"), Some("application/json"))
+        totalSize.fold(result)(s => result.withHeaders("X-Total" -> s.toString))
+      case renderer =>
+        db.roTransaction { g =>
+          val value = query((), g, authContext)
+          Results.Ok(renderer.toJson(value))
+        }
+    }
   }
 
-  private def toOutput(value: Any, tpe: ru.Type, authContext: AuthContext): Output[_] =
-    value match {
-      case o: Output[_] => o
-      case s: Seq[o] =>
-        val subType = RichType.getTypeArgs(tpe, ru.typeOf[Seq[_]]).head
-        val result  = s.map(x => toOutput(x, subType, authContext).toJson)
-        Output(s, Json.obj("result" -> result))
-      case s: Option[o] =>
-        s.fold[Output[_]](Output(None, JsNull)) { v =>
-          val subType = RichType.getTypeArgs(tpe, ru.typeOf[Option[_]]).head
-          toOutput(v, subType, authContext)
+  def execute(q: Query)(implicit authGraph: AuthGraph): Try[Output[_]] =
+    execute(q, authGraph.graph, authGraph.auth)
+
+  def execute(q: Query, graph: Graph, authContext: AuthContext): Try[Output[_]] = {
+    val outputType  = q.toType(ru.typeOf[Graph])
+    val outputValue = q((), graph, authContext)
+    getRenderer(outputType, authContext).map(_.toOutput(outputValue))
+  }
+
+  private def getRenderer(tpe: ru.Type, authContext: AuthContext): Try[Renderer[Any]] =
+    if (SubType(tpe, ru.typeOf[PagedResult[_]])) Success(Renderer.stream[Any](_.asInstanceOf[PagedResult[Any]]))
+    else if (SubType(tpe, ru.typeOf[Output[_]])) Success(Renderer[Any](_.asInstanceOf[Output[Any]]))
+    else if (SubType(tpe, ru.typeOf[Seq[_]])) {
+      val subType = RichType.getTypeArgs(tpe, ru.typeOf[Seq[_]]).head
+      getRenderer(subType, authContext).map { subRenderer =>
+        Renderer[Any] { value =>
+          Output(value, JsArray(value.asInstanceOf[Seq[Any]].map(v => subRenderer.toJson(v))))
         }
-      case PagedResult(result, _) =>
-        val subType = RichType.getTypeArgs(tpe, ru.typeOf[PagedResult[_]]).head
-        val seqType = ru.appliedType(ru.typeOf[Seq[_]].typeConstructor, subType)
-        val lOutput = toOutput(result, seqType, authContext)
-        Output(value, lOutput.toJson)
-      case _ =>
-        allQueries
-          .find(q => q.checkFrom(tpe) && SubType(q.toType(tpe), ru.typeOf[Output[_]]) && q.paramType == ru.typeOf[Unit])
-          .map(q => q.asInstanceOf[Query]((), value, authContext))
-          .getOrElse {
-            throw BadRequestError(s"Value of type $tpe can't be output")
-          }
-          .asInstanceOf[Output[_]]
-    }
+      }
+    } else if (SubType(tpe, ru.typeOf[Option[_]])) {
+      val subType = RichType.getTypeArgs(tpe, ru.typeOf[Option[_]]).head
+      getRenderer(subType, authContext).map { subRenderer =>
+        Renderer[Any] { value =>
+          value
+            .asInstanceOf[Option[Any]]
+            .fold[Output[_]](Output(None, JsNull))(v => subRenderer.toOutput(v))
+        }
+      }
+    } else
+      allQueries
+        .find(q => q.checkFrom(tpe) && SubType(q.toType(tpe), ru.typeOf[Output[_]]) && q.paramType == ru.typeOf[Unit])
+        .fold[Try[Renderer[Any]]] {
+          if (SubType(tpe, ru.typeOf[TraversalLike[_, _]])) {
+            val subType = RichType.getTypeArgs(tpe, ru.typeOf[TraversalLike[_, _]]).head
+            getRenderer(subType, authContext).map(subRenderer =>
+              Renderer.stream[Any](traversal => PagedResult(traversal.asInstanceOf[TraversalLike[Any, _]], None)(subRenderer))
+            )
+          } else if (SubType(tpe, ru.typeOf[GremlinScala[_]])) {
+            val subType = RichType.getTypeArgs(tpe, ru.typeOf[GremlinScala[_]]).head
+            getRenderer(subType, authContext).map(subRenderer =>
+              Renderer.stream[Any](traversal => PagedResult(Traversal(traversal.asInstanceOf[GremlinScala[Any]]), None)(subRenderer))
+            )
+          } else Failure(BadRequestError(s"Value of type $tpe can't be output"))
+        } { q =>
+          if (SubType(q.toType(tpe), ru.typeOf[PagedResult[_]]))
+            Success(Renderer.stream(value => q.asInstanceOf[Query]((), value, authContext).asInstanceOf[PagedResult[Any]]))
+          else
+            Success(Renderer(value => q.asInstanceOf[Query]((), value, authContext).asInstanceOf[Output[Any]]))
+        }
 
   private def getQuery(tpe: ru.Type, field: Field): Or[Query, Every[AttributeError]] = {
     def applyQuery[P](query: ParamQuery[P], from: Field): Or[Query, Every[AttributeError]] =

@@ -1,13 +1,12 @@
 package org.thp.scalligraph.models
 
-import scala.language.implicitConversions
-
-import play.api.libs.json.{Json, OWrites}
-
 import gremlin.scala.P
-import org.thp.scalligraph.controllers.{FieldsParser, Output}
+import org.thp.scalligraph.controllers.{FieldsParser, Renderer}
 import org.thp.scalligraph.query._
 import org.thp.scalligraph.steps.StepsOps._
+import play.api.libs.json.{Json, OWrites}
+
+import scala.language.implicitConversions
 
 case class OutputPerson(createdBy: String, label: String, name: String, age: Int)
 
@@ -22,10 +21,10 @@ object OutputSoftware {
 }
 
 object ModernOutputs {
-  implicit def toOutputPerson(person: Person with Entity): Output[OutputPerson] =
-    Output(new OutputPerson(person._createdBy, s"Mister ${person.name}", person.name, person.age))
-  implicit def toOutputSoftware(software: Software with Entity): Output[OutputSoftware] =
-    Output(new OutputSoftware(software._createdBy, software.name, software.lang))
+  implicit val personOutput: Renderer[Person with Entity] =
+    Renderer.json[Person with Entity, OutputPerson](person => new OutputPerson(person._createdBy, s"Mister ${person.name}", person.name, person.age))
+  implicit val softwareOutput: Renderer[Software with Entity] =
+    Renderer.json[Software with Entity, OutputSoftware](software => new OutputSoftware(software._createdBy, software.name, software.lang))
 }
 
 case class SeniorAgeThreshold(age: Int)
@@ -77,7 +76,7 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
       FieldsParser[FriendLevel],
       (friendLevel, personSteps, _) => personSteps.friends(friendLevel.level)
     ),
-    Query[Person with Entity, Output[OutputPerson]]("output", (person, _) => person),
-    Query[Software with Entity, Output[OutputSoftware]]("output", (software, _) => software)
+    Query.output[Person with Entity, PersonSteps],
+    Query.output[Software with Entity, SoftwareSteps]
   )
 }

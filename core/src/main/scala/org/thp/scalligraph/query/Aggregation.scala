@@ -4,22 +4,21 @@ import java.lang.{Double => JDouble, Float => JFloat, Integer => JInt, Long => J
 import java.time.temporal.ChronoUnit
 import java.util.{Calendar, Date, Collection => JCollection, List => JList, Map => JMap}
 
-import scala.collection.JavaConverters._
-import scala.reflect.runtime.{universe => ru}
-import scala.util.Try
-import scala.util.matching.Regex
-
-import play.api.libs.json.{JsNumber, JsObject, Json, Writes}
-
 import gremlin.scala.{__, By, StepLabel, Vertex}
 import org.scalactic.Accumulation.withGood
 import org.scalactic.{Bad, Good, One, Or}
-import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.UniMapping
 import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
+import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError}
+import play.api.libs.json.{JsNumber, JsObject, Json, Writes}
+
+import scala.collection.JavaConverters._
+import scala.reflect.runtime.{universe => ru}
+import scala.util.Try
+import scala.util.matching.Regex
 
 object GroupAggregation {
 
@@ -309,7 +308,7 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs:
           val values = subAggs
             .asInstanceOf[Seq[Aggregation[Any, Any, Any]]]
             .zip(e.tail)
-            .map { case (a, r) => a.name -> a.output(r).toOutput }
+            .map { case (a, r) => a.name -> a.output(r).toValue }
             .toMap
           val jsValues =
             subAggs
@@ -327,7 +326,7 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs:
       }
       .toMap
 
-    val native: Map[Any, Map[String, Any]] = subMap.map { case (k, v) => k -> v.toOutput }
+    val native: Map[Any, Map[String, Any]] = subMap.map { case (k, v) => k -> v.toValue }
     val json: JsObject                     = JsObject(subMap.map { case (k, v) => k.toString -> v.toJson })
     //Json.obj(name -> JsObject(subMap.map { case (k, v) ⇒ k.toString -> v.toJson }))
     Output(native, json)
@@ -408,7 +407,7 @@ case class TimeAggregation(aggName: Option[String], fieldName: String, interval:
         val values = subAggs
           .asInstanceOf[Seq[Aggregation[Any, Any, Any]]]
           .zip(e.tail)
-          .map { case (a, r) => a.name -> a.output(r).toOutput }
+          .map { case (a, r) => a.name -> a.output(r).toValue }
           .toMap
         val jsValues =
           subAggs
@@ -425,7 +424,7 @@ case class TimeAggregation(aggName: Option[String], fieldName: String, interval:
       }
       .toMap
 
-    val native: Map[Any, Map[String, Any]] = subMap.map { case (k, v) => k -> v.toOutput }
+    val native: Map[Any, Map[String, Any]] = subMap.map { case (k, v) => k -> v.toValue }
     val json: JsObject                     = JsObject(subMap.map { case (k, v) => k.getTime.toString -> Json.obj(fieldName -> v.toJson) })
     Output(native, json)
   }
