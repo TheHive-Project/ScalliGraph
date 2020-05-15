@@ -53,7 +53,6 @@ class ScalligraphRouter @Inject() (
     httpConfig: HttpConfiguration,
     routers: immutable.Set[Router],
     entrypoint: Entrypoint,
-    db: Database,
     globalQueryExecutor: GlobalQueryExecutor,
     actionBuilder: DefaultActionBuilder,
     authSrv: AuthSrv,
