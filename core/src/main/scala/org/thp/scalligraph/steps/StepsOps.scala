@@ -306,9 +306,11 @@ object StepsOps {
       raw.headOption().map(converter.toDomain)
     }
 
-    def getOrFail(): Try[D] =
+    def getOrFail(): Try[D] = getOrFail(traversal.typeName)
+
+    def getOrFail(entityName: String): Try[D] =
       headOption()
-        .fold[Try[D]](Failure(NotFoundError(s"${traversal.typeName} not found")))(Success.apply)
+        .fold[Try[D]](Failure(NotFoundError(s"$entityName not found")))(Success.apply)
 
     def orFail(ex: Exception): Try[D] = headOption().fold[Try[D]](Failure(ex))(Success.apply)
 
