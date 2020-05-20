@@ -2,12 +2,6 @@ package org.thp.scalligraph.controllers
 
 import java.util.Date
 
-import scala.language.experimental.macros
-import scala.util.Try
-import scala.xml.{Elem, XML}
-
-import play.api.libs.json.{JsObject, JsValue}
-
 import org.scalactic.Accumulation._
 import org.scalactic._
 import org.thp.scalligraph._
@@ -15,6 +9,12 @@ import org.thp.scalligraph.auth.Permission
 import org.thp.scalligraph.macros.FieldsParserMacro
 import org.thp.scalligraph.query.{PropertyUpdater, PublicProperty}
 import org.thp.scalligraph.utils.Hash
+import play.api.Logger
+import play.api.libs.json.{JsObject, JsValue}
+
+import scala.language.experimental.macros
+import scala.util.Try
+import scala.xml.{Elem, XML}
 
 class FieldsParser[T](
     val formatName: String,
@@ -106,6 +106,7 @@ trait FieldsParserLowerPrio extends FieldsParserLowestPrio {
 }
 
 object FieldsParser extends FieldsParserLowerPrio {
+  lazy val logger: Logger                                     = Logger(getClass)
   def apply[T](implicit fp: FieldsParser[T]): FieldsParser[T] = fp
 
   def apply[T](formatName: String, acceptedInput: Set[String])(parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]]) =
@@ -114,6 +115,20 @@ object FieldsParser extends FieldsParserLowerPrio {
   def apply[T](formatName: String)(parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]]) =
     new FieldsParser[T](formatName, Set(formatName), parse)
 
+  def debug[T](formatName: String)(parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]]) =
+    new FieldsParser[T](formatName, Set(formatName), new PartialFunction[(FPath, Field), T Or Every[AttributeError]] {
+      override def isDefinedAt(input: (FPath, Field)): Boolean = {
+        val result = parse.isDefinedAt(input)
+        logger.debug(s"FieldsParser($formatName): $input => $result")
+        result
+      }
+
+      override def apply(input: (FPath, Field)): Or[T, Every[AttributeError]] = {
+        val result = parse.apply(input)
+        logger.debug(s"FieldsParser($formatName): $input => $result")
+        result
+      }
+    })
   def update(name: String, properties: Seq[PublicProperty[_, _]]): FieldsParser[Seq[PropertyUpdater]] =
     FieldsParser(name) {
       case (_, FObject(fields)) =>
