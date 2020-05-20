@@ -4,7 +4,9 @@ import scala.reflect.runtime.{universe => ru}
 
 import play.api.Logger
 
+import java.util.{Collection => JCollection}
 import gremlin.scala.P
+import scala.collection.JavaConverters._
 import org.apache.tinkerpop.gremlin.process.traversal.TextP
 import org.scalactic.Accumulation._
 import org.scalactic.Good
@@ -37,8 +39,13 @@ case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilt
     step.filter { s =>
       val property: Traversal[Any, Any] =
         PublicProperty.getPropertyTraversal(publicProperties, stepType, s, fieldName, authContext).asInstanceOf[Traversal[Any, Any]]
-      if (property.mapping == IdMapping)
-        predicate.asInstanceOf[P[Any]].setValue(db.toId(predicate.getValue))
+      if (property.mapping == IdMapping) {
+        val newValue = predicate.getValue match {
+          case c: JCollection[_] => c.asScala.map(db.toId).asJavaCollection
+          case other             => db.toId(other)
+        }
+        predicate.asInstanceOf[P[Any]].setValue(newValue)
+      }
       property.is(db.mapPredicate(predicate.asInstanceOf[P[Any]]))
     }
 }
