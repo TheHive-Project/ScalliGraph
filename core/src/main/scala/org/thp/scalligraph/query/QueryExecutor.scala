@@ -23,14 +23,15 @@ abstract class QueryExecutor { executor =>
   lazy val logger: Logger                               = Logger(getClass)
   val db: Database
 
-  final lazy val allQueries = queries :+ sortQuery :+ filterQuery :+ aggregationQuery
-  lazy val sortQuery        = new SortQuery(db, publicProperties)
-  lazy val filterQuery      = new FilterQuery(db, publicProperties)
-  lazy val aggregationQuery = new AggregationQuery(publicProperties)
+  final lazy val allQueries                         = queries :+ sortQuery :+ filterQuery :+ aggregationQuery
+  final lazy val sortQuery: SortQuery               = new SortQuery(db, publicProperties)
+  final lazy val aggregationQuery: AggregationQuery = new AggregationQuery(publicProperties)
+  final lazy val filterQuery: FilterQuery           = FilterQuery.default(db, publicProperties) ++ customFilterQuery
+  val customFilterQuery: FilterQuery                = FilterQuery.empty(db, publicProperties)
 
   def versionCheck(v: Int): Boolean = version._1 <= v && v <= version._2
 
-  def execute(query: Query, authContext: AuthContext): Try[Result] = {
+  final def execute(query: Query, authContext: AuthContext): Try[Result] = {
     val outputType = query.toType(ru.typeOf[Graph])
     getRenderer(outputType, authContext).map {
       case renderer if renderer.isStreamable =>
@@ -48,10 +49,10 @@ abstract class QueryExecutor { executor =>
     }
   }
 
-  def execute(q: Query)(implicit authGraph: AuthGraph): Try[Output[_]] =
+  final def execute(q: Query)(implicit authGraph: AuthGraph): Try[Output[_]] =
     execute(q, authGraph.graph, authGraph.auth)
 
-  def execute(q: Query, graph: Graph, authContext: AuthContext): Try[Output[_]] = {
+  final def execute(q: Query, graph: Graph, authContext: AuthContext): Try[Output[_]] = {
     val outputType  = q.toType(ru.typeOf[Graph])
     val outputValue = q((), graph, authContext)
     getRenderer(outputType, authContext).map(_.toOutput(outputValue))
@@ -102,7 +103,7 @@ abstract class QueryExecutor { executor =>
     def applyQuery[P](query: ParamQuery[P], from: Field): Or[Query, Every[AttributeError]] =
       if (query.checkFrom(tpe)) { // FIXME why double check of type ?
         query
-          .paramParser(tpe, publicProperties)(from)
+          .paramParser(tpe)(from)
           .map(p => query.toQuery(p))
       } else {
         logger.warn(s"getQuery($tpe, $field).applyQuery($query, $from) fails because $query.checkFrom($tpe) returns false")
@@ -132,7 +133,7 @@ abstract class QueryExecutor { executor =>
     }
   }
 
-  def parser: FieldsParser[Query] = FieldsParser[Query]("query") {
+  final def parser: FieldsParser[Query] = FieldsParser[Query]("query") {
     case (_, FSeq(fields)) =>
       val initQuery = getQuery(ru.typeOf[Graph], fields.head)
       fields
@@ -145,10 +146,10 @@ abstract class QueryExecutor { executor =>
   }
 
   def ++(other: QueryExecutor): QueryExecutor = new QueryExecutor {
-    override val db: Database        = other.db
-    override val version: (Int, Int) = math.max(executor.version._1, other.version._1) -> math.min(executor.version._2, other.version._2)
-    override lazy val publicProperties: List[PublicProperty[_, _]] =
-      (executor.publicProperties :: other.publicProperties).asInstanceOf[List[PublicProperty[_, _]]]
-    override lazy val queries: Seq[ParamQuery[_]] = executor.queries ++ other.queries
+    override val db: Database                                      = other.db
+    override val version: (Int, Int)                               = math.max(executor.version._1, other.version._1) -> math.min(executor.version._2, other.version._2)
+    override lazy val publicProperties: List[PublicProperty[_, _]] = executor.publicProperties ::: other.publicProperties
+    override lazy val queries: Seq[ParamQuery[_]]                  = executor.queries ++ other.queries
+    override val customFilterQuery: FilterQuery                    = executor.customFilterQuery ++ other.customFilterQuery
   }
 }

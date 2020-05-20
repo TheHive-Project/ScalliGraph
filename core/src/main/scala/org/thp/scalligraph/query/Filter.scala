@@ -171,7 +171,11 @@ object InputFilter {
     else PredicateFilter(field, P.eq(value))
   }
 
-  def fieldsParser(tpe: ru.Type, properties: Seq[PublicProperty[_, _]]): FieldsParser[InputFilter] = {
+  def fieldsParser(
+      tpe: ru.Type,
+      properties: Seq[PublicProperty[_, _]],
+      globalParser: ru.Type => FieldsParser[InputFilter]
+  ): FieldsParser[InputFilter] = {
     def propParser(name: String): FieldsParser[Any] = {
       val prop = PublicProperty.getProperty(properties, tpe, name)
       prop.fieldsParser.map(prop.fieldsParser.formatName)(v => prop.mapping.asInstanceOf[Mapping[_, Any, Any]].toGraph(v))
@@ -179,10 +183,10 @@ object InputFilter {
 
     FieldsParser("query") {
       case (path, FObjOne("_and", FSeq(fields))) =>
-        fields.zipWithIndex.validatedBy { case (field, index) => fieldsParser(tpe, properties)((path :/ "_and").toSeq(index), field) }.map(and)
+        fields.zipWithIndex.validatedBy { case (field, index) => globalParser(tpe)((path :/ "_and").toSeq(index), field) }.map(and)
       case (path, FObjOne("_or", FSeq(fields))) =>
-        fields.zipWithIndex.validatedBy { case (field, index) => fieldsParser(tpe, properties)((path :/ "_or").toSeq(index), field) }.map(or)
-      case (path, FObjOne("_not", field))                            => fieldsParser(tpe, properties)(path :/ "_not", field).map(not)
+        fields.zipWithIndex.validatedBy { case (field, index) => globalParser(tpe)((path :/ "_or").toSeq(index), field) }.map(or)
+      case (path, FObjOne("_not", field))                            => globalParser(tpe)(path :/ "_not", field).map(not)
       case (_, FObjOne("_any", _))                                   => Good(yes)
       case (_, FObjOne("_lt", FObjOne(key, field)))                  => propParser(key)(field).map(value => lt(key, value))
       case (_, FObjOne("_gt", FObjOne(key, field)))                  => propParser(key)(field).map(value => gt(key, value))
@@ -207,7 +211,7 @@ object InputFilter {
       case (_, FObjOne("_contains", FString(path)))            => Good(isDefined(path))
       case (_, FObjOne("_like", FObjOne(key, FString(value)))) => Good(like(key, value))
       case (_, FFieldValue(key, field))                        => propParser(key)(field).map(value => is(key, value))
-      case (_, FObjOne(key, field)) =>
+      case (_, FObjOne(key, field)) if !key.headOption.contains('_') =>
         logger.warn(s"""Use of filter {"$key": "$field"} is deprecated. Please use {"_is":{"$key":"$field"}}""")
         propParser(key)(field).map(value => is(key, value))
       case (_, FObject(kv)) if kv.isEmpty => Good(yes)
