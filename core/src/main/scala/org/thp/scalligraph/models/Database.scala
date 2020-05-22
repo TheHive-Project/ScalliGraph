@@ -176,9 +176,10 @@ abstract class BaseDatabase extends Database {
       .collect {
         case hm: HasVertexModel[_] => hm.model.asInstanceOf[Model.Vertex[E]]
       }
-      .getOrElse {
-        throw InternalError(s"Class ${ru.typeOf[E].typeSymbol} is not a vertex model")
+      .recoverWith {
+        case error => Failure(InternalError(s"${ru.typeOf[E].typeSymbol} is not a vertex model", error))
       }
+      .get
   }
 
   override def getEdgeModel[E <: Product: ru.TypeTag, FROM <: Product, TO <: Product]: Model.Edge[E, FROM, TO] = {
@@ -187,9 +188,10 @@ abstract class BaseDatabase extends Database {
       .collect {
         case hm: HasEdgeModel[_, _, _] => hm.model.asInstanceOf[Model.Edge[E, FROM, TO]]
       }
-      .getOrElse {
-        throw InternalError(s"Class ${ru.typeOf[E].typeSymbol} is not an edge model")
+      .recoverWith {
+        case error => Failure(InternalError(s"${ru.typeOf[E].typeSymbol} is not an edge model", error))
       }
+      .get
   }
 
   override def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Try[Unit] =
