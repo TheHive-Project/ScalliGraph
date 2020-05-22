@@ -413,15 +413,18 @@ class JanusDatabase(
       indexType match {
         case IndexType.unique =>
           logger.debug(s"Creating unique index on fields $elementLabel:${propertyKeys.mkString(",")}")
-          propertyKeys.foreach { k =>
-            index.addKey(k)
-          }
+          propertyKeys.foreach(index.addKey)
           index.unique()
           val i = index.buildCompositeIndex()
           mgmt.setConsistency(i, ConsistencyModifier.LOCK)
           propertyKeys.foreach { k =>
             mgmt.setConsistency(k, ConsistencyModifier.LOCK)
           }
+        case IndexType.tryUnique =>
+          logger.debug(s"Creating unique index on fields $elementLabel:${propertyKeys.mkString(",")}")
+          propertyKeys.foreach(index.addKey)
+          index.unique()
+          index.buildCompositeIndex()
         case IndexType.basic =>
           logger.debug(s"Creating basic index on fields $elementLabel:${propertyKeys.mkString(",")}")
           propertyKeys.foreach(index.addKey)

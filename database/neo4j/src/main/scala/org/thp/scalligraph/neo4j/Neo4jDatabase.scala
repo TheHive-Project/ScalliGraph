@@ -130,7 +130,7 @@ class Neo4jDatabase(
                 .on(property)
                 .create()
             // graph.cypher(s"CREATE INDEX ON: ${model.label}(${properties.mkString(",")})")
-            case IndexType.unique =>
+            case IndexType.unique | IndexType.tryUnique =>
               neo4jGraph
                 .schema()
                 .constraintFor(Label.label(model.label))

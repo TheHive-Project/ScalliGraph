@@ -101,8 +101,9 @@ lazy val coreTest = (project in file("core-test"))
     name := "scalligraph-core-test",
     version := scalligraphVersion,
     libraryDependencies ++= Seq(
-      specs       % Test,
-      playLogback % Test
+      janusGraphInMemory % Test,
+      specs              % Test,
+      playLogback        % Test
     )
   )
 
@@ -117,7 +118,7 @@ lazy val janus = (project in file("database/janusgraph"))
       janusGraphHBase,
       janusGraphLucene,
       janusGraphElasticSearch,
-      cassandra,
+      janusGraphCassandra,
       specs % Test
     )
   )
