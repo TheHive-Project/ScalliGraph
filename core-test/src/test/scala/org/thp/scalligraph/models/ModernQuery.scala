@@ -6,8 +6,6 @@ import org.thp.scalligraph.query._
 import org.thp.scalligraph.steps.StepsOps._
 import play.api.libs.json.{Json, OWrites}
 
-import scala.language.implicitConversions
-
 case class OutputPerson(createdBy: String, label: String, name: String, age: Int)
 
 object OutputPerson {

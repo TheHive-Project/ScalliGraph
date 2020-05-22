@@ -1,7 +1,6 @@
 package org.thp.scalligraph.models
 
-import scala.util.Try
-
+import scala.util.{Success, Try}
 import gremlin.scala.{Graph, GremlinScala, Key, P, Vertex}
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph._
@@ -25,6 +24,8 @@ case class Created(weight: Double)
 @EntitySteps[Person]
 class PersonSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph) extends VertexSteps[Person](raw) {
   def created = new SoftwareSteps(this.outTo[Created].raw)
+
+  def getByName(name: String): PersonSteps = this.has("name", name)
 
   def created(predicate: P[Double]) = new SoftwareSteps(this.outToE[Created].has("weight", predicate).inV().raw)
 
@@ -54,6 +55,9 @@ class PersonSrv @Inject() (implicit db: Database) extends VertexSrv[Person, Pers
   override val initialValues: Seq[Person]                                                         = Seq(Person("marc", 34), Person("franck", 28))
   override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): PersonSteps               = new PersonSteps(raw)
   def create(e: Person)(implicit graph: Graph, authContext: AuthContext): Try[Person with Entity] = createEntity(e)
+  override def get(idOrNumber: String)(implicit graph: Graph): PersonSteps =
+    if (db.isValidId(idOrNumber)) initSteps.getByIds(idOrNumber)
+    else initSteps.getByName(idOrNumber)
 }
 
 @Singleton
