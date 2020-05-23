@@ -5,6 +5,7 @@ import java.time.temporal.ChronoUnit
 import java.util.{Calendar, Date, Collection => JCollection, List => JList, Map => JMap}
 
 import gremlin.scala.{__, By, StepLabel, Vertex}
+import org.apache.tinkerpop.gremlin.process.traversal.{Order, Scope}
 import org.scalactic.Accumulation.withGood
 import org.scalactic.{Bad, Good, One, Or}
 import org.thp.scalligraph.auth.AuthContext
@@ -13,6 +14,7 @@ import org.thp.scalligraph.models.UniMapping
 import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
 import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError}
+import play.api.Logger
 import play.api.libs.json.{JsNumber, JsObject, Json, Writes}
 
 import scala.collection.JavaConverters._
@@ -70,8 +72,10 @@ object GroupAggregation {
           withGood(
             FieldsParser.string.optional.on("_name")(field),
             FieldsParser.string.on("_field")(field),
+            FieldsParser.string.sequence.on("_order")(field),
+            FieldsParser.long.optional.on("_size")(field),
             aggregationFieldsParser.sequence.on("_select")(field)
-          )((aggName, fieldName, subAgg) => FieldAggregation(aggName, fieldName, subAgg))
+          )((aggName, fieldName, order, size, subAgg) => FieldAggregation(aggName, fieldName, order, size, subAgg))
       }
     case "count" =>
       FieldsParser("CountAggregation") {
@@ -264,9 +268,9 @@ case class AggCount(aggName: Option[String]) extends GroupAggregation[Long, JLon
 }
 //case class AggTop[T](fieldName: String) extends AggFunction[T](s"top_$fieldName")
 
-case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs: Seq[Aggregation[_, _, _]])
+case class FieldAggregation(aggName: Option[String], fieldName: String, orders: Seq[String], size: Option[Long], subAggs: Seq[Aggregation[_, _, _]])
     extends GroupAggregation[JList[JCollection[Any]], JList[JCollection[Any]], Map[Any, Map[String, Any]]](aggName.getOrElse(s"field_$fieldName")) {
-
+  lazy val logger: Logger = Logger(getClass)
   override def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
@@ -280,7 +284,23 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, subAggs:
         .group(By(), By(__.select(elementLabel).fold()))
         .unfold[JMap.Entry[Any, JCollection[Any]]](null) // Map.Entry[K, List[V]]
 
-    groupedVertices
+    val sortedAndGroupedVertex = orders
+      .map {
+        case order if order.headOption.contains('-') => order.tail -> Order.desc
+        case order if order.headOption.contains('+') => order.tail -> Order.asc
+        case order                                   => order      -> Order.asc
+      }
+      .foldLeft(groupedVertices) {
+        case (acc, (field, order)) if field == fieldName => acc.sort(By(__[JMap.Entry[Any, JCollection[Any]]].selectKeys, order))
+        case (acc, (field, order)) if field == "count"   => acc.sort(By(__[JMap.Entry[Any, JCollection[Any]]].selectValues.count(Scope.local), order))
+        case (acc, (field, _)) =>
+          logger.warn(s"In field aggregation you can only sort by the field ($fieldName) or by count, not by $field")
+          acc
+      }
+
+    val sizedSortedAndGroupedVertex = size.fold(sortedAndGroupedVertex)(sortedAndGroupedVertex.range(0, _))
+
+    sizedSortedAndGroupedVertex
       .project[Any](
         By(__[JMap.Entry[Any, Any]].selectKeys) +: subAggs
           .map(a =>
