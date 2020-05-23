@@ -168,6 +168,8 @@ object StepsOps {
 
     def existsOrFail(): Try[Unit] = if (exists()) Success(()) else Failure(AuthorizationError("Unauthorized action"))
 
+    def dedup: T = newInstance0(raw.dedup())
+
     def getCount: Long = raw.count().head()
 
     def count: Traversal[Long, JLong] = new Traversal(raw.count(), UniMapping.jlong)
