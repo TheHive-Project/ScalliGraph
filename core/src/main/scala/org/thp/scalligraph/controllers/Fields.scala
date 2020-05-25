@@ -11,6 +11,8 @@ import play.api.mvc._
 import org.scalactic.Good
 
 sealed trait Field {
+  def isDefined: Boolean = true
+
   def get(pathElement: String): Field = FUndefined
 
   def get(path: FPath): Field = path match {
@@ -142,7 +144,8 @@ case object FNull extends Field {
 }
 
 case object FUndefined extends Field {
-  override def toJson: JsValue = JsNull
+  override def isDefined: Boolean = false
+  override def toJson: JsValue    = JsNull
 }
 
 case class FAny(value: Seq[String]) extends Field {
