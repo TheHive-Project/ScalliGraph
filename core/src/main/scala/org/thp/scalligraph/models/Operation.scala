@@ -24,14 +24,12 @@ case class DBOperation[DB <: Database: ClassTag](comment: String, op: DB => Try[
 }
 
 object Operations {
-  def apply(schemaName: String, schema: Schema): Operations = Operations(schemaName, schema, 1, Map.empty)
+  def apply(schemaName: String, schema: Schema): Operations = new Operations(schemaName, schema, Nil)
 }
 
-case class Operations private (schemaName: String, schema: Schema, currentVersion: Int, operations: Map[Int, Seq[Operation]]) {
-  lazy val logger: Logger = Logger(getClass)
-  private def addOperations(op: Operation*): Operations =
-    copy(operations = operations + (currentVersion -> (operations.getOrElse(currentVersion, Nil) ++ op)))
-  def forVersion(v: Int): Operations = copy(currentVersion = v)
+case class Operations private (schemaName: String, schema: Schema, operations: Seq[Operation]) {
+  lazy val logger: Logger                               = Logger(getClass)
+  private def addOperations(op: Operation*): Operations = copy(operations = operations ++ op)
   def addProperty[T](model: String, propertyName: String)(implicit mapping: UniMapping[T]): Operations =
     addOperations(AddProperty(model, propertyName, mapping.toMapping))
   def removeProperty[T](model: String, propertyName: String, usedOnlyByThisModel: Boolean): Operations =
@@ -49,31 +47,27 @@ case class Operations private (schemaName: String, schema: Schema, currentVersio
         logger.info("Create database schema")
         db.createSchemaFrom(schema)
       case version =>
-        operations.toSeq.sortBy(_._1).foldLeft[Try[Unit]](Success(())) {
-          case (acc, (v, ops)) if v > version =>
-            ops
-              .foldLeft(acc) {
-                case (_: Success[_], AddProperty(model, propertyName, mapping)) =>
-                  logger.info(s"Add property $propertyName to $model")
-                  db.addProperty(model, propertyName, mapping)
-                case (_: Success[_], RemoveProperty(model, propertyName, usedOnlyByThisModel)) =>
-                  logger.info(s"Remove property $propertyName from $model")
-                  db.removeProperty(model, propertyName, usedOnlyByThisModel)
-                case (_: Success[_], UpdateGraph(model, update, comment)) =>
-                  logger.info(s"Update graph: $comment")
-                  db.tryTransaction(graph => update(Traversal(db.labelFilter(model)(graph.V))))
-                    .recoverWith { case error => Failure(InternalError(s"Unable to execute migration operation: $comment", error)) }
-                case (_: Success[_], AddIndex(model, indexType, properties)) =>
-                  logger.info(s"Add index in $model for properties: ${properties.mkString(", ")}")
-                  db.addIndex(model, indexType, properties)
-                case (_: Success[_], dbOperation: DBOperation[_]) =>
-                  logger.info(s"Update database: ${dbOperation.comment}")
-                  dbOperation(db)
-                case (f: Failure[_], _) => f
-              }
-              .flatMap(_ => db.setVersion(schemaName, v))
+        operations.zipWithIndex.foldLeft[Try[Unit]](Success(())) {
+          case (Success(_), (ops, v)) if v >= version =>
+            (ops match {
+              case AddProperty(model, propertyName, mapping) =>
+                logger.info(s"Add property $propertyName to $model")
+                db.addProperty(model, propertyName, mapping)
+              case RemoveProperty(model, propertyName, usedOnlyByThisModel) =>
+                logger.info(s"Remove property $propertyName from $model")
+                db.removeProperty(model, propertyName, usedOnlyByThisModel)
+              case UpdateGraph(model, update, comment) =>
+                logger.info(s"Update graph: $comment")
+                db.tryTransaction(graph => update(Traversal(db.labelFilter(model)(graph.V))))
+                  .recoverWith { case error => Failure(InternalError(s"Unable to execute migration operation: $comment", error)) }
+              case AddIndex(model, indexType, properties) =>
+                logger.info(s"Add index in $model for properties: ${properties.mkString(", ")}")
+                db.addIndex(model, indexType, properties)
+              case dbOperation: DBOperation[_] =>
+                logger.info(s"Update database: ${dbOperation.comment}")
+                dbOperation(db)
+            }).flatMap(_ => db.setVersion(schemaName, v))
           case (acc, _) => acc
         }
     }
-
 }
