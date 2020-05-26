@@ -53,7 +53,7 @@ class SessionAuthSrv(
     * Cookie is signed by Play framework (it cannot be modified by user)
     */
   override def setSessionUser(authContext: AuthContext): Result => Result = { result: Result =>
-    if (result.header.status / 100 == 2) {
+    if (result.header.status / 100 < 4) {
       val newAuthContext = result.header.headers.get("X-Organisation").fold(authContext)(authContext.changeOrganisation)
       val session = result.newSession.getOrElse(Session()) +
         ("authContext" -> Json.toJson(newAuthContext).toString) +

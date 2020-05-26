@@ -5,7 +5,7 @@ import java.util.UUID
 import com.google.inject.Provider
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.controllers.AuthenticatedRequest
-import org.thp.scalligraph.{AuthenticationError, BadConfigurationError, BadRequestError, NotFoundError}
+import org.thp.scalligraph.{AuthenticationError, BadConfigurationError, BadRequestError, CreateError, NotFoundError}
 import play.api.libs.json.JsObject
 import play.api.libs.ws.WSClient
 import play.api.mvc._
@@ -79,7 +79,10 @@ class OAuth2Srv(
                     .recoverWith {
                       case _: NotFoundError => Future.fromTry(createUser(oauth2Req))
                     }
-                } yield sessionAuthSrv.setSessionUser(authReq.authContext)(Results.Ok)
+                    .recoverWith {
+                      case _: CreateError => Future.failed(NotFoundError("User not found"))
+                    }
+                } yield sessionAuthSrv.setSessionUser(authReq.authContext)(Results.Found("/"))
               }
 
             case x => Future.failed(BadConfigurationError(s"OAuth GrantType $x not supported yet"))
@@ -240,7 +243,7 @@ class OAuth2Provider @Inject() (
       scope               <- configuration.getOrFail[Seq[String]]("scope")
       userIdField         <- configuration.getOrFail[String]("userIdField")
       authorizationHeader <- configuration.getOrFail[String]("authorizationHeader")
-      userOrganisationField = configuration.getOptional[String]("userOrganisation")
+      userOrganisationField = configuration.getOptional[String]("organisationField")
       defaultOrganisation   = configuration.getOptional[String]("defaultOrganisation")
     } yield new OAuth2Srv(
       OAuth2Config(
