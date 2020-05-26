@@ -114,7 +114,7 @@ class OAuth2Srv(
 
     logger.debug(s"Redirecting to ${OAuth2Config.redirectUri} with $queryStringParams and state $state")
     Results
-      .Redirect(OAuth2Config.authorizationUrl, queryStringParams, status = 200)
+      .Redirect(OAuth2Config.authorizationUrl, queryStringParams, status = 302)
       .withSession("state" -> state)
   }
 
