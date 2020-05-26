@@ -66,9 +66,11 @@ class OAuth2Srv(
     new ActionFunction[Request, AuthenticatedRequest] {
       override def invokeBlock[A](request: Request[A], block: AuthenticatedRequest[A] => Future[Result]): Future[Result] =
         if (isSSO(request)) {
+          logger.debug("Found SSO request")
           OAuth2Config.grantType match {
             case GrantType.authorizationCode =>
               if (!isSecuredAuthCode(request)) {
+                logger.debug("Code or state is not provided, redirect to authorizationUrl")
                 Future.successful(authRedirect())
               } else {
                 for {
@@ -137,7 +139,10 @@ class OAuth2Srv(
             case Some(code) =>
               logger.debug(s"Attempting to retrieve OAuth2 token from ${OAuth2Config.tokenUrl} with code $code")
               getAuthTokenFromCode(code.head, state)
-                .map(t => new TokenizedRequest[A](Some(t), request))
+                .map { t =>
+                  logger.trace(s"Got token $t")
+                  new TokenizedRequest[A](Some(t), request)
+                }
             case None =>
               Future.failed(AuthenticationError(s"OAuth2 server code missing ${request.queryString.get("error")}"))
           }
@@ -150,7 +155,16 @@ class OAuth2Srv(
     * @param code the previously obtained code
     * @return
     */
-  private def getAuthTokenFromCode(code: String, state: String): Future[String] =
+  private def getAuthTokenFromCode(code: String, state: String): Future[String] = {
+    logger.trace(s"""
+                    |Request to ${OAuth2Config.tokenUrl} with
+                    |  code:          $code
+                    |  grant_type:    ${OAuth2Config.grantType}
+                    |  client_secret: ${OAuth2Config.clientSecret}
+                    |  redirect_uri:  ${OAuth2Config.redirectUri}
+                    |  client_id:     ${OAuth2Config.clientId}
+                    |  state:         $state
+                    |""".stripMargin)
     WSClient
       .url(OAuth2Config.tokenUrl)
       .withHttpHeaders("Accept" -> "application/json")
@@ -167,25 +181,30 @@ class OAuth2Srv(
       .transform {
         case Success(r) if r.status == 200 => Success((r.json \ "access_token").asOpt[String].getOrElse(""))
         case Failure(error)                => Failure(AuthenticationError(s"OAuth2 token verification failure ${error.getMessage}"))
-        case Success(r)                    => Failure(AuthenticationError(s"OAuth2 unexpected response from server (${r.status} ${r.statusText})"))
+        case Success(r)                    => Failure(AuthenticationError(s"OAuth2/token unexpected response from server (${r.status} ${r.statusText})"))
       }
+  }
 
   /**
     * Enriched action with OAuth2 server user data
     * @return
     */
   private def userFromToken[A](request: TokenizedRequest[A]): Future[OAuthenticatedRequest[A]] =
-    for {
-      token    <- Future.fromTry(Try(request.token.get))
-      userJson <- getUserDataFromToken(token)
-    } yield new OAuthenticatedRequest[A](userJson, request)
+    request
+      .token
+      .fold[Future[JsObject]](Future.failed(AuthenticationError("Token is missing")))(getUserDataFromToken)
+      .map { userJson =>
+        logger.debug(s"Got user info: $userJson")
+        new OAuthenticatedRequest[A](userJson, request)
+      }
 
   /**
     * Client query for user data with OAuth2 token
     * @param token the token
     * @return
     */
-  private def getUserDataFromToken(token: String): Future[JsObject] =
+  private def getUserDataFromToken(token: String): Future[JsObject] = {
+    logger.trace(s"Request to ${OAuth2Config.userUrl} with authorization header: ${OAuth2Config.authorizationHeader} $token")
     WSClient
       .url(OAuth2Config.userUrl)
       .addHttpHeaders("Authorization" -> s"${OAuth2Config.authorizationHeader} $token")
@@ -193,8 +212,9 @@ class OAuth2Srv(
       .transform {
         case Success(r) if r.status == 200 => Success(r.json.as[JsObject])
         case Failure(error)                => Failure(AuthenticationError(s"OAuth2 user data fetch failure ${error.getMessage}"))
-        case Success(r)                    => Failure(AuthenticationError(s"OAuth2 unexpected response from server (${r.status} ${r.statusText})"))
+        case Success(r)                    => Failure(AuthenticationError(s"OAuth2/userinfo unexpected response from server (${r.status} ${r.statusText})"))
       }
+  }
 
   private def authenticate[A](request: OAuthenticatedRequest[A]): Try[AuthenticatedRequest[A]] =
     for {
