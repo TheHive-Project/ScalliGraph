@@ -1,32 +1,34 @@
 package org.thp.scalligraph.auth
 
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.matching.Regex
-import scala.util.{Failure, Success, Try}
-
-import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
-import play.api.{ConfigLoader, Configuration}
-
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.controllers.AuthenticatedRequest
 import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError}
+import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
+import play.api.{ConfigLoader, Configuration}
+
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.matching.Regex
+import scala.util.{Failure, Success, Try}
 
 object AuthCapability extends Enumeration {
   val changePassword, setPassword, authByKey, sso, mfa = Value
 }
 
 @Singleton
-class RequestOrganisation(header: Option[String], parameter: Option[String], pathSegment: Option[Regex]) extends (Request[_] => Option[String]) {
+class RequestOrganisation(header: Option[String], parameter: Option[String], pathSegment: Option[Regex], cookie: Option[String])
+    extends (Request[_] => Option[String]) {
   @Inject() def this(configuration: Configuration) =
     this(
       configuration.getOptional[String]("auth.organisationHeader"),
       configuration.getOptional[String]("auth.organisationParameter"),
-      configuration.getOptional[String]("auth.organisationPathExtractor").map(_.r)
+      configuration.getOptional[String]("auth.organisationPathExtractor").map(_.r),
+      configuration.getOptional[String]("auth.organisationCookieName")
     )
   override def apply(request: Request[_]): Option[String] =
     header.flatMap(request.headers.get(_)) orElse
       parameter.flatMap(request.queryString.getOrElse(_, Nil).headOption) orElse
-      pathSegment.flatMap(r => r.findFirstMatchIn(request.path).flatMap(m => Option(m.group(0))))
+      pathSegment.flatMap(r => r.findFirstMatchIn(request.path).flatMap(m => Option(m.group(0)))) orElse
+      cookie.flatMap(request.cookies.get).map(_.value)
 }
 
 trait AuthSrvProvider extends (Configuration => Try[AuthSrv]) {
