@@ -16,9 +16,10 @@ import org.apache.tinkerpop.gremlin.structure.Transaction
 import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
 import org.janusgraph.core.attribute.{Text => JanusText}
 import org.janusgraph.core.schema.{Mapping => JanusMapping, _}
-import org.janusgraph.core.{Cardinality, JanusGraph, JanusGraphFactory, JanusGraphTransaction, SchemaViolationException}
+import org.janusgraph.core._
 import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
+import org.janusgraph.graphdb.database.management.ManagementSystem
 import org.slf4j.MDC
 import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.auth.AuthContext
@@ -78,6 +79,12 @@ class JanusDatabase(
   }
 
   def this(system: ActorSystem) = this(Configuration.load(Environment.simple()), system)
+
+  def batchMode: JanusDatabase = {
+    val config = janusGraph.configuration()
+    config.setProperty("storage.batch-loading", true)
+    new JanusDatabase(JanusGraphFactory.open(config), maxAttempts, minBackoff, maxBackoff, randomFactor, chunkSize, system)
+  }
 
   def close(): Unit = janusGraph.close()
 
@@ -212,48 +219,49 @@ class JanusDatabase(
     }
 
   override def createSchema(models: Seq[Model]): Try[Unit] =
-    Retry(maxAttempts)
-      .on[PermanentLockingException]
-      .withTry {
-        Try {
-          logger.info("Creating database schema")
-          janusGraph.synchronized {
-            val mgmt = janusGraph.openManagement()
-            createElementLabels(mgmt, models)
-            createEntityProperties(mgmt)
-            addProperties(mgmt, models)
-            if (mgmt.getGraphIndex("_label_vertex_index") == null)
-              mgmt
-                .buildIndex("_label_vertex_index", classOf[Vertex])
-                .addKey(mgmt.getPropertyKey("_label"))
-                .buildCompositeIndex()
+    managementTransaction { mgmt =>
+      logger.info("Creating database schema")
+      createElementLabels(mgmt, models)
+      createEntityProperties(mgmt)
+      addProperties(mgmt, models)
+      if (mgmt.getGraphIndex("_label_vertex_index") == null)
+        mgmt
+          .buildIndex("_label_vertex_index", classOf[Vertex])
+          .addKey(mgmt.getPropertyKey("_label"))
+          .buildCompositeIndex()
 
-            models.foreach {
-              case model: VertexModel =>
-                val vertexLabel = mgmt.getVertexLabel(model.label)
-                model.indexes.foreach {
-                  case (indexType, properties) => createIndex(mgmt, classOf[Vertex], vertexLabel, indexType, properties)
-                }
-              case model: EdgeModel[_, _] =>
-                val edgeLabel = mgmt.getEdgeLabel(model.label)
-                model.indexes.foreach {
-                  case (indexType, properties) => createIndex(mgmt, classOf[Edge], edgeLabel, indexType, properties)
-                }
-            }
-            mgmt.commit()
-
-            // TODO add index for labels when it will be possible
-            // cf. https://github.com/JanusGraph/janusgraph/issues/283
-
-//            val mgmt2 = janusGraph.openManagement()
-//            //          mgmt2.getGraphIndexes(classOf[Vertex]).asScala.foreach { index =>
-//            //            ManagementSystem.awaitGraphIndexStatus(janusGraph, index.name()).call()
-//            //          }
-//            mgmt2.getGraphIndexes(classOf[Vertex]).asScala.foreach { index =>
-//              mgmt2.updateIndex(index, SchemaAction.REINDEX).get()
-//            }
-//            mgmt2.commit()
+      models.foreach {
+        case model: VertexModel =>
+          val vertexLabel = mgmt.getVertexLabel(model.label)
+          model.indexes.foreach {
+            case (indexType, properties) => createIndex(mgmt, classOf[Vertex], vertexLabel, indexType, properties)
           }
+        case model: EdgeModel[_, _] =>
+          val edgeLabel = mgmt.getEdgeLabel(model.label)
+          model.indexes.foreach {
+            case (indexType, properties) => createIndex(mgmt, classOf[Edge], edgeLabel, indexType, properties)
+          }
+        // TODO add index for labels when it will be possible
+        // cf. https://github.com/JanusGraph/janusgraph/issues/283
+      }
+      Success(())
+    }.flatMap(_ => enableIndexes())
+
+  def enableIndexes(): Try[Unit] =
+    managementTransaction { mgmt => // wait for the index to become available
+      Try {
+        (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).collect {
+          case index if index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.INSTALLED) => index.name()
+        }
+      }
+    }.map(_.foreach(indexName => ManagementSystem.awaitGraphIndexStatus(janusGraph, indexName).call()))
+      .flatMap { _ =>
+        managementTransaction { mgmt => // enable index by reindexing the existing data
+          (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).collect {
+            case index if index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.REGISTERED) =>
+              mgmt.updateIndex(index, SchemaAction.REINDEX).get()
+          }
+          Success(())
         }
       }
 
