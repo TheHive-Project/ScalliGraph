@@ -124,7 +124,7 @@ class PerformanceTest extends PlaySpecification {
         db.labelFilter("EntityWithName")(graph.V)
           .has(Key("name") -> entity.name)
           .headOption()
-          .fold(db.createVertex(graph, authContext, model, entity))(vertex => model.toDomain(vertex))
+          .fold(db.createVertex(graph, authContext, model, entity))(vertex => model.toDomain(vertex)(db))
 
       db.createSchema(model)
       val createTiming = new TimingStats
