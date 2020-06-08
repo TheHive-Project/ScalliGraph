@@ -124,7 +124,7 @@ class JanusDatabase(
       () => tx,
       _.tx().commit(),
       _.tx().rollback(),
-      Flow[Graph].flatMapConcat(graph => Source.fromIterator(() => ite))
+      Flow[Graph].flatMapConcat(_ => Source.fromIterator(() => ite))
     )
     src -> v
   }
