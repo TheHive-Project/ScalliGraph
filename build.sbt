@@ -115,10 +115,12 @@ lazy val janus = (project in file("database/janusgraph"))
     libraryDependencies ++= Seq(
       janusGraph,
       janusGraphBerkeleyDB,
-      janusGraphHBase,
+//      janusGraphHBase,
       janusGraphLucene,
-      janusGraphElasticSearch,
+//      janusGraphElasticSearch,
       janusGraphCassandra,
+//      janusGraphDriver,
+//      janusGraphCore,
       specs % Test
     )
   )
