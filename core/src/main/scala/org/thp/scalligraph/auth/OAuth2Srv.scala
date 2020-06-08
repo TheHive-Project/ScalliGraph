@@ -44,6 +44,7 @@ class TokenizedRequest[A](val token: Option[String], request: Request[A])       
 class OAuthenticatedRequest[A](val user: JsObject, request: TokenizedRequest[A]) extends WrappedRequest[A](request)
 
 class OAuth2Srv(
+    httpContext: String,
     OAuth2Config: OAuth2Config,
     userSrv: UserSrv,
     WSClient: WSClient,
@@ -84,7 +85,7 @@ class OAuth2Srv(
                     .recoverWith {
                       case _: CreateError => Future.failed(NotFoundError("User not found"))
                     }
-                } yield sessionAuthSrv.setSessionUser(authReq.authContext)(Results.Found("/"))
+                } yield sessionAuthSrv.setSessionUser(authReq.authContext)(Results.Found(httpContext))
               }
 
             case x => Future.failed(BadConfigurationError(s"OAuth GrantType $x not supported yet"))
@@ -266,6 +267,7 @@ class OAuth2Provider @Inject() (
       userOrganisationField = configuration.getOptional[String]("organisationField")
       defaultOrganisation   = configuration.getOptional[String]("defaultOrganisation")
     } yield new OAuth2Srv(
+      configuration.get[String]("play.http.context"),
       OAuth2Config(
         clientId,
         clientSecret,
