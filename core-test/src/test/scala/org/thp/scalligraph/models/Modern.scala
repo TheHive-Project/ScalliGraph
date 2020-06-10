@@ -1,6 +1,5 @@
 package org.thp.scalligraph.models
 
-import scala.util.{Success, Try}
 import gremlin.scala.{Graph, GremlinScala, Key, P, Vertex}
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph._
@@ -8,6 +7,8 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.services._
 import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.VertexSteps
+
+import scala.util.Try
 
 @VertexEntity
 case class Person(name: String, age: Int)
@@ -80,22 +81,24 @@ class ModernSchema @Inject() (implicit db: Database) extends Schema {
 object ModernDatabaseBuilder {
 
   def build(schema: ModernSchema)(implicit db: Database, authContext: AuthContext): Try[Unit] =
-    db.createSchemaFrom(schema).flatMap { _ =>
-      db.tryTransaction { implicit graph =>
-        for {
-          vadas  <- schema.personSrv.create(Person("vadas", 27))
-          marko  <- schema.personSrv.create(Person("marko", 29))
-          josh   <- schema.personSrv.create(Person("josh", 32))
-          peter  <- schema.personSrv.create(Person("peter", 35))
-          lop    <- schema.softwareSrv.create(Software("lop", "java"))
-          ripple <- schema.softwareSrv.create(Software("ripple", "java"))
-          _      <- schema.knowsSrv.create(Knows(0.5), marko, vadas)
-          _      <- schema.knowsSrv.create(Knows(1), marko, josh)
-          _      <- schema.createdSrv.create(Created(0.4), marko, lop)
-          _      <- schema.createdSrv.create(Created(1), josh, ripple)
-          _      <- schema.createdSrv.create(Created(0.4), josh, lop)
-          _      <- schema.createdSrv.create(Created(0.2), peter, lop)
-        } yield ()
+    db.createSchemaFrom(schema)
+      .flatMap(_ => db.addSchemaIndexes(schema))
+      .flatMap { _ =>
+        db.tryTransaction { implicit graph =>
+          for {
+            vadas  <- schema.personSrv.create(Person("vadas", 27))
+            marko  <- schema.personSrv.create(Person("marko", 29))
+            josh   <- schema.personSrv.create(Person("josh", 32))
+            peter  <- schema.personSrv.create(Person("peter", 35))
+            lop    <- schema.softwareSrv.create(Software("lop", "java"))
+            ripple <- schema.softwareSrv.create(Software("ripple", "java"))
+            _      <- schema.knowsSrv.create(Knows(0.5), marko, vadas)
+            _      <- schema.knowsSrv.create(Knows(1), marko, josh)
+            _      <- schema.createdSrv.create(Created(0.4), marko, lop)
+            _      <- schema.createdSrv.create(Created(1), josh, ripple)
+            _      <- schema.createdSrv.create(Created(0.4), josh, lop)
+            _      <- schema.createdSrv.create(Created(0.2), peter, lop)
+          } yield ()
+        }
       }
-    }
 }

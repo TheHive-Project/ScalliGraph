@@ -54,6 +54,9 @@ trait Database {
   def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Try[Unit]
   def createSchema(model: Model, models: Model*): Try[Unit] = createSchema(model +: models)
   def createSchema(models: Seq[Model]): Try[Unit]
+  def addSchemaIndexes(schemaObject: Schema): Try[Unit]
+  def addSchemaIndexes(model: Model, models: Model*): Try[Unit] = addSchemaIndexes(model +: models)
+  def addSchemaIndexes(models: Seq[Model]): Try[Unit]
   def addProperty[T](model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit]
   def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit]
   def addIndex(model: String, indexType: IndexType.Value, properties: Seq[String]): Try[Unit]
@@ -201,7 +204,7 @@ abstract class BaseDatabase extends Database {
       _ <- tryTransaction(graph => schemaObject.init(graph, authContext))
     } yield ()
 
-  override def createSchema(models: Seq[Model]): Try[Unit]
+  override def addSchemaIndexes(schemaObject: Schema): Try[Unit] = addSchemaIndexes(schemaObject.modelList ++ extraModels)
 
   protected case class DummyEntity(
       _model: Model,

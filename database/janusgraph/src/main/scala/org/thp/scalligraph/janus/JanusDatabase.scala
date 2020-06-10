@@ -224,6 +224,11 @@ class JanusDatabase(
       createElementLabels(mgmt, models)
       createEntityProperties(mgmt)
       addProperties(mgmt, models)
+      Success(())
+    }
+
+  override def addSchemaIndexes(models: Seq[Model]): Try[Unit] =
+    managementTransaction { mgmt =>
       if (mgmt.getGraphIndex("_label_vertex_index") == null)
         mgmt
           .buildIndex("_label_vertex_index", classOf[Vertex])

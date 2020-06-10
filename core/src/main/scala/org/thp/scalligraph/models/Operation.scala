@@ -44,29 +44,31 @@ case class Operations private (schemaName: String, schema: Schema, operations: S
   def execute(db: Database)(implicit authContext: AuthContext): Try[Unit] =
     db.version(schemaName) match {
       case 0 =>
-        logger.info("Create database schema")
+        logger.info(s"$schemaName: Create database schema")
         db.createSchemaFrom(schema)
+          .flatMap(_ => db.addSchemaIndexes(schema))
+          .flatMap(_ => db.setVersion(schemaName, operations.length + 1))
       case version =>
         operations.zipWithIndex.foldLeft[Try[Unit]](Success(())) {
-          case (Success(_), (ops, v)) if v >= version =>
+          case (Success(_), (ops, v)) if v + 1 >= version =>
             (ops match {
               case AddProperty(model, propertyName, mapping) =>
-                logger.info(s"Add property $propertyName to $model")
+                logger.info(s"$schemaName: Add property $propertyName to $model")
                 db.addProperty(model, propertyName, mapping)
               case RemoveProperty(model, propertyName, usedOnlyByThisModel) =>
-                logger.info(s"Remove property $propertyName from $model")
+                logger.info(s"$schemaName: Remove property $propertyName from $model")
                 db.removeProperty(model, propertyName, usedOnlyByThisModel)
               case UpdateGraph(model, update, comment) =>
-                logger.info(s"Update graph: $comment")
+                logger.info(s"$schemaName: Update graph: $comment")
                 db.tryTransaction(graph => update(Traversal(db.labelFilter(model)(graph.V))))
                   .recoverWith { case error => Failure(InternalError(s"Unable to execute migration operation: $comment", error)) }
               case AddIndex(model, indexType, properties) =>
-                logger.info(s"Add index in $model for properties: ${properties.mkString(", ")}")
+                logger.info(s"$schemaName: Add index in $model for properties: ${properties.mkString(", ")}")
                 db.addIndex(model, indexType, properties)
               case dbOperation: DBOperation[_] =>
-                logger.info(s"Update database: ${dbOperation.comment}")
+                logger.info(s"$schemaName: Update database: ${dbOperation.comment}")
                 dbOperation(db)
-            }).flatMap(_ => db.setVersion(schemaName, v))
+            }).flatMap(_ => db.setVersion(schemaName, v + 1))
           case (acc, _) => acc
         }
     }
