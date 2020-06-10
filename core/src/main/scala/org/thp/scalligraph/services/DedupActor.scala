@@ -21,6 +21,7 @@ object DedupActor {
 trait DedupOps[E <: Product] {
   val db: Database
   val service: VertexSrv[E, _ <: VertexSteps[E]]
+  lazy val logger: Logger = Logger(getClass)
 
   def getDuplicates[A](property: String): List[List[E with Entity]] = db.roTransaction { implicit graph =>
     service
@@ -41,13 +42,13 @@ trait DedupOps[E <: Product] {
     service.get(from).raw.outE().toList().foreach { edge =>
       val props = edge.properties[Any]().asScala.map(p => Key(p.key()) -> p.value()).toList
       val label = edge.label()
-      println(s"create edge from $toVertex to ${graph.E(edge.id()).inV().head()} with properties: $props")
+      logger.debug(s"create edge from $toVertex to ${graph.E(edge.id()).inV().head()} with properties: $props")
       graph.E(edge.id()).inV().addE(label, props: _*).from(toVertex).iterate()
     }
     service.get(from).raw.inE().toList().foreach { edge =>
       val props = edge.properties[Any]().asScala.map(p => Key(p.key()) -> p.value()).toList
       val label = edge.label()
-      println(s"create edge from ${graph.E(edge.id()).outV().head()} to $toVertex with properties: $props")
+      logger.debug(s"create edge from ${graph.E(edge.id()).outV().head()} to $toVertex with properties: $props")
       graph.E(edge.id()).outV().addE(label, props: _*).to(toVertex).iterate()
     }
   }
@@ -63,7 +64,6 @@ abstract class DedupActor[E <: Product] extends Actor with DedupOps[E] {
   final case object NeedCheck
   final case object Check
 
-  lazy val logger: Logger = Logger(getClass)
   val min: FiniteDuration
   val max: FiniteDuration
   def resolve(entities: List[E with Entity])(implicit graph: Graph): Try[Unit]
