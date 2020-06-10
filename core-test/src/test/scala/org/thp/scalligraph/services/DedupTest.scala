@@ -1,5 +1,6 @@
 package org.thp.scalligraph.services
 
+import gremlin.scala.Graph
 import org.specs2.specification.core.Fragments
 import org.thp.scalligraph.AppBuilder
 import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
@@ -9,7 +10,7 @@ import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
 
-import scala.util.Success
+import scala.util.{Success, Try}
 
 class DedupTest extends PlaySpecification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
@@ -36,6 +37,8 @@ class DedupTest extends PlaySpecification {
         val dedupOps: DedupOps[Software] = new DedupOps[Software] {
           override val db: Database         = app[Database]
           override val service: SoftwareSrv = app[SoftwareSrv]
+
+          override def resolve(entities: List[Software with Entity])(implicit graph: Graph): Try[Unit] = Success(())
         }
         val duplicates = dedupOps.getDuplicates("name")
         duplicates must have size 1

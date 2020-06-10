@@ -57,16 +57,6 @@ trait DedupOps[E <: Product] {
 
   val updatedFirst: Ordering[E with Entity] = (x: E with Entity, y: E with Entity) =>
     x._updatedAt.getOrElse(x._createdAt).compareTo(y._updatedAt.getOrElse(y._createdAt))
-}
-
-abstract class DedupActor[E <: Product] extends Actor with DedupOps[E] {
-  import DedupActor._
-  final case object NeedCheck
-  final case object Check
-
-  val min: FiniteDuration
-  val max: FiniteDuration
-  def resolve(entities: List[E with Entity])(implicit graph: Graph): Try[Unit]
 
   lazy val uniqueProperties: Seq[String] = service.model.indexes.flatMap {
     case (IndexType.unique, properties) if properties.lengthCompare(1) == 0 => properties
@@ -84,6 +74,18 @@ abstract class DedupActor[E <: Product] extends Actor with DedupOps[E] {
           resolve(entities)
         }
       })
+
+  def resolve(entities: List[E with Entity])(implicit graph: Graph): Try[Unit]
+}
+
+trait DedupActor extends Actor {
+  import DedupActor._
+  final case object NeedCheck
+  final case object Check
+
+  val min: FiniteDuration
+  val max: FiniteDuration
+  def check(): Unit
 
   override def receive: Receive = receive(needCheck = false, None)
   def receive(needCheck: Boolean, timer: Option[Cancellable]): Receive = {
