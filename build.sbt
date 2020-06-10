@@ -125,30 +125,30 @@ lazy val janus = (project in file("database/janusgraph"))
     )
   )
 
-lazy val orientdb = (project in file("database/orientdb"))
-  .dependsOn(core)
-  .settings(
-    name := "scalligraph-orientdb",
-    version := scalligraphVersion,
-    libraryDependencies ++= Seq(
-      gremlinScala,
-      gremlinOrientdb,
-      specs % Test
-    )
-  )
-
-lazy val neo4j = (project in file("database/neo4j"))
-  .dependsOn(core)
-  .settings(
-    name := "scalligraph-neo4j",
-    version := scalligraphVersion,
-    libraryDependencies ++= Seq(
-      gremlinScala,
-      neo4jGremlin,
-      neo4jTinkerpop,
-      specs % Test
-    )
-  )
+//lazy val orientdb = (project in file("database/orientdb"))
+//  .dependsOn(core)
+//  .settings(
+//    name := "scalligraph-orientdb",
+//    version := scalligraphVersion,
+//    libraryDependencies ++= Seq(
+//      gremlinScala,
+//      gremlinOrientdb,
+//      specs % Test
+//    )
+//  )
+//
+//lazy val neo4j = (project in file("database/neo4j"))
+//  .dependsOn(core)
+//  .settings(
+//    name := "scalligraph-neo4j",
+//    version := scalligraphVersion,
+//    libraryDependencies ++= Seq(
+//      gremlinScala,
+//      neo4jGremlin,
+//      neo4jTinkerpop,
+//      specs % Test
+//    )
+//  )
 
 //lazy val graphql = (project in file("graphql"))
 //  .dependsOn(core)
