@@ -13,6 +13,11 @@ case class InitialValue[V <: Product](model: Model.Vertex[V], value: V) {
     db.createVertex[V](graph, authContext, model, value)
 }
 
+trait UpdatableSchema { _: Schema =>
+  val operations: Operations
+  def update(db: Database)(implicit authContext: AuthContext): Try[Unit] = operations.execute(db, this)
+}
+
 trait Schema { schema =>
   def modelList: Seq[Model]
   def initialValues: Seq[InitialValue[_]]                              = Nil

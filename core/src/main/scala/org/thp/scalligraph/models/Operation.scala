@@ -24,11 +24,12 @@ case class DBOperation[DB <: Database: ClassTag](comment: String, op: DB => Try[
 }
 
 object Operations {
-  def apply(schemaName: String, schema: Schema): Operations = new Operations(schemaName, schema, Nil)
+  def apply(schemaName: String): Operations = new Operations(schemaName, Nil)
 }
 
-case class Operations private (schemaName: String, schema: Schema, operations: Seq[Operation]) {
+case class Operations private (schemaName: String, operations: Seq[Operation]) {
   lazy val logger: Logger                               = Logger(getClass)
+  val lastVersion: Int                                  = operations.length + 2
   private def addOperations(op: Operation*): Operations = copy(operations = operations ++ op)
   def addProperty[T](model: String, propertyName: String)(implicit mapping: UniMapping[T]): Operations =
     addOperations(AddProperty(model, propertyName, mapping.toMapping))
@@ -41,7 +42,7 @@ case class Operations private (schemaName: String, schema: Schema, operations: S
   def dbOperation[DB <: Database: ClassTag](comment: String)(op: DB => Try[Unit]): Operations =
     addOperations(DBOperation[DB](comment, op))
 
-  def execute(db: Database)(implicit authContext: AuthContext): Try[Unit] =
+  def execute(db: Database, schema: Schema)(implicit authContext: AuthContext): Try[Unit] =
     db.version(schemaName) match {
       case 0 =>
         logger.info(s"$schemaName: Create database schema")
@@ -68,7 +69,7 @@ case class Operations private (schemaName: String, schema: Schema, operations: S
               case dbOperation: DBOperation[_] =>
                 logger.info(s"$schemaName: Update database: ${dbOperation.comment}")
                 dbOperation(db)
-            }).flatMap(_ => db.setVersion(schemaName, v + 1))
+            }).flatMap(_ => db.setVersion(schemaName, v + 2))
           case (acc, _) => acc
         }
     }
