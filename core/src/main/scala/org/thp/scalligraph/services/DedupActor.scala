@@ -2,16 +2,20 @@ package org.thp.scalligraph.services
 
 import java.util.{Map => JMap}
 
-import akka.actor.{Actor, Cancellable}
+import akka.actor.{Actor, ActorRef, ActorSystem, Cancellable, PoisonPill, Props}
+import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
 import gremlin.scala._
+import javax.inject.{Inject, Provider}
 import org.thp.scalligraph.models.{Database, Entity, IndexType}
 import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.VertexSteps
 import play.api.Logger
+import play.api.inject.Injector
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.math.Ordering
+import scala.reflect.ClassTag
 import scala.util.Try
 
 object DedupActor {
@@ -106,5 +110,29 @@ trait DedupActor extends Actor {
       timer.foreach(_.cancel())
       context.become(receive(needCheck = false, None))
   }
+}
 
+class DedupActorProvider[A <: Actor: ClassTag](name: String) extends Provider[ActorRef] {
+  @Inject private var system: ActorSystem = _
+  @Inject private var injector: Injector  = _
+
+  override lazy val get: ActorRef = {
+    val singletonManager =
+      system.actorOf(
+        ClusterSingletonManager.props(
+          singletonProps = Props(injector.instanceOf[A]),
+          terminationMessage = PoisonPill,
+          settings = ClusterSingletonManagerSettings(system)
+        ),
+        name = s"${name}DedupSingletonManager"
+      )
+
+    system.actorOf(
+      ClusterSingletonProxy.props(
+        singletonManagerPath = singletonManager.path.toStringWithoutAddress,
+        settings = ClusterSingletonProxySettings(system)
+      ),
+      name = s"${name}DedupSingletonProxy"
+    )
+  }
 }
