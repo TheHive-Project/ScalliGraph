@@ -3,6 +3,7 @@ package org.thp.scalligraph.janus
 import java.lang.{Long => JLong}
 import java.nio.file.{Files, Paths}
 import java.util.function.Consumer
+import java.util.regex.Pattern
 import java.util.{Date, Properties}
 
 import akka.NotUsed
@@ -14,17 +15,17 @@ import javax.inject.{Inject, Singleton}
 import org.apache.tinkerpop.gremlin.process.traversal.Text
 import org.apache.tinkerpop.gremlin.structure.Transaction
 import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
+import org.janusgraph.core._
 import org.janusgraph.core.attribute.{Text => JanusText}
 import org.janusgraph.core.schema.{Mapping => JanusMapping, _}
-import org.janusgraph.core._
 import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
 import org.janusgraph.graphdb.database.management.ManagementSystem
 import org.slf4j.MDC
-import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.utils.{Config, Retry}
+import org.thp.scalligraph.{InternalError, NotFoundError}
 import play.api.{Configuration, Environment}
 
 import scala.collection.JavaConverters._
@@ -252,24 +253,6 @@ class JanusDatabase(
       Success(())
     }.flatMap(_ => enableIndexes())
 
-  def enableIndexes(): Try[Unit] =
-    managementTransaction { mgmt => // wait for the index to become available
-      Try {
-        (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).collect {
-          case index if index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.INSTALLED) => index.name()
-        }
-      }
-    }.map(_.foreach(indexName => ManagementSystem.awaitGraphIndexStatus(janusGraph, indexName).call()))
-      .flatMap { _ =>
-        managementTransaction { mgmt => // enable index by reindexing the existing data
-          (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).collect {
-            case index if index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.REGISTERED) =>
-              mgmt.updateIndex(index, SchemaAction.REINDEX).get()
-          }
-          Success(())
-        }
-      }
-
   private def createEntityProperties(mgmt: JanusGraphManagement): Unit =
     if (Option(mgmt.getPropertyKey("_label")).isEmpty) {
       mgmt
@@ -385,6 +368,58 @@ class JanusDatabase(
       }
     }
 
+  def removeAllIndexes(): Unit =
+    managementTransaction { mgmt =>
+      Success((mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).map(_.name()))
+    }.foreach(_.foreach(removeIndex))
+
+  def removeIndexes(baseIndexName: String): Unit =
+    managementTransaction { mgmt =>
+      val indexNamePattern: Pattern = s"$baseIndexName(?:_\\p{Digit}+)?".r.pattern
+      Success((mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).collect {
+        case index if indexNamePattern.matcher(index.name()).matches() => index.name()
+      })
+    }.foreach(_.foreach(removeIndex))
+
+  private def removeIndex(indexName: String) =
+    managementTransaction { mgmt =>
+      Option(mgmt.getGraphIndex(indexName)).fold[Try[Unit]](Failure(NotFoundError(s"Index $indexName doesn't exist"))) { index =>
+        if (!index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.DISABLED)) {
+          logger.debug(s"Disable index $indexName")
+          mgmt.updateIndex(index, SchemaAction.DISABLE_INDEX)
+        } else {
+          logger.debug(s"Index $indexName is already disable")
+        }
+        Success(())
+      }
+    }.map(_ => ManagementSystem.awaitGraphIndexStatus(janusGraph, indexName).status(SchemaStatus.DISABLED).call())
+      .flatMap { _ =>
+        managementTransaction { mgmt =>
+          Option(mgmt.getGraphIndex(indexName)).foreach { index =>
+            mgmt.updateIndex(index, SchemaAction.REMOVE_INDEX)
+          }
+          Success(())
+        }
+      }
+
+  def enableIndexes(): Try[Unit] =
+    managementTransaction { mgmt => // wait for the index to become available
+      Try {
+        (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).collect {
+          case index if index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.INSTALLED) => index.name()
+        }
+      }
+    }.map(_.foreach(indexName => ManagementSystem.awaitGraphIndexStatus(janusGraph, indexName).call()))
+      .flatMap { _ =>
+        managementTransaction { mgmt => // enable index by reindexing the existing data
+          (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).collect {
+            case index if index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.REGISTERED) =>
+              mgmt.updateIndex(index, SchemaAction.REINDEX).get()
+          }
+          Success(())
+        }
+      }
+
   override def addIndex(model: String, indexType: IndexType.Value, properties: Seq[String]): Try[Unit] =
     managementTransaction { mgmt =>
       Option(mgmt.getVertexLabel(model))
@@ -396,15 +431,30 @@ class JanusDatabase(
             Success(())
         }
     }
-//      .flatMap {
-//      case (elementLabel, elementClass) =>
-//        managementTransaction { mgmt =>
-//          val indexName = (elementLabel.name +: properties).map(_.replaceAll("[^\\p{Alnum}]", "").toLowerCase().capitalize).mkString
-//          Option(mgmt.getGraphIndex(indexName)).foreach(mgmt.updateIndex(_, SchemaAction.REINDEX).get())
-//          Success(())
-//        }
-//
-//    }
+
+  /**
+    * Find the available index name for the specified index base name. If this index is already present and not disable, return None
+    * @param mgmt JanusGraph management
+    * @param baseIndexName Base index name
+    * @return the available index name or None if index is present
+    */
+  private def findFirstAvailableIndex(mgmt: JanusGraphManagement, baseIndexName: String): Option[String] = {
+    val indexNamePattern: Pattern = s"$baseIndexName(?:_\\p{Digit}+)?".r.pattern
+    val availableIndexes = (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).filter(i =>
+      indexNamePattern.matcher(i.name()).matches()
+    )
+    if (availableIndexes.isEmpty) Some(baseIndexName)
+    else {
+      val isEnable = availableIndexes.exists(index => !index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.DISABLED))
+      if (isEnable) None
+      else {
+        availableIndexes.map(_.name()).toSeq.max.split('_') match {
+          case Array(_)    => Some(s"${baseIndexName}_1")
+          case Array(_, n) => Some(s"${baseIndexName}_${n.toInt + 1}")
+        }
+      }
+    }
+  }
 
   private def createIndex(
       mgmt: JanusGraphManagement,
@@ -413,10 +463,8 @@ class JanusDatabase(
       indexType: IndexType.Value,
       properties: Seq[String]
   ): Unit = {
-    val indexName = (elementLabel.name +: properties).map(_.replaceAll("[^\\p{Alnum}]", "").toLowerCase().capitalize).mkString
-    if (mgmt.getGraphIndex(indexName) != null) {
-      logger.info(s"Index $indexName already exists, ignore it")
-    } else {
+    val baseIndexName = (elementLabel.name +: properties).map(_.replaceAll("[^\\p{Alnum}]", "").toLowerCase().capitalize).mkString
+    findFirstAvailableIndex(mgmt, baseIndexName).foreach { indexName =>
       val index = mgmt.buildIndex(indexName, elementClass).indexOnly(elementLabel)
       val propertyKeys = (properties :+ "_label").map { p =>
         val propertyKey = mgmt.getPropertyKey(p)
