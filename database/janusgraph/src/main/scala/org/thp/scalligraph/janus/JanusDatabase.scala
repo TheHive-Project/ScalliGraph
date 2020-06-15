@@ -230,11 +230,12 @@ class JanusDatabase(
 
   override def addSchemaIndexes(models: Seq[Model]): Try[Unit] =
     managementTransaction { mgmt =>
-      if (mgmt.getGraphIndex("_label_vertex_index") == null)
+      findFirstAvailableIndex(mgmt, "_label_vertex_index").foreach { indexName =>
         mgmt
-          .buildIndex("_label_vertex_index", classOf[Vertex])
+          .buildIndex(indexName, classOf[Vertex])
           .addKey(mgmt.getPropertyKey("_label"))
           .buildCompositeIndex()
+      }
 
       models.foreach {
         case model: VertexModel =>
@@ -448,10 +449,10 @@ class JanusDatabase(
       val isEnable = availableIndexes.exists(index => !index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.DISABLED))
       if (isEnable) None
       else {
-        availableIndexes.map(_.name()).toSeq.max.split('_') match {
-          case Array(_)    => Some(s"${baseIndexName}_1")
-          case Array(_, n) => Some(s"${baseIndexName}_${n.toInt + 1}")
-        }
+        val lastIndex = availableIndexes.map(_.name()).toSeq.max
+        val version   = lastIndex.drop(baseIndexName.length)
+        if (version.isEmpty) Some(s"${baseIndexName}_1")
+        else Some(s"${baseIndexName}_${version.tail.toInt + 1}")
       }
     }
   }
