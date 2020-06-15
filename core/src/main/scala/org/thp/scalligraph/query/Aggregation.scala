@@ -72,7 +72,7 @@ object GroupAggregation {
           withGood(
             FieldsParser.string.optional.on("_name")(field),
             FieldsParser.string.on("_field")(field),
-            FieldsParser.string.sequence.on("_order")(field),
+            FieldsParser.string.sequence.on("_order")(field).orElse(FieldsParser.string.on("_order").map("order")(Seq(_))(field)),
             FieldsParser.long.optional.on("_size")(field),
             aggregationFieldsParser.sequence.on("_select")(field)
           )((aggName, fieldName, order, size, subAgg) => FieldAggregation(aggName, fieldName, order, size, subAgg))
