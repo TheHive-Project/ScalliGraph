@@ -1,7 +1,5 @@
 package org.thp.scalligraph.query
 
-import scala.reflect.runtime.{universe => ru}
-
 import gremlin.scala.{__, GremlinScala, OrderBy, Vertex}
 import org.apache.tinkerpop.gremlin.process.traversal.Order
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
@@ -13,6 +11,8 @@ import org.thp.scalligraph.controllers.{FPath, FSeq, FString, FieldsParser}
 import org.thp.scalligraph.models.{Database, MappingCardinality}
 import org.thp.scalligraph.steps.BaseVertexSteps
 import org.thp.scalligraph.steps.StepsOps._
+
+import scala.reflect.runtime.{universe => ru}
 
 case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
 
@@ -56,6 +56,10 @@ object InputSort {
               case _: IllegalArgumentException =>
                 Bad(One(InvalidFormatAttributeError("order", "order", Order.values().map(o => s"field: '$o'").toSet, FString(order))))
             }
+          case FString(name) if name(0) == '-' => Good(new InputSort(name -> Order.desc))
+          case FString(name) if name(0) == '+' => Good(new InputSort(name -> Order.asc))
+          case FString(name)                   => Good(new InputSort(name -> Order.asc))
+          case other                           => Bad(One(InvalidFormatAttributeError("order", "order", Order.values.map(o => s"field: '$o'").toSet, other)))
         }
         .map(x => new InputSort(x.flatMap(_.fieldOrder): _*))
   }
