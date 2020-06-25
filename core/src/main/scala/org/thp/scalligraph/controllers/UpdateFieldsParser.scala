@@ -1,11 +1,11 @@
 package org.thp.scalligraph.controllers
 
-import scala.language.experimental.macros
-
 import org.scalactic.Accumulation._
 import org.scalactic.{Every, Or}
 import org.thp.scalligraph.AttributeError
 import org.thp.scalligraph.macros.FieldsParserMacro
+
+import scala.language.experimental.macros
 
 case class UpdateFieldsParser[T](formatName: String, parsers: Seq[(FPath, FieldsParser[_])]) {
 

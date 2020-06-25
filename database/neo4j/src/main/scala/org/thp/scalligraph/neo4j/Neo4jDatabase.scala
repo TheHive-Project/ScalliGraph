@@ -8,11 +8,7 @@ import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
 import gremlin.scala._
 import javax.inject.Singleton
-import org.apache.tinkerpop.gremlin.neo4j.structure.Neo4jGraph
 import org.apache.tinkerpop.gremlin.structure.Graph
-import org.neo4j.graphdb.{ConstraintViolationException, Label}
-import org.neo4j.io.fs.FileUtils
-import org.neo4j.tinkerpop.api.impl.Neo4jGraphAPIImpl
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.utils.{Config, Retry}
 import play.api.Configuration

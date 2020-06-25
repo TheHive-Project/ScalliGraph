@@ -1,9 +1,5 @@
 package org.thp.scalligraph.controllers
 
-import scala.util.Success
-
-import play.api.libs.json.Json
-
 import org.scalactic.{Bad, Good, One}
 import org.specs2.matcher.Matcher
 import org.specs2.mutable.Specification
@@ -11,6 +7,9 @@ import org.thp.scalligraph.InvalidFormatAttributeError
 import org.thp.scalligraph.models.{MyEntity, UniMapping}
 import org.thp.scalligraph.query.{PropertyUpdater, PublicProperty, PublicPropertyListBuilder}
 import org.thp.scalligraph.steps.VertexSteps
+import play.api.libs.json.Json
+
+import scala.util.Success
 
 object TestEnumeration extends Enumeration {
   val a, b, c = Value

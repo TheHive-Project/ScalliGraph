@@ -1,7 +1,9 @@
 package org.thp.scalligraph.controllers
 
-import scala.util.Success
-
+import org.specs2.concurrent.ExecutionEnv
+import org.specs2.mock.Mockito
+import org.thp.scalligraph.ErrorHandler
+import org.thp.scalligraph.auth.AuthSrv
 import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.libs.json.Json
 import play.api.libs.logback.LogbackLoggerConfigurator
@@ -9,10 +11,7 @@ import play.api.mvc.{AnyContentAsJson, DefaultActionBuilder, Results}
 import play.api.test.{FakeRequest, Helpers, PlaySpecification}
 import play.api.{Application, Configuration, Environment}
 
-import org.specs2.concurrent.ExecutionEnv
-import org.specs2.mock.Mockito
-import org.thp.scalligraph.ErrorHandler
-import org.thp.scalligraph.auth.AuthSrv
+import scala.util.Success
 
 class ControllerTest(implicit executionEnv: ExecutionEnv) extends PlaySpecification with Mockito {
   lazy val app: Application = new GuiceApplicationBuilder().build()

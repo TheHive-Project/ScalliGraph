@@ -1,13 +1,12 @@
 package org.thp.scalligraph
 
-import scala.concurrent.ExecutionContext
-
+import akka.stream.Materializer
+import javax.inject.Inject
 import play.api.Logger
 import play.api.http.{DefaultHttpFilters, EnabledFilters}
 import play.api.mvc._
 
-import akka.stream.Materializer
-import javax.inject.Inject
+import scala.concurrent.ExecutionContext
 
 class AccessLogFilter @Inject() (implicit val mat: Materializer, ec: ExecutionContext) extends EssentialFilter {
 

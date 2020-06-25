@@ -2,20 +2,19 @@ package org.thp.scalligraph.graphql
 
 import java.io.FileNotFoundException
 
-import scala.concurrent.duration._
-import scala.concurrent.{ Await, ExecutionContext }
-import scala.io.Source
-import scala.util.control.NonFatal
-import scala.util.{ Failure, Try }
-
-import play.api.libs.json.{ JsObject, JsValue, Json }
-import play.api.{ Configuration, Environment }
-
 import gremlin.scala._
-import org.thp.scalligraph.auth.{ AuthContext, AuthContextImpl }
+import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.query.AuthGraph
 import org.thp.scalligraph.utils.UnthreadedExecutionContext
+import play.api.libs.json.{JsObject, JsValue, Json}
+import play.api.{Configuration, Environment}
+
+import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext}
+import scala.io.Source
+import scala.util.control.NonFatal
+import scala.util.{Failure, Try}
 
 class SangriaTest extends PlaySpecification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)

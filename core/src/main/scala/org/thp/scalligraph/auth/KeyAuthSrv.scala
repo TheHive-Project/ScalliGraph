@@ -1,13 +1,12 @@
 package org.thp.scalligraph.auth
 
-import scala.concurrent.ExecutionContext
-import scala.util.{Success, Try}
-
+import javax.inject.Inject
 import play.api.Configuration
 import play.api.http.HeaderNames
 import play.api.mvc.Request
 
-import javax.inject.Inject
+import scala.concurrent.ExecutionContext
+import scala.util.{Success, Try}
 
 class KeyAuthSrv(authSrv: AuthSrv, requestOrganisation: RequestOrganisation, val ec: ExecutionContext) extends AuthSrvWithActionFunction {
   override val name: String = "key"

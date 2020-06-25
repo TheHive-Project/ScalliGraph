@@ -1,8 +1,8 @@
 package org.thp.scalligraph.auth
 
-import scala.language.implicitConversions
-
 import play.api.Logger
+
+import scala.language.implicitConversions
 
 trait PermissionTag
 

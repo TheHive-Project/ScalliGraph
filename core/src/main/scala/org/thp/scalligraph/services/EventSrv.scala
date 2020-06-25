@@ -1,15 +1,14 @@
 package org.thp.scalligraph.services
 
-import scala.concurrent.Future
-
-import play.api.Logger
-
 import akka.actor.{ActorRef, ActorSystem}
 import akka.cluster.pubsub.DistributedPubSub
 import akka.cluster.pubsub.DistributedPubSubMediator.{Publish, Subscribe, Unsubscribe}
 import akka.pattern.{ask => akkaAsk}
 import akka.util.Timeout
 import javax.inject.{Inject, Singleton}
+import play.api.Logger
+
+import scala.concurrent.Future
 
 @Singleton
 class EventSrv @Inject() (system: ActorSystem) {

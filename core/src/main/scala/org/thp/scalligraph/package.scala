@@ -2,9 +2,9 @@ package org.thp
 
 import java.util.{Map => JMap}
 
-import scala.util.{Failure, Success, Try}
-
 import gremlin.scala.StepLabel
+
+import scala.util.{Failure, Success, Try}
 
 package object scalligraph {
   implicit class RichOptionTry[A](o: Option[Try[A]]) {

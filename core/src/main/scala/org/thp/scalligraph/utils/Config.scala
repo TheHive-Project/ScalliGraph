@@ -4,11 +4,10 @@ import java.lang.{Boolean => JBoolean, Byte => JByte, Double => JDouble, Float =
 import java.math.{BigInteger, BigDecimal => JBigDecimal}
 import java.util.{Properties, Iterator => JIterator, List => JList}
 
-import scala.collection.JavaConverters._
-
+import org.apache.commons.configuration.{Configuration => ApacheConfig}
 import play.api.{Configuration => PlayConfig}
 
-import org.apache.commons.configuration.{Configuration => ApacheConfig}
+import scala.collection.JavaConverters._
 
 class Config(config: PlayConfig) extends ApacheConfig {
   override def subset(prefix: String): ApacheConfig                               = new Config(config.getOptional[PlayConfig](prefix).getOrElse(PlayConfig.empty))

@@ -1,8 +1,8 @@
 package org.thp.scalligraph.macros
 
-import scala.reflect.macros.blackbox
-
 import org.thp.scalligraph.controllers._
+
+import scala.reflect.macros.blackbox
 
 class FieldsParserMacro(val c: blackbox.Context) extends MacroLogger with UpdateFieldsParserUtil {
 

@@ -1,8 +1,8 @@
 package org.thp.scalligraph.record
 
-import scala.language.experimental.macros
-
 import shapeless.{HList, Witness}
+
+import scala.language.experimental.macros
 
 trait Selector[L <: HList, K] {
   type Out

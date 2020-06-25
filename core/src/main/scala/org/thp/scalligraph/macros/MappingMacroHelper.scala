@@ -1,8 +1,8 @@
 package org.thp.scalligraph.macros
 
-import scala.reflect.macros.blackbox
-
 import org.thp.scalligraph.models._
+
+import scala.reflect.macros.blackbox
 
 class MappingMacro(val c: blackbox.Context) extends MappingMacroHelper with MacroLogger {
   import c.universe._

@@ -1,5 +1,11 @@
 package org.thp.scalligraph
 
+import com.google.inject.Inject
+import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
+import org.specs2.mock.Mockito
+import org.thp.scalligraph.auth.{AuthSrv, UserSrv}
+import org.thp.scalligraph.models.{Database, Schema}
+import org.thp.scalligraph.query.QueryExecutor
 import play.api.cache.caffeine.CaffeineCacheModule
 import play.api.i18n.{I18nModule => PlayI18nModule}
 import play.api.inject.guice.GuiceApplicationBuilder
@@ -10,28 +16,21 @@ import play.api.routing.{Router => PlayRouter}
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
 
-import com.google.inject.Inject
-import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
-import org.specs2.mock.Mockito
-import org.thp.scalligraph.auth.{AuthSrv, UserSrv}
-import org.thp.scalligraph.models.{Database, Schema}
-import org.thp.scalligraph.query.QueryExecutor
-
 trait TestService {
   def id: String
 }
 
-class TestService1 @Inject()(parentTestService: ParentProvider[TestService]) extends TestService {
+class TestService1 @Inject() (parentTestService: ParentProvider[TestService]) extends TestService {
   lazy val parentServiceId: String = parentTestService.get().fold("**")(_.id)
   def id: String                   = s"<TestService1>$parentServiceId</TestService1>"
 }
 
-class TestService2 @Inject()(parentTestService: ParentProvider[TestService]) extends TestService {
+class TestService2 @Inject() (parentTestService: ParentProvider[TestService]) extends TestService {
   lazy val parentServiceId: String = parentTestService.get().fold("**")(_.id)
   def id: String                   = s"<TestService2>$parentServiceId</TestService2>"
 }
 
-class TestService3 @Inject()(parentTestService: ParentProvider[TestService]) extends TestService {
+class TestService3 @Inject() (parentTestService: ParentProvider[TestService]) extends TestService {
   lazy val parentServiceId: String = parentTestService.get().fold("**")(_.id)
   def id: String                   = s"<TestService3>$parentServiceId</TestService3>"
 }

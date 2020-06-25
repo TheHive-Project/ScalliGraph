@@ -1,8 +1,8 @@
 package org.thp.scalligraph.macros
 
-import scala.reflect.macros.blackbox
-
 import org.thp.scalligraph.models.DefineIndex
+
+import scala.reflect.macros.blackbox
 
 trait IndexMacro {
   val c: blackbox.Context

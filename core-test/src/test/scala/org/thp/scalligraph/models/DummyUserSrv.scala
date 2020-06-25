@@ -1,11 +1,10 @@
 package org.thp.scalligraph.models
 
-import scala.util.{Success, Try}
-
+import org.thp.scalligraph.auth._
 import play.api.libs.json.JsObject
 import play.api.mvc.RequestHeader
 
-import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl, Permission, User, UserSrv}
+import scala.util.{Success, Try}
 
 case class DummyUserSrv(
     userId: String = "admin",

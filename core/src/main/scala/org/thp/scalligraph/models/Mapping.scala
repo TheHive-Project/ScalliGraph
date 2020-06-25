@@ -3,16 +3,15 @@ package org.thp.scalligraph.models
 import java.lang.{Boolean => JBoolean, Byte => JByte, Double => JDouble, Float => JFloat, Integer => JInt, Long => JLong, Short => JShort}
 import java.util.{Base64, Date}
 
-import scala.language.experimental.macros
-import scala.reflect.{classTag, ClassTag}
-
-import play.api.libs.json.{JsBoolean, JsNull, JsNumber, JsObject, JsString, JsValue, Json}
-
 import gremlin.scala.dsl.Converter
 import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.auth.Permission
 import org.thp.scalligraph.macros.MappingMacro
 import org.thp.scalligraph.utils.Hash
+import play.api.libs.json._
+
+import scala.language.experimental.macros
+import scala.reflect.{classTag, ClassTag}
 
 object MappingCardinality extends Enumeration {
   val option, single, list, set = Value

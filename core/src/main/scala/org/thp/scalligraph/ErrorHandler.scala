@@ -1,12 +1,12 @@
 package org.thp.scalligraph
 
-import scala.concurrent.Future
-
 import play.api.Logger
 import play.api.http.Status.{BAD_REQUEST, FORBIDDEN, NOT_FOUND}
 import play.api.http.{HttpErrorHandler, Status, Writeable}
 import play.api.libs.json.{JsString, JsValue, Json}
 import play.api.mvc.{RequestHeader, ResponseHeader, Result}
+
+import scala.concurrent.Future
 
 /**
   * This class handles errors. It traverses all causes of exception to find known error and shows the appropriate message

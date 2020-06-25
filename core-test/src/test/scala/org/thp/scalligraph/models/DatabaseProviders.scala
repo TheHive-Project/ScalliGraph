@@ -1,11 +1,10 @@
 package org.thp.scalligraph.models
 
-import play.api.{Configuration, Environment, Logger}
-
 import akka.actor.ActorSystem
 import com.typesafe.config.ConfigFactory
 import javax.inject.{Inject, Provider}
 import org.thp.scalligraph.janus.JanusDatabase
+import play.api.{Configuration, Environment, Logger}
 //import org.thp.scalligraph.neo4j.Neo4jDatabase
 //import org.thp.scalligraph.orientdb.OrientDatabase
 

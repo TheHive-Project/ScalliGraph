@@ -5,14 +5,13 @@ import java.nio.charset.Charset
 import java.nio.file.{Files, Path, Paths}
 import java.security.MessageDigest
 
-import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.concurrent.duration.DurationInt
-
-import play.api.libs.json.{Format, JsString, Reads, Writes}
-
 import akka.stream.Materializer
 import akka.stream.scaladsl.{FileIO, Source}
 import akka.util.ByteString
+import play.api.libs.json.{Format, JsString, Reads, Writes}
+
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.{Await, ExecutionContext, Future}
 
 case class Hasher(algorithms: String*) {
 

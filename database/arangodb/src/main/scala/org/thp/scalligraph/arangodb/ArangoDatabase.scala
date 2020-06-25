@@ -1,13 +1,12 @@
 package org.thp.scalligraph.arangodb
-import scala.util.Random
-
-import play.api.Configuration
-
 import com.typesafe.config.ConfigFactory
 import gremlin.scala.Graph
-import javax.inject.{ Inject, Singleton }
+import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.utils.Config
+import play.api.Configuration
+
+import scala.util.Random
 
 object ArangoDatabase {
   def randomName           = new String(Array.fill(10)(('A' + Random.nextInt(26)).toChar))

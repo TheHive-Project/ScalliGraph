@@ -3,14 +3,13 @@ package org.thp.scalligraph
 import java.util.concurrent.TimeUnit
 import java.util.{Map => JMap}
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.duration.{Duration, FiniteDuration}
-
-import play.api.mvc.RequestHeader
-
 import akka.dispatch._
 import com.typesafe.config.Config
 import org.slf4j.MDC
+import play.api.mvc.RequestHeader
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 /**
   * Configurator for a context propagating dispatcher.

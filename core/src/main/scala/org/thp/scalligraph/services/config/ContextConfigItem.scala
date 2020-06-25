@@ -1,16 +1,15 @@
 package org.thp.scalligraph.services.config
 
-import scala.compat.java8.OptionConverters._
-import scala.concurrent.ExecutionContext
-import scala.util.{Failure, Try}
-
-import play.api.libs.json.{Format, JsObject, JsValue, Json}
-
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.BadConfigurationError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.services.EventSrv
+import play.api.libs.json.{Format, JsObject, JsValue, Json}
+
+import scala.compat.java8.OptionConverters._
+import scala.concurrent.ExecutionContext
+import scala.util.{Failure, Try}
 
 trait ConfigContext[C] {
   def defaultPath(path: String): String

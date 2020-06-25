@@ -2,13 +2,12 @@ package org.thp.scalligraph.controllers
 
 import java.nio.file.Path
 
-import scala.collection.immutable
-
+import org.scalactic.Good
 import play.api.Logger
 import play.api.libs.json._
 import play.api.mvc._
 
-import org.scalactic.Good
+import scala.collection.immutable
 
 sealed trait Field {
   def isDefined: Boolean = true

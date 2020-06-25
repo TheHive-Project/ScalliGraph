@@ -1,4 +1,4 @@
-import sbt._
+
 
 object Dependencies {
   val janusVersion        = "0.5.2"

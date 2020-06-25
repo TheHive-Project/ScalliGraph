@@ -1,11 +1,10 @@
 package org.thp.scalligraph.models
 
+import org.apache.tinkerpop.gremlin.structure.Transaction.Status
+import org.specs2.specification.core.Fragments
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
-
-import org.apache.tinkerpop.gremlin.structure.Transaction.Status
-import org.specs2.specification.core.Fragments
 
 class CallbackTest extends PlaySpecification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)

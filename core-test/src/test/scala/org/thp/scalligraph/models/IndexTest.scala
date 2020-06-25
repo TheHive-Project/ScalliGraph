@@ -1,16 +1,15 @@
 package org.thp.scalligraph.models
 
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration.DurationInt
-import scala.concurrent.{Await, Future, Promise}
-
+import org.specs2.specification.core.Fragments
+import org.thp.scalligraph.VertexEntity
+import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
 
-import org.specs2.specification.core.Fragments
-import org.thp.scalligraph.VertexEntity
-import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.{Await, Future, Promise}
 
 @DefineIndex(IndexType.unique, "name")
 @VertexEntity

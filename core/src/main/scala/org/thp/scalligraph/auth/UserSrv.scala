@@ -2,7 +2,7 @@ package org.thp.scalligraph.auth
 
 import org.thp.scalligraph.utils.Instance
 import play.api.libs.functional.syntax._
-import play.api.libs.json.{JsObject, JsPath, Json, Reads, Writes}
+import play.api.libs.json._
 import play.api.mvc.RequestHeader
 
 import scala.util.Try

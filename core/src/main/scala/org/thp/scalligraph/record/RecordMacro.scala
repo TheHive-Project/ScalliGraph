@@ -1,13 +1,13 @@
 package org.thp.scalligraph.record
 
+import shapeless.labelled.KeyTag
+import shapeless.tag.Tagged
+import shapeless.{::, HList, HNil}
+
 import scala.annotation.tailrec
 import scala.reflect.macros.whitebox
 import scala.tools.nsc.Global
 import scala.{Symbol => ScalaSymbol}
-
-import shapeless.labelled.KeyTag
-import shapeless.tag.Tagged
-import shapeless.{::, HList, HNil}
 
 class UnsafeSelector[L <: HList, K, O](i: Int) extends Selector[L, K] {
   type Out = O

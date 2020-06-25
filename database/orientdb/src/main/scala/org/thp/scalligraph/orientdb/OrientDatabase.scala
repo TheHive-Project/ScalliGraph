@@ -5,13 +5,8 @@ import java.util.{List => JList, Set => JSet}
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
-import com.orientechnologies.orient.core.exception.OConcurrentModificationException
-import com.orientechnologies.orient.core.metadata.schema.OClass.INDEX_TYPE
-import com.orientechnologies.orient.core.metadata.schema.{OClass, OSchema, OType}
-import com.orientechnologies.orient.core.storage.ORecordDuplicatedException
 import gremlin.scala._
 import javax.inject.{Inject, Singleton}
-import org.apache.tinkerpop.gremlin.orientdb.OrientGraphFactory
 import org.apache.tinkerpop.gremlin.structure.Graph
 import org.slf4j.MDC
 import org.thp.scalligraph.InternalError

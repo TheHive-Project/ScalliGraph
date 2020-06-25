@@ -1,16 +1,15 @@
 package org.thp.scalligraph.query
 
-import scala.reflect.runtime.{universe => ru}
-import scala.util.{Success, Try}
-
-import play.api.libs.json.{JsObject, Json}
-
 import gremlin.scala.{Graph, Vertex}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FieldsParser}
 import org.thp.scalligraph.models.{Database, Mapping}
 import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
+import play.api.libs.json.{JsObject, Json}
+
+import scala.reflect.runtime.{universe => ru}
+import scala.util.{Success, Try}
 
 class PropertyBuilder[S <: BaseVertexSteps, D, SD, G](stepType: ru.Type, propertyName: String, mapping: Mapping[D, SD, G], noValue: NoValue[G]) {
 

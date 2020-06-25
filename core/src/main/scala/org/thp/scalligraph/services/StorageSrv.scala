@@ -5,12 +5,6 @@ import java.net.URI
 import java.nio.file._
 import java.util.Base64
 
-import scala.concurrent.duration.{DurationInt, FiniteDuration}
-import scala.concurrent.{Await, ExecutionContext}
-import scala.util.{Success, Try}
-
-import play.api.{Configuration, Logger}
-
 import akka.NotUsed
 import akka.stream.Materializer
 import akka.stream.alpakka.s3.scaladsl.S3
@@ -25,6 +19,11 @@ import org.thp.scalligraph.auth.UserSrv
 import org.thp.scalligraph.models.{Binary, BinaryLink, Database, Entity}
 import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.VertexSteps
+import play.api.{Configuration, Logger}
+
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
+import scala.concurrent.{Await, ExecutionContext}
+import scala.util.{Success, Try}
 
 trait StorageSrv {
   def loadBinary(folder: String, id: String): InputStream

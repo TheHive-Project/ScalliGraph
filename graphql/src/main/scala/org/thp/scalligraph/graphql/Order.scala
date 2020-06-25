@@ -1,11 +1,11 @@
 package org.thp.scalligraph.graphql
 
-import scala.reflect.{ ClassTag, classTag }
-import scala.util.Try
-
-import gremlin.scala.{ Element, OrderBy, __ }
+import gremlin.scala.{Element, OrderBy, __}
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.query.{ AuthGraph, PublicProperty }
+import org.thp.scalligraph.query.{AuthGraph, PublicProperty}
+
+import scala.reflect.{ClassTag, classTag}
+import scala.util.Try
 
 object Order {
 

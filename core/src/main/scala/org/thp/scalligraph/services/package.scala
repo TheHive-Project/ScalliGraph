@@ -1,9 +1,9 @@
 package org.thp.scalligraph
 
-import scala.reflect.runtime.{universe => ru}
-
 import gremlin.scala.{Edge, Element, Graph, GremlinScala, Vertex}
 import org.thp.scalligraph.models.{Database, Entity, Schema}
+
+import scala.reflect.runtime.{universe => ru}
 
 package object services {
   implicit class RichElement(e: Element)(implicit db: Database) {

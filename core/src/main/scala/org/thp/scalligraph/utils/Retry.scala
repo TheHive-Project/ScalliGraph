@@ -2,14 +2,13 @@ package org.thp.scalligraph.utils
 
 import java.util.concurrent.ThreadLocalRandom
 
+import akka.actor.{ActorSystem, Scheduler}
+import akka.pattern.after
+import play.api.Logger
+
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.concurrent.{blocking, Await, ExecutionContext, Future}
 import scala.util.{Failure, Try}
-
-import play.api.Logger
-
-import akka.actor.{ActorSystem, Scheduler}
-import akka.pattern.after
 
 object Retry {
 

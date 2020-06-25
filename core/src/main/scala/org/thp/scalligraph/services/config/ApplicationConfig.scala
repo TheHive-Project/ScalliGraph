@@ -1,13 +1,5 @@
 package org.thp.scalligraph.services.config
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.duration.{Duration, FiniteDuration}
-import scala.util.{Failure, Success, Try}
-
-import play.api.libs.functional.syntax._
-import play.api.libs.json._
-import play.api.{ConfigLoader, Configuration, Logger}
-
 import akka.actor.ActorRef
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import javax.inject.{Inject, Named, Singleton}
@@ -15,6 +7,13 @@ import org.thp.scalligraph.NotFoundError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.services.EventSrv
+import play.api.libs.functional.syntax._
+import play.api.libs.json._
+import play.api.{ConfigLoader, Configuration, Logger}
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.util.{Failure, Success, Try}
 
 @Singleton
 class ApplicationConfig @Inject() (

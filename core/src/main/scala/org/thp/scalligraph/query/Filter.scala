@@ -1,12 +1,8 @@
 package org.thp.scalligraph.query
 
-import scala.reflect.runtime.{universe => ru}
-
-import play.api.Logger
-
 import java.util.{Collection => JCollection}
+
 import gremlin.scala.P
-import scala.collection.JavaConverters._
 import org.apache.tinkerpop.gremlin.process.traversal.TextP
 import org.scalactic.Accumulation._
 import org.scalactic.Good
@@ -15,6 +11,10 @@ import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.{Database, Mapping}
 import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.{BaseVertexSteps, IdMapping, Traversal}
+import play.api.Logger
+
+import scala.collection.JavaConverters._
+import scala.reflect.runtime.{universe => ru}
 
 trait InputFilter extends InputQuery {
 

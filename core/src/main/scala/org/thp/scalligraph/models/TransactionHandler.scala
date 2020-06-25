@@ -3,7 +3,7 @@ package org.thp.scalligraph.models
 import akka.stream.SubscriptionWithCancelException.NonFailureCancellation
 import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, Source}
 import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
-import akka.stream.{Attributes, FanInShape2, Inlet, Outlet, SourceShape}
+import akka.stream._
 
 object TransactionHandler {
   def apply[TX, E, M](newTx: () => TX, commit: TX => Unit, rollback: TX => Unit, flow: Flow[TX, E, M]): Source[E, M] =

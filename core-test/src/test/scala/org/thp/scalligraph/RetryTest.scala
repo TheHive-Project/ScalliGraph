@@ -1,10 +1,9 @@
 package org.thp.scalligraph
 
-import scala.util.Success
-
+import org.thp.scalligraph.utils.Retry
 import play.api.test.PlaySpecification
 
-import org.thp.scalligraph.utils.Retry
+import scala.util.Success
 
 class RetryTest extends PlaySpecification {
 

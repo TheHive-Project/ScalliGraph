@@ -1,11 +1,10 @@
 package org.thp.scalligraph.services
 
-import scala.collection.immutable
-
-import play.api.Logger
-
 import javax.inject.{Inject, Provider, Singleton}
 import org.thp.scalligraph.models.Model
+import play.api.Logger
+
+import scala.collection.immutable
 
 @Singleton
 class ModelSrv @Inject() (modelsProvider: Provider[immutable.Set[Model]]) {
