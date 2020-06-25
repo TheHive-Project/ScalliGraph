@@ -2,11 +2,6 @@ package org.thp.scalligraph.services
 
 import java.util.Date
 
-import scala.reflect.runtime.{universe => ru}
-import scala.util.{Failure, Success, Try}
-
-import play.api.libs.json.JsObject
-
 import gremlin.scala._
 import org.thp.scalligraph.NotFoundError
 import org.thp.scalligraph.auth.AuthContext
@@ -14,6 +9,10 @@ import org.thp.scalligraph.models._
 import org.thp.scalligraph.query.PropertyUpdater
 import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.VertexSteps
+import play.api.libs.json.JsObject
+
+import scala.reflect.runtime.{universe => ru}
+import scala.util.{Failure, Success, Try}
 
 abstract class VertexSrv[V <: Product: ru.TypeTag, S <: VertexSteps[V]](implicit db: Database) extends ElementSrv[V, S] {
 
@@ -40,9 +39,7 @@ abstract class VertexSrv[V <: Product: ru.TypeTag, S <: VertexSteps[V]](implicit
   def createEntity(e: V)(implicit graph: Graph, authContext: AuthContext): Try[V with Entity] =
     Success(db.createVertex[V](graph, authContext, model, e))
 
-  def initialValues: Seq[V] = Nil
-
-  def getInitialValues: Seq[InitialValue[V]] = initialValues.map(v => InitialValue(model, v))
+  def exists(e: V)(implicit graph: Graph): Boolean = false
 
   def update(steps: S => S, propertyUpdaters: Seq[PropertyUpdater])(implicit graph: Graph, authContext: AuthContext): Try[(S, JsObject)] =
     update(steps(initSteps), propertyUpdaters)

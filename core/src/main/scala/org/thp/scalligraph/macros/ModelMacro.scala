@@ -1,8 +1,8 @@
 package org.thp.scalligraph.macros
 
-import scala.reflect.macros.blackbox
-
 import org.thp.scalligraph.models.Model
+
+import scala.reflect.macros.blackbox
 
 class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexMacro with MacroLogger {
 
@@ -20,6 +20,17 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
     val mappingDefinitions = mappings.map(m => q"val ${m.valName} = ${m.definition}")
     val fieldMap           = mappings.map(m => q"${m.name} -> ${m.valName}")
     val setProperties      = mappings.map(m => q"db.setProperty(vertex, ${m.name}, e.${TermName(m.name)}, ${m.valName})")
+    val initialValues =
+      try {
+        val entityTypeModule = entityType.typeSymbol.companion
+        if (entityTypeModule.typeSignature.members.exists(_.name.toString == "initialValues"))
+          q"$entityTypeModule.initialValues"
+        else q"Nil"
+      } catch {
+        case e: Throwable =>
+          error(s"Unable to get initialValues from $label: $e")
+          q"Nil"
+      }
     val domainBuilder = mappings.map { m =>
       q"""
         try {
@@ -44,6 +55,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
 
         override val label: String = $label
 
+        override val initialValues: Seq[E] = $initialValues
         override val indexes: Seq[(IndexType.Value, Seq[String])] = ${getIndexes[E]}
 
         ..$mappingDefinitions
@@ -55,7 +67,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
         }
 
         override val fields: Map[String, Mapping[_, _, _]] = Map(..$fieldMap)
-        
+
         override def toDomain(element: ElementType)(implicit db: Database): EEntity = new $entityType(..$domainBuilder) with Entity {
           val _id        = element.id().toString
           val _model     = thisModel
@@ -64,7 +76,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
           val _updatedAt = db.getProperty(element, "_updatedAt", UniMapping.date.optional)
           val _updatedBy = db.getProperty(element, "_updatedBy", UniMapping.string.optional)
         }
-      
+
         override def addEntity(e: $entityType, entity: Entity): EEntity = new $entityType(..${mappings
       .map(m => q"e.${TermName(m.name)}")}) with Entity {
           override def _id: String                = entity._id
@@ -128,9 +140,9 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
           ..$setProperties
           edge
         }
-        
+
         override val fields: Map[String, Mapping[_, _, _]] = Map(..$fieldMap)
-        
+
         override def toDomain(element: ElementType)(implicit db: Database): EEntity = {
           def fail(name: String): Nothing =
             throw InternalError($label + " " + element.id + " doesn't comply with its schema, field `" + name + "` is missing (" + element.value(name) + "): " + Model.printElement(element))
@@ -144,7 +156,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
             val _updatedBy = properties.get("_updatedBy").map(v => UniMapping.string.toDomain(v.head.asInstanceOf[String]))
           }
         }
-        
+
         override def addEntity(e: $entityType, entity: Entity): EEntity =
           new $entityType(..${mappings.map(m => q"e.${TermName(m.name)}")}) with Entity {
             override def _id: String                = entity._id

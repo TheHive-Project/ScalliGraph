@@ -2,14 +2,14 @@ package org.thp.scalligraph.models
 
 import java.util.Date
 
-import scala.annotation.StaticAnnotation
-import scala.collection.JavaConverters._
-import scala.language.experimental.macros
-
 import gremlin.scala._
 import gremlin.scala.dsl.{Converter, DomainRoot}
 import org.thp.scalligraph.NotFoundError
 import org.thp.scalligraph.macros.ModelMacro
+
+import scala.annotation.StaticAnnotation
+import scala.collection.JavaConverters._
+import scala.language.experimental.macros
 
 class Readonly extends StaticAnnotation
 
@@ -96,6 +96,9 @@ abstract class Model {
 
 abstract class VertexModel extends Model { thisModel =>
   override type ElementType = Vertex
+
+  val initialValues: Seq[E]                  = Nil
+  def getInitialValues: Seq[InitialValue[E]] = initialValues.map(iv => InitialValue(this.asInstanceOf[Model.Vertex[E]], iv))
 
   def create(e: E)(implicit db: Database, graph: Graph): Vertex
 

@@ -13,6 +13,10 @@ import scala.util.Try
 @VertexEntity
 case class Person(name: String, age: Int)
 
+object Person {
+  val initialValues = Seq(Person("marc", 34), Person("franck", 28))
+}
+
 @VertexEntity
 case class Software(name: String, lang: String)
 
@@ -53,7 +57,6 @@ class SoftwareSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Gra
 
 @Singleton
 class PersonSrv @Inject() (implicit db: Database) extends VertexSrv[Person, PersonSteps] {
-  override val initialValues: Seq[Person]                                                         = Seq(Person("marc", 34), Person("franck", 28))
   override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): PersonSteps               = new PersonSteps(raw)
   def create(e: Person)(implicit graph: Graph, authContext: AuthContext): Try[Person with Entity] = createEntity(e)
   override def get(idOrNumber: String)(implicit graph: Graph): PersonSteps =
@@ -75,7 +78,7 @@ class ModernSchema @Inject() (implicit db: Database) extends Schema {
   val createdSrv                                   = new EdgeSrv[Created, Person, Software]
   val vertexServices: Seq[VertexSrv[_, _]]         = Seq(personSrv, softwareSrv)
   override def modelList: Seq[Model]               = (vertexServices :+ knowsSrv :+ createdSrv).map(_.model)
-  override def initialValues: Seq[InitialValue[_]] = vertexServices.map(_.getInitialValues).flatten
+  override def initialValues: Seq[InitialValue[_]] = vertexServices.map(_.model.getInitialValues).flatten
 }
 
 object ModernDatabaseBuilder {
