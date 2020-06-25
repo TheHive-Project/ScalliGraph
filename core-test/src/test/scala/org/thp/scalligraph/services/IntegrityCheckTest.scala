@@ -12,12 +12,12 @@ import play.api.{Configuration, Environment}
 
 import scala.util.{Success, Try}
 
-class DedupTest extends PlaySpecification {
+class IntegrityCheckTest extends PlaySpecification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
   implicit val authContext: AuthContext = AuthContextImpl("me", "", "", "", Set.empty)
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    s"[${dbProvider.name}] dedup" should {
+    s"[${dbProvider.name}] integrity check" should {
       "copy edges vertex" in {
         val app: AppBuilder = new AppBuilder()
           .bindToProvider(dbProvider)
@@ -34,21 +34,20 @@ class DedupTest extends PlaySpecification {
             .map(_ => lop)
         }.get
 
-        val dedupOps: DedupOps[Software] = new DedupOps[Software] {
+        val integrityCheckOps: IntegrityCheckOps[Software] = new IntegrityCheckOps[Software] {
           override val db: Database         = app[Database]
           override val service: SoftwareSrv = app[SoftwareSrv]
 
           override def resolve(entities: List[Software with Entity])(implicit graph: Graph): Try[Unit] = Success(())
         }
-        val duplicates = dedupOps.getDuplicates("name")
+        val duplicates = integrityCheckOps.getDuplicates("name")
         duplicates must have size 1
         duplicates.head.map(s => s.name -> s.lang) must contain(exactly("lop" -> "java", "lop" -> "asm"))
         db.tryTransaction { implicit graph =>
-          duplicates.head.sorted(dedupOps.createdFirst.reverse) match {
-            case lastCreated :: others =>
+          integrityCheckOps.lastCreatedEntity(duplicates.head).foreach {
+            case (lastCreated, others) =>
               println(s"copy edge from ${others.map(v => s"$v(${v._id})").mkString(", ")} to $lastCreated(${lastCreated._id})")
-              others.foreach(dedupOps.copyEdge(_, lastCreated))
-            case _ => failure("should never append")
+              others.foreach(integrityCheckOps.copyEdge(_, lastCreated))
           }
           Success(())
         }
