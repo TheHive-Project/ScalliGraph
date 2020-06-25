@@ -248,7 +248,8 @@ class OAuth2Provider @Inject() (
     userSrv: UserSrv,
     WSClient: WSClient,
     implicit val executionContext: ExecutionContext,
-    provider: Provider[AuthSrv]
+    provider: Provider[AuthSrv],
+    globalConfig: Configuration
 ) extends AuthSrvProvider {
   override val name: String = "oauth2"
   override def apply(configuration: Configuration): Try[AuthSrv] =
@@ -267,7 +268,7 @@ class OAuth2Provider @Inject() (
       userOrganisationField = configuration.getOptional[String]("organisationField")
       defaultOrganisation   = configuration.getOptional[String]("defaultOrganisation")
     } yield new OAuth2Srv(
-      configuration.get[String]("play.http.context"),
+      globalConfig.get[String]("play.http.context"),
       OAuth2Config(
         clientId,
         clientSecret,
