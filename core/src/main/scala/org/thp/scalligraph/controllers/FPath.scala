@@ -1,5 +1,7 @@
 package org.thp.scalligraph.controllers
 
+import org.thp.scalligraph.InvalidFormatAttributeError
+
 trait FPath {
   val isEmpty: Boolean  = false
   def nonEmpty: Boolean = !isEmpty
@@ -79,7 +81,7 @@ object FPath {
       case (seqRegex(p), pathElem)              => FPathSeq(p, pathElem)
       case (elemInSeqRegex(p, index), pathElem) => FPathElemInSeq(p, index.toInt, pathElem)
       case (other, pathElem) if other.isEmpty   => pathElem
-      case (other, pathElem)                    => sys.error(s"ERROR: FPath($other) / $pathElem")
+      case (other, pathElem)                    => throw InvalidFormatAttributeError(path, "attributeName", Set.empty, FString(other))
     }
 
   def unapplySeq(path: FPath): Option[Seq[String]] =
