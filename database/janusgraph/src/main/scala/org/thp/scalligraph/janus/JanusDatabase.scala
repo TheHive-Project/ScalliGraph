@@ -87,6 +87,11 @@ class JanusDatabase(
     new JanusDatabase(JanusGraphFactory.open(config), maxAttempts, minBackoff, maxBackoff, randomFactor, chunkSize, system)
   }
 
+  def dropOtherConnections: Try[Unit] = managementTransaction { mgmt =>
+    mgmt.getOpenInstances.asScala.filterNot(_.endsWith("(current)")).foreach(mgmt.forceCloseInstance)
+    Success(())
+  }
+
   def close(): Unit = janusGraph.close()
 
   def isValidId(id: String): Boolean = id.forall(_.isDigit)
@@ -403,7 +408,7 @@ class JanusDatabase(
         }
       }
 
-  def enableIndexes(): Try[Unit] =
+  override def enableIndexes(): Try[Unit] =
     managementTransaction { mgmt => // wait for the index to become available
       Try {
         (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).collect {
@@ -466,7 +471,7 @@ class JanusDatabase(
   ): Unit = {
     val baseIndexName = (elementLabel.name +: properties).map(_.replaceAll("[^\\p{Alnum}]", "").toLowerCase().capitalize).mkString
     findFirstAvailableIndex(mgmt, baseIndexName).foreach { indexName =>
-      val index = mgmt.buildIndex(indexName, elementClass).indexOnly(elementLabel)
+      val index = mgmt.buildIndex(indexName, elementClass)
       val propertyKeys = (properties :+ "_label").map { p =>
         val propertyKey = mgmt.getPropertyKey(p)
         if (propertyKey == null) throw InternalError(s"Property $p in ${elementLabel.name} not found")

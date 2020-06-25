@@ -60,6 +60,7 @@ trait Database {
   def addProperty[T](model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit]
   def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit]
   def addIndex(model: String, indexType: IndexType.Value, properties: Seq[String]): Try[Unit]
+  def enableIndexes(): Try[Unit]
 //  def removeIndex(model: String, properties: Seq[String]): Try[Unit]
 
   def drop(): Unit
@@ -201,7 +202,7 @@ abstract class BaseDatabase extends Database {
     for {
       _ <- createSchema(schemaObject.modelList ++ extraModels)
       _ <- tryTransaction(graph => Try(schemaObject.initialValues.foreach(_.create()(this, graph, authContext))))
-      _ <- tryTransaction(graph => schemaObject.init(graph, authContext))
+      _ <- tryTransaction(graph => schemaObject.init(this)(graph, authContext))
     } yield ()
 
   override def addSchemaIndexes(schemaObject: Schema): Try[Unit] = addSchemaIndexes(schemaObject.modelList ++ extraModels)
