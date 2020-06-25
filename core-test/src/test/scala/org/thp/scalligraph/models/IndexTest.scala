@@ -23,6 +23,7 @@ class IndexTest extends PlaySpecification {
     implicit val db: Database = dbProvider.get()
     val model                 = Model.vertex[EntityWithUniqueName]
     db.createSchema(model)
+    db.addSchemaIndexes(model)
 
     s"[${dbProvider.name}] Creating duplicate entries on unique index constraint" should {
       "throw an exception in the same transaction" in {

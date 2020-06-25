@@ -34,6 +34,7 @@ class SimpleEntityTest extends PlaySpecification {
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
     implicit val db: Database = dbProvider.get()
     db.createSchema(db.getModel[MyEntity])
+    db.addSchemaIndexes(db.getModel[MyEntity])
     val myEntitySrv: MyEntitySrv = new MyEntitySrv
 
     s"[${dbProvider.name}] simple entity" should {

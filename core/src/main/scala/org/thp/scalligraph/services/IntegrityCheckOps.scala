@@ -21,7 +21,7 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
   val db: Database
   val service: VertexSrv[E, _ <: VertexSteps[E]]
 
-  val name: String        = service.model.label
+  lazy val name: String   = service.model.label
   lazy val logger: Logger = Logger(getClass)
 
   def getDuplicates[A](property: String): List[List[E with Entity]] = db.roTransaction { implicit graph =>

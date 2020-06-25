@@ -43,23 +43,20 @@ class QueryTest extends PlaySpecification {
             Field(
               Json.arr(
                 Json.obj("_name" -> "allPeople"),
-                Json.obj("_name" -> "sort", "_fields" -> Json.arr(Json.obj("age" -> "incr"))),
-                Json.obj("_name" -> "toList")
+                Json.obj("_name" -> "sort", "_fields" -> Json.arr(Json.obj("age" -> "incr")))
               )
             )
           val result = queryExecutor.parser(input).flatMap { query =>
             Or.from(queryExecutor.execute(query)(authGraph).map(_.toJson))
           }
           result must_=== Good(
-            Json.obj(
-              "result" -> Json.arr(
-                Json.obj("createdBy" -> "admin", "label" -> "Mister vadas", "name"  -> "vadas", "age"  -> 27),
-                Json.obj("createdBy" -> "admin", "label" -> "Mister franck", "name" -> "franck", "age" -> 28),
-                Json.obj("createdBy" -> "admin", "label" -> "Mister marko", "name"  -> "marko", "age"  -> 29),
-                Json.obj("createdBy" -> "admin", "label" -> "Mister josh", "name"   -> "josh", "age"   -> 32),
-                Json.obj("createdBy" -> "admin", "label" -> "Mister marc", "name"   -> "marc", "age"   -> 34),
-                Json.obj("createdBy" -> "admin", "label" -> "Mister peter", "name"  -> "peter", "age"  -> 35)
-              )
+            Json.arr(
+              Json.obj("createdBy" -> "admin", "label" -> "Mister vadas", "name"  -> "vadas", "age"  -> 27),
+              Json.obj("createdBy" -> "admin", "label" -> "Mister franck", "name" -> "franck", "age" -> 28),
+              Json.obj("createdBy" -> "admin", "label" -> "Mister marko", "name"  -> "marko", "age"  -> 29),
+              Json.obj("createdBy" -> "admin", "label" -> "Mister josh", "name"   -> "josh", "age"   -> 32),
+              Json.obj("createdBy" -> "admin", "label" -> "Mister marc", "name"   -> "marc", "age"   -> 34),
+              Json.obj("createdBy" -> "admin", "label" -> "Mister peter", "name"  -> "peter", "age"  -> 35)
             )
           )
         }

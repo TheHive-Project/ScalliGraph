@@ -34,6 +34,7 @@ class CardinalityTest extends PlaySpecification {
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
     implicit val db: Database = dbProvider.get()
     db.createSchema(db.getModel[EntityWithSeq])
+    db.addSchemaIndexes(db.getModel[EntityWithSeq])
     val entityWithSeqSrv: EntityWithSeqSrv = new EntityWithSeqSrv
 
     s"[${dbProvider.name}] entity" should {
