@@ -1,17 +1,16 @@
 package org.thp.scalligraph
 
-import scala.reflect.ClassTag
-
-import play.api.inject.guice.{GuiceApplicationBuilder, GuiceableModule}
-import play.api.libs.concurrent.Akka
-import play.api.{Application, Configuration}
-
 import akka.actor.{Actor, ActorRef, Props}
 import com.google.inject.name.Names
 import com.google.inject.util.Providers
 import com.typesafe.config.ConfigFactory
 import javax.inject.Provider
 import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
+import play.api.inject.guice.{GuiceApplicationBuilder, GuiceableModule}
+import play.api.libs.concurrent.Akka
+import play.api.{Application, Configuration}
+
+import scala.reflect.ClassTag
 
 class AppBuilder extends ScalaModule {
 
@@ -36,6 +35,12 @@ class AppBuilder extends ScalaModule {
   def bind[T: Manifest, TImpl <: T: Manifest]: AppBuilder = {
     if (initialized) throw InternalError("Bind is not permitted after app use")
     init = init.andThen(_ => bind[T].to[TImpl])
+    this
+  }
+
+  def bindNamed[T: Manifest, TImpl <: T: Manifest](name: String): AppBuilder = {
+    if (initialized) throw InternalError("Bind is not permitted after app use")
+    init = init.andThen(_ => bind[T].annotatedWithName(name).to[TImpl])
     this
   }
 
@@ -87,6 +92,18 @@ class AppBuilder extends ScalaModule {
     this
   }
 
+  def bindNamedToProvider[T: Manifest](name: String, provider: Provider[T]): AppBuilder = {
+    if (initialized) throw InternalError("Bind is not permitted after app use")
+    init = init.andThen(_ => bind[T].annotatedWithName(name).toProvider(provider))
+    this
+  }
+
+  def bindNamedToProvider[T: Manifest, TImpl <: Provider[T]: Manifest](name: String): AppBuilder = {
+    if (initialized) throw InternalError("Bind is not permitted after app use")
+    init = init.andThen(_ => bind[T].annotatedWithName(name).toProvider[TImpl])
+    this
+  }
+
   def bindActor[T <: Actor: ClassTag](name: String, props: Props => Props = identity): AppBuilder = {
     if (initialized) throw InternalError("Bind is not permitted after app use")
     init = init.andThen { _ =>
@@ -110,4 +127,5 @@ class AppBuilder extends ScalaModule {
   }
 
   def apply[T: ClassTag]: T = app.injector.instanceOf[T]
+
 }
