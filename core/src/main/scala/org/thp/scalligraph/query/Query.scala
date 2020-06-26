@@ -5,6 +5,7 @@ import org.scalactic.Good
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.Database
+import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.{BaseTraversal, BaseVertexSteps, PagedResult, TraversalLike}
 
 import scala.reflect.runtime.{currentMirror => rm, universe => ru}
@@ -166,6 +167,12 @@ class AggregationQuery(publicProperties: List[PublicProperty[_, _]]) extends Par
     )
 }
 
+object CountQuery extends Query {
+  override val name: String                                                          = "count"
+  override def checkFrom(t: ru.Type): Boolean                                        = SubType(t, ru.typeOf[BaseVertexSteps])
+  override def toType(t: ru.Type): ru.Type                                           = ru.typeOf[Output[Long]]
+  override def apply(param: Unit, from: Any, authContext: AuthContext): Output[Long] = Output(from.asInstanceOf[BaseVertexSteps].getCount)
+}
 trait InputQuery {
   def apply[S <: BaseVertexSteps](
       db: Database,
