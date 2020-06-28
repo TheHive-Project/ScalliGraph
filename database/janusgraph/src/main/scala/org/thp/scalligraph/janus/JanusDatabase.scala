@@ -20,6 +20,7 @@ import org.janusgraph.core.attribute.{Text => JanusText}
 import org.janusgraph.core.schema.{Mapping => JanusMapping, _}
 import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
+import org.janusgraph.graphdb.database.StandardJanusGraph
 import org.janusgraph.graphdb.database.management.ManagementSystem
 import org.slf4j.MDC
 import org.thp.scalligraph.auth.AuthContext
@@ -86,6 +87,31 @@ class JanusDatabase(
     config.setProperty("storage.batch-loading", true)
     new JanusDatabase(JanusGraphFactory.open(config), maxAttempts, minBackoff, maxBackoff, randomFactor, chunkSize, system)
   }
+
+  def instanceId: String = janusGraph match {
+    case g: StandardJanusGraph => g.getConfiguration.getUniqueGraphId
+    case _ =>
+      logger.error(s"JanusGraph database instance is not a StandardJanusGraph (${janusGraph.getClass}). Instance ID cannot be retrieved.")
+      ""
+  }
+  def openInstances: Set[String] =
+    managementTransaction { mgmt =>
+      Success {
+        mgmt
+          .getOpenInstances
+          .asScala
+          .map {
+            case instance if instance.endsWith("(current)") => instance.dropRight(9)
+            case instance                                   => instance
+          }
+          .toSet
+      }
+    }.get
+
+  def dropConnections(instanceIds: Seq[String]): Unit =
+    managementTransaction { mgmt =>
+      Success(instanceIds.foreach(mgmt.forceCloseInstance))
+    }.get
 
   def dropOtherConnections: Try[Unit] = managementTransaction { mgmt =>
     mgmt.getOpenInstances.asScala.filterNot(_.endsWith("(current)")).foreach(mgmt.forceCloseInstance)
