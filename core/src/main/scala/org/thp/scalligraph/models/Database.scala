@@ -61,6 +61,7 @@ trait Database {
   def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit]
   def addIndex(model: String, indexType: IndexType.Value, properties: Seq[String]): Try[Unit]
   def enableIndexes(): Try[Unit]
+  def removeAllIndexes(): Unit
 //  def removeIndex(model: String, properties: Seq[String]): Try[Unit]
 
   def drop(): Unit

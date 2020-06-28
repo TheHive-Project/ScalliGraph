@@ -16,7 +16,11 @@ import scala.collection.JavaConverters._
 import scala.reflect.runtime.{universe => ru}
 import scala.util.Try
 
-sealed trait GenIntegrityCheckOps
+sealed trait GenIntegrityCheckOps {
+  def check(): Unit
+  def initialCheck()(implicit graph: Graph, authContext: AuthContext): Unit
+}
+
 trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
   val db: Database
   val service: VertexSrv[E, _ <: VertexSteps[E]]

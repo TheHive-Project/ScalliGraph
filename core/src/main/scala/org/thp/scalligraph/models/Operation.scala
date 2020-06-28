@@ -15,6 +15,7 @@ case class AddProperty(model: String, propertyName: String, mapping: Mapping[_, 
 case class RemoveProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean)           extends Operation
 case class UpdateGraph(model: String, update: Traversal[Vertex, Vertex] => Try[Unit], comment: String) extends Operation
 case class AddIndex(model: String, indexType: IndexType.Value, properties: Seq[String])                extends Operation
+object RebuildIndexes                                                                                  extends Operation
 case class DBOperation[DB <: Database: ClassTag](comment: String, op: DB => Try[Unit]) extends Operation {
   def apply(db: Database): Try[Unit] =
     if (classTag[DB].runtimeClass.isAssignableFrom(db.getClass))
@@ -22,6 +23,7 @@ case class DBOperation[DB <: Database: ClassTag](comment: String, op: DB => Try[
     else
       Success(())
 }
+object NoOperation extends Operation
 
 object Operations {
   def apply(schemaName: String): Operations = new Operations(schemaName, Nil)
@@ -41,6 +43,8 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
     addOperations(AddIndex(model, indexType, properties))
   def dbOperation[DB <: Database: ClassTag](comment: String)(op: DB => Try[Unit]): Operations =
     addOperations(DBOperation[DB](comment, op))
+  def noop: Operations           = addOperations(NoOperation)
+  def rebuildIndexes: Operations = addOperations(RebuildIndexes)
 
   def execute(db: Database, schema: Schema)(implicit authContext: AuthContext): Try[Unit] =
     db.version(schemaName) match {
@@ -69,6 +73,12 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
               case dbOperation: DBOperation[_] =>
                 logger.info(s"$schemaName: Update database: ${dbOperation.comment}")
                 dbOperation(db)
+              case NoOperation => Success(())
+              case RebuildIndexes =>
+                logger.info(s"$schemaName: Remove all indexes")
+                db.removeAllIndexes()
+                logger.info(s"$schemaName: Add schema indexes")
+                db.addSchemaIndexes(schema)
             }).flatMap(_ => db.setVersion(schemaName, v + 2))
           case (acc, _) => acc
         }

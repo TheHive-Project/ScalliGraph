@@ -374,7 +374,7 @@ class JanusDatabase(
       }
     }
 
-  def removeAllIndexes(): Unit =
+  override def removeAllIndexes(): Unit =
     managementTransaction { mgmt =>
       Success((mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).map(_.name()))
     }.foreach(_.foreach(removeIndex))
@@ -471,23 +471,23 @@ class JanusDatabase(
   ): Unit = {
     val baseIndexName = (elementLabel.name +: properties).map(_.replaceAll("[^\\p{Alnum}]", "").toLowerCase().capitalize).mkString
     findFirstAvailableIndex(mgmt, baseIndexName).foreach { indexName =>
-      val index = mgmt.buildIndex(indexName, elementClass)
+      val index = mgmt.buildIndex(indexName, elementClass).indexOnly(elementLabel)
       val propertyKeys = (properties :+ "_label").map { p =>
         val propertyKey = mgmt.getPropertyKey(p)
         if (propertyKey == null) throw InternalError(s"Property $p in ${elementLabel.name} not found")
         propertyKey
       }
       indexType match {
+//        case IndexType.unique =>
+//          logger.debug(s"Creating unique index on fields $elementLabel:${propertyKeys.mkString(",")}")
+//          propertyKeys.foreach(index.addKey)
+//          index.unique()
+//          val i = index.buildCompositeIndex()
+//          mgmt.setConsistency(i, ConsistencyModifier.LOCK)
+//          propertyKeys.foreach { k =>
+//            mgmt.setConsistency(k, ConsistencyModifier.LOCK)
+//          }
         case IndexType.unique =>
-          logger.debug(s"Creating unique index on fields $elementLabel:${propertyKeys.mkString(",")}")
-          propertyKeys.foreach(index.addKey)
-          index.unique()
-          val i = index.buildCompositeIndex()
-          mgmt.setConsistency(i, ConsistencyModifier.LOCK)
-          propertyKeys.foreach { k =>
-            mgmt.setConsistency(k, ConsistencyModifier.LOCK)
-          }
-        case IndexType.tryUnique =>
           logger.debug(s"Creating unique index on fields $elementLabel:${propertyKeys.mkString(",")}")
           propertyKeys.foreach(index.addKey)
           index.unique()
@@ -546,7 +546,7 @@ class JanusDatabase(
     }
   }
 
-  override def labelFilter[E <: Element](label: String): GremlinScala[E] => GremlinScala[E] = _.has(Key("_label") of label)
+  override def labelFilter[E <: Element](label: String): GremlinScala[E] => GremlinScala[E] = _.has(Key("_label") of label).hasLabel(label)
 
   override def mapPredicate[T](predicate: P[T]): P[T] =
     predicate.getBiPredicate match {
