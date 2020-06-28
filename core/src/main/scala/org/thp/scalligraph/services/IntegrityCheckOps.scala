@@ -7,7 +7,6 @@ import org.apache.tinkerpop.gremlin.process.traversal.Scope
 import org.apache.tinkerpop.gremlin.structure.T
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.{Database, Entity, IndexType, UniMapping}
-import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.VertexSteps
 import play.api.Logger
 import shapeless.{::, HNil}
@@ -29,7 +28,7 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
   lazy val logger: Logger = Logger(getClass)
 
   def getDuplicates[A](property: String): List[List[E with Entity]] = db.roTransaction { implicit graph =>
-    service
+    val values = service
       .initSteps
       .raw
       .groupCount(By(Key[A](property)))
@@ -37,9 +36,22 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
       .where(_.selectValues.is(P.gt(1)))
       .selectKeys
       .toList
-      .map { value =>
-        service.initSteps.has(property, value).toList
-      }
+    if (values.isEmpty)
+      Nil
+    else {
+      service
+        .initSteps
+        .raw
+        .traversal
+        .asScala
+        .collect {
+          case vertex if values.contains(vertex.value(property)) => (vertex.value[Any](property), service.model.toDomain(vertex)(db))
+        }
+        .toSeq
+        .groupBy(_._1)
+        .map(_._2.map(_._2).toList)
+        .toList
+    }
   }
 
   def copyEdge(from: E with Entity, to: E with Entity, predicate: Edge => Boolean = _ => true)(implicit graph: Graph): Unit = {
