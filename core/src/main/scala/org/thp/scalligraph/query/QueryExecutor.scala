@@ -10,7 +10,7 @@ import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.{PagedResult, Traversal, TraversalLike}
 import org.thp.scalligraph.utils.RichType
 import play.api.Logger
-import play.api.libs.json.{JsArray, JsNull, JsValue}
+import play.api.libs.json.{JsArray, JsNull, JsNumber, JsValue}
 import play.api.mvc.{Result, Results}
 
 import scala.reflect.runtime.{universe => ru}
@@ -61,6 +61,7 @@ abstract class QueryExecutor { executor =>
   private def getRenderer(tpe: ru.Type, authContext: AuthContext): Try[Renderer[Any]] =
     if (SubType(tpe, ru.typeOf[PagedResult[_]])) Success(Renderer.stream[Any](_.asInstanceOf[PagedResult[Any]]))
     else if (SubType(tpe, ru.typeOf[Output[_]])) Success(Renderer[Any](_.asInstanceOf[Output[Any]]))
+    else if (SubType(tpe, ru.typeOf[Number])) Success(Renderer(n => Output(n, JsNumber(BigDecimal(n.toString)))))
     else if (SubType(tpe, ru.typeOf[Seq[_]])) {
       val subType = RichType.getTypeArgs(tpe, ru.typeOf[Seq[_]]).head
       getRenderer(subType, authContext).map { subRenderer =>

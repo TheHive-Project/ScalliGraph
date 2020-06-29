@@ -168,10 +168,10 @@ class AggregationQuery(publicProperties: List[PublicProperty[_, _]]) extends Par
 }
 
 object CountQuery extends Query {
-  override val name: String                                                          = "count"
-  override def checkFrom(t: ru.Type): Boolean                                        = SubType(t, ru.typeOf[BaseVertexSteps])
-  override def toType(t: ru.Type): ru.Type                                           = ru.typeOf[Output[Long]]
-  override def apply(param: Unit, from: Any, authContext: AuthContext): Output[Long] = Output(from.asInstanceOf[BaseVertexSteps].getCount)
+  override val name: String                                                  = "count"
+  override def checkFrom(t: ru.Type): Boolean                                = SubType(t, ru.typeOf[BaseVertexSteps])
+  override def toType(t: ru.Type): ru.Type                                   = ru.typeOf[Long]
+  override def apply(param: Unit, from: Any, authContext: AuthContext): Long = from.asInstanceOf[BaseVertexSteps].getCount
 }
 trait InputQuery {
   def apply[S <: BaseVertexSteps](
