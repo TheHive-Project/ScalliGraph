@@ -1,16 +1,9 @@
 ---
 kind: pipeline
 name: default
-
-# Disable default clone
-clone:
-  disable: true
+type: docker
 
 steps:
-  # This clone step doesn't use "root" user
-  - name: clone
-    image: plugins/git:next
-
   # Restore cache of downloaded dependencies
   - name: restore-cache
     image: drillster/drone-volume-cache
@@ -19,6 +12,7 @@ steps:
       mount:
         - .sbt
         - .ivy2
+        - .cache
     volumes: [{name: cache, path: /cache}]
 
   # Run project tests
@@ -35,8 +29,7 @@ steps:
       mount:
         - .sbt
         - .ivy2
-        - ui/node_modules
-        - ui/bower_components
+        - .cache
     volumes: [{name: cache, path: /cache}]
 
 volumes:
