@@ -7,6 +7,7 @@ import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
 
+import scala.concurrent.duration.DurationInt
 import scala.util.Try
 
 class StreamTransactionTest extends PlaySpecification {
@@ -40,7 +41,7 @@ class StreamTransactionTest extends PlaySpecification {
       val flow      = Flow[Tx].mapConcat(_ => 1 to 10)
       val (tx, src) = Tx(flow)
       await(src.runWith(Sink.seq)) must beEqualTo(Seq(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
-      tx.isCommitted must beTrue.setMessage(s"$tx is not committed")
+      tx.isCommitted must beTrue.setMessage(s"$tx is not committed").eventually(5, 10.milliseconds)
     }
 
     "commit the transaction if sink consume part of elements" in {
@@ -48,21 +49,21 @@ class StreamTransactionTest extends PlaySpecification {
       val (tx, src) = Tx(flow)
       await(src.runWith(Sink.head)) must beEqualTo(1)
       println(s"$tx ${tx.isCommitted}")
-      tx.isCommitted must beTrue.setMessage(s"$tx is not committed")
+      tx.isCommitted must beTrue.setMessage(s"$tx is not committed").eventually(5, 10.milliseconds)
     }
 
     "rollback the transaction if flow fails" in {
       val flow      = Flow[Tx].mapConcat(_ => 1 to 10).map(v => 1 / (v - 3))
       val (tx, src) = Tx(flow)
       Try(await(src.runWith(Sink.seq))) must beAFailedTry
-      tx.isRollback must beTrue.setMessage(s"$tx is not rolled back")
+      tx.isRollback must beTrue.setMessage(s"$tx is not rolled back").eventually(5, 10.milliseconds)
     }
 
     "rollback the transaction if sink fails" in {
       val flow      = Flow[Tx].mapConcat(_ => 1 to 10)
       val (tx, src) = Tx(flow)
       Try(await(src.runWith(Flow[Int].map(v => 1 / (v - 3)).toMat(Sink.ignore)(Keep.right)))) must beAFailedTry
-      tx.isRollback must beTrue.setMessage(s"$tx is not rolled back")
+      tx.isRollback must beTrue.setMessage(s"$tx is not rolled back").eventually(5, 10.milliseconds)
     }
   }
 }
