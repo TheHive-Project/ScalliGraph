@@ -9,6 +9,7 @@ steps:
     image: drillster/drone-volume-cache
     settings:
       restore: true
+      backend: "filesystem"
       mount:
         - .sbt
         - .ivy2
@@ -26,6 +27,7 @@ steps:
     image: drillster/drone-volume-cache
     settings:
       rebuild: true
+      backend: "filesystem"
       mount:
         - .sbt
         - .ivy2
