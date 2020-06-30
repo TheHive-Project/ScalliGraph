@@ -60,8 +60,8 @@ class ScalligraphRouter @Inject() (
 ) extends Provider[Router] {
   lazy val logger: Logger           = Logger(getClass)
   lazy val routerList: List[Router] = routers.toList
+  val prefix: String                = httpConfig.context
   override lazy val get: Router = {
-    val prefix = httpConfig.context
 
     routerList
       .reduceOption(_ orElse _)
@@ -95,8 +95,14 @@ class ScalligraphRouter @Inject() (
       actionBuilder.async { request =>
         authSrv
           .actionFunction(defaultAction)
-          .invokeBlock(request, (_: AuthenticatedRequest[AnyContent]) => Future.failed(NotFoundError(request.path)))
-
+          .invokeBlock(
+            request,
+            (_: AuthenticatedRequest[AnyContent]) =>
+              if (request.path.endsWith("/ssoLogin"))
+                Future.successful(Results.Redirect(prefix))
+              else
+                Future.failed(NotFoundError(request.path))
+          )
       }
   }
 }
