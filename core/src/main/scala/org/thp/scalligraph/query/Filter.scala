@@ -203,6 +203,8 @@ object InputFilter {
       case (_, FObjOne("_lte", FDeprecatedObjOne(key, field)))                 => propParser(key)(field).map(value => lte(key, value))
       case (_, FObjOne("_gte", FFieldValue(key, field)))                       => propParser(key)(field).map(value => gte(key, value))
       case (_, FObjOne("_gte", FDeprecatedObjOne(key, field)))                 => propParser(key)(field).map(value => gte(key, value))
+      case (_, FObjOne("_ne", FFieldValue(key, field)))                        => propParser(key)(field).map(value => neq(key, value))
+      case (_, FObjOne("_ne", FDeprecatedObjOne(key, field)))                  => propParser(key)(field).map(value => neq(key, value))
       case (_, FObjOne("_is", FFieldValue(key, field)))                        => propParser(key)(field).map(value => is(key, value))
       case (_, FObjOne("_is", FDeprecatedObjOne(key, field)))                  => propParser(key)(field).map(value => is(key, value))
       case (_, FObjOne("_startsWith", FFieldValue(key, FString(value))))       => Good(startsWith(key, value))
