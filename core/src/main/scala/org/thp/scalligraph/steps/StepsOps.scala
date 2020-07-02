@@ -239,7 +239,7 @@ object StepsOps {
       newInstance0(raw.and(filters: _*))
     }
 
-    def not(t: T => BaseTraversal): BaseTraversal =
+    def not(t: T => BaseTraversal): T =
       newInstance0(raw.not((g: GremlinScala[traversal.EndGraph]) => t(newInstance0(g)).raw))
 
     def choose[A: ClassTag](
