@@ -7,11 +7,13 @@ import org.apache.tinkerpop.gremlin.process.traversal.Scope
 import org.apache.tinkerpop.gremlin.structure.T
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.{Database, Entity, IndexType, UniMapping}
+import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.VertexSteps
 import play.api.Logger
 import shapeless.{::, HNil}
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.reflect.runtime.{universe => ru}
 import scala.util.Try
 
@@ -24,35 +26,35 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
   val db: Database
   val service: VertexSrv[E, _ <: VertexSteps[E]]
 
-  lazy val name: String   = service.model.label
-  lazy val logger: Logger = Logger(getClass)
+  lazy val name: String     = service.model.label
+  lazy val logger: Logger   = Logger(getClass)
+  final private val noValue = new Object
 
-  def getDuplicates[A](property: String): List[List[E with Entity]] = db.roTransaction { implicit graph =>
-    val values = service
-      .initSteps
-      .raw
-      .groupCount(By(Key[A](property)))
-      .unfold[JMap.Entry[A, Long]]()
-      .where(_.selectValues.is(P.gt(1)))
-      .selectKeys
-      .toList
-    if (values.isEmpty)
-      Nil
+  def getDuplicates[A](properties: Seq[String]): List[List[E with Entity]] =
+    if (properties.isEmpty) Nil
     else {
-      service
-        .initSteps
-        .raw
-        .traversal
-        .asScala
-        .collect {
-          case vertex if values.contains(vertex.value(property)) => (vertex.value[Any](property), service.model.toDomain(vertex)(db))
-        }
-        .toSeq
-        .groupBy(_._1)
-        .map(_._2.map(_._2).toList)
-        .toList
+      val singleProperty = properties.lengthCompare(1) == 0
+      val getValues: Vertex => Any =
+        if (singleProperty) (_: Vertex).value[Any](properties.head)
+        else (v: Vertex) => properties.map(v.property[Any](_).orElse(noValue))
+      db.roTransaction { implicit graph =>
+        val map = mutable.Map.empty[Any, mutable.Buffer[String]]
+        service
+          .initSteps
+          .raw
+          .traversal
+          .asScala
+          .foreach { v =>
+            map.getOrElseUpdate(getValues(v), mutable.Buffer.empty[String]) :+ v.id.toString
+          }
+        map
+          .values
+          .collect {
+            case vertexIds if vertexIds.lengthCompare(1) > 0 => service.getByIds(vertexIds: _*).toList
+          }
+          .toList
+      }
     }
-  }
 
   def copyEdge(from: E with Entity, to: E with Entity, predicate: Edge => Boolean = _ => true)(implicit graph: Graph): Unit = {
     val toVertex: Vertex = graph.V(to._id).head
@@ -196,20 +198,17 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
       Some((elements(lastIndex), elements.patch(lastIndex, Nil, 1)))
     }
 
-  lazy val uniqueProperties: Seq[String] = service.model.indexes.flatMap {
-    case (IndexType.unique, properties) if properties.lengthCompare(1) == 0 => properties
-    case (IndexType.unique, _) =>
-      logger.warn("Index on only one property can be deduplicated")
-      None
-    case _ => Nil
+  lazy val uniqueProperties: Option[Seq[String]] = service.model.indexes.collectFirst {
+    case (IndexType.unique, properties) => properties
   }
 
-  def duplicateEntities: Seq[List[E with Entity]] = uniqueProperties.flatMap(getDuplicates)
+  def duplicateEntities: List[List[E with Entity]] = uniqueProperties.fold[List[List[E with Entity]]](Nil)(getDuplicates)
 
   def check(): Unit =
     duplicateEntities
       .foreach { entities =>
         db.tryTransaction { implicit graph =>
+          logger.info(s"Found duplicate entities:${entities.map(e => s"\n - $e").mkString}")
           resolve(entities)
         }
       }

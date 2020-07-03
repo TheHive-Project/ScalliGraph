@@ -40,7 +40,7 @@ class IntegrityCheckTest extends PlaySpecification {
 
           override def resolve(entities: List[Software with Entity])(implicit graph: Graph): Try[Unit] = Success(())
         }
-        val duplicates = integrityCheckOps.getDuplicates("name")
+        val duplicates = integrityCheckOps.getDuplicates(Seq("name"))
         duplicates must have size 1
         duplicates.head.map(s => s.name -> s.lang) must contain(exactly("lop" -> "java", "lop" -> "asm"))
         db.tryTransaction { implicit graph =>
