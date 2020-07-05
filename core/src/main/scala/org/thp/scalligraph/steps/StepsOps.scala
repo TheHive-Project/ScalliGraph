@@ -4,7 +4,7 @@ import java.lang.{Double => JDouble, Long => JLong}
 import java.util.{Date, UUID, Collection => JCollection, List => JList, Map => JMap}
 
 import gremlin.scala.dsl.Converter
-import gremlin.scala.{By, Edge, Graph, GremlinScala, Key, OrderBy, P, ProjectionBuilder, StepLabel, Vertex, __, _}
+import gremlin.scala.{By, Edge, Graph, GremlinScala, Key, OrderBy, P, ProjectionBuilder => GremlinProjectionBuilder, StepLabel, Vertex, __, _}
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
 import org.apache.tinkerpop.gremlin.process.traversal.step.TraversalOptionParent.Pick
 import org.apache.tinkerpop.gremlin.structure.Element
@@ -15,11 +15,13 @@ import org.thp.scalligraph.services.VertexSrv
 import org.thp.scalligraph.{AuthorizationError, InternalError, NotFoundError}
 import play.api.Logger
 import shapeless.HNil
+import shapeless.ops.tuple.{Prepend => TuplePrepend}
 
 import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
+import shapeless.syntax.std.tuple._
 
 trait BranchOption[T <: BaseTraversal, R <: BaseTraversal] {
   def traversal: T => R
@@ -35,6 +37,58 @@ case class BranchMatchAll[T <: BaseTraversal, R <: BaseTraversal](traversal: T =
 /* if nothing else matched in branch/choose step */
 case class BranchOtherwise[T <: BaseTraversal, R <: BaseTraversal](traversal: T => R) extends BranchOption[T, R] {
   override def pickToken = Pick.none
+}
+
+class ProjectionBuilder[E <: Product, T <: BaseTraversal](
+    traversal: T,
+    labels: Seq[String],
+    addBy: GraphTraversal[_, JMap[String, Any]] => GraphTraversal[_, JMap[String, Any]],
+    buildResult: JMap[String, Any] => E
+) {
+  import StepsOps.BaseTraversalOps
+
+  def apply[U, TR <: Product](by: By[U])(implicit prepend: TuplePrepend.Aux[E, Tuple1[U], TR]): ProjectionBuilder[TR, T] = {
+    val label = UUID.randomUUID().toString
+    new ProjectionBuilder[TR, T](traversal, labels :+ label, addBy.andThen(by.apply), map => buildResult(map) :+ map.get(label).asInstanceOf[U])
+  }
+
+  def by[TR <: Product](implicit prepend: TuplePrepend.Aux[E, Tuple1[traversal.EndGraph], TR]): ProjectionBuilder[TR, T] = {
+    val label = UUID.randomUUID().toString
+    new ProjectionBuilder[TR, T](
+      traversal,
+      labels :+ label,
+      addBy.andThen(By().apply),
+      map => buildResult(map) :+ map.get(label).asInstanceOf[traversal.EndGraph]
+    )
+  }
+
+  def by[U, TR <: Product](key: Key[U])(implicit prepend: TuplePrepend.Aux[E, Tuple1[U], TR]): ProjectionBuilder[TR, T] = {
+    val label = UUID.randomUUID().toString
+    new ProjectionBuilder[TR, T](
+      traversal,
+      labels :+ label,
+      addBy.andThen(_.by(key.name)),
+      map => buildResult(map) :+ map.get(label).asInstanceOf[U]
+    )
+  }
+
+  def by[U, TR <: Product](
+      f: T => TraversalGraph[U]
+  )(implicit prepend: TuplePrepend.Aux[E, Tuple1[U], TR]): ProjectionBuilder[TR, T] = {
+    val label = UUID.randomUUID().toString
+    new ProjectionBuilder[TR, T](
+      traversal,
+      labels :+ label,
+      addBy.andThen(_.by(f(traversal.start).raw.traversal)),
+      map => buildResult(map) :+ map.get(label).asInstanceOf[U]
+    )
+  }
+
+  private[steps] def build(g: GremlinScala[_]): GremlinScala[E] =
+    GremlinScala(addBy(g.traversal.project(labels.head, labels.tail: _*))).map(buildResult)
+}
+object ProjectionBuilder {
+  def apply[S <: BaseTraversal](steps: S) = new ProjectionBuilder[Nil.type, S](steps, Nil, scala.Predef.identity, _ => Nil)
 }
 
 object StepsOps {
@@ -98,8 +152,8 @@ object StepsOps {
 
     def otherV()(implicit ev: G <:< Edge): Traversal[Vertex, Vertex] = Traversal(raw.otherV())
 
-    def label(implicit ev: G <:< Element): Traversal[String, String]                 = new Traversal(raw.label(), UniMapping.string)
-    def value[A: ClassTag](key: Key[A])(implicit ev: G <:< Element): Traversal[A, A] = new Traversal[A, A](raw.value(key), UniMapping.identity)
+    def label(implicit ev: G <:< Element): Traversal[String, String]                  = new Traversal(raw.label(), UniMapping.string)
+    def value[A: ClassTag](name: String)(implicit ev: G <:< Element): Traversal[A, A] = new Traversal[A, A](raw.value[A](name), UniMapping.identity)
 
     def _id(implicit ev: G <:< Element) = new Traversal[String, AnyRef](raw.id(), IdMapping)
 
@@ -146,13 +200,15 @@ object StepsOps {
 
     def converter: Converter.Aux[traversal.EndDomain, traversal.EndGraph] = traversal.converter
 
-    def start(): T = newInstance0(__[traversal.EndGraph])
+    def start: T = newInstance0(__[traversal.EndGraph])
 
     private def newInstance0(newRaw: GremlinScala[traversal.EndGraph]): T = traversal.newInstance(newRaw).asInstanceOf[T]
 
     def range(from: Long, to: Long): T =
       if (from == 0 && to == Long.MaxValue) traversal
       else newInstance0(traversal.raw.range(from, to))
+
+    def limit(n: Long): T = newInstance0(traversal.raw.limit(n))
 
     def richPage[DD: Renderer](from: Long, to: Long, withTotal: Boolean)(f: T => TraversalLike[DD, _]): PagedResult[DD] = {
       logger.debug(s"Execution of $raw (richPage)")
@@ -192,8 +248,8 @@ object StepsOps {
 
     def unfold[A: ClassTag]: Traversal[A, A] = new Traversal(raw.unfold[A](), UniMapping.identity)
 
-    def project[A <: Product: ClassTag](builder: ProjectionBuilder[Nil.type] => ProjectionBuilder[A]): Traversal[A, A] =
-      new Traversal(raw.project(builder), UniMapping.identity)
+//    def project[A <: Product: ClassTag](builder: GremlinProjectionBuilder[Nil.type] => GremlinProjectionBuilder[A]): Traversal[A, A] =
+//      new Traversal(raw.project(builder), UniMapping.identity)
 
     def project[A](bys: By[_ <: A]*): Traversal[JCollection[A], JCollection[A]] = {
       val labels = bys.map(_ => UUID.randomUUID().toString)
@@ -201,6 +257,11 @@ object StepsOps {
         bys.foldLeft(raw.project[A](labels.head, labels.tail: _*))((t, b) => GremlinScala(b.apply(t.traversal)))
       new Traversal(traversal.selectValues, UniMapping.identity)
     }
+
+    def project[A <: Product: ClassTag](
+        builder: ProjectionBuilder[Nil.type, T] => ProjectionBuilder[A, T]
+    ): Traversal[A, A] =
+      Traversal(builder(ProjectionBuilder(traversal)).build(traversal.raw))
 
     // TODO check if A = EndGraph
     def as[A](stepLabel: StepLabel[A]): T = newInstance0(new GremlinScala[traversal.EndGraph](raw.traversal.as(stepLabel.name)))
@@ -257,8 +318,8 @@ object StepsOps {
       )
 
     def choose[A, B: ClassTag](on: T => TraversalLike[_, A], options: BranchOption[T, TraversalLike[B, B]]*): Traversal[B, B] = {
-      val jTraversal = options.foldLeft[GraphTraversal[_, B]](raw.traversal.choose(on(this.start()).raw.traversal)) { (tr, option) =>
-        tr.option(option.pickToken, option.traversal(this.start()).raw.traversal)
+      val jTraversal = options.foldLeft[GraphTraversal[_, B]](raw.traversal.choose(on(this.start).raw.traversal)) { (tr, option) =>
+        tr.option(option.pickToken, option.traversal(this.start).raw.traversal)
       }
       Traversal[B](GremlinScala(jTraversal))
     }
@@ -272,6 +333,9 @@ object StepsOps {
     def hasNot[A](key: String): T                                                               = newInstance0(raw.hasNot(Key[A](key)))
 
     def hasId(ids: String*)(implicit ev: traversal.EndGraph <:< Element): T = newInstance0(raw.hasId(ids: _*))
+
+    def union[A: ClassTag](t: (T => TraversalGraph[A])*): TraversalGraph[A] =
+      Traversal[A](raw.unionFlat(t.map(_.compose(newInstance0).andThen(_.raw)): _*))
   }
 
   implicit class TraversalOps[D, G](val traversal: TraversalLike[D, G]) {

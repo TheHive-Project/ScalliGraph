@@ -36,7 +36,7 @@ class PersonSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph
 
   def connectedEdge: List[String] = this.outE().label.toList
 
-  def knownLevels: List[Double] = this.outToE[Knows].value[Double](Key("weight")).toList
+  def knownLevels: List[Double] = this.outToE[Knows].value[Double]("weight").toList
 
   def knows: PersonSteps = new PersonSteps(this.outTo[Knows].raw)
 
