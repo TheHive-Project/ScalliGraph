@@ -45,7 +45,7 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
           .traversal
           .asScala
           .foreach { v =>
-            map.getOrElseUpdate(getValues(v), mutable.Buffer.empty[String]) :+ v.id.toString
+            map.getOrElseUpdate(getValues(v), mutable.Buffer.empty[String]) += v.id.toString
           }
         map
           .values
