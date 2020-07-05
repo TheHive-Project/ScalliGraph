@@ -14,7 +14,9 @@ class EdgeSrv[E <: Product: ru.TypeTag, FROM <: Product: ru.TypeTag, TO <: Produ
     extends ElementSrv[E, EdgeSteps[E, FROM, TO]] {
   override val model: Model.Edge[E, FROM, TO] = db.getEdgeModel[E, FROM, TO]
 
-  override def getByIds(ids: String*)(implicit graph: Graph): EdgeSteps[E, FROM, TO] = steps(db.labelFilter(model)(graph.E(ids: _*)))
+  override def getByIds(ids: String*)(implicit graph: Graph): EdgeSteps[E, FROM, TO] =
+    if (ids.isEmpty) steps(graph.inject())
+    else steps(db.labelFilter(model)(graph.E(ids: _*)))
 
   def steps(raw: GremlinScala[Edge])(implicit graph: Graph) = new EdgeSteps[E, FROM, TO](raw)
 

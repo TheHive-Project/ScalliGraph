@@ -22,7 +22,9 @@ abstract class VertexSrv[V <: Product: ru.TypeTag, S <: VertexSteps[V]](implicit
 
   override def initSteps(implicit graph: Graph): S = steps(db.labelFilter(model)(graph.V))
 
-  override def getByIds(ids: String*)(implicit graph: Graph): S = steps(db.labelFilter(model)(graph.V(ids: _*)))
+  override def getByIds(ids: String*)(implicit graph: Graph): S =
+    if (ids.isEmpty) steps(graph.inject())
+    else steps(db.labelFilter(model)(graph.V(ids: _*)))
 
   def get(vertex: Vertex)(implicit graph: Graph): S = steps(db.labelFilter(model)(graph.V(vertex)))
 
