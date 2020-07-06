@@ -4,7 +4,7 @@ import java.lang.{Double => JDouble, Long => JLong}
 import java.util.{Date, UUID, Collection => JCollection, List => JList, Map => JMap}
 
 import gremlin.scala.dsl.Converter
-import gremlin.scala.{By, Edge, Graph, GremlinScala, Key, OrderBy, P, ProjectionBuilder => GremlinProjectionBuilder, StepLabel, Vertex, __, _}
+import gremlin.scala.{By, Edge, Graph, GremlinScala, Key, OrderBy, P, StepLabel, Vertex, __, _}
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
 import org.apache.tinkerpop.gremlin.process.traversal.step.TraversalOptionParent.Pick
 import org.apache.tinkerpop.gremlin.structure.Element
@@ -16,12 +16,12 @@ import org.thp.scalligraph.{AuthorizationError, InternalError, NotFoundError}
 import play.api.Logger
 import shapeless.HNil
 import shapeless.ops.tuple.{Prepend => TuplePrepend}
+import shapeless.syntax.std.tuple._
 
 import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
-import shapeless.syntax.std.tuple._
 
 trait BranchOption[T <: BaseTraversal, R <: BaseTraversal] {
   def traversal: T => R

@@ -1,6 +1,6 @@
 package org.thp.scalligraph.models
 
-import gremlin.scala.{Graph, GremlinScala, Key, P, Vertex}
+import gremlin.scala.{Graph, GremlinScala, P, Vertex}
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
