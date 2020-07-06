@@ -12,7 +12,7 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.UniMapping
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
+import org.thp.scalligraph.steps.{Traversal}
 import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError}
 import play.api.Logger
 import play.api.libs.json.{JsNumber, JsObject, Json, Writes}
@@ -144,7 +144,7 @@ abstract class GroupAggregation[TD, TG, R](name: String) extends Aggregation[TD,
   def get(
       properties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      fromStep: BaseVertexSteps,
+      fromStep: Traversal[_, Vertex],
       authContext: AuthContext
   ): Output[R] =
     output(apply(properties, stepType, fromStep, authContext).head())
@@ -155,7 +155,7 @@ abstract class Aggregation[TD, TG, R](val name: String) {
   def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      fromStep: BaseVertexSteps,
+      fromStep: Traversal[_, Vertex],
       authContext: AuthContext
   ): Traversal[TD, TG]
 
@@ -176,7 +176,7 @@ case class AggSum(fieldName: String) extends AggFunction[Number, Number, Number]
   override def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      fromStep: BaseVertexSteps,
+      fromStep: Traversal[_, Vertex],
       authContext: AuthContext
   ): Traversal[Number, Number] = {
     val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
@@ -197,7 +197,7 @@ case class AggAvg(aggName: Option[String], fieldName: String) extends AggFunctio
   override def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      fromStep: BaseVertexSteps,
+      fromStep: Traversal[_, Vertex],
       authContext: AuthContext
   ): Traversal[Double, JDouble] = {
     val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
@@ -218,7 +218,7 @@ case class AggMin(aggName: Option[String], fieldName: String) extends AggFunctio
   override def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      fromStep: BaseVertexSteps,
+      fromStep: Traversal[_, Vertex],
       authContext: AuthContext
   ): Traversal[Number, Number] = {
     val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
@@ -239,7 +239,7 @@ case class AggMax(fieldName: String) extends AggFunction[Number, Number, Number]
   override def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      fromStep: BaseVertexSteps,
+      fromStep: Traversal[_, Vertex],
       authContext: AuthContext
   ): Traversal[Number, Number] = {
     val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
@@ -260,7 +260,7 @@ case class AggCount(aggName: Option[String]) extends GroupAggregation[Long, JLon
   override def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      fromStep: BaseVertexSteps,
+      fromStep: Traversal[_, Vertex],
       authContext: AuthContext
   ): Traversal[Long, JLong]                  = fromStep.count
   override def output(t: Long): Output[Long] = Output(t, Json.obj(name -> t))
@@ -274,7 +274,7 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, orders: 
   override def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      fromStep: BaseVertexSteps,
+      fromStep: Traversal[_, Vertex],
       authContext: AuthContext
   ): Traversal[JList[JCollection[Any]], JList[JCollection[Any]]] = {
     val elementLabel = StepLabel[Vertex]()
@@ -386,7 +386,7 @@ case class TimeAggregation(aggName: Option[String], fieldName: String, interval:
   override def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      fromStep: BaseVertexSteps,
+      fromStep: Traversal[_, Vertex],
       authContext: AuthContext
   ): Traversal[JList[JCollection[Any]], JList[JCollection[Any]]] = {
     val elementLabel = StepLabel[Vertex]()

@@ -13,7 +13,7 @@ import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
 import scala.reflect.runtime.{universe => ru}
 
-case class PagedResult[R: Renderer](result: TraversalLike[R, _], totalSize: Option[Traversal[Long, _]]) extends Output[List[R]] {
+case class PagedResult[R: Renderer](result: Traversal[R, _], totalSize: Option[Traversal[Long, _]]) extends Output[List[R]] {
   override lazy val toJson: JsValue                         = JsArray(result.toList.map(implicitly[Renderer[R]].toOutput(_).toJson))
   override lazy val toValue: List[R]                        = result.toList
   val subRenderer: Renderer[R]                              = implicitly[Renderer[R]]
@@ -47,51 +47,4 @@ object IdMapping extends Mapping[String, String, AnyRef] {
   override def toDomain(g: AnyRef): String               = g.toString
   override val isReadonly: Boolean                       = true
   override def readonly: Mapping[String, String, AnyRef] = this
-}
-
-abstract class BaseElementSteps extends BaseTraversal {
-  override type EndGraph <: Element
-  val db: Database
-  val graph: Graph
-}
-
-abstract class BaseVertexSteps extends BaseElementSteps with TraversalGraph[Vertex] {
-  override def newInstance(newRaw: GremlinScala[Vertex]): BaseVertexSteps
-  override def newInstance(): BaseVertexSteps
-}
-
-class VertexSteps[E <: Product: ru.TypeTag](val raw: GremlinScala[Vertex])(implicit val db: Database, val graph: Graph)
-    extends BaseVertexSteps
-    with TraversalLike[E with Entity, Vertex] {
-  override type EndGraph = Vertex
-  lazy val model: Model.Vertex[E] = db.getVertexModel[E]
-
-  override def converter: Converter.Aux[E with Entity, Vertex] = model.converter(db, graph)
-
-  override def newInstance(newRaw: GremlinScala[Vertex]): VertexSteps[E] = new VertexSteps[E](newRaw)
-  override def newInstance(): VertexSteps[E]                             = newInstance(raw.clone())
-
-  override def typeName: String = ru.typeOf[E].toString
-}
-
-abstract class BaseEdgeSteps extends BaseElementSteps with TraversalGraph[Edge] {
-  override def newInstance(newRaw: GremlinScala[Edge]): BaseEdgeSteps
-  override def newInstance(): BaseEdgeSteps
-}
-
-class EdgeSteps[E <: Product: ru.TypeTag, FROM <: Product, TO <: Product](val raw: GremlinScala[Edge])(
-    implicit val db: Database,
-    val graph: Graph
-) extends BaseEdgeSteps
-    with TraversalLike[E with Entity, Edge] {
-  override type EndGraph  = Edge
-  override type EndDomain = E with Entity
-  lazy val model: Model.Edge[E, FROM, TO] = db.getEdgeModel[E, FROM, TO]
-
-  override def converter: Converter.Aux[E with Entity, Edge] = db.getModel[E].converter(db, graph).asInstanceOf[Converter.Aux[E with Entity, Edge]]
-
-  override def newInstance(newRaw: GremlinScala[Edge]): EdgeSteps[E, FROM, TO] = new EdgeSteps[E, FROM, TO](newRaw)
-  override def newInstance(): EdgeSteps[E, FROM, TO]                           = newInstance(raw.clone())
-
-  override def typeName: String = ru.typeOf[E].toString
 }
