@@ -227,8 +227,8 @@ class GenericBySelector[D, G](origin: => Traversal[D, G]) {
     (t: GraphTraversal[_, G]) => t.by(f(origin.start).deepRaw)
 }
 
-abstract class ByResult[F, T] {
-  def apply[A](from: GraphTraversal[A, F]): GraphTraversal[A, T]
+abstract class ByResult[F, T] extends (GraphTraversal[_, F] => GraphTraversal[_, T]) {
+  def apply[A](from: GraphTraversal[A, F]): GraphTraversal[A, T] = apply(from)
 }
 object ByResult {
   def apply()
