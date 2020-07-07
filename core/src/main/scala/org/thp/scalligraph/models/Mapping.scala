@@ -1,8 +1,9 @@
 package org.thp.scalligraph.models
 
 import java.lang.{Boolean => JBoolean, Byte => JByte, Double => JDouble, Float => JFloat, Integer => JInt, Long => JLong, Short => JShort}
-import java.util.{Base64, Date}
+import java.util.{Base64, Date, List => JList}
 
+import scala.collection.JavaConverters._
 import gremlin.scala.dsl.Converter
 import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.auth.Permission
@@ -101,6 +102,7 @@ abstract class Mapping[D, SD: ClassTag, G: ClassTag] extends UniMapping[D] with 
   def set: Mapping[Set[D], D, G]         = throw InternalError(s"Set of $this is not supported")
   def optional: Mapping[Option[D], D, G] = throw InternalError(s"Option of $this is not supported")
   def readonly: Mapping[D, SD, G]
+  def fold: SingleMapping[Seq[SD], JList[G]] = SingleMapping(d => Some(d.flatMap(toGraphOpt).asJava), _.asScala.map(toDomain))
 
   def isCompatibleWith(m: Mapping[_, _, _]): Boolean =
     graphTypeClass.equals(m.graphTypeClass) && MappingCardinality.isCompatible(cardinality, m.cardinality)

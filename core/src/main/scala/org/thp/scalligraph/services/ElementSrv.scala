@@ -2,7 +2,7 @@ package org.thp.scalligraph.services
 
 import gremlin.scala.{Element, Graph, Vertex}
 import org.thp.scalligraph.models.{Entity, Model}
-import org.thp.scalligraph.steps.{BaseElementSteps, Traversal}
+import org.thp.scalligraph.steps.{Traversal}
 import org.thp.scalligraph.steps.StepsOps._
 import play.api.Logger
 

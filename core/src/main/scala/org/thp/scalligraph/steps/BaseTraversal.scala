@@ -51,11 +51,11 @@ object Traversal {
 }
 
 class Traversal[+D, G](val raw: GremlinScala[G], mapping: Mapping[_, D, G]) {
-  def typeName: String                                              = mapping.domainTypeClass.getSimpleName
-  def deepRaw: GraphTraversal[_, G]                                 = raw.traversal
-  def onRaw(f: GremlinScala[G] => GremlinScala[G]): Traversal[D, G] = new Traversal[D, G](f(raw), mapping)
-//  def onRawMap[D2, G2](f: GremlinScala[G] => GremlinScala[G2], m: Mapping[_, D2, G2]) = new Traversal[D2, G2](f(raw), m)
-  def onDeepRaw(f: GraphTraversal[_, G] => GraphTraversal[_, G]) = new Traversal(new GremlinScala[G](f(raw.traversal)), mapping)
+  def typeName: String                                                                = mapping.domainTypeClass.getSimpleName
+  def deepRaw: GraphTraversal[_, G]                                                   = raw.traversal
+  def onRaw(f: GremlinScala[G] => GremlinScala[G]): Traversal[D, G]                   = new Traversal[D, G](f(raw), mapping)
+  def onRawMap[D2, G2](f: GremlinScala[G] => GremlinScala[G2], m: Mapping[_, D2, G2]) = new Traversal[D2, G2](f(raw), m)
+  def onDeepRaw(f: GraphTraversal[_, G] => GraphTraversal[_, G])                      = new Traversal(new GremlinScala[G](f(raw.traversal)), mapping)
   def onDeepRawMap[D2, G2](f: GraphTraversal[_, G] => GraphTraversal[_, G2], m: Mapping[_, D, G] => Mapping[_, D2, G2]) =
     new Traversal(new GremlinScala[G2](f(raw.traversal)), m(mapping))
   def start = new Traversal[D, G](__[G], mapping)
@@ -68,5 +68,6 @@ class Traversal[+D, G](val raw: GremlinScala[G], mapping: Mapping[_, D, G]) {
     if (m.isCompatibleWith(mapping)) Some(new Traversal(raw.asInstanceOf[GremlinScala[GG]], m))
     else None
 
-  override def clone(): Traversal[D, G] = new Traversal[D, G](raw.clone, mapping)
+  def changeMapping[DD](m: Mapping[_, DD, G]): Traversal[DD, G] = new Traversal(raw, m)
+  override def clone(): Traversal[D, G]                         = new Traversal[D, G](raw.clone, mapping)
 }

@@ -30,7 +30,7 @@ class PublicProperty[D, G](
     if (definition.lengthCompare(1) == 0)
       definition.head.apply(path, steps)
     else
-      steps.coalesce(mapping)(definition.map(d => d.apply(path, _)): _*)
+      steps.coalesce(definition.map(d => d.apply(path, _)): _*).changeMapping(mapping)
 }
 
 object PublicProperty {
@@ -46,7 +46,7 @@ object PublicProperty {
     properties
       .iterator
       .collectFirst {
-        case p if p.stepType =:= stepType && path.startsWith(p.propertyPath).isDefined => p.get(step, path)
+        case p if p.stepType =:= stepType && path.startsWith(p.propertyPath).isDefined => p.get(step, path).asInstanceOf[Traversal[Any, Any]]
       }
       .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))
   }

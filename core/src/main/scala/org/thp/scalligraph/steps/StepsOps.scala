@@ -139,21 +139,27 @@ object StepsOps {
 
     def mean[N <: Number]()(implicit toNumber: G => N): Traversal[Double, JDouble] = new Traversal(raw.mean, UniMapping.jdouble)
 
-    def as[G](stepLabel: StepLabel[G]): Traversal[D, G] = traversal.onRaw(raw => new GremlinScala[G](raw.traversal.as(stepLabel.name)))
+    def as[A](stepLabel: StepLabel[A]): Traversal[D, G] = traversal.onDeepRaw(_.as(stepLabel.name))
 
     def group[K, V](
         keysBy: GroupBySelector[D, G] => ByResult[G, V],
         valuesBy: GroupBySelector[D, G] => ByResult[G, K]
     ): Traversal[JMap[K, JCollection[V]], JMap[K, JCollection[V]]] =
       traversal.onDeepRawMap(
-        (_.group).andThen(keysBy(groupBySelector)).andThen(valuesBy(groupBySelector)),
+        ((_: GraphTraversal[_, G])
+          .group
+          .asInstanceOf[GraphTraversal[_, G]])
+          .andThen(keysBy(groupBySelector))
+          .andThen(_.asInstanceOf[GraphTraversal[_, G]])
+          .andThen(valuesBy(groupBySelector))
+          .andThen(_.asInstanceOf[GraphTraversal[_, JMap[K, JCollection[V]]]]),
         _ => UniMapping.identity
       )
 
-    def select[A](label: StepLabel[A]): Traversal[A, A] =
+    def select[A: ClassTag](label: StepLabel[A]): Traversal[A, A] =
       traversal.onDeepRawMap(_.select(label.name).asInstanceOf[GraphTraversal[_, A]], _ => UniMapping.identity)
 
-    def fold: Traversal[Seq[D], JCollection[G]] = traversal.onDeepRawMap(_.fold(), _.sequence)
+    def fold: Traversal[Seq[D], JList[G]] = traversal.onDeepRawMap(_.fold(), _.fold)
 
     def unfold[A: ClassTag]: Traversal[A, A] = new Traversal(raw.unfold[A](), UniMapping.identity)
 
@@ -162,11 +168,14 @@ object StepsOps {
 
     /* select only the keys from a map (e.g. groupBy) - see usage examples in SelectSpec.scala */
     def selectKeys[K](implicit columnType: ColumnType.Aux[G, K, _]): Traversal[K, K] =
-      traversal.onDeepRawMap[K, K](_.select(Column.keys).asInstanceOf[GraphTraversal[K, K]], UniMapping.identity)
+      traversal.onDeepRawMap[K, K](_.select(Column.keys).asInstanceOf[GraphTraversal[K, K]], UniMapping.identity[K])
 
     /* select only the values from a map (e.g. groupBy) - see usage examples in SelectSpec.scala */
     def selectValues[V](implicit columnType: ColumnType.Aux[G, _, V]): Traversal[V, V] =
       traversal.onDeepRawMap[V, V](_.select(Column.values).asInstanceOf[GraphTraversal[V, V]], UniMapping.identity)
+
+    def coalesce[A](f: (Traversal[D, G] => Traversal[_, A])*): Traversal[A, A] =
+      traversal.onDeepRawMap(_.coalesce(f.map(_.apply(traversal.start).deepRaw): _*), UniMapping.identity)
 
     def project[A <: Product: ClassTag](
         builder: ProjectionBuilder[Nil.type, D, G] => ProjectionBuilder[A, D, G]
@@ -218,7 +227,12 @@ class GenericBySelector[D, G](origin: => Traversal[D, G]) {
     (t: GraphTraversal[_, G]) => t.by(f(origin.start).deepRaw)
 }
 
-abstract class ByResult[F, T] extends (GraphTraversal[_, F] => GraphTraversal[_, T])
+abstract class ByResult[F, T] {
+  def apply[A](from: GraphTraversal[A, F]): GraphTraversal[A, T]
+}
+object ByResult {
+  def apply()
+}
 //
 //object GroupBySelectorResult {
 //  def apply(f: )

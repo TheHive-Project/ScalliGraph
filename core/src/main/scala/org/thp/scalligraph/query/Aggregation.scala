@@ -269,14 +269,14 @@ case class AggCount(aggName: Option[String]) extends GroupAggregation[Long, JLon
 //case class AggTop[T](fieldName: String) extends AggFunction[T](s"top_$fieldName")
 
 case class FieldAggregation(aggName: Option[String], fieldName: String, orders: Seq[String], size: Option[Long], subAggs: Seq[Aggregation[_, _, _]])
-    extends GroupAggregation[JList[JCollection[Any]], JList[JCollection[Any]], Map[Any, Map[String, Any]]](aggName.getOrElse(s"field_$fieldName")) {
+    extends GroupAggregation[Seq[Seq[Any]], JCollection[JCollection[Any]], Map[Any, Map[String, Any]]](aggName.getOrElse(s"field_$fieldName")) {
   lazy val logger: Logger = Logger(getClass)
   override def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
       fromStep: Traversal[_, Vertex],
       authContext: AuthContext
-  ): Traversal[JList[JCollection[Any]], JList[JCollection[Any]]] = {
+  ): Traversal[Seq[Seq[Any]], JList[JCollection[Any]]] = {
     val elementLabel = StepLabel[Vertex]()
     val groupedVertices: Traversal[JMap.Entry[Any, JCollection[Any]], JMap.Entry[Any, JCollection[Any]]] = {
       PublicProperty
@@ -300,77 +300,40 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, orders: 
       }
 
     val sizedSortedAndGroupedVertex = size.fold(sortedAndGroupedVertex)(sortedAndGroupedVertex.limit)
-    val xx = sizedSortedAndGroupedVertex
-      .genProject(
+    sizedSortedAndGroupedVertex
+      .genProject[Any](
         _.by(_.selectKeys),
-        subAggs.map { agg =>
-          val x = (gby: GenericBySelector[JMap.Entry[Any, JCollection[Any]], JMap.Entry[Any, JCollection[Any]]]) =>
+        subAggs.map(agg =>
+          (gby: GenericBySelector[JMap.Entry[Any, JCollection[Any]], JMap.Entry[Any, JCollection[Any]]]) =>
             gby.by(t => agg.apply(publicProperties, stepType, t.selectValues.unfold, authContext))
-          x
-        }: _*
+        ): _*
       )
       .fold
-    ???
-    /*
- Error:(305, 98) type mismatch;
- found   :     org.thp.scalligraph.steps.GenericBy[java.util.Map.Entry[Any,java.util.Collection[Any]],java.util.Map.Entry[Any,java.util.Collection[Any]]] => Seq[org.thp.scalligraph.steps.GenericBy[java.util.Map.Entry[Any,java.util.Collection[Any]],java.util.Map.Entry[Any,java.util.Collection[Any]]] with org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal[_$27,java.util.Map.Entry[Any,java.util.Collection[Any]]] forSome { type _$27 } => Object]
- required: Seq[org.thp.scalligraph.steps.GenericBy[java.util.Map.Entry[Any,java.util.Collection[Any]],java.util.Map.Entry[Any,java.util.Collection[Any]]] => org.thp.scalligraph.steps.GroupBySelectorResult[java.util.Map.Entry[Any,java.util.Collection[Any]],java.util.Map.Entry[Any,java.util.Collection[Any]]]]
-        ((_: GenericBy[JMap.Entry[Any, JCollection[Any]], JMap.Entry[Any, JCollection[Any]]]).by +:     */
-//
-//        b =>
-//        subAggs.foldLeft(b.by(_.selectKeys)) {
-//          case (acc, agg: Aggregation[Any, Any, Any]) =>
-//            acc.by { t =>
-//              val x = agg.apply(publicProperties, stepType, t.start.selectValues.unfold, authContext)
-//              x
-//            }
-//        }
-//      )
-//      .fold
-
-//        By(__[JMap.Entry[Any, Any]].selectKeys) +: subAggs
-//          .map(a =>
-//            By(
-//              a.apply(
-//                  publicProperties,
-//                  stepType,
-//                  fromStep.newInstance(__[JMap[Any, Any]].selectValues.unfold()),
-//                  authContext
-//                )
-//                .raw
-//            )
-//          ): _*
-//      )
-//      .fold
   }
 
-  override def output(l: JList[JCollection[Any]]): Output[Map[Any, Map[String, Any]]] = {
-    val subMap: Map[Any, Output[Map[String, Any]]] = l
-      .asScala
-      .map(_.asScala)
-      .flatMap { e =>
-        val key = e.head
-        if (key != "") { // maybe should be compared with property.mapping.noValue but property is not accessible here
-          val values = subAggs
+  override def output(l: Seq[Seq[Any]]): Output[Map[Any, Map[String, Any]]] = {
+    val subMap: Map[Any, Output[Map[String, Any]]] = l.flatMap { e =>
+      val key = e.head
+      if (key != "") { // maybe should be compared with property.mapping.noValue but property is not accessible here
+        val values = subAggs
+          .asInstanceOf[Seq[Aggregation[Any, Any, Any]]]
+          .zip(e.tail)
+          .map { case (a, r) => a.name -> a.output(r).toValue }
+          .toMap
+        val jsValues =
+          subAggs
             .asInstanceOf[Seq[Aggregation[Any, Any, Any]]]
             .zip(e.tail)
-            .map { case (a, r) => a.name -> a.output(r).toValue }
-            .toMap
-          val jsValues =
-            subAggs
-              .asInstanceOf[Seq[Aggregation[Any, Any, Any]]]
-              .zip(e.tail)
-              .foldLeft(JsObject.empty) {
-                case (acc, (ar, r)) =>
-                  ar.output(r).toJson match {
-                    case o: JsObject => acc ++ o
-                    case v           => acc + (ar.name -> v)
-                  }
-              }
-          Some(key -> Output(values, jsValues))
-        } else None
-      }
-      .toMap
+            .foldLeft(JsObject.empty) {
+              case (acc, (ar, r)) =>
+                ar.output(r).toJson match {
+                  case o: JsObject => acc ++ o
+                  case v           => acc + (ar.name -> v)
+                }
+            }
+        Some(key -> Output(values, jsValues))
+      } else None
+    }.toMap
 
     val native: Map[Any, Map[String, Any]] = subMap.map { case (k, v) => k -> v.toValue }
     val json: JsObject                     = JsObject(subMap.map { case (k, v) => k.toString -> v.toJson })
@@ -414,29 +377,21 @@ case class TimeAggregation(aggName: Option[String], fieldName: String, interval:
       stepType: ru.Type,
       fromStep: Traversal[_, Vertex],
       authContext: AuthContext
-  ): Traversal[JList[JCollection[Any]], JList[JCollection[Any]]] = {
+  ): Traversal[Seq[Seq[Any]], JList[JCollection[Any]]] = {
     val elementLabel = StepLabel[Vertex]()
     val groupedVertices = PublicProperty
       .getPropertyTraversal(publicProperties, stepType, fromStep.as(elementLabel), fieldName, authContext)
       .map(date => dateToKey(date.asInstanceOf[Date]))
-      .group(By[Long](), By(__.select(elementLabel).fold()))
+      .group(_.by, _.by(_.select(elementLabel).fold))
       .unfold[JMap.Entry[Long, JCollection[Any]]](null) // Map.Entry[K, List[V]]
 
     groupedVertices
-      .project[Any](
-        By(__[JMap.Entry[Any, Any]].selectKeys)
-          +: subAggs
-            .map(a =>
-              By(
-                a.apply(
-                    publicProperties,
-                    stepType,
-                    fromStep.newInstance(__[JMap[Long, Any]].selectValues.unfold()),
-                    authContext
-                  )
-                  .raw
-              )
-            ): _*
+      .genProject[Any](
+        _.by,
+        subAggs.map(agg =>
+          (gby: GenericBySelector[JMap.Entry[Long, JCollection[Any]], JMap.Entry[Long, JCollection[Any]]]) =>
+            gby.by(t => agg.apply(publicProperties, stepType, t.selectValues.unfold, authContext))
+        ): _*
       )
       .fold
   }
