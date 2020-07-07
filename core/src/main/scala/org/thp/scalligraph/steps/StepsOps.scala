@@ -122,20 +122,24 @@ object StepsOps {
     def range(low: Long, high: Long): Traversal[D, G] = traversal.onRaw(_.range(low, high))
 
     def map[A: ClassTag](f: D => A): Traversal[A, A] =
-      new Traversal[A, A](raw.map(x => f(toDomain(x))), UniMapping.identity)
+      new Traversal[A, A](raw.map(x => f(toDomain(x))), identity)
 
-    def count: Traversal[Long, JLong] = new Traversal(raw.count(), UniMapping.jlong)
+    def count: Traversal[Long, JLong] = new Traversal(raw.count(), _.longValue)
 
-    def localCount: Traversal[Long, JLong] = new Traversal(raw.count(Scope.local), UniMapping.jlong)
+    def localCount: Traversal[Long, JLong] = new Traversal(raw.count(Scope.local), _.longValue)
 
     def sum[N <: Number: ClassTag]()(implicit toNumber: G => N): Traversal[N, N] =
-      new Traversal(raw.sum[N]()(toNumber), UniMapping.identity)
+      new Traversal(raw.sum[N]()(toNumber), identity)
 
-    def min[C <: Comparable[_]: ClassTag]()(implicit toComparable: G => C): Traversal[C, C] =
-      new Traversal(raw.min[C]()(toComparable), UniMapping.identity)
+    def forceMin: Traversal[D, G] = traversal.onDeepRaw(_.asInstanceOf[GraphTraversal[_, Comparable[_]]].min[Comparable[_]])
 
-    def max[C <: Comparable[_]: ClassTag]()(implicit toComparable: G => C): Traversal[C, C] =
-      new Traversal(raw.max[C]()(toComparable), UniMapping.identity)
+    def min[C <: Comparable[_]]()(implicit toComparable: G => C): Traversal[C, C] =
+      new Traversal(raw.min[C]()(toComparable), identity)
+
+    def forceMax: Traversal[D, G] = traversal.onDeepRaw(_.max[G])
+
+    def max[C <: Comparable[_]]()(implicit toComparable: G => C): Traversal[C, C] =
+      new Traversal(raw.max[C]()(toComparable), identity)
 
     def mean[N <: Number]()(implicit toNumber: G => N): Traversal[Double, JDouble] = new Traversal(raw.mean, UniMapping.jdouble)
 
@@ -167,15 +171,15 @@ object StepsOps {
       traversal.onDeepRaw(t => f.map(_.apply(sortBySelector)).foldLeft(t)((s, g) => g(s)))
 
     /* select only the keys from a map (e.g. groupBy) - see usage examples in SelectSpec.scala */
-    def selectKeys[K](implicit columnType: ColumnType.Aux[G, K, _]): Traversal[K, K] =
-      traversal.onDeepRawMap[K, K](_.select(Column.keys).asInstanceOf[GraphTraversal[K, K]], UniMapping.identity[K])
+    def selectKeys[K: ClassTag](implicit columnType: ColumnType.Aux[G, K, _]): Traversal[K, K] =
+      traversal.onDeepRawMap[K, K](_.select(Column.keys).asInstanceOf[GraphTraversal[K, K]], UniMapping.identity)
 
     /* select only the values from a map (e.g. groupBy) - see usage examples in SelectSpec.scala */
-    def selectValues[V](implicit columnType: ColumnType.Aux[G, _, V]): Traversal[V, V] =
+    def selectValues[V: ClassTag](implicit columnType: ColumnType.Aux[G, _, V]): Traversal[V, V] =
       traversal.onDeepRawMap[V, V](_.select(Column.values).asInstanceOf[GraphTraversal[V, V]], UniMapping.identity)
 
     def coalesce[A](f: (Traversal[D, G] => Traversal[_, A])*): Traversal[A, A] =
-      traversal.onDeepRawMap(_.coalesce(f.map(_.apply(traversal.start).deepRaw): _*), UniMapping.identity)
+      traversal.onDeepRawMap(_.coalesce(f.map(_.apply(traversal.start).deepRaw): _*), identity)
 
     def project[A <: Product: ClassTag](
         builder: ProjectionBuilder[Nil.type, D, G] => ProjectionBuilder[A, D, G]
@@ -198,6 +202,7 @@ object StepsOps {
       Traversal(new GremlinScala[A](graphTraversal.asInstanceOf[GraphTraversal[_, A]]))
     }
 
+    def asDouble()                                         = traversal.onR
     private def genericBySelector: GenericBySelector[D, G] = new GenericBySelector[D, G](traversal)
     private def groupBySelector: GroupBySelector[D, G]     = new GroupBySelector[D, G](traversal)
     private def sortBySelector: SortBySelector[D, G]       = new SortBySelector[D, G](traversal)

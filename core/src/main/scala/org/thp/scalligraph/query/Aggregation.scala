@@ -181,13 +181,14 @@ case class AggSum(fieldName: String) extends AggFunction[Number, Number, Number]
   ): Traversal[Number, Number] = {
     val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
 
-    property
-      .cast(UniMapping.int)
-      .map(_.sum[Number]())
-      .orElse(property.cast(UniMapping.long).map(_.sum[Number]()))
-      .orElse(property.cast(UniMapping.float).map(_.sum[Number]()))
-      .orElse(property.cast(UniMapping.double).map(_.sum[Number]()))
-      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Sum aggregation is not applicable"))
+    property.asNumber.get.sum[Number]
+//    property
+//      .cast(UniMapping.int)
+//      .map(_.sum[Number]())
+//      .orElse(property.cast(UniMapping.long).map(_.sum[Number]()))
+//      .orElse(property.cast(UniMapping.float).map(_.sum[Number]()))
+//      .orElse(property.cast(UniMapping.double).map(_.sum[Number]()))
+//      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Sum aggregation is not applicable"))
   }
   override def output(t: Number): Output[Number] = Output(t) // TODO add aggregation name
 
@@ -202,13 +203,13 @@ case class AggAvg(aggName: Option[String], fieldName: String) extends AggFunctio
   ): Traversal[Double, JDouble] = {
     val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
 
-    property
-      .cast(UniMapping.int)
-      .map(_.mean)
-      .orElse(property.cast(UniMapping.long).map(_.mean))
-      .orElse(property.cast(UniMapping.float).map(_.mean))
-      .orElse(property.cast(UniMapping.double).map(_.mean))
-      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Avg aggregation is not applicable"))
+    property.asNumber.get.mean[Number]
+//      .cast(UniMapping.int)
+//      .map(_.mean)
+//      .orElse(property.cast(UniMapping.long).map(_.mean))
+//      .orElse(property.cast(UniMapping.float).map(_.mean))
+//      .orElse(property.cast(UniMapping.double).map(_.mean))
+//      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Avg aggregation is not applicable"))
   }
 
   override def output(t: Double): Output[Double] = Output(t) // TODO add aggregation name
@@ -223,14 +224,14 @@ case class AggMin(aggName: Option[String], fieldName: String) extends AggFunctio
   ): Traversal[Number, Number] = {
     val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
 
-    property
-      .cast(UniMapping.int)
-      .flatMap(_.min[JInt]().cast(UniMapping.jint))
-      .orElse(property.cast(UniMapping.long).flatMap(_.min[JLong]().cast(UniMapping.jlong)))
-      .orElse(property.cast(UniMapping.float).flatMap(_.min[JFloat]().cast(UniMapping.jfloat)))
-      .orElse(property.cast(UniMapping.double).flatMap(_.min[JDouble]().cast(UniMapping.jdouble)))
-      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Min aggregation is not applicable"))
-      .asInstanceOf[Traversal[Number, Number]]
+    property.asNumber.get.forceMin
+//      .cast(UniMapping.int)
+//      .flatMap(_.min[JInt]().cast(UniMapping.jint))
+//      .orElse(property.cast(UniMapping.long).flatMap(_.min[JLong]().cast(UniMapping.jlong)))
+//      .orElse(property.cast(UniMapping.float).flatMap(_.min[JFloat]().cast(UniMapping.jfloat)))
+//      .orElse(property.cast(UniMapping.double).flatMap(_.min[JDouble]().cast(UniMapping.jdouble)))
+//      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Min aggregation is not applicable"))
+//      .asInstanceOf[Traversal[Number, Number]]
   }
   override def output(t: Number): Output[Number] = Output(t)(Writes(v => Json.obj(name -> v)))
 }
@@ -244,14 +245,14 @@ case class AggMax(fieldName: String) extends AggFunction[Number, Number, Number]
   ): Traversal[Number, Number] = {
     val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
 
-    property
-      .cast(UniMapping.int)
-      .flatMap(_.max[JInt]().cast(UniMapping.jint))
-      .orElse(property.cast(UniMapping.long).flatMap(_.max[JLong]().cast(UniMapping.jlong)))
-      .orElse(property.cast(UniMapping.float).flatMap(_.max[JFloat]().cast(UniMapping.jfloat)))
-      .orElse(property.cast(UniMapping.double).flatMap(_.max[JDouble]().cast(UniMapping.jdouble)))
-      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Max aggregation is not applicable"))
-      .asInstanceOf[Traversal[Number, Number]]
+    property.asNumber.get.forceMax
+//      .cast(UniMapping.int)
+//      .flatMap(_.max[JInt]().cast(UniMapping.jint))
+//      .orElse(property.cast(UniMapping.long).flatMap(_.max[JLong]().cast(UniMapping.jlong)))
+//      .orElse(property.cast(UniMapping.float).flatMap(_.max[JFloat]().cast(UniMapping.jfloat)))
+//      .orElse(property.cast(UniMapping.double).flatMap(_.max[JDouble]().cast(UniMapping.jdouble)))
+//      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Max aggregation is not applicable"))
+//      .asInstanceOf[Traversal[Number, Number]]
   }
   override def output(t: Number): Output[Number] = Output(t)(Writes(v => Json.obj(name -> v)))
 }
@@ -269,7 +270,7 @@ case class AggCount(aggName: Option[String]) extends GroupAggregation[Long, JLon
 //case class AggTop[T](fieldName: String) extends AggFunction[T](s"top_$fieldName")
 
 case class FieldAggregation(aggName: Option[String], fieldName: String, orders: Seq[String], size: Option[Long], subAggs: Seq[Aggregation[_, _, _]])
-    extends GroupAggregation[Seq[Seq[Any]], JCollection[JCollection[Any]], Map[Any, Map[String, Any]]](aggName.getOrElse(s"field_$fieldName")) {
+    extends GroupAggregation[Seq[Seq[Any]], JList[JCollection[Any]], Map[Any, Map[String, Any]]](aggName.getOrElse(s"field_$fieldName")) {
   lazy val logger: Logger = Logger(getClass)
   override def apply(
       publicProperties: List[PublicProperty[_, _]],
