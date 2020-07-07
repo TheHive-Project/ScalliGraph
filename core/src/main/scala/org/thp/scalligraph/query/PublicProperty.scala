@@ -41,7 +41,7 @@ object PublicProperty {
       step: Traversal[_, Vertex],
       fieldName: String,
       authContext: AuthContext
-  ): Traversal[_, _] = {
+  ): Traversal[Any, Any] = {
     val path = FPath(fieldName)
     properties
       .iterator

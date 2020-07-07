@@ -1,8 +1,8 @@
 package org.thp.scalligraph.steps
 
-import gremlin.scala.GremlinScala
+import gremlin.scala.{__, GremlinScala}
 import gremlin.scala.dsl.Converter
-import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, GraphTraversal}
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{GraphTraversal}
 import org.thp.scalligraph.models.{Mapping, UniMapping}
 import play.api.Logger
 

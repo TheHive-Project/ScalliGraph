@@ -12,7 +12,7 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.UniMapping
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{Traversal}
+import org.thp.scalligraph.steps.{GenericBySelector, Traversal}
 import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError}
 import play.api.Logger
 import play.api.libs.json.{JsNumber, JsObject, Json, Writes}
@@ -282,7 +282,7 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, orders: 
       PublicProperty
         .getPropertyTraversal(publicProperties, stepType, fromStep.as(elementLabel), fieldName, authContext)
         .group(_.by, _.by(_.select(elementLabel).fold))
-        .unfold[JMap.Entry[Any, JCollection[Any]]](null) // Map.Entry[K, List[V]]
+        .unfold[JMap.Entry[Any, JCollection[Any]]](null) // Map.Entry[valueOf(fieldName), List[Vertex]]
     }
 
     val sortedAndGroupedVertex = orders
@@ -292,31 +292,56 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, orders: 
         case order                                   => order      -> Order.asc
       }
       .foldLeft(groupedVertices) {
-        case (acc, (field, order)) if field == fieldName => acc.sort(_.by(_.)By(__[JMap.Entry[Any, JCollection[Any]]].selectKeys, order))
-        case (acc, (field, order)) if field == "count"   => acc.sort(By(__[JMap.Entry[Any, JCollection[Any]]].selectValues.count(Scope.local), order))
+        case (acc, (field, order)) if field == fieldName => acc.sort(_.by(_.selectKeys, order))
+        case (acc, (field, order)) if field == "count"   => acc.sort(_.by(_.selectValues.localCount, order))
         case (acc, (field, _)) =>
           logger.warn(s"In field aggregation you can only sort by the field ($fieldName) or by count, not by $field")
           acc
       }
 
-    val sizedSortedAndGroupedVertex = size.fold(sortedAndGroupedVertex)(sortedAndGroupedVertex.range(0, _))
-
-    sizedSortedAndGroupedVertex
-      .project[Any](
-        By(__[JMap.Entry[Any, Any]].selectKeys) +: subAggs
-          .map(a =>
-            By(
-              a.apply(
-                  publicProperties,
-                  stepType,
-                  fromStep.newInstance(__[JMap[Any, Any]].selectValues.unfold()),
-                  authContext
-                )
-                .raw
-            )
-          ): _*
+    val sizedSortedAndGroupedVertex = size.fold(sortedAndGroupedVertex)(sortedAndGroupedVertex.limit)
+    val xx = sizedSortedAndGroupedVertex
+      .genProject(
+        _.by(_.selectKeys),
+        subAggs.map { agg =>
+          val x = (gby: GenericBySelector[JMap.Entry[Any, JCollection[Any]], JMap.Entry[Any, JCollection[Any]]]) =>
+            gby.by(t => agg.apply(publicProperties, stepType, t.selectValues.unfold, authContext))
+          x
+        }: _*
       )
       .fold
+    ???
+    /*
+ Error:(305, 98) type mismatch;
+ found   :     org.thp.scalligraph.steps.GenericBy[java.util.Map.Entry[Any,java.util.Collection[Any]],java.util.Map.Entry[Any,java.util.Collection[Any]]] => Seq[org.thp.scalligraph.steps.GenericBy[java.util.Map.Entry[Any,java.util.Collection[Any]],java.util.Map.Entry[Any,java.util.Collection[Any]]] with org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal[_$27,java.util.Map.Entry[Any,java.util.Collection[Any]]] forSome { type _$27 } => Object]
+ required: Seq[org.thp.scalligraph.steps.GenericBy[java.util.Map.Entry[Any,java.util.Collection[Any]],java.util.Map.Entry[Any,java.util.Collection[Any]]] => org.thp.scalligraph.steps.GroupBySelectorResult[java.util.Map.Entry[Any,java.util.Collection[Any]],java.util.Map.Entry[Any,java.util.Collection[Any]]]]
+        ((_: GenericBy[JMap.Entry[Any, JCollection[Any]], JMap.Entry[Any, JCollection[Any]]]).by +:     */
+//
+//        b =>
+//        subAggs.foldLeft(b.by(_.selectKeys)) {
+//          case (acc, agg: Aggregation[Any, Any, Any]) =>
+//            acc.by { t =>
+//              val x = agg.apply(publicProperties, stepType, t.start.selectValues.unfold, authContext)
+//              x
+//            }
+//        }
+//      )
+//      .fold
+
+//        By(__[JMap.Entry[Any, Any]].selectKeys) +: subAggs
+//          .map(a =>
+//            By(
+//              a.apply(
+//                  publicProperties,
+//                  stepType,
+//                  fromStep.newInstance(__[JMap[Any, Any]].selectValues.unfold()),
+//                  authContext
+//                )
+//                .raw
+//            )
+//          ): _*
+//      )
+//      .fold
   }
 
   override def output(l: JList[JCollection[Any]]): Output[Map[Any, Map[String, Any]]] = {
