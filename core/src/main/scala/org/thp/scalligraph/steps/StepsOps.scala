@@ -5,9 +5,10 @@ import java.util.{Date, UUID, Collection => JCollection, List => JList, Map => J
 
 import gremlin.scala.dsl.Converter
 import gremlin.scala.{By, Edge, Graph, GremlinScala, Key, OrderBy, P, StepLabel, Vertex, __, _}
+import org.apache.tinkerpop.gremlin.process.traversal.Order
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
 import org.apache.tinkerpop.gremlin.process.traversal.step.TraversalOptionParent.Pick
-import org.apache.tinkerpop.gremlin.structure.Element
+import org.apache.tinkerpop.gremlin.structure.{Column, Element}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.Renderer
 import org.thp.scalligraph.models.{Entity, Mapping, UniMapping}
@@ -102,6 +103,11 @@ object StepsOps {
       raw.count().head()
     }
 
+    def head(): D = {
+      logger.debug(s"Execution of $raw (head)")
+      toDomain(raw.head)
+    }
+
     def headOption(): Option[D] = {
       logger.debug(s"Execution of $raw (headOption)")
       raw.headOption().map(toDomain)
@@ -115,6 +121,8 @@ object StepsOps {
     def map[A: ClassTag](f: D => A): Traversal[A, A] =
       new Traversal[A, A](raw.map(x => f(toDomain(x))), UniMapping.identity)
 
+    def count: Traversal[Long, JLong] = new Traversal(raw.count(), UniMapping.jlong)
+
     def sum[N <: Number: ClassTag]()(implicit toNumber: G => N): Traversal[N, N] =
       new Traversal(raw.sum[N]()(toNumber), UniMapping.identity)
 
@@ -126,9 +134,68 @@ object StepsOps {
 
     def mean[N <: Number]()(implicit toNumber: G => N): Traversal[Double, JDouble] = new Traversal(raw.mean, UniMapping.jdouble)
 
+    def as[G](stepLabel: StepLabel[G]): Traversal[D, G] = traversal.onRaw(raw => new GremlinScala[G](raw.traversal.as(stepLabel.name)))
+
+    def group[K, V](
+        keysBy: GroupBySelector[D, G] => GroupBySelectorResult[D, G, _, V],
+        valuesBy: GroupBySelector[D, G] => GroupBySelectorResult[D, G, _, K]
+    ): Traversal[JMap[K, JCollection[V]], JMap[K, JCollection[V]]] =
+      traversal.onDeepRawMap(
+        (_.group).andThen(keysBy(new GroupBySelector(traversal.start))).andThen(valuesBy(new GroupBySelector(traversal.start))),
+        _ => UniMapping.identity
+      )
+
+    def select[A](label: StepLabel[A]): Traversal[A, A] =
+      traversal.onDeepRawMap(_.select(label.name).asInstanceOf[GraphTraversal[_, A]], _ => UniMapping.identity)
+
+    def fold: Traversal[Seq[D], JCollection[G]] = traversal.onDeepRawMap(_.fold(), _.sequence)
+
+    def unfold[A: ClassTag]: Traversal[A, A] = new Traversal(raw.unfold[A](), UniMapping.identity)
+
+    def sort(f: (SortBySelector[D, G] => GroupBySelectorResult[D, G, D, G])*): Traversal[D, G] =
+      traversal.onDeepRaw(t => f.map(_.apply(new SortBySelector(traversal.start))).foldLeft(t)((s, g) => g(s)))
+
+    /* select only the keys from a map (e.g. groupBy) - see usage examples in SelectSpec.scala */
+    def selectKeys[K](implicit columnType: ColumnType.Aux[End, K, _]): GremlinScala[K] =
+      new GremlinScala[K](
+        traversal
+          .select(Column.keys) // The result of select(keys) may not be a collection (when applied on Map.Entry)
+          .asInstanceOf[GraphTraversal[_, K]]
+      )
+
+    /* select only the values from a map (e.g. groupBy) - see usage examples in SelectSpec.scala */
+    def selectValues[V](implicit columnType: ColumnType.Aux[End, _, V]): GremlinScala[V] =
+      new GremlinScala[V](
+        traversal
+          .select(Column.values)
+          .asInstanceOf[GraphTraversal[_, V]]
+      )
+
   }
 }
 
+class GroupBySelector[D, G](origin: => Traversal[D, G]) {
+  def by: GroupBySelectorResult[D, G, D, G] = (_: GraphTraversal[D, G]).by()
+  def byLabel[B](stepLabel: StepLabel[B]): GroupBySelectorResult[D, G, _, B] = new GroupBySelectorResult[D, G, _, B] {
+    override def apply(t: GraphTraversal[D, G]): GraphTraversal[_, B] = t.by(stepLabel.name).asInstanceOf[GraphTraversal[_, B]]
+  }
+  def by[B](f: Traversal[D, G] => Traversal[_, B]): GroupBySelectorResult[D, G, _, B] = new GroupBySelectorResult[D, G, _, B] {
+    override def apply(t: GraphTraversal[D, G]): GraphTraversal[_, B] = t.by(f(origin.start).deepRaw).asInstanceOf[GraphTraversal[_, B]]
+  }
+}
+
+class SortBySelector[D, G](origin: => Traversal[D, G]) {
+  def by[B](f: Traversal[D, G] => Traversal[_, B]): GroupBySelectorResult[D, G, D, G] =
+    (t: GraphTraversal[D, G]) => t.by(f(origin.start).deepRaw)
+  def by[B](f: Traversal[D, G] => Traversal[_, B], order: Order): GroupBySelectorResult[D, G, D, G] =
+    (t: GraphTraversal[D, G]) => t.by(f(origin.start).deepRaw, order)
+}
+
+abstract class GroupBySelectorResult[FD, FG, TD, TG] extends (GraphTraversal[FD, FG] => GraphTraversal[TD, TG])
+//
+//object GroupBySelectorResult {
+//  def apply(f: )
+//}
 //
 //  private lazy val logger: Logger = Logger(classOf[Traversal[_, _]])
 //
@@ -265,7 +332,6 @@ object StepsOps {
 //
 
 //
-//    def count: Traversal[Long, JLong] = new Traversal(raw.count(), UniMapping.jlong)
 //
 //    def sort(orderBys: OrderBy[_]*): T = newInstance0(raw.order(orderBys: _*))
 //
@@ -283,7 +349,6 @@ object StepsOps {
 //      new Traversal[D, G](raw.coalesce(ff: _*), mapping)
 //    }
 //
-//    def unfold[A: ClassTag]: Traversal[A, A] = new Traversal(raw.unfold[A](), UniMapping.identity)
 //
 ////    def project[A <: Product: ClassTag](builder: GremlinProjectionBuilder[Nil.type] => GremlinProjectionBuilder[A]): Traversal[A, A] =
 ////      new Traversal(raw.project(builder), UniMapping.identity)
@@ -301,7 +366,6 @@ object StepsOps {
 //      Traversal(builder(ProjectionBuilder(traversal)).build(traversal.raw))
 //
 //    // TODO check if A = EndGraph
-//    def as[A](stepLabel: StepLabel[A]): T = newInstance0(new GremlinScala[traversal.EndGraph](raw.traversal.as(stepLabel.name)))
 //
 //    def order(orderBys: List[OrderBy[_]]): T = newInstance0(raw.order(orderBys: _*))
 //
@@ -311,11 +375,6 @@ object StepsOps {
 //      ()
 //    }
 //
-//    def group[ModulatedKeys, ModulatedValues](
-//        keysBy: By[ModulatedKeys],
-//        valuesBy: By[ModulatedValues]
-//    ): Traversal[JMap[ModulatedKeys, JCollection[ModulatedValues]], JMap[ModulatedKeys, JCollection[ModulatedValues]]] =
-//      new Traversal(raw.group(keysBy, valuesBy), UniMapping.identity)
 //
 //    def groupCount[Modulated](by: By[Modulated]): Traversal[JMap[Modulated, JLong], JMap[Modulated, JLong]] =
 //      new Traversal(raw.groupCount(by), UniMapping.identity)
@@ -394,10 +453,6 @@ object StepsOps {
 //      PagedResult(r, size)
 //    }
 //
-//    def head(): D = {
-//      logger.debug(s"Execution of $raw (head)")
-//      converter.toDomain(raw.head)
-//    }
 //
 //
 //    def getOrFail(): Try[D] = getOrFail(traversal.typeName)

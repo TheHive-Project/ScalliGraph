@@ -6,7 +6,7 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FieldsParser}
 import org.thp.scalligraph.models.{Database, Mapping}
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
+import org.thp.scalligraph.steps.Traversal
 import play.api.libs.json.JsObject
 
 import scala.reflect.runtime.{universe => ru}
@@ -17,7 +17,7 @@ class PublicProperty[D, G](
     val propertyName: String,
     val mapping: Mapping[_, D, G],
     val noValue: NoValue[G],
-    definition: Seq[(FPath, BaseVertexSteps) => Traversal[D, G]],
+    definition: Seq[(FPath, Traversal[_, Vertex]) => Traversal[D, G]],
     val fieldsParser: FieldsParser[D],
     val updateFieldsParser: Option[FieldsParser[PropertyUpdater]]
 ) {
@@ -26,7 +26,7 @@ class PublicProperty[D, G](
 
   lazy val propertyPath: FPath = FPath(propertyName)
 
-  def get(steps: BaseVertexSteps, path: FPath): Traversal[D, G] =
+  def get(steps: Traversal[_, Vertex], path: FPath): Traversal[D, G] =
     if (definition.lengthCompare(1) == 0)
       definition.head.apply(path, steps)
     else
@@ -38,7 +38,7 @@ object PublicProperty {
   def getPropertyTraversal(
       properties: Seq[PublicProperty[_, _]],
       stepType: ru.Type,
-      step: BaseVertexSteps,
+      step: Traversal[_, Vertex],
       fieldName: String,
       authContext: AuthContext
   ): Traversal[_, _] = {

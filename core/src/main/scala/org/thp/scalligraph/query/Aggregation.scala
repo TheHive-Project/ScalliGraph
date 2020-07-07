@@ -278,11 +278,12 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, orders: 
       authContext: AuthContext
   ): Traversal[JList[JCollection[Any]], JList[JCollection[Any]]] = {
     val elementLabel = StepLabel[Vertex]()
-    val groupedVertices: Traversal[JMap.Entry[Any, JCollection[Any]], JMap.Entry[Any, JCollection[Any]]] =
+    val groupedVertices: Traversal[JMap.Entry[Any, JCollection[Any]], JMap.Entry[Any, JCollection[Any]]] = {
       PublicProperty
         .getPropertyTraversal(publicProperties, stepType, fromStep.as(elementLabel), fieldName, authContext)
-        .group(By(), By(__.select(elementLabel).fold()))
+        .group(_.by, _.by(_.select(elementLabel).fold))
         .unfold[JMap.Entry[Any, JCollection[Any]]](null) // Map.Entry[K, List[V]]
+    }
 
     val sortedAndGroupedVertex = orders
       .map {
@@ -291,7 +292,7 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, orders: 
         case order                                   => order      -> Order.asc
       }
       .foldLeft(groupedVertices) {
-        case (acc, (field, order)) if field == fieldName => acc.sort(By(__[JMap.Entry[Any, JCollection[Any]]].selectKeys, order))
+        case (acc, (field, order)) if field == fieldName => acc.sort(_.by(_.)By(__[JMap.Entry[Any, JCollection[Any]]].selectKeys, order))
         case (acc, (field, order)) if field == "count"   => acc.sort(By(__[JMap.Entry[Any, JCollection[Any]]].selectValues.count(Scope.local), order))
         case (acc, (field, _)) =>
           logger.warn(s"In field aggregation you can only sort by the field ($fieldName) or by count, not by $field")
