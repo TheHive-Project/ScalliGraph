@@ -117,16 +117,17 @@ object StepsOps {
 
 //    def forceMin: Traversal[D, G] = traversal.onDeepRaw(_.asInstanceOf[GraphTraversal[_, Comparable[_]]].min[Comparable[_]])
 
-    def min[C <: Comparable[_]]()(implicit toComparable: G => C): Traversal[C, C] =
-      traversal.onRaw(_.min[C]())
+    def min[C <: Comparable[_]: ClassTag]()(implicit toComparable: G => C): Traversal[C, C] =
+      traversal.onRawMap(_.min[C](), _ => ???)
 //      new Traversal(raw.min[C]()(toComparable), identity)
 
 //    def forceMax: Traversal[D, G] = traversal.onDeepRaw(_.max[G])
 
-    def max[C <: Comparable[_]]()(implicit toComparable: G => C): Traversal[C, C] =
-      new Traversal(raw.max[C]()(toComparable), identity)
+    def max[C <: Comparable[_]: ClassTag]()(implicit toComparable: G => C): Traversal[C, C] =
+      new Traversal(raw.max[C]()(toComparable), _ => ???)
 
-    def mean[N <: Number]()(implicit toNumber: G => N): Traversal[Double, JDouble] = new Traversal(raw.mean, UniMapping.jdouble)
+    def mean[N <: Number]()(implicit toNumber: G => N): Traversal[Double, JDouble] =
+      traversal.onRawMap(_.mean[N], _.doubleValue())
 
     def as[A](stepLabel: StepLabel[A]): Traversal[D, G] = traversal.onDeepRaw(_.as(stepLabel.name))
 
@@ -142,7 +143,7 @@ object StepsOps {
           .andThen(_.asInstanceOf[GraphTraversal[_, G]])
           .andThen(valuesBy(groupBySelector))
           .andThen(_.asInstanceOf[GraphTraversal[_, JMap[K, JCollection[V]]]]),
-        _ => identity[JMap[K, JCollection[V]]]
+        identity[JMap[K, JCollection[V]]]
       )
 
     def select[A: ClassTag](label: StepLabel[A]): Traversal[A, A] =
