@@ -12,7 +12,7 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.UniMapping
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{GenericBySelector, Traversal}
+import org.thp.scalligraph.steps.{GenericBySelector, Traversal, UntypedTraversal}
 import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError}
 import play.api.Logger
 import play.api.libs.json.{JsNumber, JsObject, Json, Writes}
@@ -65,7 +65,7 @@ object GroupAggregation {
       })
   }
 
-  def groupAggregationParser: PartialFunction[String, FieldsParser[GroupAggregation[_, _, _]]] = {
+  def groupAggregationParser: PartialFunction[String, FieldsParser[GroupAggregation[_]]] = {
     case "field" =>
       FieldsParser("FieldAggregation") {
         case (_, field) =>
@@ -93,7 +93,7 @@ object GroupAggregation {
       }
   }
 
-  def functionAggregationParser: PartialFunction[String, FieldsParser[Aggregation[_, _, _]]] = {
+  def functionAggregationParser: PartialFunction[String, FieldsParser[Aggregation[_]]] = {
     case "avg" =>
       FieldsParser("AvgAggregation") {
         case (_, field) =>
@@ -116,14 +116,14 @@ object GroupAggregation {
       }
   }
 
-  val aggregationFieldsParser: FieldsParser[Aggregation[_, _, _]] = {
+  val aggregationFieldsParser: FieldsParser[Aggregation[_]] = {
     def fp(name: String) =
       functionAggregationParser
         .orElse(groupAggregationParser)
         .applyOrElse(
           name,
           (name: String) =>
-            FieldsParser[Aggregation[_, _, _]]("aggregation") {
+            FieldsParser[Aggregation[_]]("aggregation") {
               case _ => Bad(One(InvalidFormatAttributeError("_agg", "aggregation name", Set("avg", "min", "max", "count", "top"), FString(name))))
             }
         )
@@ -133,36 +133,36 @@ object GroupAggregation {
     }
   }
 
-  implicit val fieldsParser: FieldsParser[GroupAggregation[_, _, _]] = FieldsParser("aggregation") {
+  implicit val fieldsParser: FieldsParser[GroupAggregation[_]] = FieldsParser("aggregation") {
     case (_, AggObj(name, field)) => groupAggregationParser(name)(field)
     //    orElse Bad(InvalidFormatAttributeError()) // TODO
   }
 }
 
-abstract class GroupAggregation[TD, TG, R](name: String) extends Aggregation[TD, TG, R](name) {
+abstract class GroupAggregation[R](name: String) extends Aggregation(name) {
 
   def get(
       properties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      fromStep: Traversal[_, Vertex],
+      fromStep: UntypedTraversal,
       authContext: AuthContext
   ): Output[R] =
-    output(apply(properties, stepType, fromStep, authContext).head())
+    output(apply(properties, stepType, fromStep, authContext).as[R, R].head())
 }
 
-abstract class Aggregation[TD, TG, R](val name: String) {
+abstract class Aggregation[R](val name: String) {
 
   def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      fromStep: Traversal[_, Vertex],
+      fromStep: UntypedTraversal,
       authContext: AuthContext
-  ): Traversal[TD, TG]
+  ): UntypedTraversal
 
-  def output(t: TD): Output[R]
+  def output(t: Any): Output[R]
 }
 
-abstract class AggFunction[TD, TG, R](name: String) extends Aggregation[TD, TG, R](name) {
+abstract class AggFunction[R](name: String) extends Aggregation[R](name) {
   implicit val numberWrites: Writes[Number] = Writes[Number] {
     case i: JInt    => JsNumber(i.toInt)
     case l: JLong   => JsNumber(l.toLong)
@@ -172,13 +172,13 @@ abstract class AggFunction[TD, TG, R](name: String) extends Aggregation[TD, TG, 
   }
 }
 
-case class AggSum(fieldName: String) extends AggFunction[Number, Number, Number](s"sum_$fieldName") {
+case class AggSum(fieldName: String) extends AggFunction[Number](s"sum_$fieldName") {
   override def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      fromStep: Traversal[_, Vertex],
+      fromStep: UntypedTraversal,
       authContext: AuthContext
-  ): Traversal[Number, Number] = {
+  ): UntypedTraversal = {
     val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
 
     property.asNumber.get.sum[Number]
@@ -254,23 +254,23 @@ case class AggMax(fieldName: String) extends AggFunction[Number, Number, Number]
 //      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Max aggregation is not applicable"))
 //      .asInstanceOf[Traversal[Number, Number]]
   }
-  override def output(t: Number): Output[Number] = Output(t)(Writes(v => Json.obj(name -> v)))
+  override def output(t: Any): Output[Number] = Output(t)(Writes(v => Json.obj(name -> v)))
 }
 
-case class AggCount(aggName: Option[String]) extends GroupAggregation[Long, JLong, Long](aggName.getOrElse("count")) {
+case class AggCount(aggName: Option[String]) extends GroupAggregation[Long](aggName.getOrElse("count")) {
   override def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      fromStep: Traversal[_, Vertex],
+      fromStep: UntypedTraversal,
       authContext: AuthContext
-  ): Traversal[Long, JLong]                  = fromStep.count
-  override def output(t: Long): Output[Long] = Output(t, Json.obj(name -> t))
+  ): UntypedTraversal                       = fromStep.count
+  override def output(t: Any): Output[Long] = Output(t, Json.obj(name -> t))
 
 }
 //case class AggTop[T](fieldName: String) extends AggFunction[T](s"top_$fieldName")
 
-case class FieldAggregation(aggName: Option[String], fieldName: String, orders: Seq[String], size: Option[Long], subAggs: Seq[Aggregation[_, _, _]])
-    extends GroupAggregation[Seq[Seq[Any]], JList[JCollection[Any]], Map[Any, Map[String, Any]]](aggName.getOrElse(s"field_$fieldName")) {
+case class FieldAggregation(aggName: Option[String], fieldName: String, orders: Seq[String], size: Option[Long], subAggs: Seq[Aggregation[_]])
+    extends GroupAggregation[Map[Any, Map[String, Any]]](aggName.getOrElse(s"field_$fieldName")) {
   lazy val logger: Logger = Logger(getClass)
   override def apply(
       publicProperties: List[PublicProperty[_, _]],

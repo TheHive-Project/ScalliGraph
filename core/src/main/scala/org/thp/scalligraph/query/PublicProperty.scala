@@ -6,7 +6,7 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FieldsParser}
 import org.thp.scalligraph.models.{Database, Mapping}
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.Traversal
+import org.thp.scalligraph.steps.{Traversal, UntypedTraversal}
 import play.api.libs.json.JsObject
 
 import scala.reflect.runtime.{universe => ru}
@@ -38,10 +38,10 @@ object PublicProperty {
   def getPropertyTraversal(
       properties: Seq[PublicProperty[_, _]],
       stepType: ru.Type,
-      step: Traversal[_, Vertex],
+      step: UntypedTraversal,
       fieldName: String,
       authContext: AuthContext
-  ): Traversal[Any, Any] = {
+  ): UntypedTraversal = {
     val path = FPath(fieldName)
     properties
       .iterator

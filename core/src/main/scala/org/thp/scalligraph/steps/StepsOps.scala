@@ -94,7 +94,8 @@ object StepsOps {
   lazy val logger: Logger = Logger(getClass)
 
   implicit class UntypedTraversalOps(untypedTraversal: UntypedTraversal) {
-    def min: UntypedTraversal = untypedTraversal.onTr
+    def as[D, G: ClassTag]: Traversal[D, G] = new Traversal[D, G](new GremlinScala(untypedTraversal.traversal.asInstanceOf[G]))
+    def min: UntypedTraversal               = untypedTraversal.onGraphTraversal[Any, Any](_.min[Comparable[Any]])
   }
   implicit class TraversalOps[D, G](traversal: Traversal[D, G]) {
     def raw: GremlinScala[G]          = traversal.raw
@@ -135,12 +136,12 @@ object StepsOps {
     def sum[N <: Number: ClassTag]()(implicit toNumber: G => N): Traversal[N, N] =
       new Traversal(raw.sum[N]()(toNumber), identity)
 
-    def forceMin: Traversal[D, G] = traversal.onDeepRaw(_.asInstanceOf[GraphTraversal[_, Comparable[_]]].min[Comparable[_]])
+//    def forceMin: Traversal[D, G] = traversal.onDeepRaw(_.asInstanceOf[GraphTraversal[_, Comparable[_]]].min[Comparable[_]])
 
     def min[C <: Comparable[_]]()(implicit toComparable: G => C): Traversal[C, C] =
       new Traversal(raw.min[C]()(toComparable), identity)
 
-    def forceMax: Traversal[D, G] = traversal.onDeepRaw(_.max[G])
+//    def forceMax: Traversal[D, G] = traversal.onDeepRaw(_.max[G])
 
     def max[C <: Comparable[_]]()(implicit toComparable: G => C): Traversal[C, C] =
       new Traversal(raw.max[C]()(toComparable), identity)
