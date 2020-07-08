@@ -9,6 +9,7 @@ import org.thp.scalligraph.steps.StepsOps._
 import org.thp.scalligraph.steps.{Traversal, UntypedTraversal}
 import play.api.libs.json.JsObject
 
+import scala.reflect.ClassTag
 import scala.reflect.runtime.{universe => ru}
 import scala.util.Try
 
@@ -26,11 +27,11 @@ class PublicProperty[D, G](
 
   lazy val propertyPath: FPath = FPath(propertyName)
 
-  def get(steps: Traversal[_, Vertex], path: FPath): Traversal[D, G] =
+  def get(steps: UntypedTraversal, path: FPath): Traversal[D, G] =
     if (definition.lengthCompare(1) == 0)
-      definition.head.apply(path, steps)
+      definition.head.apply(path, steps.as[Any, Vertex])
     else
-      steps.coalesce(definition.map(d => d.apply(path, _)): _*).changeMapping(mapping)
+      steps.as[Any, Vertex].coalesce(definition.map(d => d.apply(path, _)): _*)(mapping.toDomain)(ClassTag(mapping.graphTypeClass))
 }
 
 object PublicProperty {
@@ -47,10 +48,9 @@ object PublicProperty {
       .iterator
       .collectFirst {
         case p if p.stepType =:= stepType && path.startsWith(p.propertyPath).isDefined =>
-          p.get(step.as[Any, Vertex], path).asInstanceOf[Traversal[Any, Any]]
+          p.get(step.as[Any, Vertex], path).untyped
       }
       .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))
-      .untyped
   }
 
   def getProperty(

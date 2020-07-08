@@ -2,18 +2,16 @@ package org.thp.scalligraph.query
 
 import java.lang.{Double => JDouble, Float => JFloat, Integer => JInt, Long => JLong}
 import java.time.temporal.ChronoUnit
-import java.util.{Calendar, Date, UUID, Collection => JCollection, List => JList, Map => JMap}
+import java.util.{Calendar, Date, UUID, Collection => JCollection, List => JList}
 
-import gremlin.scala.{__, By, StepLabel, Vertex}
-import org.apache.tinkerpop.gremlin.process.traversal.{Order, Scope}
+import org.apache.tinkerpop.gremlin.process.traversal.Order
 import org.scalactic.Accumulation.withGood
 import org.scalactic.{Bad, Good, One, Or}
+import org.thp.scalligraph.InvalidFormatAttributeError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
-import org.thp.scalligraph.models.UniMapping
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{GenericBySelector, Traversal, UntypedBySelector, UntypedTraversal}
-import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError}
+import org.thp.scalligraph.steps.{UntypedBySelector, UntypedTraversal}
 import play.api.Logger
 import play.api.libs.json.{JsNumber, JsObject, Json, Writes}
 
@@ -26,7 +24,6 @@ import scala.util.matching.Regex
 object GroupAggregation {
 
   object AggObj {
-
     def unapply(field: Field): Option[(String, FObject)] = field match {
       case f: FObject =>
         f.get("_agg") match {
@@ -140,7 +137,7 @@ object GroupAggregation {
   }
 }
 
-abstract class GroupAggregation[R: ClassTag](name: String) extends Aggregation(name) {
+abstract class GroupAggregation[R: ClassTag](name: String) extends Aggregation[R](name) {
 
   def get(
       properties: List[PublicProperty[_, _]],
@@ -179,20 +176,10 @@ case class AggSum(fieldName: String) extends AggFunction[Number](s"sum_$fieldNam
       stepType: ru.Type,
       fromStep: UntypedTraversal,
       authContext: AuthContext
-  ): UntypedTraversal = {
-    val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
+  ): UntypedTraversal =
+    PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext).sum
 
-    property.sum
-//    property
-//      .cast(UniMapping.int)
-//      .map(_.sum[Number]())
-//      .orElse(property.cast(UniMapping.long).map(_.sum[Number]()))
-//      .orElse(property.cast(UniMapping.float).map(_.sum[Number]()))
-//      .orElse(property.cast(UniMapping.double).map(_.sum[Number]()))
-//      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Sum aggregation is not applicable"))
-  }
-  override def output(t: Number): Output[Number] = Output(t) // TODO add aggregation name
-
+  override def output(t: Any): Output[Number] = Output(t.asInstanceOf[Number]) // TODO add aggregation name
 }
 
 case class AggAvg(aggName: Option[String], fieldName: String) extends AggFunction[Number](aggName.getOrElse(s"avg_$fieldName")) {
@@ -201,17 +188,8 @@ case class AggAvg(aggName: Option[String], fieldName: String) extends AggFunctio
       stepType: ru.Type,
       fromStep: UntypedTraversal,
       authContext: AuthContext
-  ): UntypedTraversal = {
-    val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
-
-    property.mean
-//      .cast(UniMapping.int)
-//      .map(_.mean)
-//      .orElse(property.cast(UniMapping.long).map(_.mean))
-//      .orElse(property.cast(UniMapping.float).map(_.mean))
-//      .orElse(property.cast(UniMapping.double).map(_.mean))
-//      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Avg aggregation is not applicable"))
-  }
+  ): UntypedTraversal =
+    PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext).mean
 
   override def output(t: Any): Output[Number] = Output(t.asInstanceOf[Number]) // TODO add aggregation name
 }
@@ -222,18 +200,9 @@ case class AggMin(aggName: Option[String], fieldName: String) extends AggFunctio
       stepType: ru.Type,
       fromStep: UntypedTraversal,
       authContext: AuthContext
-  ): UntypedTraversal = {
-    val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
+  ): UntypedTraversal =
+    PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext).min
 
-    property.min
-//      .cast(UniMapping.int)
-//      .flatMap(_.min[JInt]().cast(UniMapping.jint))
-//      .orElse(property.cast(UniMapping.long).flatMap(_.min[JLong]().cast(UniMapping.jlong)))
-//      .orElse(property.cast(UniMapping.float).flatMap(_.min[JFloat]().cast(UniMapping.jfloat)))
-//      .orElse(property.cast(UniMapping.double).flatMap(_.min[JDouble]().cast(UniMapping.jdouble)))
-//      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Min aggregation is not applicable"))
-//      .asInstanceOf[Traversal[Number, Number]]
-  }
   override def output(t: Any): Output[Number] = Output(t.asInstanceOf[Number])(Writes(v => Json.obj(name -> v)))
 }
 
@@ -243,18 +212,9 @@ case class AggMax(fieldName: String) extends AggFunction[Number](s"max_$fieldNam
       stepType: ru.Type,
       fromStep: UntypedTraversal,
       authContext: AuthContext
-  ): UntypedTraversal = {
-    val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
+  ): UntypedTraversal =
+    PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext).max
 
-    property.max
-//      .cast(UniMapping.int)
-//      .flatMap(_.max[JInt]().cast(UniMapping.jint))
-//      .orElse(property.cast(UniMapping.long).flatMap(_.max[JLong]().cast(UniMapping.jlong)))
-//      .orElse(property.cast(UniMapping.float).flatMap(_.max[JFloat]().cast(UniMapping.jfloat)))
-//      .orElse(property.cast(UniMapping.double).flatMap(_.max[JDouble]().cast(UniMapping.jdouble)))
-//      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Max aggregation is not applicable"))
-//      .asInstanceOf[Traversal[Number, Number]]
-  }
   override def output(t: Any): Output[Number] = Output(t.asInstanceOf[Number])(Writes(v => Json.obj(name -> v)))
 }
 
@@ -264,7 +224,8 @@ case class AggCount(aggName: Option[String]) extends GroupAggregation[Long](aggN
       stepType: ru.Type,
       fromStep: UntypedTraversal,
       authContext: AuthContext
-  ): UntypedTraversal                       = fromStep.count
+  ): UntypedTraversal = fromStep.count
+
   override def output(t: Any): Output[Long] = Output(t.asInstanceOf[Long])(Writes(v => Json.obj(name -> v)))
 
 }
@@ -306,11 +267,6 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, orders: 
         ((_: UntypedBySelector).by(_.selectKeys)) +: subAggs
           .map(agg => (_: UntypedBySelector).by(t => agg(publicProperties, stepType, t.selectValues.unfold, authContext))): _*
       )
-      //        subAggs.map(agg =>
-      //          (gby: GenericBySelector[JMap.Entry[Any, JCollection[Any]], JMap.Entry[Any, JCollection[Any]]]) =>
-      //            gby.by(t => agg.apply(publicProperties, stepType, t.selectValues.unfold, authContext))
-      //        ): _*
-      //      )
       .fold
   }
 

@@ -2,7 +2,7 @@ package org.thp.scalligraph.steps
 
 import gremlin.scala.{__, GremlinScala}
 import gremlin.scala.dsl.Converter
-import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{DefaultGraphTraversal, GraphTraversal}
 import org.thp.scalligraph.models.{Mapping, UniMapping}
 import play.api.Logger
 
@@ -53,6 +53,10 @@ object Traversal {
 
 class UntypedTraversal(val traversal: GraphTraversal[_, _]) {
   def onGraphTraversal[A, B](f: GraphTraversal[A, B] => GraphTraversal[_, _]) = new UntypedTraversal(f(traversal.asInstanceOf[GraphTraversal[A, B]]))
+  override def clone(): UntypedTraversal =
+    traversal match {
+      case dgt: DefaultGraphTraversal[_, _] => new UntypedTraversal(dgt.clone)
+    }
 }
 class Traversal[+D, G: ClassTag](val raw: GremlinScala[G], conv: G => D) {
   def typeName: String                                                                = classTag[G].runtimeClass.getSimpleName
@@ -60,8 +64,8 @@ class Traversal[+D, G: ClassTag](val raw: GremlinScala[G], conv: G => D) {
   def onRaw(f: GremlinScala[G] => GremlinScala[G]): Traversal[D, G]                   = new Traversal[D, G](f(raw), conv)
   def onRawMap[D2, G2: ClassTag](f: GremlinScala[G] => GremlinScala[G2], c: G2 => D2) = new Traversal[D2, G2](f(raw), c)
   def onDeepRaw(f: GraphTraversal[_, G] => GraphTraversal[_, G])                      = new Traversal(new GremlinScala[G](f(raw.traversal)), conv)
-  def onDeepRawMap[D2, G2: ClassTag](f: GraphTraversal[_, G] => GraphTraversal[_, G2], c: G2 => D2) =
-    new Traversal(new GremlinScala[G2](f(raw.traversal)), c)
+  def onDeepRawMap[D2, G2: ClassTag](f: GraphTraversal[_, G] => GraphTraversal[_, G2], c: (G => D) => (G2 => D2)): Traversal[D2, G2] =
+    new Traversal(new GremlinScala[G2](f(raw.traversal)), c(conv))
   def start = new Traversal[D, G](__[G], conv)
 
 //  def mapping: UniMapping[D]

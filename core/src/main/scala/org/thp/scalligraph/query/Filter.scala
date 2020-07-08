@@ -10,7 +10,7 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.{Database, Mapping}
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{BaseVertexSteps, IdMapping, Traversal}
+import org.thp.scalligraph.steps.{IdMapping, Traversal, UntypedTraversal}
 import play.api.Logger
 
 import scala.collection.JavaConverters._
@@ -18,27 +18,26 @@ import scala.reflect.runtime.{universe => ru}
 
 trait InputFilter extends InputQuery {
 
-  def apply[S <: BaseVertexSteps](
+  def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      step: S,
+      step: UntypedTraversal,
       authContext: AuthContext
-  ): S
+  ): UntypedTraversal
 }
 
 case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilter {
 
-  override def apply[S <: BaseVertexSteps](
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      step: S,
+      step: UntypedTraversal,
       authContext: AuthContext
-  ): S =
+  ): UntypedTraversal =
     step.filter { s =>
-      val property: Traversal[Any, Any] =
-        PublicProperty.getPropertyTraversal(publicProperties, stepType, s, fieldName, authContext).asInstanceOf[Traversal[Any, Any]]
+      val property = PublicProperty.getProperty(publicProperties, stepType, fieldName)
       if (property.mapping == IdMapping) {
         val newValue = predicate.getValue match {
           case c: JCollection[_] => c.asScala.map(db.toId).asJavaCollection
@@ -46,50 +45,50 @@ case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilt
         }
         predicate.asInstanceOf[P[Any]].setValue(newValue)
       }
-      property.is(db.mapPredicate(predicate.asInstanceOf[P[Any]]))
+      property.get(s, FPath(fieldName)).untyped.is(db.mapPredicate(predicate)) //.asInstanceOf[P[Any]]))
     }
 }
 
 case class IsDefinedFilter(fieldName: String) extends InputFilter {
 
-  override def apply[S <: BaseVertexSteps](
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      step: S,
+      step: UntypedTraversal,
       authContext: AuthContext
-  ): S = {
-    val filter = (s: BaseVertexSteps) => PublicProperty.getPropertyTraversal(publicProperties, stepType, s, fieldName, authContext)
+  ): UntypedTraversal = {
+    val filter = (s: UntypedTraversal) => PublicProperty.getPropertyTraversal(publicProperties, stepType, s, fieldName, authContext)
     step.filter(filter)
   }
 }
 
 case class OrFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
 
-  override def apply[S <: BaseVertexSteps](
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      step: S,
+      step: UntypedTraversal,
       authContext: AuthContext
-  ): S =
-    inputFilters.map(ff => (s: S) => ff(db, publicProperties, stepType, s, authContext)) match {
+  ): UntypedTraversal =
+    inputFilters.map(ff => (s: UntypedTraversal) => ff(db, publicProperties, stepType, s, authContext)) match {
       case Seq(f) => step.filter(f)
-      case Seq()  => step.filter(_.not(identity))
+      case Seq()  => step.limit(0)
       case f      => step.filter(_.or(f: _*))
     }
 }
 
 case class AndFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
 
-  override def apply[S <: BaseVertexSteps](
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      step: S,
+      step: UntypedTraversal,
       authContext: AuthContext
-  ): S =
-    inputFilters.map(ff => (s: S) => ff(db, publicProperties, stepType, s, authContext)) match {
+  ): UntypedTraversal =
+    inputFilters.map(ff => (s: UntypedTraversal) => ff(db, publicProperties, stepType, s, authContext)) match {
       case Seq(f)      => step.filter(f)
       case Seq()       => step.filter(_.not(identity))
       case Seq(f @ _*) => step.filter(_.and(f: _*))
@@ -98,38 +97,38 @@ case class AndFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
 
 case class NotFilter(inputFilter: InputFilter) extends InputFilter {
 
-  override def apply[S <: BaseVertexSteps](
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      step: S,
+      step: UntypedTraversal,
       authContext: AuthContext
-  ): S = {
-    val criteria: BaseVertexSteps => BaseVertexSteps = (s: BaseVertexSteps) => inputFilter(db, publicProperties, stepType, s, authContext)
+  ): UntypedTraversal = {
+    val criteria: UntypedTraversal => UntypedTraversal = (s: UntypedTraversal) => inputFilter(db, publicProperties, stepType, s, authContext)
     step.filter(_.not(criteria))
   }
 }
 
 object YesFilter extends InputFilter {
 
-  override def apply[S <: BaseVertexSteps](
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      step: S,
+      step: UntypedTraversal,
       authContext: AuthContext
-  ): S = step
+  ): UntypedTraversal = step
 }
 
 class IdFilter(id: String) extends InputFilter {
 
-  override def apply[S <: BaseVertexSteps](
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      step: S,
+      step: UntypedTraversal,
       authContext: AuthContext
-  ): S = step.getByIds(id)
+  ): UntypedTraversal = step.getByIds(id)
 }
 
 object InputFilter {

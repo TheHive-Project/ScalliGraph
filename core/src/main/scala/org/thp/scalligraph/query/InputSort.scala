@@ -9,8 +9,7 @@ import org.thp.scalligraph.InvalidFormatAttributeError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FSeq, FString, FieldsParser}
 import org.thp.scalligraph.models.{Database, MappingCardinality}
-import org.thp.scalligraph.steps.BaseVertexSteps
-import org.thp.scalligraph.steps.StepsOps._
+import org.thp.scalligraph.steps.UntypedTraversal
 
 import scala.reflect.runtime.{universe => ru}
 
@@ -20,19 +19,21 @@ case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
     override def apply[End](traversal: GraphTraversal[_, End]): GraphTraversal[_, End] =
       traversal.by(f(__[Vertex]).traversal, order)
   }
-  override def apply[S <: BaseVertexSteps](
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      step: S,
+      step: UntypedTraversal,
       authContext: AuthContext
-  ): S = {
+  ): UntypedTraversal = {
     val orderBys = fieldOrder.map {
       case (fieldName, order) =>
         val property = PublicProperty.getProperty(publicProperties, stepType, fieldName)
+        if (property.mapping.cardinality == MappingCardinality.single) {} else {}
+
         val subField = FPath(fieldName.dropWhile(_ != '.').dropWhile(_ == '.'))
         val orderDefs: GremlinScala[Vertex] => GremlinScala[property.Graph] =
-          (g: GremlinScala[Vertex]) => property.get(step.newInstance(g), subField).raw.asInstanceOf[GremlinScala[property.Graph]]
+          (g: GremlinScala[Vertex]) => property.get(step.clone(), subField).raw.asInstanceOf[GremlinScala[property.Graph]]
         if (property.mapping.cardinality == MappingCardinality.single) {
           orderby(orderDefs, order)
         } else {

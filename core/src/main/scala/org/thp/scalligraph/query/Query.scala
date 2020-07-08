@@ -6,7 +6,7 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{BaseTraversal, BaseVertexSteps, PagedResult, TraversalLike}
+import org.thp.scalligraph.steps.{PagedResult, Traversal, UntypedTraversal}
 
 import scala.reflect.runtime.{currentMirror => rm, universe => ru}
 
@@ -87,9 +87,9 @@ object Query {
     override def apply(param: Unit, from: Any, authContext: AuthContext): Any = implicitly[Renderer[E]].toOutput(from.asInstanceOf[E])
   }
 
-  def output[E: Renderer: ru.TypeTag, F <: TraversalLike[E, _]: ru.TypeTag]: Query = output(identity[F])
+  def output[E: Renderer: ru.TypeTag, F <: Traversal[E, _]: ru.TypeTag]: Query = output(identity[F])
 
-  def outputWithContext[E: ru.TypeTag, F: ru.TypeTag](transform: (F, AuthContext) => TraversalLike[E, _])(implicit renderer: Renderer[E]): Query =
+  def outputWithContext[E: ru.TypeTag, F: ru.TypeTag](transform: (F, AuthContext) => Traversal[E, _])(implicit renderer: Renderer[E]): Query =
     new Query {
       override val name: String                   = "output"
       override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[F])
@@ -97,7 +97,7 @@ object Query {
       override def apply(param: Unit, from: Any, authContext: AuthContext): Any =
         PagedResult(transform(from.asInstanceOf[F], authContext), None)(renderer)
     }
-  def output[E: ru.TypeTag, F: ru.TypeTag](transform: F => TraversalLike[E, _])(implicit renderer: Renderer[E]): Query =
+  def output[E: ru.TypeTag, F: ru.TypeTag](transform: F => Traversal[E, _])(implicit renderer: Renderer[E]): Query =
     new Query {
       override val name: String                   = "output"
       override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[F])
@@ -110,14 +110,14 @@ object Query {
 class SortQuery(db: Database, publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[InputSort] {
   override def paramParser(tpe: ru.Type): FieldsParser[InputSort] = InputSort.fieldsParser
   override val name: String                                       = "sort"
-  override def checkFrom(t: ru.Type): Boolean                     = SubType(t, ru.typeOf[BaseTraversal])
+  override def checkFrom(t: ru.Type): Boolean                     = SubType(t, ru.typeOf[UntypedTraversal])
   override def toType(t: ru.Type): ru.Type                        = t
   override def apply(inputSort: InputSort, from: Any, authContext: AuthContext): Any =
     inputSort(
       db,
       publicProperties,
       rm.classSymbol(from.getClass).toType,
-      from.asInstanceOf[BaseVertexSteps],
+      from.asInstanceOf[UntypedTraversal],
       authContext
     )
 }
@@ -139,46 +139,46 @@ final class FilterQuery(
   def paramParser(tpe: ru.Type): FieldsParser[InputFilter] =
     fieldsParsers.foldLeft(FieldsParser.empty[InputFilter])((fp, f) => fp orElse f(tpe, t => paramParser(t)))
   override val name: String                   = "filter"
-  override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[BaseVertexSteps])
+  override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[UntypedTraversal])
   override def toType(t: ru.Type): ru.Type    = t
   override def apply(inputFilter: InputFilter, from: Any, authContext: AuthContext): Any =
     inputFilter(
       db,
       publicProperties,
       rm.classSymbol(from.getClass).toType,
-      from.asInstanceOf[BaseVertexSteps], //.asInstanceOf[X forSome { type X <: BaseVertexSteps[_, X] }],
+      from.asInstanceOf[UntypedTraversal], //.asInstanceOf[X forSome { type X <: BaseVertexSteps[_, X] }],
       authContext
     )
 //  def addParser(parser: (ru.Type, () => FieldsParser[InputFilter])): FilterQuery = new FilterQuery(db, publicProperties, parser :: fieldsParsers)
   def ++(other: FilterQuery): FilterQuery = new FilterQuery(db, publicProperties, filterQuery.fieldsParsers ::: other.fieldsParsers)
 }
 
-class AggregationQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[GroupAggregation[_, _, _]] {
-  override def paramParser(tpe: ru.Type): FieldsParser[GroupAggregation[_, _, _]] = GroupAggregation.fieldsParser
-  override val name: String                                                       = "aggregation"
-  override def checkFrom(t: ru.Type): Boolean                                     = SubType(t, ru.typeOf[BaseVertexSteps])
-  override def toType(t: ru.Type): ru.Type                                        = ru.typeOf[Output[_]]
-  override def apply(aggregation: GroupAggregation[_, _, _], from: Any, authContext: AuthContext): Any =
+class AggregationQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[GroupAggregation[_]] {
+  override def paramParser(tpe: ru.Type): FieldsParser[GroupAggregation[_]] = GroupAggregation.fieldsParser
+  override val name: String                                                 = "aggregation"
+  override def checkFrom(t: ru.Type): Boolean                               = SubType(t, ru.typeOf[UntypedTraversal])
+  override def toType(t: ru.Type): ru.Type                                  = ru.typeOf[Output[_]]
+  override def apply(aggregation: GroupAggregation[_], from: Any, authContext: AuthContext): Any =
     aggregation.get(
       publicProperties,
       rm.classSymbol(from.getClass).toType,
-      from.asInstanceOf[BaseVertexSteps],
+      from.asInstanceOf[UntypedTraversal],
       authContext
     )
 }
 
 object CountQuery extends Query {
   override val name: String                                                  = "count"
-  override def checkFrom(t: ru.Type): Boolean                                = SubType(t, ru.typeOf[BaseVertexSteps])
+  override def checkFrom(t: ru.Type): Boolean                                = SubType(t, ru.typeOf[UntypedTraversal])
   override def toType(t: ru.Type): ru.Type                                   = ru.typeOf[Long]
-  override def apply(param: Unit, from: Any, authContext: AuthContext): Long = from.asInstanceOf[BaseVertexSteps].getCount
+  override def apply(param: Unit, from: Any, authContext: AuthContext): Long = from.asInstanceOf[UntypedTraversal].getCount
 }
 trait InputQuery {
-  def apply[S <: BaseVertexSteps](
+  def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      step: S,
+      step: UntypedTraversal,
       authContext: AuthContext
-  ): S
+  ): UntypedTraversal
 }
