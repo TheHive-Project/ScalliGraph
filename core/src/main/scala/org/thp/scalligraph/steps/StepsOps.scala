@@ -92,6 +92,10 @@ object ProjectionBuilder {
 
 object StepsOps {
   lazy val logger: Logger = Logger(getClass)
+
+  implicit class UntypedTraversalOps(untypedTraversal: UntypedTraversal) {
+    def min: UntypedTraversal = untypedTraversal.onTr
+  }
   implicit class TraversalOps[D, G](traversal: Traversal[D, G]) {
     def raw: GremlinScala[G]          = traversal.raw
     def deepRaw: GraphTraversal[_, G] = traversal.raw.traversal

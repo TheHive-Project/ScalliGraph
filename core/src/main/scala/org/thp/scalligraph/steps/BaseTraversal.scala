@@ -51,6 +51,9 @@ object Traversal {
   def apply[T: ClassTag](raw: GremlinScala[T]) = new Traversal[T, T](raw, identity[T])
 }
 
+class UntypedTraversal(val traversal: GraphTraversal[_, _]) {
+  def onGraphTraversal[A, B](f: GraphTraversal[A, B] => GraphTraversal[_, _]) = new UntypedTraversal(f(traversal.asInstanceOf[GraphTraversal[A, B]]))
+}
 class Traversal[+D, G: ClassTag](val raw: GremlinScala[G], conv: G => D) {
   def typeName: String                                                                = classTag[G].runtimeClass.getSimpleName
   def deepRaw: GraphTraversal[_, G]                                                   = raw.traversal
