@@ -46,9 +46,11 @@ object PublicProperty {
     properties
       .iterator
       .collectFirst {
-        case p if p.stepType =:= stepType && path.startsWith(p.propertyPath).isDefined => p.get(step, path).asInstanceOf[Traversal[Any, Any]]
+        case p if p.stepType =:= stepType && path.startsWith(p.propertyPath).isDefined =>
+          p.get(step.as[Any, Vertex], path).asInstanceOf[Traversal[Any, Any]]
       }
       .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))
+      .untyped
   }
 
   def getProperty(

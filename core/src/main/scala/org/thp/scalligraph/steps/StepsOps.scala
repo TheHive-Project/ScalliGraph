@@ -2,10 +2,10 @@ package org.thp.scalligraph.steps
 
 import java.lang.{Double => JDouble, Long => JLong}
 import java.util.{Date, UUID, Collection => JCollection, List => JList, Map => JMap}
+import java.util.function.{Function => JFunction}
 
 import gremlin.scala.dsl.Converter
-import gremlin.scala.{By, Edge, Graph, GremlinScala, Key, OrderBy, P, StepLabel, Vertex, __, _}
-import org.apache.tinkerpop.gremlin.process.traversal.{Order, Scope}
+import org.apache.tinkerpop.gremlin.process.traversal.{Order, Scope, Traverser}
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
 import org.apache.tinkerpop.gremlin.process.traversal.step.TraversalOptionParent.Pick
 import org.apache.tinkerpop.gremlin.structure.{Column, Element}
@@ -24,32 +24,170 @@ import scala.reflect.ClassTag
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
 
-//trait BranchOption[T <: BaseTraversal, R <: BaseTraversal] {
-//  def traversal: T => R
-//  def pickToken: Any
-//}
-//
-//case class BranchCase[BranchOn, T <: BaseTraversal, R <: BaseTraversal](pickToken: BranchOn, traversal: T => R) extends BranchOption[T, R]
-//
-//case class BranchMatchAll[T <: BaseTraversal, R <: BaseTraversal](traversal: T => R) extends BranchOption[T, R] {
-//  override def pickToken = Pick.any
-//}
-//
-///* if nothing else matched in branch/choose step */
-//case class BranchOtherwise[T <: BaseTraversal, R <: BaseTraversal](traversal: T => R) extends BranchOption[T, R] {
-//  override def pickToken = Pick.none
-//}
-//
+object StepsOps {
+  lazy val logger: Logger = Logger(getClass)
+
+  implicit class UntypedTraversalOps(untypedTraversal: UntypedTraversal) {
+    implicit class UntypedGraphTraversalOps(graphTraversal: GraphTraversal[_, _]) {
+      def untyped: GraphTraversal[Any, Any] = graphTraversal.asInstanceOf[GraphTraversal[Any, Any]]
+    }
+
+    def as[D, G: ClassTag]: Traversal[D, G] =
+      new Traversal[D, G](new gremlin.scala.GremlinScala(untypedTraversal.traversal.asInstanceOf[GraphTraversal[_, G]]), _ => ???)
+    def min: UntypedTraversal                   = untypedTraversal.onGraphTraversal[Any, Any](_.min[Comparable[Any]])
+    def max: UntypedTraversal                   = untypedTraversal.onGraphTraversal[Any, Any](_.max[Comparable[Any]])
+    def sum: UntypedTraversal                   = untypedTraversal.onGraphTraversal[Any, Number](_.sum[Number])
+    def mean: UntypedTraversal                  = untypedTraversal.onGraphTraversal[Any, Number](_.mean[Number])
+    def count: UntypedTraversal                 = untypedTraversal.onGraphTraversal[Any, Any](_.count())
+    def localCount: UntypedTraversal            = untypedTraversal.onGraphTraversal[Any, Any](_.count(Scope.local))
+    def as(label: String): UntypedTraversal     = untypedTraversal.onGraphTraversal[Any, Any](_.as(label))
+    def select(label: String): UntypedTraversal = untypedTraversal.onGraphTraversal[Any, Any](_.select(label))
+    def fold: UntypedTraversal                  = untypedTraversal.onGraphTraversal[Any, Any](_.fold)
+    def unfold: UntypedTraversal                = untypedTraversal.onGraphTraversal[Any, Any](_.unfold[Any])
+    def selectKeys: UntypedTraversal            = untypedTraversal.onGraphTraversal[Any, Any](_.select(Column.keys))
+    def selectValues: UntypedTraversal          = untypedTraversal.onGraphTraversal[Any, Any](_.select(Column.values))
+    def limit(max: Long): UntypedTraversal      = untypedTraversal.onGraphTraversal[Any, Any](_.limit(max))
+    def map[F, T](f: F => T): UntypedTraversal  = untypedTraversal.onGraphTraversal[Any, F](_.map((t: Traverser[F]) => f(t.get)))
+    def group(k: UntypedBySelector => UntypedByResult, v: UntypedBySelector => UntypedByResult) =
+      untypedTraversal.onGraphTraversal[Any, Any](t => v(bySelector)(k(bySelector)(t.group())))
+    def sort(f: (UntypedSortBySelector => UntypedByResult)*): UntypedTraversal =
+      untypedTraversal.onGraphTraversal[Any, Any](t => f.map(_(sortBySelector)).foldLeft(t.order)((acc, s) => s(acc)))
+    def project(f: (UntypedBySelector => UntypedByResult)*) =
+      untypedTraversal.onGraphTraversal[Any, Any](t => f.map(_(bySelector)).foldLeft(t.group.untyped)((acc, p) => p(acc)))
+//    def genProject[A: ClassTag](
+//                                 first: (GenericBySelector[D, G] => ByResult[G, G]),
+//                                 other: (GenericBySelector[D, G] => ByResult[G, G])*
+//                               ): Traversal[Seq[A], JCollection[A]] = {
+//      val headLabel  = UUID.randomUUID().toString
+//      val tailLabels = other.map(_ => UUID.randomUUID().toString)
+//      traversal.onDeepRawMap(
+//        { t =>
+//          val firstProjection = first(genericBySelector)(t.project(headLabel, tailLabels: _*).asInstanceOf[GraphTraversal[_, G]])
+//          other.foldLeft(firstProjection)((acc, p) => p(genericBySelector)(acc))
+//        },
+//        identity
+//      )
+//      Traversal(new GremlinScala[A](graphTraversal.asInstanceOf[GraphTraversal[_, A]]))
+//    }
+
+    //    private def genericBySelector: UntypedGenericBySelector[D, G] = new GenericBySelector[D, G](traversal)
+    private def bySelector: UntypedBySelector         = new UntypedBySelector
+    private def sortBySelector: UntypedSortBySelector = new UntypedSortBySelector
+  }
+  implicit class TraversalOps[D, G](traversal: Traversal[D, G]) {
+    import gremlin.scala.{By, Edge, Graph, GremlinScala, Key, OrderBy, P, StepLabel, Vertex, __, _}
+
+    def raw: GremlinScala[G]          = traversal.raw
+    def deepRaw: GraphTraversal[_, G] = traversal.raw.traversal
+    def toDomain(g: G): D             = traversal.toDomain(g)
+    def untyped: UntypedTraversal     = new UntypedTraversal(deepRaw)
+
+    def getCount: Long = {
+      logger.debug(s"Execution of $raw (count)")
+      raw.count().head()
+    }
+
+    def head(): D = {
+      logger.debug(s"Execution of $raw (head)")
+      toDomain(raw.head)
+    }
+
+    def headOption(): Option[D] = {
+      logger.debug(s"Execution of $raw (headOption)")
+      raw.headOption().map(toDomain)
+    }
+
+    def toList: List[D] = {
+      logger.debug(s"Execution of $raw (toList)")
+      raw.toList.map(toDomain)
+    }
+
+    def limit(max: Long): Traversal[D, G] = traversal.onRaw(_.limit(max))
+
+    def range(low: Long, high: Long): Traversal[D, G] = traversal.onRaw(_.range(low, high))
+
+    def map[A: ClassTag](f: D => A): Traversal[A, A] = new Traversal[A, A](raw.map(x => f(toDomain(x))), identity)
+
+    def count: Traversal[Long, JLong] = new Traversal(raw.count(), _.longValue)
+
+    def localCount: Traversal[Long, JLong] = new Traversal(raw.count(Scope.local), _.longValue)
+
+    def sum[N <: Number: ClassTag]()(implicit toNumber: G => N): Traversal[N, N] =
+      new Traversal(raw.sum[N]()(toNumber), identity)
+
+//    def forceMin: Traversal[D, G] = traversal.onDeepRaw(_.asInstanceOf[GraphTraversal[_, Comparable[_]]].min[Comparable[_]])
+
+    def min[C <: Comparable[_]]()(implicit toComparable: G => C): Traversal[C, C] =
+      traversal.onRaw(_.min[C]())
+//      new Traversal(raw.min[C]()(toComparable), identity)
+
+//    def forceMax: Traversal[D, G] = traversal.onDeepRaw(_.max[G])
+
+    def max[C <: Comparable[_]]()(implicit toComparable: G => C): Traversal[C, C] =
+      new Traversal(raw.max[C]()(toComparable), identity)
+
+    def mean[N <: Number]()(implicit toNumber: G => N): Traversal[Double, JDouble] = new Traversal(raw.mean, UniMapping.jdouble)
+
+    def as[A](stepLabel: StepLabel[A]): Traversal[D, G] = traversal.onDeepRaw(_.as(stepLabel.name))
+
+    def group[K, V](
+        keysBy: GroupBySelector[D, G] => ByResult[G, V],
+        valuesBy: GroupBySelector[D, G] => ByResult[G, K]
+    ): Traversal[JMap[K, JCollection[V]], JMap[K, JCollection[V]]] =
+      traversal.onDeepRawMap(
+        ((_: GraphTraversal[_, G])
+          .group
+          .asInstanceOf[GraphTraversal[_, G]])
+          .andThen(keysBy(groupBySelector))
+          .andThen(_.asInstanceOf[GraphTraversal[_, G]])
+          .andThen(valuesBy(groupBySelector))
+          .andThen(_.asInstanceOf[GraphTraversal[_, JMap[K, JCollection[V]]]]),
+        _ => identity[JMap[K, JCollection[V]]]
+      )
+
+    def select[A: ClassTag](label: StepLabel[A]): Traversal[A, A] =
+      traversal.onDeepRawMap(_.select(label.name).asInstanceOf[GraphTraversal[_, A]], _ => identity)
+
+    def fold: Traversal[Seq[D], JList[G]] = traversal.onDeepRawMap(_.fold(), _.fold)
+
+    def unfold[A: ClassTag]: Traversal[A, A] = new Traversal(raw.unfold[A](), identity)
+
+    def sort(f: (SortBySelector[D, G] => ByResult[G, G])*): Traversal[D, G] =
+      traversal.onDeepRaw(t => f.map(_.apply(sortBySelector)).foldLeft(t.order())((s, g) => g(s)))
+
+    /* select only the keys from a map (e.g. groupBy) - see usage examples in SelectSpec.scala */
+    def selectKeys[K: ClassTag](implicit columnType: ColumnType.Aux[G, K, _]): Traversal[K, K] =
+      traversal.onDeepRawMap[K, K](_.select(Column.keys).asInstanceOf[GraphTraversal[K, K]], identity)
+
+    /* select only the values from a map (e.g. groupBy) - see usage examples in SelectSpec.scala */
+    def selectValues[V: ClassTag](implicit columnType: ColumnType.Aux[G, _, V]): Traversal[V, V] =
+      traversal.onDeepRawMap[V, V](_.select(Column.values).asInstanceOf[GraphTraversal[V, V]], identity)
+
+    def coalesce[A](f: (Traversal[D, G] => Traversal[_, A])*): Traversal[A, A] =
+      traversal.onDeepRawMap(_.coalesce(f.map(_.apply(traversal.start).deepRaw): _*), identity)
+
+    def project[A <: Product: ClassTag](
+        builder: ProjectionBuilder[Nil.type, D, G] => ProjectionBuilder[A, D, G]
+    ): Traversal[A, A] =
+      Traversal(builder(ProjectionBuilder(traversal)).build(traversal.raw))
+
+//    def asDouble()                                         = traversal.onR
+    private def genericBySelector: GenericBySelector[D, G] = new GenericBySelector[D, G](traversal)
+    private def groupBySelector: GroupBySelector[D, G]     = new GroupBySelector[D, G](traversal)
+    private def sortBySelector: SortBySelector[D, G]       = new SortBySelector[D, G](traversal)
+  }
+}
+
 class ProjectionBuilder[E <: Product, D, G](
     traversal: Traversal[D, G],
     labels: Seq[String],
     addBy: GraphTraversal[_, JMap[String, Any]] => GraphTraversal[_, JMap[String, Any]],
     buildResult: JMap[String, Any] => E
 ) {
-//  def apply[U, TR <: Product](by: By[U])(implicit prepend: TuplePrepend.Aux[E, Tuple1[U], TR]): ProjectionBuilder[TR, T] = {
-//    val label = UUID.randomUUID().toString
-//    new ProjectionBuilder[TR, T](traversal, labels :+ label, addBy.andThen(by.apply), map => buildResult(map) :+ map.get(label).asInstanceOf[U])
-//  }
+  //  def apply[U, TR <: Product](by: By[U])(implicit prepend: TuplePrepend.Aux[E, Tuple1[U], TR]): ProjectionBuilder[TR, T] = {
+  //    val label = UUID.randomUUID().toString
+  //    new ProjectionBuilder[TR, T](traversal, labels :+ label, addBy.andThen(by.apply), map => buildResult(map) :+ map.get(label).asInstanceOf[U])
+  //  }
 
   def by[TR <: Product](implicit prepend: TuplePrepend.Aux[E, Tuple1[G], TR]): ProjectionBuilder[TR, D, G] = {
     val label = UUID.randomUUID().toString
@@ -86,132 +224,9 @@ class ProjectionBuilder[E <: Product, D, G](
   private[steps] def build(g: GremlinScala[_]): GremlinScala[E] =
     GremlinScala(addBy(g.traversal.project(labels.head, labels.tail: _*))).map(buildResult)
 }
+
 object ProjectionBuilder {
   def apply[D, G](traversal: Traversal[D, G]) = new ProjectionBuilder[Nil.type, D, G](traversal, Nil, scala.Predef.identity, _ => Nil)
-}
-
-object StepsOps {
-  lazy val logger: Logger = Logger(getClass)
-
-  implicit class UntypedTraversalOps(untypedTraversal: UntypedTraversal) {
-    def as[D, G: ClassTag]: Traversal[D, G] = new Traversal[D, G](new GremlinScala(untypedTraversal.traversal.asInstanceOf[G]))
-    def min: UntypedTraversal               = untypedTraversal.onGraphTraversal[Any, Any](_.min[Comparable[Any]])
-  }
-  implicit class TraversalOps[D, G](traversal: Traversal[D, G]) {
-    def raw: GremlinScala[G]          = traversal.raw
-    def deepRaw: GraphTraversal[_, G] = traversal.raw.traversal
-    def toDomain(g: G): D             = traversal.toDomain(g)
-
-    def getCount: Long = {
-      logger.debug(s"Execution of $raw (count)")
-      raw.count().head()
-    }
-
-    def head(): D = {
-      logger.debug(s"Execution of $raw (head)")
-      toDomain(raw.head)
-    }
-
-    def headOption(): Option[D] = {
-      logger.debug(s"Execution of $raw (headOption)")
-      raw.headOption().map(toDomain)
-    }
-
-    def toList: List[D] = {
-      logger.debug(s"Execution of $raw (toList)")
-      raw.toList.map(toDomain)
-    }
-
-    def limit(max: Long): Traversal[D, G] = traversal.onRaw(_.limit(max))
-
-    def range(low: Long, high: Long): Traversal[D, G] = traversal.onRaw(_.range(low, high))
-
-    def map[A: ClassTag](f: D => A): Traversal[A, A] =
-      new Traversal[A, A](raw.map(x => f(toDomain(x))), identity)
-
-    def count: Traversal[Long, JLong] = new Traversal(raw.count(), _.longValue)
-
-    def localCount: Traversal[Long, JLong] = new Traversal(raw.count(Scope.local), _.longValue)
-
-    def sum[N <: Number: ClassTag]()(implicit toNumber: G => N): Traversal[N, N] =
-      new Traversal(raw.sum[N]()(toNumber), identity)
-
-//    def forceMin: Traversal[D, G] = traversal.onDeepRaw(_.asInstanceOf[GraphTraversal[_, Comparable[_]]].min[Comparable[_]])
-
-    def min[C <: Comparable[_]]()(implicit toComparable: G => C): Traversal[C, C] =
-      new Traversal(raw.min[C]()(toComparable), identity)
-
-//    def forceMax: Traversal[D, G] = traversal.onDeepRaw(_.max[G])
-
-    def max[C <: Comparable[_]]()(implicit toComparable: G => C): Traversal[C, C] =
-      new Traversal(raw.max[C]()(toComparable), identity)
-
-    def mean[N <: Number]()(implicit toNumber: G => N): Traversal[Double, JDouble] = new Traversal(raw.mean, UniMapping.jdouble)
-
-    def as[A](stepLabel: StepLabel[A]): Traversal[D, G] = traversal.onDeepRaw(_.as(stepLabel.name))
-
-    def group[K, V](
-        keysBy: GroupBySelector[D, G] => ByResult[G, V],
-        valuesBy: GroupBySelector[D, G] => ByResult[G, K]
-    ): Traversal[JMap[K, JCollection[V]], JMap[K, JCollection[V]]] =
-      traversal.onDeepRawMap(
-        ((_: GraphTraversal[_, G])
-          .group
-          .asInstanceOf[GraphTraversal[_, G]])
-          .andThen(keysBy(groupBySelector))
-          .andThen(_.asInstanceOf[GraphTraversal[_, G]])
-          .andThen(valuesBy(groupBySelector))
-          .andThen(_.asInstanceOf[GraphTraversal[_, JMap[K, JCollection[V]]]]),
-        _ => UniMapping.identity
-      )
-
-    def select[A: ClassTag](label: StepLabel[A]): Traversal[A, A] =
-      traversal.onDeepRawMap(_.select(label.name).asInstanceOf[GraphTraversal[_, A]], _ => UniMapping.identity)
-
-    def fold: Traversal[Seq[D], JList[G]] = traversal.onDeepRawMap(_.fold(), _.fold)
-
-    def unfold[A: ClassTag]: Traversal[A, A] = new Traversal(raw.unfold[A](), UniMapping.identity)
-
-    def sort(f: (SortBySelector[D, G] => ByResult[G, G])*): Traversal[D, G] =
-      traversal.onDeepRaw(t => f.map(_.apply(sortBySelector)).foldLeft(t)((s, g) => g(s)))
-
-    /* select only the keys from a map (e.g. groupBy) - see usage examples in SelectSpec.scala */
-    def selectKeys[K: ClassTag](implicit columnType: ColumnType.Aux[G, K, _]): Traversal[K, K] =
-      traversal.onDeepRawMap[K, K](_.select(Column.keys).asInstanceOf[GraphTraversal[K, K]], UniMapping.identity)
-
-    /* select only the values from a map (e.g. groupBy) - see usage examples in SelectSpec.scala */
-    def selectValues[V: ClassTag](implicit columnType: ColumnType.Aux[G, _, V]): Traversal[V, V] =
-      traversal.onDeepRawMap[V, V](_.select(Column.values).asInstanceOf[GraphTraversal[V, V]], UniMapping.identity)
-
-    def coalesce[A](f: (Traversal[D, G] => Traversal[_, A])*): Traversal[A, A] =
-      traversal.onDeepRawMap(_.coalesce(f.map(_.apply(traversal.start).deepRaw): _*), identity)
-
-    def project[A <: Product: ClassTag](
-        builder: ProjectionBuilder[Nil.type, D, G] => ProjectionBuilder[A, D, G]
-    ): Traversal[A, A] =
-      Traversal(builder(ProjectionBuilder(traversal)).build(traversal.raw))
-
-    def genProject[A: ClassTag](
-        first: (GenericBySelector[D, G] => ByResult[G, G]),
-        other: (GenericBySelector[D, G] => ByResult[G, G])*
-    ): Traversal[Seq[A], JCollection[A]] = {
-      val headLabel  = UUID.randomUUID().toString
-      val tailLabels = other.map(_ => UUID.randomUUID().toString)
-      traversal.onDeepRawMap(
-        { t =>
-          val firstProjection = first(genericBySelector)(t.project(headLabel, tailLabels: _*).asInstanceOf[GraphTraversal[_, G]])
-          other.foldLeft(firstProjection)((acc, p) => p(genericBySelector)(acc))
-        },
-        UniMapping.identity
-      )
-      Traversal(new GremlinScala[A](graphTraversal.asInstanceOf[GraphTraversal[_, A]]))
-    }
-
-    def asDouble()                                         = traversal.onR
-    private def genericBySelector: GenericBySelector[D, G] = new GenericBySelector[D, G](traversal)
-    private def groupBySelector: GroupBySelector[D, G]     = new GroupBySelector[D, G](traversal)
-    private def sortBySelector: SortBySelector[D, G]       = new SortBySelector[D, G](traversal)
-  }
 }
 
 class GroupBySelector[D, G](origin: => Traversal[D, G]) {
@@ -224,25 +239,31 @@ class GroupBySelector[D, G](origin: => Traversal[D, G]) {
 }
 
 class SortBySelector[D, G](origin: => Traversal[D, G]) {
-  def by[B](f: Traversal[D, G] => Traversal[_, B]): ByResult[G, G] =
-    (t: GraphTraversal[_, G]) => t.by(f(origin.start).deepRaw)
-  def by[B](f: Traversal[D, G] => Traversal[_, B], order: Order): ByResult[G, G] =
-    (t: GraphTraversal[_, G]) => t.by(f(origin.start).deepRaw, order)
+//  def by[B](f: Traversal[D, G] => Traversal[_, B]): ByResult[G, G]               = (_: GraphTraversal[_, G]).by(f(origin.start).deepRaw)
+  def by[B](f: Traversal[D, G] => Traversal[_, B], order: Order): ByResult[G, G] = (_: GraphTraversal[_, G]).by(f(origin.start).deepRaw, order)
 }
 
 class GenericBySelector[D, G](origin: => Traversal[D, G]) {
-  def by: ByResult[G, G] =
-    (t: GraphTraversal[_, G]) => t.by
-  def by[B](f: Traversal[D, G] => Traversal[_, _]): ByResult[G, G] =
-    (t: GraphTraversal[_, G]) => t.by(f(origin.start).deepRaw)
+  def by: ByResult[G, G]                                           = (_: GraphTraversal[_, G]).by
+  def by[B](f: Traversal[D, G] => Traversal[_, _]): ByResult[G, G] = (_: GraphTraversal[_, G]).by(f(origin.start).deepRaw)
 }
 
-abstract class ByResult[F, T] extends (GraphTraversal[_, F] => GraphTraversal[_, T]) {
-  def apply[A](from: GraphTraversal[A, F]): GraphTraversal[A, T] = apply(from)
+abstract class ByResult[F, T] extends (GraphTraversal[_, F] => GraphTraversal[_, T])
+
+class UntypedBySelector {
+  import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__
+
+  def by: UntypedByResult                                          = (_: GraphTraversal[_, _]).by()
+  def by(f: UntypedTraversal => UntypedTraversal): UntypedByResult = (_: GraphTraversal[_, _]).by(f(new UntypedTraversal(__.start()).traversal))
 }
-object ByResult {
-  def apply()
+
+class UntypedSortBySelector {
+  import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__
+  def by(f: UntypedTraversal => UntypedTraversal, order: Order): UntypedByResult =
+    (_: GraphTraversal[_, _]).by(f(new UntypedTraversal(__.start()).traversal), order)
 }
+abstract class UntypedByResult extends (GraphTraversal[_, _] => GraphTraversal[Any, Any])
+
 //
 //object GroupBySelectorResult {
 //  def apply(f: )
@@ -514,3 +535,20 @@ object ByResult {
 //    def is(predicate: P[G]): TraversalLike[D, G] = newInstance0(raw.is(predicate))
 //
 //}
+
+//trait BranchOption[T <: BaseTraversal, R <: BaseTraversal] {
+//  def traversal: T => R
+//  def pickToken: Any
+//}
+//
+//case class BranchCase[BranchOn, T <: BaseTraversal, R <: BaseTraversal](pickToken: BranchOn, traversal: T => R) extends BranchOption[T, R]
+//
+//case class BranchMatchAll[T <: BaseTraversal, R <: BaseTraversal](traversal: T => R) extends BranchOption[T, R] {
+//  override def pickToken = Pick.any
+//}
+//
+///* if nothing else matched in branch/choose step */
+//case class BranchOtherwise[T <: BaseTraversal, R <: BaseTraversal](traversal: T => R) extends BranchOption[T, R] {
+//  override def pickToken = Pick.none
+//}
+//

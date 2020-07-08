@@ -2,7 +2,7 @@ package org.thp.scalligraph.query
 
 import java.lang.{Double => JDouble, Float => JFloat, Integer => JInt, Long => JLong}
 import java.time.temporal.ChronoUnit
-import java.util.{Calendar, Date, Collection => JCollection, List => JList, Map => JMap}
+import java.util.{Calendar, Date, UUID, Collection => JCollection, List => JList, Map => JMap}
 
 import gremlin.scala.{__, By, StepLabel, Vertex}
 import org.apache.tinkerpop.gremlin.process.traversal.{Order, Scope}
@@ -12,12 +12,13 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.UniMapping
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{GenericBySelector, Traversal, UntypedTraversal}
+import org.thp.scalligraph.steps.{GenericBySelector, Traversal, UntypedBySelector, UntypedTraversal}
 import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError}
 import play.api.Logger
 import play.api.libs.json.{JsNumber, JsObject, Json, Writes}
 
 import scala.collection.JavaConverters._
+import scala.reflect.ClassTag
 import scala.reflect.runtime.{universe => ru}
 import scala.util.Try
 import scala.util.matching.Regex
@@ -139,7 +140,7 @@ object GroupAggregation {
   }
 }
 
-abstract class GroupAggregation[R](name: String) extends Aggregation(name) {
+abstract class GroupAggregation[R: ClassTag](name: String) extends Aggregation(name) {
 
   def get(
       properties: List[PublicProperty[_, _]],
@@ -181,7 +182,7 @@ case class AggSum(fieldName: String) extends AggFunction[Number](s"sum_$fieldNam
   ): UntypedTraversal = {
     val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
 
-    property.asNumber.get.sum[Number]
+    property.sum
 //    property
 //      .cast(UniMapping.int)
 //      .map(_.sum[Number]())
@@ -194,16 +195,16 @@ case class AggSum(fieldName: String) extends AggFunction[Number](s"sum_$fieldNam
 
 }
 
-case class AggAvg(aggName: Option[String], fieldName: String) extends AggFunction[Double, JDouble, Double](aggName.getOrElse(s"avg_$fieldName")) {
+case class AggAvg(aggName: Option[String], fieldName: String) extends AggFunction[Number](aggName.getOrElse(s"avg_$fieldName")) {
   override def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      fromStep: Traversal[_, Vertex],
+      fromStep: UntypedTraversal,
       authContext: AuthContext
-  ): Traversal[Double, JDouble] = {
+  ): UntypedTraversal = {
     val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
 
-    property.asNumber.get.mean[Number]
+    property.mean
 //      .cast(UniMapping.int)
 //      .map(_.mean)
 //      .orElse(property.cast(UniMapping.long).map(_.mean))
@@ -212,19 +213,19 @@ case class AggAvg(aggName: Option[String], fieldName: String) extends AggFunctio
 //      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Avg aggregation is not applicable"))
   }
 
-  override def output(t: Double): Output[Double] = Output(t) // TODO add aggregation name
+  override def output(t: Any): Output[Number] = Output(t.asInstanceOf[Number]) // TODO add aggregation name
 }
 
-case class AggMin(aggName: Option[String], fieldName: String) extends AggFunction[Number, Number, Number](aggName.getOrElse(s"min_$fieldName")) {
+case class AggMin(aggName: Option[String], fieldName: String) extends AggFunction[Number](aggName.getOrElse(s"min_$fieldName")) {
   override def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      fromStep: Traversal[_, Vertex],
+      fromStep: UntypedTraversal,
       authContext: AuthContext
-  ): Traversal[Number, Number] = {
+  ): UntypedTraversal = {
     val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
 
-    property.asNumber.get.forceMin
+    property.min
 //      .cast(UniMapping.int)
 //      .flatMap(_.min[JInt]().cast(UniMapping.jint))
 //      .orElse(property.cast(UniMapping.long).flatMap(_.min[JLong]().cast(UniMapping.jlong)))
@@ -233,19 +234,19 @@ case class AggMin(aggName: Option[String], fieldName: String) extends AggFunctio
 //      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Min aggregation is not applicable"))
 //      .asInstanceOf[Traversal[Number, Number]]
   }
-  override def output(t: Number): Output[Number] = Output(t)(Writes(v => Json.obj(name -> v)))
+  override def output(t: Any): Output[Number] = Output(t.asInstanceOf[Number])(Writes(v => Json.obj(name -> v)))
 }
 
-case class AggMax(fieldName: String) extends AggFunction[Number, Number, Number](s"max_$fieldName") {
+case class AggMax(fieldName: String) extends AggFunction[Number](s"max_$fieldName") {
   override def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      fromStep: Traversal[_, Vertex],
+      fromStep: UntypedTraversal,
       authContext: AuthContext
-  ): Traversal[Number, Number] = {
+  ): UntypedTraversal = {
     val property = PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext)
 
-    property.asNumber.get.forceMax
+    property.max
 //      .cast(UniMapping.int)
 //      .flatMap(_.max[JInt]().cast(UniMapping.jint))
 //      .orElse(property.cast(UniMapping.long).flatMap(_.max[JLong]().cast(UniMapping.jlong)))
@@ -254,7 +255,7 @@ case class AggMax(fieldName: String) extends AggFunction[Number, Number, Number]
 //      .getOrElse(throw BadRequestError(s"Property $fieldName in $fromStep can't be cast to number. Max aggregation is not applicable"))
 //      .asInstanceOf[Traversal[Number, Number]]
   }
-  override def output(t: Any): Output[Number] = Output(t)(Writes(v => Json.obj(name -> v)))
+  override def output(t: Any): Output[Number] = Output(t.asInstanceOf[Number])(Writes(v => Json.obj(name -> v)))
 }
 
 case class AggCount(aggName: Option[String]) extends GroupAggregation[Long](aggName.getOrElse("count")) {
@@ -264,7 +265,7 @@ case class AggCount(aggName: Option[String]) extends GroupAggregation[Long](aggN
       fromStep: UntypedTraversal,
       authContext: AuthContext
   ): UntypedTraversal                       = fromStep.count
-  override def output(t: Any): Output[Long] = Output(t, Json.obj(name -> t))
+  override def output(t: Any): Output[Long] = Output(t.asInstanceOf[Long])(Writes(v => Json.obj(name -> v)))
 
 }
 //case class AggTop[T](fieldName: String) extends AggFunction[T](s"top_$fieldName")
@@ -275,16 +276,15 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, orders: 
   override def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      fromStep: Traversal[_, Vertex],
+      fromStep: UntypedTraversal,
       authContext: AuthContext
-  ): Traversal[Seq[Seq[Any]], JList[JCollection[Any]]] = {
-    val elementLabel = StepLabel[Vertex]()
-    val groupedVertices: Traversal[JMap.Entry[Any, JCollection[Any]], JMap.Entry[Any, JCollection[Any]]] = {
+  ): UntypedTraversal = {
+    val elementLabel = UUID.randomUUID().toString
+    val groupedVertices: UntypedTraversal =
       PublicProperty
         .getPropertyTraversal(publicProperties, stepType, fromStep.as(elementLabel), fieldName, authContext)
         .group(_.by, _.by(_.select(elementLabel).fold))
-        .unfold[JMap.Entry[Any, JCollection[Any]]](null) // Map.Entry[valueOf(fieldName), List[Vertex]]
-    }
+        .unfold // Map.Entry[valueOf(fieldName), List[Vertex]]
 
     val sortedAndGroupedVertex = orders
       .map {
@@ -302,39 +302,44 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, orders: 
 
     val sizedSortedAndGroupedVertex = size.fold(sortedAndGroupedVertex)(sortedAndGroupedVertex.limit)
     sizedSortedAndGroupedVertex
-      .genProject[Any](
-        _.by(_.selectKeys),
-        subAggs.map(agg =>
-          (gby: GenericBySelector[JMap.Entry[Any, JCollection[Any]], JMap.Entry[Any, JCollection[Any]]]) =>
-            gby.by(t => agg.apply(publicProperties, stepType, t.selectValues.unfold, authContext))
-        ): _*
+      .project(
+        ((_: UntypedBySelector).by(_.selectKeys)) +: subAggs
+          .map(agg => (_: UntypedBySelector).by(t => agg(publicProperties, stepType, t.selectValues.unfold, authContext))): _*
       )
+      //        subAggs.map(agg =>
+      //          (gby: GenericBySelector[JMap.Entry[Any, JCollection[Any]], JMap.Entry[Any, JCollection[Any]]]) =>
+      //            gby.by(t => agg.apply(publicProperties, stepType, t.selectValues.unfold, authContext))
+      //        ): _*
+      //      )
       .fold
   }
 
-  override def output(l: Seq[Seq[Any]]): Output[Map[Any, Map[String, Any]]] = {
-    val subMap: Map[Any, Output[Map[String, Any]]] = l.flatMap { e =>
-      val key = e.head
-      if (key != "") { // maybe should be compared with property.mapping.noValue but property is not accessible here
-        val values = subAggs
-          .asInstanceOf[Seq[Aggregation[Any, Any, Any]]]
-          .zip(e.tail)
-          .map { case (a, r) => a.name -> a.output(r).toValue }
-          .toMap
-        val jsValues =
-          subAggs
-            .asInstanceOf[Seq[Aggregation[Any, Any, Any]]]
+  override def output(l: Any): Output[Map[Any, Map[String, Any]]] = {
+    val subMap: Map[Any, Output[Map[String, Any]]] = l
+      .asInstanceOf[Seq[Seq[Any]]]
+      .flatMap { e =>
+        val key = e.head
+        if (key != "") { // maybe should be compared with property.mapping.noValue but property is not accessible here
+          val values = subAggs
+            .asInstanceOf[Seq[Aggregation[Any]]]
             .zip(e.tail)
-            .foldLeft(JsObject.empty) {
-              case (acc, (ar, r)) =>
-                ar.output(r).toJson match {
-                  case o: JsObject => acc ++ o
-                  case v           => acc + (ar.name -> v)
-                }
-            }
-        Some(key -> Output(values, jsValues))
-      } else None
-    }.toMap
+            .map { case (a, r) => a.name -> a.output(r).toValue }
+            .toMap
+          val jsValues =
+            subAggs
+              .asInstanceOf[Seq[Aggregation[Any]]]
+              .zip(e.tail)
+              .foldLeft(JsObject.empty) {
+                case (acc, (ar, r)) =>
+                  ar.output(r).toJson match {
+                    case o: JsObject => acc ++ o
+                    case v           => acc + (ar.name -> v)
+                  }
+              }
+          Some(key -> Output(values, jsValues))
+        } else None
+      }
+      .toMap
 
     val native: Map[Any, Map[String, Any]] = subMap.map { case (k, v) => k -> v.toValue }
     val json: JsObject                     = JsObject(subMap.map { case (k, v) => k.toString -> v.toJson })
@@ -344,8 +349,8 @@ case class FieldAggregation(aggName: Option[String], fieldName: String, orders: 
 }
 
 case class CategoryAggregation() // Map[String,
-case class TimeAggregation(aggName: Option[String], fieldName: String, interval: Long, unit: ChronoUnit, subAggs: Seq[Aggregation[_, _, _]])
-    extends GroupAggregation[JList[JCollection[Any]], JList[JCollection[Any]], Map[Any, Map[String, Any]]](aggName.getOrElse(s"time_$fieldName")) {
+case class TimeAggregation(aggName: Option[String], fieldName: String, interval: Long, unit: ChronoUnit, subAggs: Seq[Aggregation[_]])
+    extends GroupAggregation[Map[Any, Map[String, Any]]](aggName.getOrElse(s"time_$fieldName")) {
   val calendar: Calendar = Calendar.getInstance()
 
   def dateToKey(date: Date): Long =
@@ -376,29 +381,27 @@ case class TimeAggregation(aggName: Option[String], fieldName: String, interval:
   override def apply(
       publicProperties: List[PublicProperty[_, _]],
       stepType: ru.Type,
-      fromStep: Traversal[_, Vertex],
+      fromStep: UntypedTraversal,
       authContext: AuthContext
-  ): Traversal[Seq[Seq[Any]], JList[JCollection[Any]]] = {
-    val elementLabel = StepLabel[Vertex]()
+  ): UntypedTraversal = {
+    val elementLabel = UUID.randomUUID().toString
     val groupedVertices = PublicProperty
       .getPropertyTraversal(publicProperties, stepType, fromStep.as(elementLabel), fieldName, authContext)
-      .map(date => dateToKey(date.asInstanceOf[Date]))
+      .map[Date, Long](dateToKey)
       .group(_.by, _.by(_.select(elementLabel).fold))
-      .unfold[JMap.Entry[Long, JCollection[Any]]](null) // Map.Entry[K, List[V]]
+      .unfold // Map.Entry[K, List[V]]
 
     groupedVertices
-      .genProject[Any](
-        _.by,
-        subAggs.map(agg =>
-          (gby: GenericBySelector[JMap.Entry[Long, JCollection[Any]], JMap.Entry[Long, JCollection[Any]]]) =>
-            gby.by(t => agg.apply(publicProperties, stepType, t.selectValues.unfold, authContext))
-        ): _*
+      .project(
+        ((_: UntypedBySelector).by(_.selectKeys)) +: subAggs
+          .map(agg => (_: UntypedBySelector).by(t => agg(publicProperties, stepType, t.selectValues.unfold, authContext))): _*
       )
       .fold
   }
 
-  override def output(l: JList[JCollection[Any]]): Output[Map[Any, Map[String, Any]]] = {
+  override def output(l: Any): Output[Map[Any, Map[String, Any]]] = {
     val subMap: Map[Date, Output[Map[String, Any]]] = l
+      .asInstanceOf[JList[JCollection[Any]]]
       .asScala
       .map(_.asScala)
       .map { e =>
@@ -407,13 +410,13 @@ case class TimeAggregation(aggName: Option[String], fieldName: String, interval:
           case _       => new Date(0)
         }
         val values = subAggs
-          .asInstanceOf[Seq[Aggregation[Any, Any, Any]]]
+          .asInstanceOf[Seq[Aggregation[Any]]]
           .zip(e.tail)
           .map { case (a, r) => a.name -> a.output(r).toValue }
           .toMap
         val jsValues =
           subAggs
-            .asInstanceOf[Seq[Aggregation[Any, Any, Any]]]
+            .asInstanceOf[Seq[Aggregation[Any]]]
             .zip(e.tail)
             .foldLeft(JsObject.empty) {
               case (acc, (ar, r)) =>
