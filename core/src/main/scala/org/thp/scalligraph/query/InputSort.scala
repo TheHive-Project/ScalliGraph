@@ -9,7 +9,8 @@ import org.thp.scalligraph.InvalidFormatAttributeError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FSeq, FString, FieldsParser}
 import org.thp.scalligraph.models.{Database, MappingCardinality}
-import org.thp.scalligraph.steps.UntypedTraversal
+import org.thp.scalligraph.steps.{UntypedSortBySelector, UntypedTraversal}
+import org.thp.scalligraph.steps.StepsOps._
 
 import scala.reflect.runtime.{universe => ru}
 
@@ -29,21 +30,13 @@ case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
     val orderBys = fieldOrder.map {
       case (fieldName, order) =>
         val property = PublicProperty.getProperty(publicProperties, stepType, fieldName)
-        if (property.mapping.cardinality == MappingCardinality.single) {} else {}
-
-        val subField = FPath(fieldName.dropWhile(_ != '.').dropWhile(_ == '.'))
-        val orderDefs: GremlinScala[Vertex] => GremlinScala[property.Graph] =
-          (g: GremlinScala[Vertex]) => property.get(step.clone(), subField).raw.asInstanceOf[GremlinScala[property.Graph]]
         if (property.mapping.cardinality == MappingCardinality.single) {
-          orderby(orderDefs, order)
+          (_: UntypedSortBySelector).by(property.get(_, FPath(fieldName)).untyped, order)
         } else {
-          val noValue: GremlinScala[Vertex] => GremlinScala[property.Graph] =
-            (_: GremlinScala[Vertex]).constant(property.noValue().asInstanceOf[property.Graph])
-          orderby(_.coalesce(orderDefs, noValue), order)
+          (_: UntypedSortBySelector).by(_.coalesce(property.get(_, FPath(fieldName)).untyped, _.constant(property.noValue())), order)
         }
     }
-    step
-      .sort(orderBys: _*)
+    step.sort(orderBys: _*)
   }
 }
 

@@ -7,6 +7,7 @@ import gremlin.scala.{ColumnType, Key, P, StepLabel}
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, GraphTraversal}
 import org.apache.tinkerpop.gremlin.process.traversal.{Order, Scope, Traverser}
 import org.apache.tinkerpop.gremlin.structure.Column
+import org.thp.scalligraph.models.{Mapping, UniMapping}
 import play.api.Logger
 import shapeless.ops.tuple.{Prepend => TuplePrepend}
 import shapeless.syntax.std.tuple._
@@ -22,37 +23,50 @@ object StepsOps {
       def untyped: GraphTraversal[Any, Any] = graphTraversal.asInstanceOf[GraphTraversal[Any, Any]]
     }
 
-    def as[D, G: ClassTag]: Traversal[D, G] =
+    def typed[D, G: ClassTag]: Traversal[D, G] =
       new Traversal[D, G](new gremlin.scala.GremlinScala(untypedTraversal.traversal.asInstanceOf[GraphTraversal[_, G]]), _ => ???)
-    def min: UntypedTraversal                    = untypedTraversal.onGraphTraversal[Any, Any](_.min[Comparable[Any]])
-    def max: UntypedTraversal                    = untypedTraversal.onGraphTraversal[Any, Any](_.max[Comparable[Any]])
-    def sum: UntypedTraversal                    = untypedTraversal.onGraphTraversal[Any, Number](_.sum[Number])
-    def mean: UntypedTraversal                   = untypedTraversal.onGraphTraversal[Any, Number](_.mean[Number])
-    def count: UntypedTraversal                  = untypedTraversal.onGraphTraversal[Any, Any](_.count())
-    def localCount: UntypedTraversal             = untypedTraversal.onGraphTraversal[Any, Any](_.count(Scope.local))
-    def as(label: String): UntypedTraversal      = untypedTraversal.onGraphTraversal[Any, Any](_.as(label))
-    def select(label: String): UntypedTraversal  = untypedTraversal.onGraphTraversal[Any, Any](_.select(label))
-    def fold: UntypedTraversal                   = untypedTraversal.onGraphTraversal[Any, Any](_.fold)
-    def unfold: UntypedTraversal                 = untypedTraversal.onGraphTraversal[Any, Any](_.unfold[Any])
-    def selectKeys: UntypedTraversal             = untypedTraversal.onGraphTraversal[Any, Any](_.select(Column.keys))
-    def selectValues: UntypedTraversal           = untypedTraversal.onGraphTraversal[Any, Any](_.select(Column.values))
-    def limit(max: Long): UntypedTraversal       = untypedTraversal.onGraphTraversal[Any, Any](_.limit(max))
-    def map[F, T](f: F => T): UntypedTraversal   = untypedTraversal.onGraphTraversal[Any, F](_.map((t: Traverser[F]) => f(t.get)))
-    def getByIds(ids: String*): UntypedTraversal = untypedTraversal.onGraphTraversal(_.hasId(ids: _*))
+    def min: UntypedTraversal        = untypedTraversal.onGraphTraversal[Any, Any](_.min[Comparable[Any]], identity)
+    def max: UntypedTraversal        = untypedTraversal.onGraphTraversal[Any, Any](_.max[Comparable[Any]], identity)
+    def sum: UntypedTraversal        = untypedTraversal.onGraphTraversal[Any, Number](_.sum[Number], identity)
+    def mean: UntypedTraversal       = untypedTraversal.onGraphTraversal[Any, Number](_.mean[Number], identity)
+    def count: UntypedTraversal      = untypedTraversal.onGraphTraversal[Any, Any](_.count(), _ => GraphConverter.long)
+    def getCount: Long               = untypedTraversal.traversal.count().next()
+    def localCount: UntypedTraversal = untypedTraversal.onGraphTraversal[Any, Any](_.count(Scope.local), _ => GraphConverter.long)
+    def as(label: String, convMap: GraphConverter[_, _] => GraphConverter[_, _] = GraphConverter.identity): UntypedTraversal =
+      untypedTraversal.onGraphTraversal[Any, Any](_.as(label), convMap)
+    def select(label: String, convMap: GraphConverter[_, _] => GraphConverter[_, _] = GraphConverter.identity): UntypedTraversal =
+      untypedTraversal.onGraphTraversal[Any, Any](_.select(label), convMap)
+    def fold: UntypedTraversal                 = untypedTraversal.onGraphTraversal[Any, Any](_.fold, GraphConverter.list)
+    def unfold: UntypedTraversal               = untypedTraversal.onGraphTraversal[Any, Any](_.unfold[Any])
+    def selectKeys: UntypedTraversal           = untypedTraversal.onGraphTraversal[Any, Any](_.select(Column.keys))
+    def selectValues: UntypedTraversal         = untypedTraversal.onGraphTraversal[Any, Any](_.select(Column.values))
+    def limit(max: Long): UntypedTraversal     = untypedTraversal.onGraphTraversal[Any, Any](_.limit(max))
+    def map[F, T](f: F => T): UntypedTraversal = untypedTraversal.onGraphTraversal[Any, F](_.map((t: Traverser[F]) => f(t.get)))
+    def getByIds(ids: String*): UntypedTraversal =
+      untypedTraversal.onGraphTraversal[Any, Any](t => ids.headOption.fold(t.limit(0))(t.hasId(_, ids.tail: _*)))
+    def constant[A](cst: A): UntypedTraversal = untypedTraversal.onGraphTraversal[Any, Any](_.constant(cst))
     def group(k: UntypedBySelector => UntypedByResult, v: UntypedBySelector => UntypedByResult): UntypedTraversal =
       untypedTraversal.onGraphTraversal[Any, Any](t => v(bySelector)(k(bySelector)(t.group())))
     def sort(f: (UntypedSortBySelector => UntypedByResult)*): UntypedTraversal =
       untypedTraversal.onGraphTraversal[Any, Any](t => f.map(_(sortBySelector)).foldLeft(t.order)((acc, s) => s(acc).untyped))
     def project(f: (UntypedBySelector => UntypedByResult)*): UntypedTraversal =
       untypedTraversal.onGraphTraversal[Any, Any](t => f.map(_(bySelector)).foldLeft(t.group.untyped)((acc, p) => p(acc).untyped))
-    def filter(f: UntypedTraversal => UntypedTraversal): UntypedTraversal = untypedTraversal.onGraphTraversal(_.filter(__.start))
-    def is(predicate: P[_]): UntypedTraversal                             = untypedTraversal.onGraphTraversal(_.is(predicate))
+    def filter(f: UntypedTraversal => UntypedTraversal): UntypedTraversal = untypedTraversal.onGraphTraversal[Any, Any](_.filter(__.start))
+    def is(predicate: P[_]): UntypedTraversal                             = untypedTraversal.onGraphTraversal[Any, Any](_.is(predicate))
     def or(f: (UntypedTraversal => UntypedTraversal)*): UntypedTraversal =
-      untypedTraversal.onGraphTraversal(_.or(f.map(_(new UntypedTraversal(__.start())).traversal): _*))
+      untypedTraversal.onGraphTraversal[Any, Any](_.or(f.map(_(UntypedTraversal.start).traversal): _*))
     def and(f: (UntypedTraversal => UntypedTraversal)*): UntypedTraversal =
-      untypedTraversal.onGraphTraversal(_.and(f.map(_(new UntypedTraversal(__.start())).traversal): _*))
+      untypedTraversal.onGraphTraversal[Any, Any](_.and(f.map(_(UntypedTraversal.start).traversal): _*))
     def not(t: UntypedTraversal => UntypedTraversal): UntypedTraversal =
-      untypedTraversal.onGraphTraversal(_.not(t(new UntypedTraversal(__.start())).traversal))
+      untypedTraversal.onGraphTraversal[Any, Any](_.not(t(UntypedTraversal.start).traversal))
+    def coalesce(f: (UntypedTraversal => UntypedTraversal)*): UntypedTraversal =
+      untypedTraversal.onGraphTraversal[Any, Any](_.coalesce(f.map(_(UntypedTraversal.start).traversal): _*))
+    def property[DD, GG](name: String, mapping: Mapping[_, DD, GG]): UntypedTraversal =
+      untypedTraversal.onGraphTraversal(_.values(), mapping.toDomain(_))
+    def _createdBy: UntypedTraversal = property("_createdBy", UniMapping.string)
+    def _createdAt: UntypedTraversal = property("_createdAt", UniMapping.date)
+    def _updatedBy: UntypedTraversal = property("_updatedBy", UniMapping.string)
+    def _updatedAt: UntypedTraversal = property("_updatedAt", UniMapping.date)
 
     private def bySelector: UntypedBySelector         = new UntypedBySelector
     private def sortBySelector: UntypedSortBySelector = new UntypedSortBySelector
@@ -100,7 +114,7 @@ object StepsOps {
       traversal.onRawMap[N, N](_.sum[N]()(toNumber), identity)
 
     def min[C <: Comparable[_]: ClassTag]()(implicit toComparable: G => C): Traversal[C, C] =
-      traversal.onRawMap[C, C](_.min[C](), _ => identity)
+      traversal.onRawMap[C, C](_.min[C](), identity)
 
     def max[C <: Comparable[_]: ClassTag]()(implicit toComparable: G => C): Traversal[C, C] =
       new Traversal(raw.max[C]()(toComparable), _ => ???)

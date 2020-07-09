@@ -47,8 +47,7 @@ object PublicProperty {
     properties
       .iterator
       .collectFirst {
-        case p if p.stepType =:= stepType && path.startsWith(p.propertyPath).isDefined =>
-          p.get(step.as[Any, Vertex], path).untyped
+        case p if p.stepType =:= stepType && path.startsWith(p.propertyPath).isDefined => p.get(step, path).untyped
       }
       .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))
   }

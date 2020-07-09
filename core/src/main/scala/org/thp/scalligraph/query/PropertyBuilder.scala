@@ -5,13 +5,13 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FieldsParser}
 import org.thp.scalligraph.models.{Database, Mapping}
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
+import org.thp.scalligraph.steps.{Traversal}
 import play.api.libs.json.{JsObject, Json}
 
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Success, Try}
 
-class PropertyBuilder[S <: BaseVertexSteps, D, SD, G](stepType: ru.Type, propertyName: String, mapping: Mapping[D, SD, G], noValue: NoValue[G]) {
+class PropertyBuilder[D, SD, G](stepType: ru.Type, propertyName: String, mapping: Mapping[D, SD, G], noValue: NoValue[G]) {
 
   def field =
     new SimpleUpdatePropertyBuilder[D, SD, G](
@@ -20,7 +20,7 @@ class PropertyBuilder[S <: BaseVertexSteps, D, SD, G](stepType: ru.Type, propert
       propertyName,
       mapping,
       noValue,
-      Seq((_, s: BaseVertexSteps) => s.property(propertyName, mapping))
+      Seq((_, s: UntypedTraversalOps) => s.property(propertyName, mapping))
     )
 
   def rename(newName: String) =
