@@ -5,7 +5,7 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FieldsParser}
 import org.thp.scalligraph.models.{Database, Mapping}
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{Traversal}
+import org.thp.scalligraph.steps.{Traversal, UntypedTraversal}
 import play.api.libs.json.{JsObject, Json}
 
 import scala.reflect.runtime.{universe => ru}
@@ -20,7 +20,7 @@ class PropertyBuilder[D, SD, G](stepType: ru.Type, propertyName: String, mapping
       propertyName,
       mapping,
       noValue,
-      Seq((_, s: UntypedTraversalOps) => s.property(propertyName, mapping))
+      Seq((_, s: UntypedTraversal) => s.property(propertyName, mapping))
     )
 
   def rename(newName: String) =
@@ -30,25 +30,25 @@ class PropertyBuilder[D, SD, G](stepType: ru.Type, propertyName: String, mapping
       newName,
       mapping,
       noValue,
-      Seq((_, s: BaseVertexSteps) => s.property(newName, mapping))
+      Seq((_, s: UntypedTraversal) => s.property(newName, mapping))
     )
 
-  def select(definition: (S => Traversal[SD, G])*) =
+  def select(definition: (UntypedTraversal => Traversal[SD, G])*) =
     new UpdatePropertyBuilder[D, SD, G](
       stepType,
       propertyName,
       mapping,
       noValue,
-      definition.map(d => (_: FPath, s: BaseVertexSteps) => d(s.asInstanceOf[S]))
+      definition.map(d => (_: FPath, s: UntypedTraversal) => d(s))
     )
 
-  def subSelect(definition: ((FPath, S) => Traversal[SD, G])*) =
+  def subSelect(definition: ((FPath, UntypedTraversal) => Traversal[SD, G])*) =
     new UpdatePropertyBuilder[D, SD, G](
       stepType,
       propertyName,
       mapping,
       noValue,
-      definition.asInstanceOf[Seq[(FPath, BaseVertexSteps) => Traversal[SD, G]]]
+      definition.asInstanceOf[Seq[(FPath, UntypedTraversal) => Traversal[SD, G]]]
     )
 }
 
@@ -58,7 +58,7 @@ class SimpleUpdatePropertyBuilder[D, SD, G](
     fieldName: String,
     mapping: Mapping[D, SD, G],
     noValue: NoValue[G],
-    definition: Seq[(FPath, BaseVertexSteps) => Traversal[SD, G]]
+    definition: Seq[(FPath, UntypedTraversal) => Traversal[SD, G]]
 ) extends UpdatePropertyBuilder[D, SD, G](stepType, propertyName, mapping, noValue, definition) {
 
   def updatable(implicit fieldsParser: FieldsParser[SD], updateFieldsParser: FieldsParser[D]): PublicProperty[SD, G] =
@@ -81,7 +81,7 @@ class UpdatePropertyBuilder[D, SD, G](
     propertyName: String,
     mapping: Mapping[D, SD, G],
     noValue: NoValue[G],
-    definition: Seq[(FPath, BaseVertexSteps) => Traversal[SD, G]]
+    definition: Seq[(FPath, UntypedTraversal) => Traversal[SD, G]]
 ) {
 
   def readonly(implicit fieldsParser: FieldsParser[SD]): PublicProperty[SD, G] =
@@ -109,18 +109,18 @@ class UpdatePropertyBuilder[D, SD, G](
     )
 }
 
-class PublicPropertyListBuilder[S <: BaseVertexSteps: ru.TypeTag](properties: List[PublicProperty[_, _]]) {
+class PublicPropertyListBuilder[S <: UntypedTraversal: ru.TypeTag](properties: List[PublicProperty[_, _]]) {
   def build: List[PublicProperty[_, _]] = properties
 
   def property[D, SD, G](
       name: String,
       mapping: Mapping[D, SD, G]
-  )(prop: PropertyBuilder[S, D, SD, G] => PublicProperty[SD, G])(implicit noValue: NoValue[G]): PublicPropertyListBuilder[S] =
+  )(prop: PropertyBuilder[D, SD, G] => PublicProperty[SD, G])(implicit noValue: NoValue[G]): PublicPropertyListBuilder[S] =
     new PublicPropertyListBuilder(
       prop(new PropertyBuilder(ru.typeOf[S], name, mapping, noValue)) :: properties
     )
 }
 
 object PublicPropertyListBuilder {
-  def apply[S <: BaseVertexSteps: ru.TypeTag] = new PublicPropertyListBuilder[S](Nil)
+  def apply[S <: UntypedTraversal: ru.TypeTag] = new PublicPropertyListBuilder[S](Nil)
 }

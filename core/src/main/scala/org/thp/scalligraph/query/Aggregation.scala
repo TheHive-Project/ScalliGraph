@@ -145,7 +145,7 @@ abstract class GroupAggregation[R: ClassTag](name: String) extends Aggregation[R
       fromStep: UntypedTraversal,
       authContext: AuthContext
   ): Output[R] =
-    output(apply(properties, stepType, fromStep, authContext).as[R, R].head())
+    output(apply(properties, stepType, fromStep, authContext).typed[R, R].head())
 }
 
 abstract class Aggregation[R](val name: String) {

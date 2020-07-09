@@ -18,7 +18,7 @@ class PublicProperty[D, G](
     val propertyName: String,
     val mapping: Mapping[_, D, G],
     val noValue: NoValue[G],
-    definition: Seq[(FPath, Traversal[_, Vertex]) => Traversal[D, G]],
+    definition: Seq[(FPath, UntypedTraversal) => Traversal[D, G]],
     val fieldsParser: FieldsParser[D],
     val updateFieldsParser: Option[FieldsParser[PropertyUpdater]]
 ) {
@@ -29,9 +29,11 @@ class PublicProperty[D, G](
 
   def get(steps: UntypedTraversal, path: FPath): Traversal[D, G] =
     if (definition.lengthCompare(1) == 0)
-      definition.head.apply(path, steps.as[Any, Vertex])
+      definition.head.apply(path, steps)
     else
-      steps.as[Any, Vertex].coalesce(definition.map(d => d.apply(path, _)): _*)(mapping.toDomain)(ClassTag(mapping.graphTypeClass))
+      steps
+        .coalesce(definition.map(d => d.apply(path, _).untyped): _*)
+        .typed[D, G](ClassTag(mapping.graphTypeClass)) // (mapping.toDomain) FIXME add mapping
 }
 
 object PublicProperty {

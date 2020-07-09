@@ -1,7 +1,7 @@
 package org.thp.scalligraph.steps
 
 import java.lang.{Double => JDouble, Long => JLong}
-import java.util.{UUID, Collection => JCollection, List => JList, Map => JMap}
+import java.util.{Date, UUID, Collection => JCollection, List => JList, Map => JMap}
 
 import gremlin.scala.{ColumnType, Key, P, StepLabel}
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, GraphTraversal}
@@ -61,12 +61,12 @@ object StepsOps {
       untypedTraversal.onGraphTraversal[Any, Any](_.not(t(UntypedTraversal.start).traversal))
     def coalesce(f: (UntypedTraversal => UntypedTraversal)*): UntypedTraversal =
       untypedTraversal.onGraphTraversal[Any, Any](_.coalesce(f.map(_(UntypedTraversal.start).traversal): _*))
-    def property[DD, GG](name: String, mapping: Mapping[_, DD, GG]): UntypedTraversal =
+    def property[DD, GG](name: String, mapping: Mapping[_, DD, GG]): Traversal[DD, GG] =
       untypedTraversal.onGraphTraversal(_.values(), mapping.toDomain(_))
-    def _createdBy: UntypedTraversal = property("_createdBy", UniMapping.string)
-    def _createdAt: UntypedTraversal = property("_createdAt", UniMapping.date)
-    def _updatedBy: UntypedTraversal = property("_updatedBy", UniMapping.string)
-    def _updatedAt: UntypedTraversal = property("_updatedAt", UniMapping.date)
+    def _createdBy: Traversal[String, String] = property("_createdBy", UniMapping.string)
+    def _createdAt: Traversal[Date, Date]     = property("_createdAt", UniMapping.date)
+    def _updatedBy: Traversal[String, String] = property("_updatedBy", UniMapping.string)
+    def _updatedAt: Traversal[Date, Date]     = property("_updatedAt", UniMapping.date)
 
     private def bySelector: UntypedBySelector         = new UntypedBySelector
     private def sortBySelector: UntypedSortBySelector = new UntypedSortBySelector
