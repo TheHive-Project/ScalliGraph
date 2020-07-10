@@ -26,7 +26,7 @@ object StepsOps {
     def toIterator: Iterator[Any] = {
       val iterator = untypedTraversal.traversal.asScala
       if (untypedTraversal.converter.isIdentity) iterator
-      else iterator.map(untypedTraversal.converter.asInstanceOf[GraphTraversal[Any, Any]])
+      else iterator.map(untypedTraversal.converter.untypedApply)
     }
 
     def toSeq: Seq[Any] = toIterator.toSeq
@@ -40,37 +40,70 @@ object StepsOps {
     def count: UntypedTraversal      = untypedTraversal.onGraphTraversal[Any, Any](_.count(), _ => GraphConverter.long)
     def getCount: Long               = untypedTraversal.traversal.count().next()
     def localCount: UntypedTraversal = untypedTraversal.onGraphTraversal[Any, Any](_.count(Scope.local), _ => GraphConverter.long)
-    def as(label: String, convMap: GraphConverter[_, _] => GraphConverter[_, _] = GraphConverter.identity): UntypedTraversal =
+
+    def as(label: String)(implicit convMap: GraphConverterMapper[_, _] = GraphConverterMapper.toIdentity): UntypedTraversal =
       untypedTraversal.onGraphTraversal[Any, Any](_.as(label), convMap)
-    def select(label: String, convMap: GraphConverter[_, _] => GraphConverter[_, _] = GraphConverter.identity): UntypedTraversal =
+
+    def select(label: String)(implicit convMap: GraphConverterMapper[_, _] = GraphConverterMapper.toIdentity): UntypedTraversal =
       untypedTraversal.onGraphTraversal[Any, Any](_.select(label), convMap)
-    def fold: UntypedTraversal                 = untypedTraversal.onGraphTraversal[Any, Any](_.fold, GraphConverter.list)
-    def unfold: UntypedTraversal               = untypedTraversal.onGraphTraversal[Any, Any](_.unfold[Any])
-    def selectKeys: UntypedTraversal           = untypedTraversal.onGraphTraversal[Any, Any](_.select(Column.keys))
-    def selectValues: UntypedTraversal         = untypedTraversal.onGraphTraversal[Any, Any](_.select(Column.values))
-    def limit(max: Long): UntypedTraversal     = untypedTraversal.onGraphTraversal[Any, Any](_.limit(max))
-    def map[F, T](f: F => T): UntypedTraversal = untypedTraversal.onGraphTraversal[Any, F](_.map((t: Traverser[F]) => f(t.get)))
-    def getByIds(ids: String*): UntypedTraversal =
-      untypedTraversal.onGraphTraversal[Any, Any](t => ids.headOption.fold(t.limit(0))(t.hasId(_, ids.tail: _*)))
-    def constant[A](cst: A): UntypedTraversal = untypedTraversal.onGraphTraversal[Any, Any](_.constant(cst))
-    def group(k: UntypedBySelector => UntypedByResult, v: UntypedBySelector => UntypedByResult): UntypedTraversal =
-      untypedTraversal.onGraphTraversal[Any, Any](t => v(bySelector)(k(bySelector)(t.group())))
+
+    def fold: UntypedTraversal = untypedTraversal.onGraphTraversal[Any, Any](_.fold, GraphConverterMapper.toList)
+
+    def unfold(implicit convMap: GraphConverterMapper[_, _] = GraphConverterMapper.toIdentity): UntypedTraversal =
+      untypedTraversal.onGraphTraversal[Any, Any](_.unfold[Any], convMap)
+
+    def selectKeys(implicit convMap: GraphConverterMapper[_, _] = GraphConverterMapper.toIdentity): UntypedTraversal =
+      untypedTraversal.onGraphTraversal[Any, Any](_.select(Column.keys), convMap)
+
+    def selectValues(implicit convMap: GraphConverterMapper[_, _] = GraphConverterMapper.toIdentity): UntypedTraversal =
+      untypedTraversal.onGraphTraversal[Any, Any](_.select(Column.values), convMap)
+
+    def limit(max: Long): UntypedTraversal = untypedTraversal.onGraphTraversal[Any, Any](_.limit(max), GraphConverterMapper.identity)
+
+    def map[F, T](f: F => T)(implicit convMap: GraphConverterMapper[_, _] = GraphConverterMapper.toIdentity): UntypedTraversal =
+      untypedTraversal.onGraphTraversal[Any, F](_.map((t: Traverser[F]) => f(t.get)), convMap)
+
+    def getByIds(ids: String*)(implicit convMap: GraphConverterMapper[_, _] = GraphConverterMapper.toIdentity): UntypedTraversal =
+      untypedTraversal.onGraphTraversal[Any, Any](t => ids.headOption.fold(t.limit(0))(t.hasId(_, ids.tail: _*)), convMap)
+
+    def constant[A](cst: A)(implicit convMap: GraphConverterMapper[_, _] = GraphConverterMapper.toIdentity): UntypedTraversal =
+      untypedTraversal.onGraphTraversal[Any, Any](_.constant(cst), convMap)
+
+    def group(k: UntypedBySelector => UntypedByResult, v: UntypedBySelector => UntypedByResult)(
+        implicit convMap: GraphConverterMapper[_, _] = GraphConverterMapper.toIdentity
+    ): UntypedTraversal =
+      untypedTraversal.onGraphTraversal[Any, Any](t => v(bySelector)(k(bySelector)(t.group())), convMap)
+
     def sort(f: (UntypedSortBySelector => UntypedByResult)*): UntypedTraversal =
-      untypedTraversal.onGraphTraversal[Any, Any](t => f.map(_(sortBySelector)).foldLeft(t.order)((acc, s) => s(acc).untyped))
-    def project(f: (UntypedBySelector => UntypedByResult)*): UntypedTraversal =
-      untypedTraversal.onGraphTraversal[Any, Any](t => f.map(_(bySelector)).foldLeft(t.group.untyped)((acc, p) => p(acc).untyped))
-    def filter(f: UntypedTraversal => UntypedTraversal): UntypedTraversal = untypedTraversal.onGraphTraversal[Any, Any](_.filter(__.start))
-    def is(predicate: P[_]): UntypedTraversal                             = untypedTraversal.onGraphTraversal[Any, Any](_.is(predicate))
+      untypedTraversal
+        .onGraphTraversal[Any, Any](t => f.map(_(sortBySelector)).foldLeft(t.order)((acc, s) => s(acc).untyped), GraphConverterMapper.identity)
+
+    def project(
+        f: (UntypedBySelector => UntypedByResult)*
+    )(implicit convMap: GraphConverterMapper[_, _] = GraphConverterMapper.toIdentity): UntypedTraversal =
+      untypedTraversal.onGraphTraversal[Any, Any](t => f.map(_(bySelector)).foldLeft(t.group.untyped)((acc, p) => p(acc).untyped), convMap)
+
+    def filter(f: UntypedTraversal => UntypedTraversal): UntypedTraversal =
+      untypedTraversal.onGraphTraversal[Any, Any](_.filter(__.start), GraphConverterMapper.identity)
+
+    def is(predicate: P[_]): UntypedTraversal = untypedTraversal.onGraphTraversal[Any, Any](_.is(predicate), GraphConverterMapper.identity)
+
     def or(f: (UntypedTraversal => UntypedTraversal)*): UntypedTraversal =
-      untypedTraversal.onGraphTraversal[Any, Any](_.or(f.map(_(UntypedTraversal.start).traversal): _*))
+      untypedTraversal.onGraphTraversal[Any, Any](_.or(f.map(_(UntypedTraversal.start).traversal): _*), GraphConverterMapper.identity)
+
     def and(f: (UntypedTraversal => UntypedTraversal)*): UntypedTraversal =
-      untypedTraversal.onGraphTraversal[Any, Any](_.and(f.map(_(UntypedTraversal.start).traversal): _*))
+      untypedTraversal.onGraphTraversal[Any, Any](_.and(f.map(_(UntypedTraversal.start).traversal): _*), GraphConverterMapper.identity)
+
     def not(t: UntypedTraversal => UntypedTraversal): UntypedTraversal =
-      untypedTraversal.onGraphTraversal[Any, Any](_.not(t(UntypedTraversal.start).traversal))
-    def coalesce(f: (UntypedTraversal => UntypedTraversal)*): UntypedTraversal =
-      untypedTraversal.onGraphTraversal[Any, Any](_.coalesce(f.map(_(UntypedTraversal.start).traversal): _*))
+      untypedTraversal.onGraphTraversal[Any, Any](_.not(t(UntypedTraversal.start).traversal), GraphConverterMapper.identity)
+
+    def coalesce(
+        f: (UntypedTraversal => UntypedTraversal)*
+    )(implicit convMap: GraphConverterMapper[_, _] = GraphConverterMapper.toIdentity): UntypedTraversal =
+      untypedTraversal.onGraphTraversal[Any, Any](_.coalesce(f.map(_(UntypedTraversal.start).traversal): _*), convMap)
+
     def property[DD, GG](name: String, mapping: Mapping[_, DD, GG]): Traversal[DD, GG] =
-      untypedTraversal.onGraphTraversal(_.values(), mapping.toDomain(_))
+      untypedTraversal.onGraphTraversal[Any, Any](_.values(name), mapping.toDomain(_)).typed[DD, GG](ClassTag(mapping.graphTypeClass))
     def _createdBy: Traversal[String, String] = property("_createdBy", UniMapping.string)
     def _createdAt: Traversal[Date, Date]     = property("_createdAt", UniMapping.date)
     def _updatedBy: Traversal[String, String] = property("_updatedBy", UniMapping.string)
@@ -120,7 +153,8 @@ object StepsOps {
 
     def range(low: Long, high: Long): Traversal[D, G] = traversal.onRaw(_.range(low, high))
 
-    def map[A: ClassTag](f: D => A): Traversal[A, A] = traversal.onRawMap[A, A](_.map(x => f(toDomain(x))), identity)
+    def map[A: ClassTag](f: D => A): Traversal[A, G] =
+      new Traversal(raw, traversal.converter.andThen(f)(_))
 
     def count: Traversal[Long, JLong] = traversal.onRawMap[Long, JLong](_.count(), _.longValue)
 

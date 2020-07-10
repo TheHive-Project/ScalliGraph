@@ -51,7 +51,8 @@ import scala.util.Try
 //}
 
 abstract class GraphConverter[+D, -G] extends (G => D) {
-  val isIdentity: Boolean = false
+  val isIdentity: Boolean       = false
+  def untypedApply(g: Any): Any = apply(g.asInstanceOf[G])
 }
 object GraphConverter {
   type any = GraphConverter[Nothing, Any]
@@ -60,15 +61,30 @@ object GraphConverter {
     override val isIdentity: Boolean = true
   }
   def long: GraphConverter[Long, JLong] = _.toLong
-  def list: GraphConverter[_, _] => GraphConverter[_, _] =
-    conv =>
-      if (conv.isIdentity) (_: Any).asInstanceOf[JList[_]].asScala
-      else (_: Any).asInstanceOf[JList[Any]].asScala.map(conv.asInstanceOf[Any => Any])
 }
 
-abstract class GraphConverterMapper[-F <: GraphConverter[_, _], +T <: GraphConverter[_, _]] extends (F => T)
+//class IdentityGraphConverterMapper[-F <: GraphConverter[_, _], +T <: GraphConverter[_, _]] extends GraphConverterMapper[F, T] {
+//  override def apply(c: F): T = c.asInstanceOf[T]
+//}
+//
+//object IdentityGraphConverterMapper {
+//  implicit def default[A]: IdentityGraphConverterMapper[A, A] = new IdentityGraphConverterMapper[A, A]
+//}
+//
+//class ToIdentityGraphConverterMapper[-F <: GraphConverter[_, _], A, B] extends GraphConverterMapper[F, GraphConverter[A, B]] {
+//  override def apply(c: F): T = GraphConverter.identity[T]
+//}
+abstract class GraphConverterMapper[-F <: GraphConverter[_, _], +T <: GraphConverter[_, _]] extends (F => T) {
+  def untypedApply(from: Any): GraphConverter[_, _] = apply(from.asInstanceOf[F])
+}
 object GraphConverterMapper {
-  def identity[A <: GraphConverter[_, _]]: GraphConverterMapper[A, A] = Predef.identity(_)
+  def apply[D, G](f: G => D): GraphConverterMapper[_, GraphConverter[D, G]] = _ => f(_)
+  def identity[A <: GraphConverter[_, _]]: GraphConverterMapper[A, A]       = Predef.identity(_)
+  def toIdentity[A]: GraphConverterMapper[A, _]                             = _ => GraphConverter.identity
+  def toList: GraphConverterMapper[_, _] =
+    (conv: GraphConverter[_, _]) =>
+      if (conv.isIdentity) (_: Any).asInstanceOf[JList[_]].asScala
+      else (_: Any).asInstanceOf[JList[Any]].asScala.map(conv.asInstanceOf[Any => Any])
 }
 
 object Traversal {
@@ -77,7 +93,7 @@ object Traversal {
 
 class UntypedTraversal(val traversal: GraphTraversal[_, _], val converter: GraphConverter[_, _]) {
   def onGraphTraversal[A, B](f: GraphTraversal[A, B] => GraphTraversal[_, _], convMap: GraphConverterMapper[_, _]) =
-    new UntypedTraversal(f(traversal.asInstanceOf[GraphTraversal[A, B]]), convMap(converter))
+    new UntypedTraversal(f(traversal.asInstanceOf[GraphTraversal[A, B]]), convMap.untypedApply(converter))
   override def clone(): UntypedTraversal =
     traversal match {
       case dgt: DefaultGraphTraversal[_, _] => new UntypedTraversal(dgt.clone, converter)
@@ -102,7 +118,8 @@ class Traversal[+D, G: ClassTag](val raw: GremlinScala[G], val converter: GraphC
       convMap: GraphConverterMapper[GraphConverter[D, G], GraphConverter[D2, G2]]
   ): Traversal[D2, G2] =
     new Traversal(new GremlinScala[G2](f(raw.traversal)), convMap(converter))
-  def start = new Traversal[D, G](gremlin.scala.__[G], converter)
+  def map[DD](f: D => DD): Traversal[DD, G] = new Traversal(raw, g => converter.andThen(f).apply(g))
+  def start                                 = new Traversal[D, G](gremlin.scala.__[G], converter)
 
 //  def mapping: UniMapping[D]
 //  def converter: Converter.Aux[D, G] = mapping
@@ -112,7 +129,7 @@ class Traversal[+D, G: ClassTag](val raw: GremlinScala[G], val converter: GraphC
 //    if (m.isCompatibleWith(mapping)) Some(new Traversal(raw.asInstanceOf[GremlinScala[GG]], m))
 //    else None
 
-  def asNumber: Try[Traversal[Number, Number]]                  = ???
-  def changeMapping[DD](m: Mapping[_, DD, G]): Traversal[DD, G] = new Traversal(raw, m.toDomain)
-  override def clone(): Traversal[D, G]                         = new Traversal[D, G](raw.clone, conv)
+  def asNumber: Try[Traversal[Number, Number]] = ???
+//  def changeMapping[DD](m: Mapping[_, DD, G]): Traversal[DD, G] = new Traversal(raw, m.toDomain)
+  override def clone(): Traversal[D, G] = new Traversal[D, G](raw.clone, converter)
 }
