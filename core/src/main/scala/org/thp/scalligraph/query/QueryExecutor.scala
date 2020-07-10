@@ -7,7 +7,7 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{PagedResult, Traversal, TraversalLike}
+import org.thp.scalligraph.steps.{PagedResult, Traversal, UntypedTraversal}
 import org.thp.scalligraph.utils.RichType
 import play.api.Logger
 import play.api.libs.json.{JsArray, JsNull, JsNumber, JsString, JsValue}
@@ -93,10 +93,15 @@ abstract class QueryExecutor { executor =>
       allQueries
         .find(q => q.checkFrom(tpe) && SubType(q.toType(tpe), ru.typeOf[Output[_]]) && q.paramType == ru.typeOf[Unit])
         .fold[Try[Renderer[Any]]] {
-          if (SubType(tpe, ru.typeOf[TraversalLike[_, _]])) {
-            val subType = RichType.getTypeArgs(tpe, ru.typeOf[TraversalLike[_, _]]).head
+          if (SubType(tpe, ru.typeOf[Traversal[_, _]])) {
+            val subType = RichType.getTypeArgs(tpe, ru.typeOf[Traversal[_, _]]).head
             getRenderer(subType, authContext).map(subRenderer =>
-              Renderer.stream[Any](traversal => PagedResult(traversal.asInstanceOf[TraversalLike[Any, _]], None)(subRenderer))
+              Renderer.stream[Any](traversal => PagedResult(traversal.asInstanceOf[Traversal[Any, _]], None)(subRenderer))
+            )
+          } else if (SubType(tpe, ru.typeOf[UntypedTraversal])) {
+            val subType = RichType.getTypeArgs(tpe, ru.typeOf[UntypedTraversal]).head
+            getRenderer(subType, authContext).map(subRenderer =>
+              Renderer.stream[Any](traversal => PagedResult(traversal.asInstanceOf[UntypedTraversal], None, subRenderer))
             )
           } else if (SubType(tpe, ru.typeOf[GremlinScala[_]])) {
             val subType = RichType.getTypeArgs(tpe, ru.typeOf[GremlinScala[_]]).head

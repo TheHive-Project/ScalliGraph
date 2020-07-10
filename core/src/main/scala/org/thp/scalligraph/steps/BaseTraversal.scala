@@ -50,15 +50,19 @@ import scala.util.Try
 //  override val raw: GremlinScala[EndGraph]
 //}
 
-abstract class GraphConverter[+D, -G] extends (G => D)
+abstract class GraphConverter[+D, -G] extends (G => D) {
+  val isIdentity: Boolean = false
+}
 object GraphConverter {
   type any = GraphConverter[Nothing, Any]
-  val identityInstance: GraphConverter[Any, Any] = Predef.identity(_)
-  def identity[A]: GraphConverter[A, A]          = identityInstance.asInstanceOf[GraphConverter[A, A]]
-  def long: GraphConverter[Long, JLong]          = _.toLong
+  def identity[A]: GraphConverter[A, A] = new GraphConverter[A, A] {
+    override def apply(v: A): A      = v
+    override val isIdentity: Boolean = true
+  }
+  def long: GraphConverter[Long, JLong] = _.toLong
   def list: GraphConverter[_, _] => GraphConverter[_, _] =
     conv =>
-      if (conv == identityInstance) (_: Any).asInstanceOf[JList[_]].asScala
+      if (conv.isIdentity) (_: Any).asInstanceOf[JList[_]].asScala
       else (_: Any).asInstanceOf[JList[Any]].asScala.map(conv.asInstanceOf[Any => Any])
 }
 
@@ -84,20 +88,26 @@ object UntypedTraversal {
   def start: UntypedTraversal = new UntypedTraversal(__.start(), GraphConverter.identity)
 }
 
-class Traversal[+D, G: ClassTag](val raw: GremlinScala[G], conv: G => D) {
-  def typeName: String                                                                = classTag[G].runtimeClass.getSimpleName
-  def deepRaw: GraphTraversal[_, G]                                                   = raw.traversal
-  def onRaw(f: GremlinScala[G] => GremlinScala[G]): Traversal[D, G]                   = new Traversal[D, G](f(raw), conv)
-  def onRawMap[D2, G2: ClassTag](f: GremlinScala[G] => GremlinScala[G2], c: G2 => D2) = new Traversal[D2, G2](f(raw), c)
-  def onDeepRaw(f: GraphTraversal[_, G] => GraphTraversal[_, G])                      = new Traversal(new GremlinScala[G](f(raw.traversal)), conv)
-  def onDeepRawMap[D2, G2: ClassTag](f: GraphTraversal[_, G] => GraphTraversal[_, G2], c: (G => D) => (G2 => D2)): Traversal[D2, G2] =
-    new Traversal(new GremlinScala[G2](f(raw.traversal)), c(conv))
-  def start = new Traversal[D, G](gremlin.scala.__[G], conv)
+class Traversal[+D, G: ClassTag](val raw: GremlinScala[G], val converter: GraphConverter[D, G]) {
+  def typeName: String                                              = classTag[G].runtimeClass.getSimpleName
+  def deepRaw: GraphTraversal[_, G]                                 = raw.traversal
+  def onRaw(f: GremlinScala[G] => GremlinScala[G]): Traversal[D, G] = new Traversal[D, G](f(raw), converter)
+  def onRawMap[D2, G2: ClassTag](
+      f: GremlinScala[G] => GremlinScala[G2],
+      convMap: GraphConverterMapper[GraphConverter[D, G], GraphConverter[D2, G2]]
+  )                                                              = new Traversal[D2, G2](f(raw), convMap(converter))
+  def onDeepRaw(f: GraphTraversal[_, G] => GraphTraversal[_, G]) = new Traversal(new GremlinScala[G](f(raw.traversal)), converter)
+  def onDeepRawMap[D2, G2: ClassTag](
+      f: GraphTraversal[_, G] => GraphTraversal[_, G2],
+      convMap: GraphConverterMapper[GraphConverter[D, G], GraphConverter[D2, G2]]
+  ): Traversal[D2, G2] =
+    new Traversal(new GremlinScala[G2](f(raw.traversal)), convMap(converter))
+  def start = new Traversal[D, G](gremlin.scala.__[G], converter)
 
 //  def mapping: UniMapping[D]
 //  def converter: Converter.Aux[D, G] = mapping
 
-  def toDomain(g: G): D = conv(g)
+  def toDomain(g: G): D = converter(g)
 //  def cast[DD, GG](m: Mapping[_, DD, GG]): Option[Traversal[DD, GG]] =
 //    if (m.isCompatibleWith(mapping)) Some(new Traversal(raw.asInstanceOf[GremlinScala[GG]], m))
 //    else None

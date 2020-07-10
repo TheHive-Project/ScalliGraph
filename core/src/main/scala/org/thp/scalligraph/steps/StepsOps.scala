@@ -23,6 +23,14 @@ object StepsOps {
       def untyped: GraphTraversal[Any, Any] = graphTraversal.asInstanceOf[GraphTraversal[Any, Any]]
     }
 
+    def toIterator: Iterator[Any] = {
+      val iterator = untypedTraversal.traversal.asScala
+      if (untypedTraversal.converter.isIdentity) iterator
+      else iterator.map(untypedTraversal.converter.asInstanceOf[GraphTraversal[Any, Any]])
+    }
+
+    def toSeq: Seq[Any] = toIterator.toSeq
+
     def typed[D, G: ClassTag]: Traversal[D, G] =
       new Traversal[D, G](new gremlin.scala.GremlinScala(untypedTraversal.traversal.asInstanceOf[GraphTraversal[_, G]]), _ => ???)
     def min: UntypedTraversal        = untypedTraversal.onGraphTraversal[Any, Any](_.min[Comparable[Any]], identity)
@@ -78,7 +86,15 @@ object StepsOps {
     def raw: GremlinScala[G]          = traversal.raw
     def deepRaw: GraphTraversal[_, G] = traversal.raw.traversal
     def toDomain(g: G): D             = traversal.toDomain(g)
-    def untyped: UntypedTraversal     = new UntypedTraversal(deepRaw)
+    def untyped: UntypedTraversal     = new UntypedTraversal(deepRaw, traversal.converter)
+
+    def toIterator: Iterator[D] = {
+      val iterator = deepRaw.asScala
+      if (traversal.converter.isIdentity) iterator.asInstanceOf[Iterator[D]]
+      else iterator.map(traversal.converter)
+    }
+
+    def toSeq: Seq[Any] = toIterator.toSeq
 
     def getCount: Long = {
       logger.debug(s"Execution of $raw (count)")

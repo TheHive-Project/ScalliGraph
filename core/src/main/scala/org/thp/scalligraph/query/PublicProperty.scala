@@ -32,7 +32,7 @@ class PublicProperty[D, G](
       definition.head.apply(path, steps)
     else
       steps
-        .coalesce(definition.map(d => d.apply(path, _).untyped): _*)
+        .coalesce(t => definition.map(d => d.apply(path, t).untyped): _*)
         .typed[D, G](ClassTag(mapping.graphTypeClass)) // (mapping.toDomain) FIXME add mapping
 }
 

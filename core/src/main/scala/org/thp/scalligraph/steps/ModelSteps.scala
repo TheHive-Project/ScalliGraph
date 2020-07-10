@@ -19,6 +19,10 @@ case class PagedResult[R: Renderer](result: Traversal[R, _], totalSize: Option[T
   val subRenderer: Renderer[R]                              = implicitly[Renderer[R]]
   def map[T: Renderer: ClassTag](f: R => T): PagedResult[T] = PagedResult(result.map(f), totalSize)
 }
+object PagedResult {
+  def apply(result: UntypedTraversal, totalSize: Option[Traversal[Long, _]], renderer: Renderer[Any]) =
+    new PagedResult[Any](result.typed[Any, Any], totalSize)(renderer)
+}
 
 class ValueMap(m: Map[String, Seq[AnyRef]]) {
   def get[A](name: String): A = m(name).head.asInstanceOf[A]
