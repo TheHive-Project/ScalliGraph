@@ -89,6 +89,8 @@ abstract class QueryExecutor { executor =>
             .fold[Output[_]](Output(None, JsNull))(v => subRenderer.toOutput(v))
         }
       }
+    } else if (SubType(tpe, ru.typeOf[JsValue])) {
+      Success(Renderer[Any](value => Output(value.asInstanceOf[JsValue])))
     } else
       allQueries
         .find(q => q.checkFrom(tpe) && SubType(q.toType(tpe), ru.typeOf[Output[_]]) && q.paramType == ru.typeOf[Unit])

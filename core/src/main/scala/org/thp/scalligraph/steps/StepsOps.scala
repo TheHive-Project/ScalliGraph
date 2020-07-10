@@ -129,6 +129,11 @@ object StepsOps {
     def groupBy[K, V](k: By[K], v: By[V]): Traversal[JMap[K, JCollection[V]], JMap[K, JCollection[V]]] =
       new Traversal(raw.group(k, v), UniMapping.identity)
 
+    def selectKeys[K: ClassTag](implicit columnType: ColumnType.Aux[G, K, _]): Traversal[K, K] = new Traversal(raw.selectKeys, UniMapping.identity[K])
+
+    def selectValues[V: ClassTag](implicit columnType: ColumnType.Aux[G, _, V]): Traversal[V, V] =
+      new Traversal(raw.selectValues, UniMapping.identity[V])
+
     def fold: Traversal[JList[G], JList[G]] = new Traversal(raw.fold, UniMapping.identity)
 
     def outTo[E <: Product: ru.TypeTag](implicit ev: G <:< Vertex): Traversal[Vertex, Vertex] =
