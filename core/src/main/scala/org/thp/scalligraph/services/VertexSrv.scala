@@ -55,7 +55,7 @@ abstract class VertexSrv[V <: Product: ru.TypeTag](implicit db: Database) extend
   )(implicit graph: Graph, authContext: AuthContext): Try[(Traversal[V, Vertex], JsObject)] = {
     val myClone = steps.clone
     logger.debug(s"Execution of ${steps.raw} (update)")
-    steps.raw.headOption().fold[Try[(Traversal[V, Vertex], JsObject)]](Failure(NotFoundError(s"${steps.typeName} not found"))) { vertex =>
+    steps.raw.headOption().fold[Try[(Traversal[V, Vertex], JsObject)]](Failure(NotFoundError(s"${steps} not found"))) { vertex =>
       logger.trace(s"Update ${vertex.id()} by ${authContext.userId}")
       propertyUpdaters
         .toTry(u => u(vertex, db, graph, authContext))

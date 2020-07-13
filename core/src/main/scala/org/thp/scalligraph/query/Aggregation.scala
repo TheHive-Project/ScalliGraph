@@ -7,11 +7,11 @@ import java.util.{Calendar, Date, UUID, Collection => JCollection, List => JList
 import org.apache.tinkerpop.gremlin.process.traversal.Order
 import org.scalactic.Accumulation.withGood
 import org.scalactic.{Bad, Good, One, Or}
-import org.thp.scalligraph.InvalidFormatAttributeError
+import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{UntypedBySelector, UntypedTraversal}
+import org.thp.scalligraph.steps.{Converter, Traversal, UntypedTraversal}
 import play.api.Logger
 import play.api.libs.json.{JsNumber, JsObject, Json, Writes}
 
@@ -21,231 +21,248 @@ import scala.reflect.runtime.{universe => ru}
 import scala.util.Try
 import scala.util.matching.Regex
 
-object GroupAggregation {
+//object GroupAggregation {
+//
+//  object AggObj {
+//    def unapply(field: Field): Option[(String, FObject)] = field match {
+//      case f: FObject =>
+//        f.get("_agg") match {
+//          case FString(name) => Some(name -> (f - "_agg"))
+//          case _             => None
+//        }
+//      case _ => None
+//    }
+//  }
+//
+//  val intervalParser: FieldsParser[(Long, ChronoUnit)] = FieldsParser[(Long, ChronoUnit)]("interval") {
+//    case (_, f) =>
+//      withGood(
+//        FieldsParser.long.optional.on("_interval")(f),
+//        FieldsParser[ChronoUnit]("chronoUnit") {
+//          case (_, f @ FString(value)) =>
+//            Or.from(
+//              Try(ChronoUnit.valueOf(value)).toOption,
+//              One(InvalidFormatAttributeError("_unit", "chronoUnit", ChronoUnit.values.toSet.map((_: ChronoUnit).toString), f))
+//            )
+//        }.on("_unit")(f)
+//      )((i, u) => i.getOrElse(0L) -> u)
+//  }
+//
+//  val intervalRegex: Regex = "(\\d+)([smhdwMy])".r
+//
+//  val mergedIntervalParser: FieldsParser[(Long, ChronoUnit)] = FieldsParser[(Long, ChronoUnit)]("interval") {
+//    case (_, FString(intervalRegex(interval, unit))) =>
+//      Good(unit match {
+//        case "s" => interval.toLong -> ChronoUnit.SECONDS
+//        case "m" => interval.toLong -> ChronoUnit.MINUTES
+//        case "h" => interval.toLong -> ChronoUnit.HOURS
+//        case "d" => interval.toLong -> ChronoUnit.DAYS
+//        case "w" => interval.toLong -> ChronoUnit.WEEKS
+//        case "M" => interval.toLong -> ChronoUnit.MONTHS
+//        case "y" => interval.toLong -> ChronoUnit.YEARS
+//      })
+//  }
+//
+//  def groupAggregationParser: PartialFunction[String, FieldsParser[GroupAggregation[_]]] = {
+//    case "field" =>
+//      FieldsParser("FieldAggregation") {
+//        case (_, field) =>
+//          withGood(
+//            FieldsParser.string.optional.on("_name")(field),
+//            FieldsParser.string.on("_field")(field),
+//            FieldsParser.string.sequence.on("_order")(field).orElse(FieldsParser.string.on("_order").map("order")(Seq(_))(field)),
+//            FieldsParser.long.optional.on("_size")(field),
+//            aggregationFieldsParser.sequence.on("_select")(field)
+//          )((aggName, fieldName, order, size, subAgg) => FieldAggregation(aggName, fieldName, order, size, subAgg))
+//      }
+//    case "count" =>
+//      FieldsParser("CountAggregation") {
+//        case (_, field) => FieldsParser.string.optional.on("_name")(field).map(aggName => AggCount(aggName))
+//      }
+//    case "time" =>
+//      FieldsParser("TimeAggregation") {
+//        case (_, field) =>
+//          withGood(
+//            FieldsParser.string.optional.on("_name")(field),
+//            FieldsParser.string.sequence.on("_fields")(field),
+//            mergedIntervalParser.on("_interval").orElse(intervalParser)(field),
+//            aggregationFieldsParser.sequence.on("_select")(field)
+//          )((aggName, fieldNames, intervalUnit, subAgg) => TimeAggregation(aggName, fieldNames.head, intervalUnit._1, intervalUnit._2, subAgg))
+//      }
+//  }
+//
+//  def functionAggregationParser: PartialFunction[String, FieldsParser[Aggregation[_]]] = {
+//    case "avg" =>
+//      FieldsParser("AvgAggregation") {
+//        case (_, field) =>
+//          withGood(
+//            FieldsParser.string.optional.on("_name")(field),
+//            FieldsParser.string.on("_field")(field)
+//          )((aggName, fieldName) => AggAvg(aggName, fieldName))
+//      }
+//    case "min" =>
+//      FieldsParser("MinAggregation") {
+//        case (_, field) =>
+//          withGood(
+//            FieldsParser.string.optional.on("_name")(field),
+//            FieldsParser.string.on("_field")(field)
+//          )((aggName, fieldName) => AggMin(aggName, fieldName))
+//      }
+//    case "count" =>
+//      FieldsParser("CountAggregation") {
+//        case (_, field) => FieldsParser.string.optional.on("_name")(field).map(aggName => AggCount(aggName))
+//      }
+//  }
+//
+//  val aggregationFieldsParser: FieldsParser[Aggregation[_]] = {
+//    def fp(name: String) =
+//      functionAggregationParser
+//        .orElse(groupAggregationParser)
+//        .applyOrElse(
+//          name,
+//          (name: String) =>
+//            FieldsParser[Aggregation[_]]("aggregation") {
+//              case _ => Bad(One(InvalidFormatAttributeError("_agg", "aggregation name", Set("avg", "min", "max", "count", "top"), FString(name))))
+//            }
+//        )
+//    FieldsParser("aggregation") {
+//      case (_, AggObj(name, field)) => fp(name)(field)
+//      //    case other => Bad(InvalidFormatAttributeError()) // TODO
+//    }
+//  }
+//
+//  implicit val fieldsParser: FieldsParser[GroupAggregation[_]] = FieldsParser("aggregation") {
+//    case (_, AggObj(name, field)) => groupAggregationParser(name)(field)
+//    //    orElse Bad(InvalidFormatAttributeError()) // TODO
+//  }
+//}
 
-  object AggObj {
-    def unapply(field: Field): Option[(String, FObject)] = field match {
-      case f: FObject =>
-        f.get("_agg") match {
-          case FString(name) => Some(name -> (f - "_agg"))
-          case _             => None
-        }
-      case _ => None
-    }
-  }
+abstract class Aggregation[PD, PG, PC <: Converter[PD, PG], R](val name: String) {
 
-  val intervalParser: FieldsParser[(Long, ChronoUnit)] = FieldsParser[(Long, ChronoUnit)]("interval") {
-    case (_, f) =>
-      withGood(
-        FieldsParser.long.optional.on("_interval")(f),
-        FieldsParser[ChronoUnit]("chronoUnit") {
-          case (_, f @ FString(value)) =>
-            Or.from(
-              Try(ChronoUnit.valueOf(value)).toOption,
-              One(InvalidFormatAttributeError("_unit", "chronoUnit", ChronoUnit.values.toSet.map((_: ChronoUnit).toString), f))
-            )
-        }.on("_unit")(f)
-      )((i, u) => i.getOrElse(0L) -> u)
-  }
-
-  val intervalRegex: Regex = "(\\d+)([smhdwMy])".r
-
-  val mergedIntervalParser: FieldsParser[(Long, ChronoUnit)] = FieldsParser[(Long, ChronoUnit)]("interval") {
-    case (_, FString(intervalRegex(interval, unit))) =>
-      Good(unit match {
-        case "s" => interval.toLong -> ChronoUnit.SECONDS
-        case "m" => interval.toLong -> ChronoUnit.MINUTES
-        case "h" => interval.toLong -> ChronoUnit.HOURS
-        case "d" => interval.toLong -> ChronoUnit.DAYS
-        case "w" => interval.toLong -> ChronoUnit.WEEKS
-        case "M" => interval.toLong -> ChronoUnit.MONTHS
-        case "y" => interval.toLong -> ChronoUnit.YEARS
-      })
-  }
-
-  def groupAggregationParser: PartialFunction[String, FieldsParser[GroupAggregation[_]]] = {
-    case "field" =>
-      FieldsParser("FieldAggregation") {
-        case (_, field) =>
-          withGood(
-            FieldsParser.string.optional.on("_name")(field),
-            FieldsParser.string.on("_field")(field),
-            FieldsParser.string.sequence.on("_order")(field).orElse(FieldsParser.string.on("_order").map("order")(Seq(_))(field)),
-            FieldsParser.long.optional.on("_size")(field),
-            aggregationFieldsParser.sequence.on("_select")(field)
-          )((aggName, fieldName, order, size, subAgg) => FieldAggregation(aggName, fieldName, order, size, subAgg))
-      }
-    case "count" =>
-      FieldsParser("CountAggregation") {
-        case (_, field) => FieldsParser.string.optional.on("_name")(field).map(aggName => AggCount(aggName))
-      }
-    case "time" =>
-      FieldsParser("TimeAggregation") {
-        case (_, field) =>
-          withGood(
-            FieldsParser.string.optional.on("_name")(field),
-            FieldsParser.string.sequence.on("_fields")(field),
-            mergedIntervalParser.on("_interval").orElse(intervalParser)(field),
-            aggregationFieldsParser.sequence.on("_select")(field)
-          )((aggName, fieldNames, intervalUnit, subAgg) => TimeAggregation(aggName, fieldNames.head, intervalUnit._1, intervalUnit._2, subAgg))
-      }
-  }
-
-  def functionAggregationParser: PartialFunction[String, FieldsParser[Aggregation[_]]] = {
-    case "avg" =>
-      FieldsParser("AvgAggregation") {
-        case (_, field) =>
-          withGood(
-            FieldsParser.string.optional.on("_name")(field),
-            FieldsParser.string.on("_field")(field)
-          )((aggName, fieldName) => AggAvg(aggName, fieldName))
-      }
-    case "min" =>
-      FieldsParser("MinAggregation") {
-        case (_, field) =>
-          withGood(
-            FieldsParser.string.optional.on("_name")(field),
-            FieldsParser.string.on("_field")(field)
-          )((aggName, fieldName) => AggMin(aggName, fieldName))
-      }
-    case "count" =>
-      FieldsParser("CountAggregation") {
-        case (_, field) => FieldsParser.string.optional.on("_name")(field).map(aggName => AggCount(aggName))
-      }
-  }
-
-  val aggregationFieldsParser: FieldsParser[Aggregation[_]] = {
-    def fp(name: String) =
-      functionAggregationParser
-        .orElse(groupAggregationParser)
-        .applyOrElse(
-          name,
-          (name: String) =>
-            FieldsParser[Aggregation[_]]("aggregation") {
-              case _ => Bad(One(InvalidFormatAttributeError("_agg", "aggregation name", Set("avg", "min", "max", "count", "top"), FString(name))))
-            }
-        )
-    FieldsParser("aggregation") {
-      case (_, AggObj(name, field)) => fp(name)(field)
-      //    case other => Bad(InvalidFormatAttributeError()) // TODO
-    }
-  }
-
-  implicit val fieldsParser: FieldsParser[GroupAggregation[_]] = FieldsParser("aggregation") {
-    case (_, AggObj(name, field)) => groupAggregationParser(name)(field)
-    //    orElse Bad(InvalidFormatAttributeError()) // TODO
-  }
-}
-
-abstract class GroupAggregation[R: ClassTag](name: String) extends Aggregation[R](name) {
-
-  def get(
-      properties: List[PublicProperty[_, _]],
+  def getProperty(
+      properties: Seq[PublicProperty[_, _, _]],
       stepType: ru.Type,
-      fromStep: UntypedTraversal,
+      fieldName: String,
       authContext: AuthContext
-  ): Output[R] =
-    output(apply(properties, stepType, fromStep, authContext).typed[R, R].head())
-}
-
-abstract class Aggregation[R](val name: String) {
+  ): PublicProperty[PD, PG, PC] = {
+    val path = FPath(fieldName)
+    properties
+      .iterator
+      .collectFirst {
+        case p if p.stepType =:= stepType && path.startsWith(p.propertyPath).isDefined => p.asInstanceOf[PublicProperty[PD, PG, PC]]
+      }
+      .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))
+  }
 
   def apply(
-      publicProperties: List[PublicProperty[_, _]],
+      publicProperties: List[PublicProperty[_, _, _]],
       stepType: ru.Type,
-      fromStep: UntypedTraversal,
+      fromStep: Traversal[_, _, _],
       authContext: AuthContext
-  ): UntypedTraversal
+  ): Output[R] = toOutput(publicProperties, stepType, fromStep, authContext)
 
-  def output(t: Any): Output[R]
+  def toOutput[D, G, C](
+      publicProperties: List[PublicProperty[_, _, _]],
+      stepType: ru.Type,
+      fromStep: Traversal[D, G, C],
+      authContext: AuthContext
+  ): Output[R]
 }
 
-abstract class AggFunction[R](name: String) extends Aggregation[R](name) {
-  implicit val numberWrites: Writes[Number] = Writes[Number] {
-    case i: JInt    => JsNumber(i.toInt)
-    case l: JLong   => JsNumber(l.toLong)
-    case f: JFloat  => JsNumber(f.toDouble)
-    case d: JDouble => JsNumber(d.doubleValue())
-    case o: Number  => JsNumber(o.doubleValue())
+abstract class GroupAggregation[D, G, C <: Converter[D, G], R](name: String) extends Aggregation[D, G, C, R](name) {}
+
+abstract class AggFunction[D, G, C <: Converter[D, G], R](name: String) extends Aggregation[D, G, C, R](name) {
+//  implicit val numberWrites: Writes[Number] = Writes[Number] {
+//    case i: JInt    => JsNumber(i.toInt)
+//    case l: JLong   => JsNumber(l.toLong)
+//    case f: JFloat  => JsNumber(f.toDouble)
+//    case d: JDouble => JsNumber(d.doubleValue())
+//    case o: Number  => JsNumber(o.doubleValue())
+//  }
+}
+
+case class AggSum[PD, PG, PC <: Converter[PD, PG]](aggName: Option[String], fieldName: String)
+    extends AggFunction[PD, PG, PC, PD](s"sum_$fieldName") {
+  override def toOutput[D, G, C <: Converter[D, G]](
+      publicProperties: List[PublicProperty[_, _, _]],
+      stepType: ru.Type,
+      fromStep: Traversal[D, G, C],
+      authContext: AuthContext
+  ): Output[PD] = {
+    val property = getProperty(publicProperties, stepType, fieldName, authContext)
+    val value    = property.get(fromStep, FPath(fieldName)).mapAsNumber(_.sum).head()
+    property.mapping.toOutput(value)
+//    Output(value)(property.)
   }
 }
-
-case class AggSum(fieldName: String) extends AggFunction[Number](s"sum_$fieldName") {
-  override def apply(
-      publicProperties: List[PublicProperty[_, _]],
+//
+//case class AggAvg[D](aggName: Option[String], fieldName: String) extends AggFunction[D, Number, Number](s"avg_$fieldName") {
+//  override def apply(
+//      publicProperties: List[PublicProperty[_, _]],
+//      stepType: ru.Type,
+//      fromStep: UntypedTraversal,
+//      authContext: AuthContext
+//  ): Traversal[Number, Number] =
+//    getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext).asNumber.get.mean
+//
+//  override def output(avg: Number): Output[Number] = Output(avg) // TODO add aggregation name
+//}
+//
+case class AggMin[PD, PG, PC <: Converter[PD, PG]](aggName: Option[String], fieldName: String)
+    extends AggFunction[PD, PG, PC, PD](s"min_$fieldName") {
+  override def toOutput[D, G, C <: Converter[D, G]](
+      publicProperties: List[PublicProperty[_, _, _]],
       stepType: ru.Type,
-      fromStep: UntypedTraversal,
+      fromStep: Traversal[D, G, C],
       authContext: AuthContext
-  ): UntypedTraversal =
-    PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext).sum
-
-  override def output(t: Any): Output[Number] = Output(t.asInstanceOf[Number]) // TODO add aggregation name
+  ): Output[PD] = {
+    val property = getProperty(publicProperties, stepType, fieldName, authContext)
+    val value    = property.get(fromStep, FPath(fieldName)).min.head()
+    property.mapping.toOutput(value)
+  }
 }
-
-case class AggAvg(aggName: Option[String], fieldName: String) extends AggFunction[Number](aggName.getOrElse(s"avg_$fieldName")) {
-  override def apply(
-      publicProperties: List[PublicProperty[_, _]],
-      stepType: ru.Type,
-      fromStep: UntypedTraversal,
-      authContext: AuthContext
-  ): UntypedTraversal =
-    PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext).mean
-
-  override def output(t: Any): Output[Number] = Output(t.asInstanceOf[Number]) // TODO add aggregation name
-}
-
-case class AggMin(aggName: Option[String], fieldName: String) extends AggFunction[Number](aggName.getOrElse(s"min_$fieldName")) {
-  override def apply(
-      publicProperties: List[PublicProperty[_, _]],
-      stepType: ru.Type,
-      fromStep: UntypedTraversal,
-      authContext: AuthContext
-  ): UntypedTraversal =
-    PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext).min
-
-  override def output(t: Any): Output[Number] = Output(t.asInstanceOf[Number])(Writes(v => Json.obj(name -> v)))
-}
-
-case class AggMax(fieldName: String) extends AggFunction[Number](s"max_$fieldName") {
-  override def apply(
-      publicProperties: List[PublicProperty[_, _]],
-      stepType: ru.Type,
-      fromStep: UntypedTraversal,
-      authContext: AuthContext
-  ): UntypedTraversal =
-    PublicProperty.getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext).max
-
-  override def output(t: Any): Output[Number] = Output(t.asInstanceOf[Number])(Writes(v => Json.obj(name -> v)))
-}
-
-case class AggCount(aggName: Option[String]) extends GroupAggregation[Long](aggName.getOrElse("count")) {
-  override def apply(
-      publicProperties: List[PublicProperty[_, _]],
-      stepType: ru.Type,
-      fromStep: UntypedTraversal,
-      authContext: AuthContext
-  ): UntypedTraversal = fromStep.count
-
-  override def output(t: Any): Output[Long] = Output(t.asInstanceOf[Long])(Writes(v => Json.obj(name -> v)))
-
-}
+//
+//case class AggMax[D](aggName: Option[String], fieldName: String) extends AggFunction[D, Number, Number](s"avg_$fieldName") {
+//  override def apply(
+//      publicProperties: List[PublicProperty[_, _]],
+//      stepType: ru.Type,
+//      fromStep: UntypedTraversal,
+//      authContext: AuthContext
+//  ): Traversal[Number, _] =
+//    getPropertyTraversal(publicProperties, stepType, fromStep, fieldName, authContext).asNumber.get.mean
+//
+//  override def output(number: Number): Output[Number] = Output(number) // TODO add aggregation name
+//}
+//
+//case class AggCount(aggName: Option[String]) extends GroupAggregation[Long](aggName.getOrElse("count")) {
+//  override def apply(
+//      publicProperties: List[PublicProperty[_, _]],
+//      stepType: ru.Type,
+//      fromStep: UntypedTraversal,
+//      authContext: AuthContext
+//  ): UntypedTraversal = fromStep.count
+//
+//  override def output(t: Any): Output[Long] = Output(t.asInstanceOf[Long])(Writes(v => Json.obj(name -> v)))
+//
+//}
 //case class AggTop[T](fieldName: String) extends AggFunction[T](s"top_$fieldName")
 
-case class FieldAggregation(aggName: Option[String], fieldName: String, orders: Seq[String], size: Option[Long], subAggs: Seq[Aggregation[_]])
-    extends GroupAggregation[Map[Any, Map[String, Any]]](aggName.getOrElse(s"field_$fieldName")) {
+case class FieldAggregation[PD, PG, PC <: Converter[PD, PG]](
+    aggName: Option[String],
+    fieldName: String,
+    orders: Seq[String],
+    size: Option[Long],
+    subAggs: Seq[Aggregation[_, _, _, _]]
+) extends GroupAggregation[PD, PG, PC, Map[PD, Map[String, Any]]](aggName.getOrElse(s"field_$fieldName")) {
   lazy val logger: Logger = Logger(getClass)
-  override def apply(
-      publicProperties: List[PublicProperty[_, _]],
+  override def toOutput[D, G, C <: Converter[D, G]](
+      publicProperties: List[PublicProperty[_, _, _]],
       stepType: ru.Type,
-      fromStep: UntypedTraversal,
+      fromStep: Traversal[D, G, C],
       authContext: AuthContext
   ): UntypedTraversal = {
-    val elementLabel = UUID.randomUUID().toString
-    val groupedVertices: UntypedTraversal =
-      PublicProperty
-        .getPropertyTraversal(publicProperties, stepType, fromStep.as(elementLabel), fieldName, authContext)
-        .group(_.by, _.by(_.select(elementLabel).fold))
-        .unfold // Map.Entry[valueOf(fieldName), List[Vertex]]
+    val property        = getProperty(publicProperties, stepType, fieldName, authContext)
+    val groupedVertices = fromStep.group(_.by(property.get(_, FPath(fieldName)))).unfold
 
     val sortedAndGroupedVertex = orders
       .map {

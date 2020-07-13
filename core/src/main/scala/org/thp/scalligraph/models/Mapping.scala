@@ -4,10 +4,11 @@ import java.lang.{Boolean => JBoolean, Byte => JByte, Double => JDouble, Float =
 import java.util.{Base64, Date, List => JList}
 
 import scala.collection.JavaConverters._
-import gremlin.scala.dsl.Converter
 import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.auth.Permission
+import org.thp.scalligraph.controllers.{Output, Renderer}
 import org.thp.scalligraph.macros.MappingMacro
+import org.thp.scalligraph.steps.{BiConverter, Converter}
 import org.thp.scalligraph.utils.Hash
 import play.api.libs.json._
 
@@ -39,6 +40,7 @@ trait MappingLowerPrio extends MappingLowestPrio {
 }
 
 object UniMapping extends MappingLowerPrio {
+  implicit def fakeRenderer[F]: Renderer[F] = ???
   implicit val jsObject: SingleMapping[JsObject, String] =
     SingleMapping[JsObject, String](toGraphOptFn = j => Some(j.toString), toDomainFn = s => Json.parse(s).as[JsObject])
   val id: SingleMapping[String, AnyRef]                      = SingleMapping[String, AnyRef](toGraphOptFn = i => Some(i), toDomainFn = _.toString)
@@ -88,21 +90,20 @@ object UniMapping extends MappingLowerPrio {
 }
 
 /*sealed*/
-abstract class Mapping[D, SD: ClassTag, G: ClassTag] extends UniMapping[D] with Converter[SD] {
+abstract class Mapping[D, SD: ClassTag: Renderer, G: ClassTag] extends UniMapping[D] with BiConverter[SD, G] {
   override type GraphType = G
   val graphTypeClass: Class[_]  = Option(classTag[G]).fold[Class[_]](classOf[Any])(c => convertToJava(c.runtimeClass))
   val domainTypeClass: Class[_] = Option(classTag[SD]).fold[Class[_]](classOf[Any])(c => convertToJava(c.runtimeClass))
   val cardinality: MappingCardinality.Value
 //  val noValue: G
   val isReadonly: Boolean
-  override def toGraph(d: SD): G = toGraphOpt(d).get
   def toGraphOpt(d: SD): Option[G]
-  override def toDomain(g: G): SD
   def sequence: Mapping[Seq[D], D, G]    = throw InternalError(s"Sequence of $this is not supported")
   def set: Mapping[Set[D], D, G]         = throw InternalError(s"Set of $this is not supported")
   def optional: Mapping[Option[D], D, G] = throw InternalError(s"Option of $this is not supported")
   def readonly: Mapping[D, SD, G]
-  def fold: SingleMapping[Seq[SD], JList[G]] = SingleMapping(d => Some(d.flatMap(toGraphOpt).asJava), _.asScala.map(toDomain))
+  def fold: SingleMapping[Seq[SD], JList[G]] = SingleMapping(d => Some(d.flatMap(toGraphOpt).asJava), _.asScala.map(this))
+  def toOutput(d: D): Output[D]              = ???
 
   def isCompatibleWith(m: Mapping[_, _, _]): Boolean =
     graphTypeClass.equals(m.graphTypeClass) && MappingCardinality.isCompatible(cardinality, m.cardinality)
@@ -120,7 +121,7 @@ abstract class Mapping[D, SD: ClassTag, G: ClassTag] extends UniMapping[D] with 
   }
 }
 
-case class OptionMapping[D: ClassTag, G: ClassTag](
+case class OptionMapping[D: ClassTag: Renderer, G: ClassTag](
     toGraphOptFn: D => Option[G] = (d: D) => Some(d.asInstanceOf[G]),
     toDomainFn: G => D = (g: G) => g.asInstanceOf[D],
     isReadonly: Boolean = false
@@ -131,7 +132,7 @@ case class OptionMapping[D: ClassTag, G: ClassTag](
   override def readonly: OptionMapping[D, G]         = copy(isReadonly = true)
 }
 
-case class SingleMapping[D: ClassTag, G: ClassTag](
+case class SingleMapping[D: ClassTag: Renderer, G: ClassTag](
     toGraphOptFn: D => Option[G] = (d: D) => Some(d.asInstanceOf[G]),
     toDomainFn: G => D = (g: G) => g.asInstanceOf[D],
     isReadonly: Boolean = false
@@ -145,7 +146,7 @@ case class SingleMapping[D: ClassTag, G: ClassTag](
   override def set: SetMapping[D, G]                 = SetMapping[D, G](toGraphOptFn, toDomainFn, isReadonly)
 }
 
-case class ListMapping[D: ClassTag, G: ClassTag](
+case class ListMapping[D: ClassTag: Renderer, G: ClassTag](
     toGraphOptFn: D => Option[G] = (d: D) => Some(d.asInstanceOf[G]),
     toDomainFn: G => D = (g: G) => g.asInstanceOf[D],
     isReadonly: Boolean = false
@@ -156,7 +157,7 @@ case class ListMapping[D: ClassTag, G: ClassTag](
   override def readonly: ListMapping[D, G]           = copy(isReadonly = true)
 }
 
-case class SetMapping[D: ClassTag, G: ClassTag](
+case class SetMapping[D: ClassTag: Renderer, G: ClassTag](
     toGraphOptFn: D => Option[G] = (d: D) => Some(d.asInstanceOf[G]),
     toDomainFn: G => D = (g: G) => g.asInstanceOf[D],
     isReadonly: Boolean = false

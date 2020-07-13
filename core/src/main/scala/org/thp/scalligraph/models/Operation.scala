@@ -11,11 +11,11 @@ import scala.util.{Failure, Success, Try}
 
 sealed trait Operation
 
-case class AddProperty(model: String, propertyName: String, mapping: Mapping[_, _, _])                 extends Operation
-case class RemoveProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean)           extends Operation
-case class UpdateGraph(model: String, update: Traversal[Vertex, Vertex] => Try[Unit], comment: String) extends Operation
-case class AddIndex(model: String, indexType: IndexType.Value, properties: Seq[String])                extends Operation
-object RebuildIndexes                                                                                  extends Operation
+case class AddProperty(model: String, propertyName: String, mapping: Mapping[_, _, _])                    extends Operation
+case class RemoveProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean)              extends Operation
+case class UpdateGraph(model: String, update: Traversal[Vertex, Vertex, _] => Try[Unit], comment: String) extends Operation
+case class AddIndex(model: String, indexType: IndexType.Value, properties: Seq[String])                   extends Operation
+object RebuildIndexes                                                                                     extends Operation
 case class DBOperation[DB <: Database: ClassTag](comment: String, op: DB => Try[Unit]) extends Operation {
   def apply(db: Database): Try[Unit] =
     if (classTag[DB].runtimeClass.isAssignableFrom(db.getClass))
@@ -37,7 +37,7 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
     addOperations(AddProperty(model, propertyName, mapping.toMapping))
   def removeProperty[T](model: String, propertyName: String, usedOnlyByThisModel: Boolean): Operations =
     addOperations(RemoveProperty(model, propertyName, usedOnlyByThisModel))
-  def updateGraph(comment: String, model: String)(update: Traversal[Vertex, Vertex] => Try[Unit]): Operations =
+  def updateGraph(comment: String, model: String)(update: Traversal[Vertex, Vertex, _] => Try[Unit]): Operations =
     addOperations(UpdateGraph(model, update, comment))
   def addIndex(model: String, indexType: IndexType.Value, properties: String*): Operations =
     addOperations(AddIndex(model, indexType, properties))

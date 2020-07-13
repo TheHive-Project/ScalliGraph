@@ -14,6 +14,12 @@ trait Renderer[M] {
 object Renderer {
   type Aux[M, DD] = Renderer[M] { type D = DD }
 
+  implicit def jsValue[J <: JsValue]: Renderer[J] = new Renderer[J] {
+    override type D = J
+    override def toOutput(m: J): Output[J] = Output(m)
+    override val isStreamable: Boolean     = false
+  }
+
   def json[M, DD: Writes](f: M => DD): Renderer.Aux[M, DD] = new Renderer[M] {
     override type D = DD
     override def toOutput(m: M): Output[D] = Output(f(m))

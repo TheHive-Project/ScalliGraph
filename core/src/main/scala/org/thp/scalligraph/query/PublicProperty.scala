@@ -6,19 +6,19 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FieldsParser}
 import org.thp.scalligraph.models.{Database, Mapping}
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{Traversal, UntypedTraversal}
+import org.thp.scalligraph.steps.{Converter, Traversal, UntypedTraversal}
 import play.api.libs.json.JsObject
 
 import scala.reflect.ClassTag
 import scala.reflect.runtime.{universe => ru}
 import scala.util.Try
 
-class PublicProperty[D, G](
+class PublicProperty[D, G, C <: Converter[D, G]](
     val stepType: ru.Type,
     val propertyName: String,
-    val mapping: Mapping[_, D, G],
+    val mapping: Mapping[D, _, G],
     val noValue: NoValue[G],
-    definition: Seq[(FPath, UntypedTraversal) => Traversal[D, G]],
+    definition: Seq[(FPath, Traversal[_, _, _]) => Traversal[D, G, C]],
     val fieldsParser: FieldsParser[D],
     val updateFieldsParser: Option[FieldsParser[PropertyUpdater]]
 ) {
@@ -27,19 +27,19 @@ class PublicProperty[D, G](
 
   lazy val propertyPath: FPath = FPath(propertyName)
 
-  def get(steps: UntypedTraversal, path: FPath): Traversal[D, G] =
+  def get(steps: Traversal[_, _, _], path: FPath): Traversal[D, G, C] =
     if (definition.lengthCompare(1) == 0)
       definition.head.apply(path, steps)
     else
       steps
-        .coalesce(t => definition.map(d => d.apply(path, t).untyped): _*)
+        .coalesce(t => definition.map(d => d.apply(path, t)): _*)
         .typed[D, G](ClassTag(mapping.graphTypeClass)) // (mapping.toDomain) FIXME add mapping
 }
 
 object PublicProperty {
 
   def getPropertyTraversal(
-      properties: Seq[PublicProperty[_, _]],
+      properties: Seq[PublicProperty[_, _, _]],
       stepType: ru.Type,
       step: UntypedTraversal,
       fieldName: String,
@@ -55,10 +55,10 @@ object PublicProperty {
   }
 
   def getProperty(
-      properties: Seq[PublicProperty[_, _]],
+      properties: Seq[PublicProperty[_, _, _]],
       stepType: ru.Type,
       fieldName: String
-  ): PublicProperty[_, _] = {
+  ): PublicProperty[_, _, _] = {
     val path = FPath(fieldName)
     properties
       .iterator

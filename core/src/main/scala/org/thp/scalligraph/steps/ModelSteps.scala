@@ -34,17 +34,17 @@ object ValueMap {
     Some(new ValueMap(m.asScala.map { case (k, v) => k.toString -> v.asInstanceOf[JList[AnyRef]].asScala }.toMap))
 }
 
-class SelectMap(m: Map[String, Any]) {
-  def get[A](name: String): A        = m(name).asInstanceOf[A]
-  def get[A](label: StepLabel[A]): A = m(label.name).asInstanceOf[A]
-}
+//class SelectMap(m: Map[String, Any]) {
+//  def get[A](name: String): A        = m(name).asInstanceOf[A]
+//  def get[A](label: StepLabel[A]): A = m(label.name).asInstanceOf[A]
+//}
 
-object SelectMap {
-
-  def unapply(m: JMap[_, _]): Option[SelectMap] =
-    Some(new SelectMap(m.asScala.map { case (k, v) => k.toString -> v }.toMap))
-}
-
+//object SelectMap {
+//
+//  def unapply(m: JMap[_, _]): Option[SelectMap] =
+//    Some(new SelectMap(m.asScala.map { case (k, v) => k.toString -> v }.toMap))
+//}
+//
 object IdMapping extends Mapping[String, String, AnyRef] {
   override val cardinality: MappingCardinality.Value     = MappingCardinality.single
   override def toGraphOpt(d: String): Option[AnyRef]     = Some(d)
