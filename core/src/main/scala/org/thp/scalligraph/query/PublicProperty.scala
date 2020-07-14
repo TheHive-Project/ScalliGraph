@@ -14,7 +14,7 @@ import scala.reflect.runtime.{universe => ru}
 import scala.util.Try
 
 class PublicProperty[D, G, C <: Converter[D, G]](
-    val stepType: ru.Type,
+    val traversalType: ru.Type,
     val propertyName: String,
     val mapping: Mapping[D, _, G],
     val noValue: NoValue[G],
@@ -27,11 +27,11 @@ class PublicProperty[D, G, C <: Converter[D, G]](
 
   lazy val propertyPath: FPath = FPath(propertyName)
 
-  def get(steps: Traversal[_, _, _], path: FPath): Traversal[D, G, C] =
+  def get(traversal: Traversal[_, _, _], path: FPath): Traversal[D, G, C] =
     if (definition.lengthCompare(1) == 0)
-      definition.head.apply(path, steps)
+      definition.head.apply(path, traversal)
     else
-      steps
+      traversal
         .coalesce(t => definition.map(d => d.apply(path, t)): _*)
         .typed[D, G](ClassTag(mapping.graphTypeClass)) // (mapping.toDomain) FIXME add mapping
 }
@@ -40,7 +40,7 @@ object PublicProperty {
 
   def getPropertyTraversal(
       properties: Seq[PublicProperty[_, _, _]],
-      stepType: ru.Type,
+      traversalType: ru.Type,
       step: UntypedTraversal,
       fieldName: String,
       authContext: AuthContext
@@ -49,23 +49,23 @@ object PublicProperty {
     properties
       .iterator
       .collectFirst {
-        case p if p.stepType =:= stepType && path.startsWith(p.propertyPath).isDefined => p.get(step, path).untyped
+        case p if p.traversalType =:= traversalType && path.startsWith(p.propertyPath).isDefined => p.get(step, path).untyped
       }
-      .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))
+      .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
   }
 
   def getProperty(
       properties: Seq[PublicProperty[_, _, _]],
-      stepType: ru.Type,
+      traversalType: ru.Type,
       fieldName: String
   ): PublicProperty[_, _, _] = {
     val path = FPath(fieldName)
     properties
       .iterator
       .collectFirst {
-        case p if p.stepType =:= stepType && path.startsWith(p.propertyPath).isDefined => p
+        case p if p.traversalType =:= traversalType && path.startsWith(p.propertyPath).isDefined => p
       }
-      .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))
+      .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
   }
 }
 

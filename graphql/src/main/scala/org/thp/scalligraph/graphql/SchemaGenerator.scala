@@ -207,7 +207,7 @@ object SchemaGenerator {
         new CacheFunction[Option[OutputType[_]]] { current =>
           override def fn: Some[ObjectType[AuthGraph, Any]] = {
             val fields: Seq[CacheFunction[Option[Field[AuthGraph, Any]]]] = getQueryFields(tpe, current) ++
-              executor.publicProperties.filter(_.stepType =:= tpe).map(getPropertyFields(_)) ++
+              executor.publicProperties.filter(_.traversalType =:= tpe).map(getPropertyFields(_)) ++
               getOutputFields(tpe) :+
               CacheFunction[Option[Field[AuthGraph, Any]]](Some(Field("_", OptionType(StringType), resolve = _ => None)))
 
@@ -232,7 +232,7 @@ object SchemaGenerator {
     val objectName = tpe.typeSymbol.name.decodedName.toString.trim
     val inputFields = executor
       .publicProperties
-      .filter(_.stepType =:= tpe)
+      .filter(_.traversalType =:= tpe)
       .map(prop => InputField(prop.propertyName, OptionInputType(orderEnumeration)))
     if (inputFields.isEmpty) None
     else {
@@ -277,7 +277,7 @@ object SchemaGenerator {
     val objectName = tpe.typeSymbol.name.decodedName.toString.trim
     val fieldFilters: List[FieldFilter[_]] = executor
       .publicProperties
-      .filter(_.stepType =:= tpe)
+      .filter(_.traversalType =:= tpe)
       .flatMap {
         case prop if prop.mapping.domainTypeClass == classOf[String] => stringFilters(prop.asInstanceOf[PublicProperty[Element, _, _]])
         case prop if prop.mapping.domainTypeClass == classOf[Int]    => intFilters(prop.asInstanceOf[PublicProperty[Element, _, _]])
@@ -360,8 +360,8 @@ object SchemaGenerator {
       case MappingCardinality.list   => ru.appliedType(seqType, t)
       case MappingCardinality.set    => ru.appliedType(seqType, t)
     }
-    val stepType   = ru.appliedType(ru.typeOf[Traversal[Any]].typeConstructor, propertyType)
-    val objectType = getObject(stepType).apply().get
+    val traversalType   = ru.appliedType(ru.typeOf[Traversal[Any]].typeConstructor, propertyType)
+    val objectType = getObject(traversalType).apply().get
     CacheFunction(
       Some(
         Field[AuthGraph, ScalliSteps[A, _, _ <: AnyRef], Traversal[B], Any]( // FIXME should be ElementStep instead of ScalliSteps. Property can be applied only on element step.

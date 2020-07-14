@@ -20,7 +20,7 @@ object Order {
 
   def getField[S <: ScalliSteps[_, E, S]: ClassTag, E <: Element](
       properties: List[PublicProperty[_ <: Element, _, _]],
-      stepType: OutputType[S]
+      traversalType: OutputType[S]
   ): Option[Field[AuthGraph, S]] = {
 
     case class FieldOrder[A <: Element](property: PublicProperty[A, _, _], order: org.apache.tinkerpop.gremlin.process.traversal.Order) {
@@ -51,7 +51,7 @@ object Order {
     Some(
       Field[AuthGraph, S, S, S](
         "order",
-        stepType,
+        traversalType,
         arguments = List(arg),
         resolve = ctx => ctx.value.sort(ctx.arg(arg).map(_.orderBy(ctx.ctx.auth)): _*)
       )

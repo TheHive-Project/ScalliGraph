@@ -41,6 +41,16 @@ object Converter {
   }
   type CMap[DK, DV, GK, GV, CK <: Converter[DK, GK], CV <: Converter[DV, GV]] =
     Poly2Converter[Map[DK, Seq[DV]], JMap[GK, JCollection[GV]], DK, Seq[DV], GK, JCollection[GV], CK, CCollection[DV, GV, CV]]
+      with Poly1Converter[
+        Map[DK, Seq[DV]],
+        JMap[GK, JCollection[GV]],
+        (DK, Seq[DV]),
+        JMap.Entry[GK, JCollection[GV]],
+        CMapEntry[DK, GK, DV, GV, CK, CV]
+      ]
+  type CMapEntry[DK, GK, DV, GV, CK <: Converter[DK, GK], CV <: Converter[DV, GV]] =
+    Poly2Converter[(DK, Seq[DV]), JMap.Entry[GK, JCollection[GV]], DK, Seq[DV], GK, JCollection[GV], CK, CCollection[DV, GV, CV]]
+      with Converter[(DK, Seq[DV]), JMap.Entry[GK, JCollection[GV]]]
   def cmap[DK, DV, GK, GV, CK <: Converter[DK, GK], CV <: Converter[DV, GV]](kConverter: CK, vConverter: CV): CMap[DK, DV, GK, GV, CK, CV] =
     /*
               (m: JMap[GK, JCollection[GV]]) =>
@@ -66,11 +76,9 @@ class IdentityConverter[A] extends Converter[A, A] {
 trait Poly1Converter[+SD, -SG, D, G, C <: Converter[D, G]] extends Converter[SD, SG] {
   val subConverter: C
 }
-trait Poly2Converter[+SD, -SG, DK, DV, GK, GV, CK <: Converter[DK, GK], CV <: Converter[DV, GV]]
-    extends Poly1Converter[SD, SG, (DK, DV), JMap.Entry[GK, GV], Converter[(DK, DV), JMap.Entry[GK, GV]]] {
+trait Poly2Converter[+SD, -SG, DK, DV, GK, GV, CK <: Converter[DK, GK], CV <: Converter[DV, GV]] {
   val subConverterKey: CK
   val subConverterValue: CV
-  override val subConverter: Converter[(DK, DV), JMap.Entry[GK, GV]] = kv => subConverterKey(kv.getKey) -> subConverterValue(kv.getValue)
 }
 
 //class IdentityGraphConverterMapper[-F <: GraphConverter[_, _], +T <: GraphConverter[_, _]] extends GraphConverterMapper[F, T] {
@@ -120,17 +128,19 @@ class Traversal[+D, G, C <: Converter[D, G]](val raw: GremlinScala[G], val conve
   def onRaw(f: GremlinScala[G] => GremlinScala[G]): Traversal[D, G, C] = new Traversal[D, G, C](f(raw), converter)
   def onRawMap[D2, G2, C2 <: Converter[D2, G2]](
       f: GremlinScala[G] => GremlinScala[G2],
-      convMap: GraphConverterMapper[Converter[D, G], C2]
+      convMap: GraphConverterMapper[C, C2]
   ) = new Traversal[D2, G2, C2](f(raw), convMap(converter))
   def onDeepRaw(f: GraphTraversal[_, G] => GraphTraversal[_, G]): Traversal[D, G, C] =
     new Traversal[D, G, C](new GremlinScala[G](f(raw.traversal)), converter)
   def onDeepRawMap[D2, G2, C2 <: Converter[D2, G2]](
       f: GraphTraversal[_, G] => GraphTraversal[_, G2],
-      convMap: GraphConverterMapper[Converter[D, G], C2]
+      convMap: GraphConverterMapper[C, C2]
   ): Traversal[D2, G2, C2] =
     new Traversal[D2, G2, C2](new GremlinScala[G2](f(raw.traversal)), convMap(converter))
   def map[DD](f: D => DD): Traversal[DD, G, Converter[DD, G]] =
     new Traversal[DD, G, Converter[DD, G]](raw, g => converter.andThen(f).apply(g))
+  def graphMap[DD, GG, CC <: Converter[DD, GG]](d: G => GG, convMap: GraphConverterMapper[C, CC]): Traversal[DD, GG, CC] =
+    new Traversal[DD, GG, CC](raw.map(d), convMap(converter))
   def start = new Traversal[D, G, C](gremlin.scala.__[G], converter)
 
 //  def mapping: UniMapping[D]

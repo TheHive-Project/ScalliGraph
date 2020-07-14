@@ -11,11 +11,11 @@ import play.api.libs.json.{JsObject, Json}
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Success, Try}
 
-class PropertyBuilder[D, SD, G](stepType: ru.Type, propertyName: String, mapping: Mapping[D, SD, G], noValue: NoValue[G]) {
+class PropertyBuilder[D, SD, G](traversalType: ru.Type, propertyName: String, mapping: Mapping[D, SD, G], noValue: NoValue[G]) {
 
   def field =
     new SimpleUpdatePropertyBuilder[D, SD, G](
-      stepType,
+      traversalType,
       propertyName,
       propertyName,
       mapping,
@@ -25,7 +25,7 @@ class PropertyBuilder[D, SD, G](stepType: ru.Type, propertyName: String, mapping
 
   def rename(newName: String) =
     new SimpleUpdatePropertyBuilder[D, SD, G](
-      stepType,
+      traversalType,
       propertyName,
       newName,
       mapping,
@@ -35,7 +35,7 @@ class PropertyBuilder[D, SD, G](stepType: ru.Type, propertyName: String, mapping
 
   def select(definition: (UntypedTraversal => Traversal[SD, G])*) =
     new UpdatePropertyBuilder[D, SD, G](
-      stepType,
+      traversalType,
       propertyName,
       mapping,
       noValue,
@@ -44,7 +44,7 @@ class PropertyBuilder[D, SD, G](stepType: ru.Type, propertyName: String, mapping
 
   def subSelect(definition: ((FPath, UntypedTraversal) => Traversal[SD, G])*) =
     new UpdatePropertyBuilder[D, SD, G](
-      stepType,
+      traversalType,
       propertyName,
       mapping,
       noValue,
@@ -53,17 +53,17 @@ class PropertyBuilder[D, SD, G](stepType: ru.Type, propertyName: String, mapping
 }
 
 class SimpleUpdatePropertyBuilder[D, SD, G](
-    stepType: ru.Type,
+    traversalType: ru.Type,
     propertyName: String,
     fieldName: String,
     mapping: Mapping[D, SD, G],
     noValue: NoValue[G],
     definition: Seq[(FPath, UntypedTraversal) => Traversal[SD, G]]
-) extends UpdatePropertyBuilder[D, SD, G](stepType, propertyName, mapping, noValue, definition) {
+) extends UpdatePropertyBuilder[D, SD, G](traversalType, propertyName, mapping, noValue, definition) {
 
   def updatable(implicit fieldsParser: FieldsParser[SD], updateFieldsParser: FieldsParser[D]): PublicProperty[SD, G] =
     new PublicProperty[SD, G](
-      stepType,
+      traversalType,
       propertyName,
       mapping,
       noValue,
@@ -77,7 +77,7 @@ class SimpleUpdatePropertyBuilder[D, SD, G](
 }
 
 class UpdatePropertyBuilder[D, SD, G](
-    stepType: ru.Type,
+    traversalType: ru.Type,
     propertyName: String,
     mapping: Mapping[D, SD, G],
     noValue: NoValue[G],
@@ -86,7 +86,7 @@ class UpdatePropertyBuilder[D, SD, G](
 
   def readonly(implicit fieldsParser: FieldsParser[SD]): PublicProperty[SD, G] =
     new PublicProperty[SD, G](
-      stepType,
+      traversalType,
       propertyName,
       mapping,
       noValue,
@@ -99,7 +99,7 @@ class UpdatePropertyBuilder[D, SD, G](
       f: (FPath, D, Vertex, Database, Graph, AuthContext) => Try[JsObject]
   )(implicit fieldsParser: FieldsParser[SD], updateFieldsParser: FieldsParser[D]): PublicProperty[SD, G] =
     new PublicProperty[SD, G](
-      stepType,
+      traversalType,
       propertyName,
       mapping,
       noValue,

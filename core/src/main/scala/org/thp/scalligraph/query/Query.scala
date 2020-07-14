@@ -2,11 +2,12 @@ package org.thp.scalligraph.query
 
 import gremlin.scala.Graph
 import org.scalactic.Good
+import org.thp.scalligraph.BadRequestError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{PagedResult, Traversal, UntypedTraversal}
+import org.thp.scalligraph.steps.{Converter, PagedResult, Traversal, UntypedTraversal}
 
 import scala.reflect.runtime.{currentMirror => rm, universe => ru}
 
@@ -173,12 +174,28 @@ object CountQuery extends Query {
   override def toType(t: ru.Type): ru.Type                                   = ru.typeOf[Long]
   override def apply(param: Unit, from: Any, authContext: AuthContext): Long = from.asInstanceOf[UntypedTraversal].getCount
 }
-trait InputQuery {
-  def apply(
-      db: Database,
-      publicProperties: List[PublicProperty[_, _]],
-      stepType: ru.Type,
-      step: UntypedTraversal,
+
+trait InputQuery[PD, PG, PC <: Converter[PD, PG]] {
+  def getProperty(
+      properties: Seq[PublicProperty[_, _, _]],
+      traversalType: ru.Type,
+      fieldName: String,
       authContext: AuthContext
-  ): UntypedTraversal
+  ): PublicProperty[PD, PG, PC] = {
+    val path = FPath(fieldName)
+    properties
+      .iterator
+      .collectFirst {
+        case p if p.traversalType =:= traversalType && path.startsWith(p.propertyPath).isDefined => p.asInstanceOf[PublicProperty[PD, PG, PC]]
+      }
+      .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
+  }
+
+  def apply[D, G, C <: Converter[D, G]](
+      db: Database,
+      publicProperties: List[PublicProperty[_, _, _]],
+      traversalType: ru.Type,
+      traversal: Traversal[D, G, C],
+      authContext: AuthContext
+  ): Traversal[D, G, C]
 }

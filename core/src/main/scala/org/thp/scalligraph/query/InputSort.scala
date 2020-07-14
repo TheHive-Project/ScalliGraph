@@ -23,13 +23,13 @@ case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
   override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
-      stepType: ru.Type,
+      traversalType: ru.Type,
       step: UntypedTraversal,
       authContext: AuthContext
   ): UntypedTraversal = {
     val orderBys = fieldOrder.map {
       case (fieldName, order) =>
-        val property = PublicProperty.getProperty(publicProperties, stepType, fieldName)
+        val property = PublicProperty.getProperty(publicProperties, traversalType, fieldName)
         if (property.mapping.cardinality == MappingCardinality.single) {
           (_: UntypedSortBySelector).by(property.get(_, FPath(fieldName)).untyped, order)
         } else {
