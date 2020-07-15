@@ -400,5 +400,8 @@ object StepsOps {
 
     def map[A: ClassTag](f: D => A): Traversal[A, A] =
       new Traversal[A, A](raw.map(x => f(converter.toDomain(x))), UniMapping.identity)
+
+    def collect[A: ClassTag](f: PartialFunction[D, A]): Traversal[A, A] =
+      new Traversal[A, A](raw.map(converter.toDomain).collect(f), UniMapping.identity)
   }
 }
