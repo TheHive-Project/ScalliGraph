@@ -108,6 +108,12 @@ class Entrypoint @Inject() (
           }
         }
 
+    def asyncAuthPermitted(permission: Permission)(block: AuthenticatedRequest[Record[V]] => Future[Result]): Action[AnyContent] =
+      asyncAuth { request =>
+        if (request.isPermitted(permission)) block(request)
+        else Future.failed(AuthorizationError(s"Your are not authorized to $name, you haven't the permission $permission"))
+      }
+
     /**
       *
       * @param db necessary db instance for transaction
