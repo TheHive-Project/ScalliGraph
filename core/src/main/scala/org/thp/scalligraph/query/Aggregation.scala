@@ -360,6 +360,15 @@ case class TimeAggregation(aggName: Option[String], fieldName: String, interval:
 
   def dateToKey(date: Date): Long =
     unit match {
+      case ChronoUnit.WEEKS =>
+        calendar.setTime(date)
+        val year = calendar.get(Calendar.YEAR)
+        val week = (calendar.get(Calendar.WEEK_OF_YEAR) / interval) * interval
+        calendar.setTimeInMillis(0)
+        calendar.set(Calendar.YEAR, year)
+        calendar.set(Calendar.WEEK_OF_YEAR, week.toInt)
+        calendar.getTimeInMillis
+
       case ChronoUnit.MONTHS =>
         calendar.setTime(date)
         val year  = calendar.get(Calendar.YEAR)
@@ -375,7 +384,6 @@ case class TimeAggregation(aggName: Option[String], fieldName: String, interval:
         calendar.setTimeInMillis(0)
         calendar.set(Calendar.YEAR, year.toInt)
         calendar.getTimeInMillis
-      // TODO week
       case other =>
         val duration = other.getDuration.toMillis * interval
         (date.getTime / duration) * duration
