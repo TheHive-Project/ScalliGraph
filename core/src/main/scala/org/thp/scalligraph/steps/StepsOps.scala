@@ -9,7 +9,7 @@ import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, GraphTraver
 import org.apache.tinkerpop.gremlin.process.traversal.{Order, Scope, Traverser}
 import org.apache.tinkerpop.gremlin.structure.Column
 import org.thp.scalligraph.NotFoundError
-import org.thp.scalligraph.models.{Mapping, Model, SingleMapping, UniMapping}
+import org.thp.scalligraph.models.{EdgeEntity, Mapping, Model, SingleMapping, UniMapping}
 import play.api.Logger
 import shapeless.ops.tuple.{Prepend => TuplePrepend}
 import shapeless.syntax.std.tuple._
@@ -288,7 +288,7 @@ object StepsOps {
       )
     }
 
-    def outTo[E <: Product: ru.TypeTag](implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] = {
+    def outTo[E <: EdgeEntity[_, _]: ru.TypeTag](implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] = {
       val model = Model.getEdgeModel[E, _, _]
       model.fromLabel
       model.Traversal(raw.out(model.label))

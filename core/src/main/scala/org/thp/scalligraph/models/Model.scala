@@ -145,3 +145,7 @@ abstract class EdgeModel[FROM <: Product, TO <: Product] extends Model { thisMod
   override def get(id: String)(implicit db: Database, graph: Graph): Edge =
     graph.E(id).headOption().getOrElse(throw NotFoundError(s"Edge $id not found"))
 }
+
+class EdgeEntity[From <: VertexEntity, To <: VertexEntity]
+
+class VertexEntity
