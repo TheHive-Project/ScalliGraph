@@ -7,7 +7,7 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{Converter, PagedResult, Traversal, UntypedTraversal}
+import org.thp.scalligraph.steps.{Converter, PagedResult, Traversal}
 
 import scala.reflect.runtime.{currentMirror => rm, universe => ru}
 
@@ -88,9 +88,11 @@ object Query {
     override def apply(param: Unit, from: Any, authContext: AuthContext): Any = implicitly[Renderer[E]].toOutput(from.asInstanceOf[E])
   }
 
-  def output[E: Renderer: ru.TypeTag, F <: Traversal[E, _]: ru.TypeTag]: Query = output(identity[F])
+  def output[E: Renderer: ru.TypeTag, F <: Traversal[E, G, Converter[E, G]] forSome { type G }: ru.TypeTag]: Query = output(identity[F])
 
-  def outputWithContext[E: ru.TypeTag, F: ru.TypeTag](transform: (F, AuthContext) => Traversal[E, _])(implicit renderer: Renderer[E]): Query =
+  def outputWithContext[E: ru.TypeTag, F: ru.TypeTag](transform: (F, AuthContext) => Traversal[E, G, Converter[E, G]] forSome { type G })(
+      implicit renderer: Renderer[E]
+  ): Query =
     new Query {
       override val name: String                   = "output"
       override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[F])
@@ -98,7 +100,9 @@ object Query {
       override def apply(param: Unit, from: Any, authContext: AuthContext): Any =
         PagedResult(transform(from.asInstanceOf[F], authContext), None)(renderer)
     }
-  def output[E: ru.TypeTag, F: ru.TypeTag](transform: F => Traversal[E, _])(implicit renderer: Renderer[E]): Query =
+  def output[E: ru.TypeTag, F: ru.TypeTag](transform: F => Traversal[E, G, Converter[E, G]] forSome { type G })(
+      implicit renderer: Renderer[E]
+  ): Query =
     new Query {
       override val name: String                   = "output"
       override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[F])
@@ -111,21 +115,21 @@ object Query {
 class SortQuery(db: Database, publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[InputSort] {
   override def paramParser(tpe: ru.Type): FieldsParser[InputSort] = InputSort.fieldsParser
   override val name: String                                       = "sort"
-  override def checkFrom(t: ru.Type): Boolean                     = SubType(t, ru.typeOf[UntypedTraversal])
+  override def checkFrom(t: ru.Type): Boolean                     = SubType(t, ru.typeOf[Traversal[_, _, _]])
   override def toType(t: ru.Type): ru.Type                        = t
   override def apply(inputSort: InputSort, from: Any, authContext: AuthContext): Any =
     inputSort(
       db,
       publicProperties,
       rm.classSymbol(from.getClass).toType,
-      from.asInstanceOf[UntypedTraversal],
+      from.asInstanceOf[Traversal[_, _, _]],
       authContext
     )
 }
 
 object FilterQuery {
   def apply(db: Database, publicProperties: List[PublicProperty[_, _]])(
-      fieldsParser: (ru.Type, ru.Type => FieldsParser[InputFilter]) => FieldsParser[InputFilter]
+      fieldsParser: (ru.Type, ru.Type => FieldsParser[InputQuery]) => FieldsParser[InputQuery]
   ): FilterQuery = new FilterQuery(db, publicProperties, fieldsParser :: Nil)
   def default(db: Database, publicProperties: List[PublicProperty[_, _]]): FilterQuery =
     apply(db, publicProperties)(InputFilter.fieldsParser(_, publicProperties, _))
@@ -135,67 +139,52 @@ object FilterQuery {
 final class FilterQuery(
     db: Database,
     publicProperties: List[PublicProperty[_, _]],
-    protected val fieldsParsers: List[(ru.Type, ru.Type => FieldsParser[InputFilter]) => FieldsParser[InputFilter]] = Nil
-) extends ParamQuery[InputFilter] { filterQuery =>
-  def paramParser(tpe: ru.Type): FieldsParser[InputFilter] =
-    fieldsParsers.foldLeft(FieldsParser.empty[InputFilter])((fp, f) => fp orElse f(tpe, t => paramParser(t)))
+    protected val fieldsParsers: List[(ru.Type, ru.Type => FieldsParser[InputQuery]) => FieldsParser[InputQuery]] = Nil
+) extends ParamQuery[InputQuery] { filterQuery =>
+  def paramParser(tpe: ru.Type): FieldsParser[InputQuery] =
+    fieldsParsers.foldLeft(FieldsParser.empty[InputQuery])((fp, f) => fp orElse f(tpe, t => paramParser(t)))
   override val name: String                   = "filter"
-  override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[UntypedTraversal])
+  override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[Traversal[_, _, _]])
   override def toType(t: ru.Type): ru.Type    = t
-  override def apply(inputFilter: InputFilter, from: Any, authContext: AuthContext): Any =
+  override def apply(inputFilter: InputQuery, from: Any, authContext: AuthContext): Any =
     inputFilter(
       db,
       publicProperties,
       rm.classSymbol(from.getClass).toType,
-      from.asInstanceOf[UntypedTraversal], //.asInstanceOf[X forSome { type X <: BaseVertexSteps[_, X] }],
+      from.asInstanceOf[Traversal[_, _, _]], //.asInstanceOf[X forSome { type X <: BaseVertexSteps[_, X] }],
       authContext
     )
-//  def addParser(parser: (ru.Type, () => FieldsParser[InputFilter])): FilterQuery = new FilterQuery(db, publicProperties, parser :: fieldsParsers)
+//  def addParser(parser: (ru.Type, () => FieldsParser[InputQuery])): FilterQuery = new FilterQuery(db, publicProperties, parser :: fieldsParsers)
   def ++(other: FilterQuery): FilterQuery = new FilterQuery(db, publicProperties, filterQuery.fieldsParsers ::: other.fieldsParsers)
 }
 
-class AggregationQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[GroupAggregation[_]] {
-  override def paramParser(tpe: ru.Type): FieldsParser[GroupAggregation[_]] = GroupAggregation.fieldsParser
-  override val name: String                                                 = "aggregation"
-  override def checkFrom(t: ru.Type): Boolean                               = SubType(t, ru.typeOf[UntypedTraversal])
-  override def toType(t: ru.Type): ru.Type                                  = ru.typeOf[Output[_]]
-  override def apply(aggregation: GroupAggregation[_], from: Any, authContext: AuthContext): Any =
-    aggregation.get(
+class AggregationQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[GroupAggregation] {
+  override def paramParser(tpe: ru.Type): FieldsParser[GroupAggregation] = GroupAggregation.fieldsParser
+  override val name: String                                              = "aggregation"
+  override def checkFrom(t: ru.Type): Boolean                            = SubType(t, ru.typeOf[Traversal[_, _, _]])
+  override def toType(t: ru.Type): ru.Type                               = ru.typeOf[Output[_]]
+  override def apply(aggregation: GroupAggregation, from: Any, authContext: AuthContext): Any =
+    aggregation(
       publicProperties,
       rm.classSymbol(from.getClass).toType,
-      from.asInstanceOf[UntypedTraversal],
+      from.asInstanceOf[Traversal[_, _, _]],
       authContext
     )
 }
 
 object CountQuery extends Query {
   override val name: String                                                  = "count"
-  override def checkFrom(t: ru.Type): Boolean                                = SubType(t, ru.typeOf[UntypedTraversal])
+  override def checkFrom(t: ru.Type): Boolean                                = SubType(t, ru.typeOf[Traversal[_, _, _]])
   override def toType(t: ru.Type): ru.Type                                   = ru.typeOf[Long]
-  override def apply(param: Unit, from: Any, authContext: AuthContext): Long = from.asInstanceOf[UntypedTraversal].getCount
+  override def apply(param: Unit, from: Any, authContext: AuthContext): Long = from.asInstanceOf[Traversal[Any, Any, Converter[Any, Any]]].getCount
 }
 
-trait InputQuery[PD, PG, PC <: Converter[PD, PG]] {
-  def getProperty(
-      properties: Seq[PublicProperty[_, _, _]],
-      traversalType: ru.Type,
-      fieldName: String,
-      authContext: AuthContext
-  ): PublicProperty[PD, PG, PC] = {
-    val path = FPath(fieldName)
-    properties
-      .iterator
-      .collectFirst {
-        case p if p.traversalType =:= traversalType && path.startsWith(p.propertyPath).isDefined => p.asInstanceOf[PublicProperty[PD, PG, PC]]
-      }
-      .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
-  }
-
-  def apply[D, G, C <: Converter[D, G]](
+trait InputQuery {
+  def apply[D, G](
       db: Database,
-      publicProperties: List[PublicProperty[_, _, _]],
+      publicProperties: List[PublicProperty[_, _]],
       traversalType: ru.Type,
-      traversal: Traversal[D, G, C],
+      traversal: Traversal[_, _, _],
       authContext: AuthContext
-  ): Traversal[D, G, C]
+  ): Traversal[D, G, Converter[D, G]]
 }

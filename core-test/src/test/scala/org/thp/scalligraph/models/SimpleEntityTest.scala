@@ -2,7 +2,7 @@ package org.thp.scalligraph.models
 
 import gremlin.scala.{Graph, GremlinScala, Vertex}
 import org.specs2.specification.core.Fragments
-import org.thp.scalligraph.VertexEntity
+import org.thp.scalligraph.BuildVertexEntity
 import org.thp.scalligraph.auth.{AuthContext, UserSrv}
 import org.thp.scalligraph.services.VertexSrv
 import org.thp.scalligraph.steps.StepsOps._
@@ -13,7 +13,7 @@ import play.api.{Configuration, Environment}
 
 import scala.util.Try
 
-@VertexEntity
+@BuildVertexEntity
 case class MyEntity(name: String, value: Int)
 
 object MyEntity {

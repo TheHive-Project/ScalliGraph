@@ -8,7 +8,7 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.query.PropertyUpdater
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{Traversal}
+import org.thp.scalligraph.steps.{Converter, Traversal}
 import play.api.libs.json.JsObject
 
 import scala.reflect.runtime.{universe => ru}
@@ -18,15 +18,15 @@ abstract class VertexSrv[V <: Product: ru.TypeTag](implicit db: Database) extend
 
   override val model: Model.Vertex[V] = db.getVertexModel[V]
 
-  def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): Traversal[V with Entity, Vertex]
+  override def initSteps(implicit graph: Graph): Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]] =
+    new Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]](db.labelFilter(model)(graph.V), model.converter)
 
-  override def initSteps(implicit graph: Graph): Traversal[V with Entity, Vertex] = steps(db.labelFilter(model)(graph.V))
+  override def getByIds(ids: String*)(implicit graph: Graph): Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]] =
+    if (ids.isEmpty) new Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]](graph.inject(), model.converter)
+    else new Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]](db.labelFilter(model)(graph.V(ids: _*)), model.converter)
 
-  override def getByIds(ids: String*)(implicit graph: Graph): Traversal[V with Entity, Vertex] =
-    if (ids.isEmpty) steps(graph.inject())
-    else steps(db.labelFilter(model)(graph.V(ids: _*)))
-
-  def get(vertex: Vertex)(implicit graph: Graph): Traversal[V with Entity, Vertex] = steps(db.labelFilter(model)(graph.V(vertex)))
+  def get(vertex: Vertex)(implicit graph: Graph): Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]] =
+    new Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]](db.labelFilter(model)(graph.V(vertex)), model.converter)
 
   def getOrFail(id: String)(implicit graph: Graph): Try[V with Entity] =
     get(id)
@@ -34,7 +34,7 @@ abstract class VertexSrv[V <: Product: ru.TypeTag](implicit db: Database) extend
       .fold[Try[V with Entity]](Failure(NotFoundError(s"${model.label} $id not found")))(Success.apply)
 
   def getOrFail(vertex: Vertex)(implicit graph: Graph): Try[V with Entity] =
-    steps(db.labelFilter(model)(graph.V(vertex)))
+    new Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]](db.labelFilter(model)(graph.V(vertex)), model.converter)
       .headOption()
       .fold[Try[V with Entity]](Failure(NotFoundError(s"${model.label} ${vertex.id()} not found")))(Success.apply)
 
@@ -44,26 +44,30 @@ abstract class VertexSrv[V <: Product: ru.TypeTag](implicit db: Database) extend
   def exists(e: V)(implicit graph: Graph): Boolean = false
 
   def update(
-      steps: Traversal[V, Vertex] => Traversal[V, Vertex],
+      steps: Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]] => Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]],
       propertyUpdaters: Seq[PropertyUpdater]
-  )(implicit graph: Graph, authContext: AuthContext): Try[(Traversal[V, Vertex], JsObject)] =
-    update(steps(initSteps), propertyUpdaters)
+  )(implicit graph: Graph, authContext: AuthContext): Try[(Traversal[V, Vertex, Converter[V with Entity, Vertex]], JsObject)] =
+    update(initSteps, propertyUpdaters)
 
   def update(
-      steps: Traversal[V, Vertex],
+      steps: Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]],
       propertyUpdaters: Seq[PropertyUpdater]
-  )(implicit graph: Graph, authContext: AuthContext): Try[(Traversal[V, Vertex], JsObject)] = {
-    val myClone = steps.clone
+  )(implicit graph: Graph, authContext: AuthContext): Try[(Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]], JsObject)] = {
+    val myClone = steps.clone()
     logger.debug(s"Execution of ${steps.raw} (update)")
-    steps.raw.headOption().fold[Try[(Traversal[V, Vertex], JsObject)]](Failure(NotFoundError(s"${steps} not found"))) { vertex =>
-      logger.trace(s"Update ${vertex.id()} by ${authContext.userId}")
-      propertyUpdaters
-        .toTry(u => u(vertex, db, graph, authContext))
-        .map { o =>
-          db.setOptionProperty(vertex, "_updatedAt", Some(new Date), db.updatedAtMapping)
-          db.setOptionProperty(vertex, "_updatedBy", Some(authContext.userId), db.updatedByMapping)
-          myClone -> o.reduceOption(_ ++ _).getOrElse(JsObject.empty)
-        }
-    }
+    steps
+      .raw
+      .headOption()
+      .fold[Try[(Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]], JsObject)]](Failure(NotFoundError(s"${steps} not found"))) {
+        vertex =>
+          logger.trace(s"Update ${vertex.id()} by ${authContext.userId}")
+          propertyUpdaters
+            .toTry(u => u(vertex, db, graph, authContext))
+            .map { o =>
+              db.setOptionProperty(vertex, "_updatedAt", Some(new Date), db.updatedAtMapping)
+              db.setOptionProperty(vertex, "_updatedBy", Some(authContext.userId), db.updatedByMapping)
+              myClone -> o.reduceOption(_ ++ _).getOrElse(JsObject.empty)
+            }
+      }
   }
 }

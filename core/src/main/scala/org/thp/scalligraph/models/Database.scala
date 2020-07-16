@@ -294,7 +294,7 @@ abstract class BaseDatabase extends Database {
   override def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D = {
     val values = element.properties[G](key)
     if (values.hasNext) {
-      val v = mapping.toDomain(values.next().value)
+      val v = mapping(values.next().value)
       if (values.hasNext)
         throw InternalError(s"Property $key must have only one value but is multivalued on element $element" + Model.printElement(element))
       else v
@@ -305,7 +305,7 @@ abstract class BaseDatabase extends Database {
     val values = element
       .properties[G](key)
     if (values.hasNext) {
-      val v = Some(mapping.toDomain(values.next().value))
+      val v = Some(mapping(values.next().value))
       if (values.hasNext)
         throw InternalError(s"Property $key must have at most one value but is multivalued on element $element" + Model.printElement(element))
       else v
@@ -316,14 +316,14 @@ abstract class BaseDatabase extends Database {
     element
       .properties[G](key)
       .asScala
-      .map(p => mapping.toDomain(p.value()))
+      .map(p => mapping(p.value()))
       .toList
 
   override def getSetProperty[D, G](element: Element, key: String, mapping: SetMapping[D, G]): Set[D] =
     element
       .properties[G](key)
       .asScala
-      .map(p => mapping.toDomain(p.value()))
+      .map(p => mapping(p.value()))
       .toSet
 
   override def setSingleProperty[D, G](element: Element, key: String, value: D, mapping: SingleMapping[D, _]): Unit =

@@ -6,14 +6,14 @@ import scala.annotation.{compileTimeOnly, StaticAnnotation}
 import scala.language.experimental.{macros => enableMacro}
 
 @compileTimeOnly("enable macro paradise to expand macro annotations")
-class VertexEntity extends StaticAnnotation {
+class BuildVertexEntity extends StaticAnnotation {
 
   def macroTransform(annottees: Any*): Any =
     macro AnnotationMacro.buildVertexModel
 }
 
 @compileTimeOnly("enable macro paradise to expand macro annotations")
-class EdgeEntity[FROM <: Product, TO <: Product] extends StaticAnnotation {
+class BuildEdgeEntity[FROM <: Product, TO <: Product] extends StaticAnnotation {
 
   def macroTransform(annottees: Any*): Any =
     macro AnnotationMacro.buildEdgeModel

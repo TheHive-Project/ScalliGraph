@@ -6,7 +6,7 @@ import org.specs2.mutable.Specification
 import org.thp.scalligraph.InvalidFormatAttributeError
 import org.thp.scalligraph.models.{MyEntity, UniMapping}
 import org.thp.scalligraph.query.{PropertyUpdater, PublicProperty, PublicPropertyListBuilder}
-import org.thp.scalligraph.steps.VertexSteps
+import org.thp.scalligraph.steps.Traversal
 import play.api.libs.json.Json
 
 import scala.util.Success
@@ -167,7 +167,7 @@ class FieldsParserMacroTest extends Specification with TestUtils {
   }
 
   "Nothing to update" in {
-    val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
+    val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[Traversal.VERTEX[MyEntity]]
       .property("p1", UniMapping.string)(_.field.updatable)
       .build
     val updateFieldsParser = FieldsParser.update("xxx", properties)
@@ -176,7 +176,7 @@ class FieldsParserMacroTest extends Specification with TestUtils {
   }
 
   "update one field" in {
-    val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
+    val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[Traversal.VERTEX[MyEntity]]
       .property("p1", UniMapping.string)(_.field.updatable)
       .build
     val updateFieldsParser = FieldsParser.update("xxx", properties)
@@ -190,7 +190,7 @@ class FieldsParserMacroTest extends Specification with TestUtils {
   }
 
   "update using custom function" in {
-    val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
+    val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[Traversal.VERTEX[MyEntity]]
       .property("p1", UniMapping.string)(_.rename("p2").custom { (path, value, _, _, _, _) =>
         path must_=== FPath("p1.sp2")
         value must_== "yop"
@@ -209,7 +209,7 @@ class FieldsParserMacroTest extends Specification with TestUtils {
   }
 
   "fail if contains an invalid field format" in {
-    val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
+    val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[Traversal.VERTEX[MyEntity]]
       .property("p1", UniMapping.string)(_.field.updatable)
       .property("p2", UniMapping.string)(_.field.updatable)
       .build
@@ -220,7 +220,7 @@ class FieldsParserMacroTest extends Specification with TestUtils {
   }
 
   "update several fields" in {
-    val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
+    val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[Traversal.VERTEX[MyEntity]]
       .property("p1", UniMapping.string)(_.field.updatable)
       .property("p2", UniMapping.string)(_.field.updatable)
       .build
@@ -238,7 +238,7 @@ class FieldsParserMacroTest extends Specification with TestUtils {
   }
 
   "update subfield" in {
-    val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[VertexSteps[MyEntity]]
+    val properties: Seq[PublicProperty[_, _]] = PublicPropertyListBuilder[Traversal.VERTEX[MyEntity]]
       .property("p1", UniMapping.string)(_.field.updatable)
       .build
     val updateFieldsParser = FieldsParser.update("xxx", properties)

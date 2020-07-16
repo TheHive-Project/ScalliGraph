@@ -104,6 +104,7 @@ abstract class Mapping[D, SD: ClassTag: Renderer, G: ClassTag] extends UniMappin
   def readonly: Mapping[D, SD, G]
   def fold: SingleMapping[Seq[SD], JList[G]] = SingleMapping(d => Some(d.flatMap(toGraphOpt).asJava), _.asScala.map(this))
   def toOutput(d: D): Output[D]              = ???
+  val converter: Converter[D, G]             = ???
 
   def isCompatibleWith(m: Mapping[_, _, _]): Boolean =
     graphTypeClass.equals(m.graphTypeClass) && MappingCardinality.isCompatible(cardinality, m.cardinality)
@@ -128,8 +129,9 @@ case class OptionMapping[D: ClassTag: Renderer, G: ClassTag](
 ) extends Mapping[Option[D], D, G] {
   override val cardinality: MappingCardinality.Value = MappingCardinality.option
   override def toGraphOpt(d: D): Option[G]           = toGraphOptFn(d)
-  override def toDomain(g: G): D                     = toDomainFn(g)
+  override def apply(g: G): D                        = toDomainFn(g)
   override def readonly: OptionMapping[D, G]         = copy(isReadonly = true)
+  override def reverse: Converter[G, D]              = toGraphOpt(_).get
 }
 
 case class SingleMapping[D: ClassTag: Renderer, G: ClassTag](
@@ -139,11 +141,12 @@ case class SingleMapping[D: ClassTag: Renderer, G: ClassTag](
 ) extends Mapping[D, D, G] {
   override val cardinality: MappingCardinality.Value = MappingCardinality.single
   override def toGraphOpt(d: D): Option[G]           = toGraphOptFn(d)
-  override def toDomain(g: G): D                     = toDomainFn(g)
+  override def apply(g: G): D                        = toDomainFn(g)
   override def readonly: SingleMapping[D, G]         = copy(isReadonly = true)
   override def optional: OptionMapping[D, G]         = OptionMapping[D, G](toGraphOptFn, toDomainFn, isReadonly)
   override def sequence: ListMapping[D, G]           = ListMapping[D, G](toGraphOptFn, toDomainFn, isReadonly)
   override def set: SetMapping[D, G]                 = SetMapping[D, G](toGraphOptFn, toDomainFn, isReadonly)
+  override def reverse: Converter[G, D]              = toGraphOpt(_).get
 }
 
 case class ListMapping[D: ClassTag: Renderer, G: ClassTag](
@@ -153,8 +156,9 @@ case class ListMapping[D: ClassTag: Renderer, G: ClassTag](
 ) extends Mapping[Seq[D], D, G] {
   override val cardinality: MappingCardinality.Value = MappingCardinality.list
   override def toGraphOpt(d: D): Option[G]           = toGraphOptFn(d)
-  override def toDomain(g: G): D                     = toDomainFn(g)
+  override def apply(g: G): D                        = toDomainFn(g)
   override def readonly: ListMapping[D, G]           = copy(isReadonly = true)
+  override def reverse: Converter[G, D]              = toGraphOpt(_).get
 }
 
 case class SetMapping[D: ClassTag: Renderer, G: ClassTag](
@@ -164,6 +168,7 @@ case class SetMapping[D: ClassTag: Renderer, G: ClassTag](
 ) extends Mapping[Set[D], D, G] {
   override val cardinality: MappingCardinality.Value = MappingCardinality.set
   override def toGraphOpt(d: D): Option[G]           = toGraphOptFn(d)
-  override def toDomain(g: G): D                     = toDomainFn(g)
+  override def apply(g: G): D                        = toDomainFn(g)
   override def readonly: SetMapping[D, G]            = copy(isReadonly = true)
+  override def reverse: Converter[G, D]              = toGraphOpt(_).get
 }

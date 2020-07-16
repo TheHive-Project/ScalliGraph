@@ -22,8 +22,7 @@ package object services {
           )
         )
       model
-        .converter(db, graph)
-        .toDomain(e.asInstanceOf[model.ElementType])
+        .converter(e.asInstanceOf[model.ElementType])
     }
   }
 

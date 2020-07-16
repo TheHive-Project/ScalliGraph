@@ -5,42 +5,47 @@ import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.services._
+import org.thp.scalligraph.steps.{Converter, Traversal}
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.VertexSteps
 
 import scala.util.Try
 
-@VertexEntity
+@BuildVertexEntity
 case class Person(name: String, age: Int)
 
 object Person {
   val initialValues = Seq(Person("marc", 34), Person("franck", 28))
 }
 
-@VertexEntity
+@BuildVertexEntity
 case class Software(name: String, lang: String)
 
-@EdgeEntity[Person, Person]
+@BuildEdgeEntity[Person, Person]
 case class Knows(weight: Double)
 
-@EdgeEntity[Person, Software]
+@BuildEdgeEntity[Person, Software]
 case class Created(weight: Double)
 
+object PersonOps {
+  implicit class PersonOps(traversal: Traversal.VERTEX[Person]) {
+    def created = traversal.outTo[Created]
+    new SoftwareSteps(this.outTo[Created].raw)
+
+    def getByName(name: String): PersonSteps = this.has("name", name)
+
+    def created(predicate: P[Double]) = new SoftwareSteps(this.outToE[Created].has("weight", predicate).inV().raw)
+
+    def connectedEdge: List[String] = this.outE().label.toList
+
+    def knownLevels: List[Double] = this.outToE[Knows].value[Double]("weight").toList
+
+    def knows: PersonSteps = new PersonSteps(this.outTo[Knows].raw)
+
+    def friends(threshold: Double = 0.8): PersonSteps = new PersonSteps(this.outToE[Knows].has("weight", P.gte(threshold)).inV().raw)
+  }
+}
 @EntitySteps[Person]
 class PersonSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph) extends VertexSteps[Person](raw) {
-  def created = new SoftwareSteps(this.outTo[Created].raw)
-
-  def getByName(name: String): PersonSteps = this.has("name", name)
-
-  def created(predicate: P[Double]) = new SoftwareSteps(this.outToE[Created].has("weight", predicate).inV().raw)
-
-  def connectedEdge: List[String] = this.outE().label.toList
-
-  def knownLevels: List[Double] = this.outToE[Knows].value[Double]("weight").toList
-
-  def knows: PersonSteps = new PersonSteps(this.outTo[Knows].raw)
-
-  def friends(threshold: Double = 0.8): PersonSteps = new PersonSteps(this.outToE[Knows].has("weight", P.gte(threshold)).inV().raw)
 
   override def newInstance(newRaw: GremlinScala[Vertex]): PersonSteps = new PersonSteps(newRaw)
 }

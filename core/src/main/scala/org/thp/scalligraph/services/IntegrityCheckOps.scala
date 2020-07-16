@@ -8,7 +8,6 @@ import org.apache.tinkerpop.gremlin.structure.T
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.{Database, Entity, IndexType, UniMapping}
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.VertexSteps
 import play.api.Logger
 import shapeless.{::, HNil}
 
@@ -24,7 +23,7 @@ sealed trait GenIntegrityCheckOps {
 
 trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
   val db: Database
-  val service: VertexSrv[E, _ <: VertexSteps[E]]
+  val service: VertexSrv[E]
 
   lazy val name: String     = service.model.label
   lazy val logger: Logger   = Logger(getClass)
