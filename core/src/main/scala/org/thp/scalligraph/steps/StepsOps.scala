@@ -4,7 +4,7 @@ import java.lang.{Double => JDouble, Long => JLong}
 import java.util.{Date, UUID, Collection => JCollection, List => JList, Map => JMap}
 
 import scala.reflect.runtime.{universe => ru}
-import gremlin.scala.{ColumnType, Element, Key, P, Vertex}
+import gremlin.scala.{ColumnType, Edge, Element, Key, P, Vertex}
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, GraphTraversal}
 import org.apache.tinkerpop.gremlin.process.traversal.{Order, Scope, Traverser}
 import org.apache.tinkerpop.gremlin.structure.Column
@@ -123,7 +123,7 @@ object StepsOps {
 
   implicit class TraversalOps[D, G, C <: Converter[D, G]](traversal: Traversal[D, G, C]) {
     import gremlin.scala.GremlinScala
-    type ConvMapper[DD, GG] = GraphConverterMapper[Converter[D, G], Converter[DD, GG]]
+//    type ConvMapper[DD, GG] = GraphConverterMapper[Converter[D, G], Converter[DD, GG]]
 
     def raw: GremlinScala[G]          = traversal.raw
     def deepRaw: GraphTraversal[_, G] = traversal.raw.traversal
@@ -170,10 +170,10 @@ object StepsOps {
 //      })
 
     def count: Traversal[Long, JLong, Converter[Long, JLong]] =
-      traversal.onRawMap[Long, JLong, Converter[Long, JLong]](_.count(), _ => Converter.long)
+      traversal.onRawMap[Long, JLong, Converter[Long, JLong]](_.count(), Converter.long)
 
     def localCount: Traversal[Long, JLong, Converter[Long, JLong]] =
-      traversal.onRawMap[Long, JLong, Converter[Long, JLong]](_.count(Scope.local), _ => Converter.long)
+      traversal.onRawMap[Long, JLong, Converter[Long, JLong]](_.count(Scope.local), Converter.long)
 
     def sum: Traversal[D, G, C] =
       traversal.mapAsNumber(_.onDeepRaw(_.sum[Number]))
@@ -193,7 +193,7 @@ object StepsOps {
     }
 
     def constant[A](cst: A): Traversal[A, A, IdentityConverter[A]] =
-      traversal.onDeepRawMap[A, A, IdentityConverter[A]](_.constant(cst), _ => Converter.identity[A])
+      traversal.onDeepRawMap[A, A, IdentityConverter[A]](_.constant(cst), Converter.identity[A])
 
     def group[DK, DV, GK, GV, CK <: Converter[DK, GK], CV <: Converter[DV, GV]](
         keysBy: GenericBySelector[D, G, C] => ByResult[G, DK, GK, CK],
@@ -209,7 +209,7 @@ object StepsOps {
           .andThen(_.asInstanceOf[GraphTraversal[_, G]])
           .andThen(valueByResult)
           .andThen(_.asInstanceOf[GraphTraversal[Map[DK, Seq[DV]], JMap[GK, JCollection[GV]]]]),
-        _ => Converter.cmap[DK, DV, GK, GV, CK, CV](keyByResult.converter, valueByResult.converter)
+        Converter.cmap[DK, DV, GK, GV, CK, CV](keyByResult.converter, valueByResult.converter)
       )
     }
 
@@ -225,20 +225,20 @@ object StepsOps {
           .asInstanceOf[GraphTraversal[_, G]])
           .andThen(keyByResult)
           .andThen(_.asInstanceOf[GraphTraversal[Map[KD, Seq[D]], JMap[KG, JCollection[G]]]]),
-        _ => Converter.cmap[KD, D, KG, G, KC, C](keyByResult.converter, traversal.converter)
+        Converter.cmap[KD, D, KG, G, KC, C](keyByResult.converter, traversal.converter)
       )
     }
 
     def select[DD, GG, CC <: Converter[DD, GG]](label: StepLabel[DD, GG, CC]): Traversal[DD, GG, CC] =
-      traversal.onDeepRawMap[DD, GG, CC](_.select(label.name).asInstanceOf[GraphTraversal[DD, GG]], _ => label.converter)
+      traversal.onDeepRawMap[DD, GG, CC](_.select(label.name).asInstanceOf[GraphTraversal[DD, GG]], label.converter)
 
     def fold: Traversal[Seq[D], JList[G], Converter.CList[D, G, C]] =
-      traversal.onDeepRawMap[Seq[D], JList[G], Converter.CList[D, G, C]](_.fold(), _ => Converter.clist[D, G, C](traversal.converter))
+      traversal.onDeepRawMap[Seq[D], JList[G], Converter.CList[D, G, C]](_.fold(), Converter.clist[D, G, C](traversal.converter))
 
     def unfold[DU, GU, CC <: Converter[DU, GU]](
         implicit ev: C <:< Poly1Converter[_, _, DU, GU, CC]
     ): Traversal[DU, GU, CC] =
-      traversal.onDeepRawMap[DU, GU, CC](_.unfold[GU](), _ => traversal.converter.subConverter)
+      traversal.onDeepRawMap[DU, GU, CC](_.unfold[GU](), traversal.converter.subConverter)
 
     def sort(f: (SortBySelector[D, G, C] => ByResult[G, G, G, _])*): Traversal[D, G, C] =
       traversal.onDeepRaw(t => f.map(_(sortBySelector)).foldLeft(t.order())((s, g) => g.app(s)))
@@ -247,21 +247,21 @@ object StepsOps {
     def selectKeys[DU, GU, CC <: Converter[DU, GU]](
         implicit ev: C <:< Poly2Converter[_, _, DU, _, GU, _, CC, _]
     ): Traversal[DU, GU, CC] =
-      traversal.onDeepRawMap[DU, GU, CC](_.select(Column.keys).asInstanceOf[GraphTraversal[_, GU]], _ => traversal.converter.subConverterKey)
+      traversal.onDeepRawMap[DU, GU, CC](_.select(Column.keys).asInstanceOf[GraphTraversal[_, GU]], traversal.converter.subConverterKey)
 
     /* select only the values from a map (e.g. groupBy) - see usage examples in SelectSpec.scala */
     def selectValues[DU, GU, CC <: Converter[DU, GU]](
         implicit
         ev: C <:< Poly2Converter[_, _, _, DU, _, GU, _, CC]
     ): Traversal[DU, GU, CC] =
-      traversal.onDeepRawMap[DU, GU, CC](_.select(Column.values).asInstanceOf[GraphTraversal[_, GU]], _ => traversal.converter.subConverterValue)
+      traversal.onDeepRawMap[DU, GU, CC](_.select(Column.values).asInstanceOf[GraphTraversal[_, GU]], traversal.converter.subConverterValue)
 
     def coalesce[DD, GG, CC <: Converter[DD, GG]](f: (Traversal[D, G, C] => Traversal[DD, GG, CC])*): Traversal[DD, GG, CC] = {
 
       val ts = f.map(_(traversal.start))
       ts.headOption
         .fold(traversal.limit(0).asInstanceOf[Traversal[DD, GG, CC]])(t =>
-          traversal.onDeepRawMap[DD, GG, CC](_.coalesce(ts.map(_.deepRaw): _*), _ => t.converter)
+          traversal.onDeepRawMap[DD, GG, CC](_.coalesce(ts.map(_.deepRaw): _*), t.converter)
         )
     }
 
@@ -269,7 +269,7 @@ object StepsOps {
         builder: ProjectionBuilder[Nil.type, D, G, C] => ProjectionBuilder[A, D, G, C]
     ): Traversal[A, JMap[String, Any], Converter[A, JMap[String, Any]]] = {
       val b: ProjectionBuilder[A, D, G, C] = builder(projectionBuilder)
-      traversal.onDeepRawMap[A, JMap[String, Any], Converter[A, JMap[String, Any]]](b.traversal, _ => b.converter)
+      traversal.onDeepRawMap[A, JMap[String, Any], Converter[A, JMap[String, Any]]](b.traversal, b.converter)
     }
 
     def flatProject[PD, PG, PC <: Converter[PD, PG]](
@@ -284,25 +284,37 @@ object StepsOps {
               p(acc).asInstanceOf[GraphTraversal[Any, JMap[String, Any]]]
             )
             .asInstanceOf[GraphTraversal[_, JMap[String, Any]]],
-        _ => (m: JMap[String, Any]) => labels.zip(projections).map { case (l, p) => p.converter(m.get(l).asInstanceOf[PG]) }
+        (m: JMap[String, Any]) => labels.zip(projections).map { case (l, p) => p.converter(m.get(l).asInstanceOf[PG]) }
       )
     }
 
-    def outTo[E <: EdgeEntity[_, _]: ru.TypeTag](implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] = {
-      val model = Model.getEdgeModel[E, _, _]
-      model.fromLabel
-      model.Traversal(raw.out(model.label))
-    }
+    def out[E <: Product: ru.TypeTag](implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
+      traversal.onDeepRawMap(_.out(ru.typeOf[E].typeSymbol.name.toString), Converter.identity[Vertex])
+    def out(label: String)(implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
+      traversal.onDeepRawMap(_.out(label), Converter.identity[Vertex])
+    def out(implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
+      traversal.onDeepRawMap(_.out(), Converter.identity[Vertex])
 
-    def outToE[E <: Product: ru.TypeTag](implicit ev: G <:< Vertex): Traversal[Edge, Edge] =
-      Traversal(raw.outE(ru.typeOf[E].typeSymbol.name.toString))
+    def outE[E <: Product: ru.TypeTag](implicit ev: G <:< Vertex): Traversal[Edge, Edge, IdentityConverter[Edge]] =
+      traversal.onDeepRawMap(_.outE(ru.typeOf[E].typeSymbol.name.toString), Converter.identity[Edge])
+    def outE(label: String)(implicit ev: G <:< Vertex): Traversal[Edge, Edge, IdentityConverter[Edge]] =
+      traversal.onDeepRawMap(_.outE(label), Converter.identity[Edge])
+    def outE(implicit ev: G <:< Vertex): Traversal[Edge, Edge, IdentityConverter[Edge]] =
+      traversal.onDeepRawMap(_.outE(), Converter.identity[Edge])
 
-    def outE()(implicit ev: G <:< Vertex): Traversal[Edge, Edge] =
-      Traversal(raw.outE())
+    def in[E <: Product: ru.TypeTag](implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
+      traversal.onDeepRawMap(_.in(ru.typeOf[E].typeSymbol.name.toString), Converter.identity[Vertex])
+    def in(label: String)(implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
+      traversal.onDeepRawMap(_.in(label), Converter.identity[Vertex])
+    def in(implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
+      traversal.onDeepRawMap(_.in(), Converter.identity[Vertex])
 
-    def inTo[E <: Product: ru.TypeTag](implicit ev: G <:< Vertex): Traversal[Vertex, Vertex] =
-      Traversal(raw.in(ru.typeOf[E].typeSymbol.name.toString))
-    def inToE[E <: Product: ru.TypeTag](implicit ev: G <:< Vertex): Traversal[Edge, Edge] = Traversal(raw.inE(ru.typeOf[E].typeSymbol.name.toString))
+    def inE[E <: Product: ru.TypeTag](implicit ev: G <:< Vertex): Traversal[Edge, Edge, IdentityConverter[Edge]] =
+      traversal.onDeepRawMap(_.inE(ru.typeOf[E].typeSymbol.name.toString), Converter.identity[Edge])
+    def inE(label: String)(implicit ev: G <:< Vertex): Traversal[Edge, Edge, IdentityConverter[Edge]] =
+      traversal.onDeepRawMap(_.inE(label), Converter.identity[Edge])
+    def inE(implicit ev: G <:< Vertex): Traversal[Edge, Edge, IdentityConverter[Edge]] =
+      traversal.onDeepRawMap(_.inE(), Converter.identity[Edge])
 
     def inV()(implicit ev: G <:< Edge): Traversal[Vertex, Vertex]  = Traversal(raw.inV())
     def outV()(implicit ev: G <:< Edge): Traversal[Vertex, Vertex] = Traversal(raw.outV())
