@@ -53,7 +53,12 @@ class SessionAuthSrv(
     */
   override def setSessionUser(authContext: AuthContext): Result => Result = { result: Result =>
     if (result.header.status / 100 < 4) {
-      val newAuthContext = result.header.headers.get("X-Organisation").fold(authContext)(authContext.changeOrganisation)
+      val newAuthContext = result.header.headers.get("X-Organisation").fold(authContext) { newOrganisation =>
+        authContext.changeOrganisation(
+          newOrganisation,
+          Permission(result.header.headers.get("X-Permissions").fold(Set.empty[String])(_.split(',').toSet))
+        )
+      }
       val session = result.newSession.getOrElse(Session()) +
         ("authContext" -> Json.toJson(newAuthContext).toString) +
         ("expire"      -> (now + maxSessionInactivity.toMillis).toString)

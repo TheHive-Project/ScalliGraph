@@ -13,13 +13,14 @@ trait AuthContext {
   def organisation: String
   def requestId: String
   def permissions: Set[Permission]
-  def changeOrganisation(newOrganisation: String): AuthContext
+  def changeOrganisation(newOrganisation: String, newPermissions: Set[Permission]): AuthContext
   def isPermitted(requiredPermission: Permission): Boolean = permissions.contains(requiredPermission)
 }
 
 case class AuthContextImpl(userId: String, userName: String, organisation: String, requestId: String, permissions: Set[Permission])
     extends AuthContext {
-  override def changeOrganisation(newOrganisation: String): AuthContext = copy(organisation = newOrganisation)
+  override def changeOrganisation(newOrganisation: String, newPermissions: Set[Permission]): AuthContext =
+    copy(organisation = newOrganisation, permissions = newPermissions)
 }
 
 object AuthContext {
