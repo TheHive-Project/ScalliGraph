@@ -538,9 +538,9 @@ class JanusDatabase(
   override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
     val createdVertex = model.create(v)(this, graph)
     val entity        = DummyEntity(model, createdVertex.id(), authContext.userId)
-    setSingleProperty(createdVertex, "_createdAt", entity._createdAt, createdAtMapping)
-    setSingleProperty(createdVertex, "_createdBy", entity._createdBy, createdByMapping)
-    setSingleProperty(createdVertex, "_label", model.label, UniMapping.string)
+    createdAtMapping.setProperty(createdVertex, "_createdAt", entity._createdAt)
+    createdByMapping.setProperty(createdVertex, "_createdBy", entity._createdBy)
+    UniMapping.string.setProperty(createdVertex, "_label", model.label)
     logger.trace(s"Created vertex is ${Model.printElement(createdVertex)}")
     model.addEntity(v, entity)
   }
@@ -559,9 +559,9 @@ class JanusDatabase(
     } yield {
       val createdEdge = model.create(e, f, t)(this, graph)
       val entity      = DummyEntity(model, createdEdge.id(), authContext.userId)
-      setSingleProperty(createdEdge, "_createdAt", entity._createdAt, createdAtMapping)
-      setSingleProperty(createdEdge, "_createdBy", entity._createdBy, createdByMapping)
-      setSingleProperty(createdEdge, "_label", model.label, UniMapping.string)
+      createdAtMapping.setProperty(createdEdge, "_createdAt", entity._createdAt)
+      createdByMapping.setProperty(createdEdge, "_createdBy", entity._createdBy)
+      UniMapping.string.setProperty(createdEdge, "_label", model.label)
       logger.trace(s"Create edge ${model.label} from $f to $t: ${Model.printElement(createdEdge)}")
       model.addEntity(e, entity)
     }

@@ -2,15 +2,10 @@ package org.thp.scalligraph.models
 
 import java.util.Date
 
-import scala.reflect.runtime.{universe => ru}
 import gremlin.scala._
-import org.thp.scalligraph.InternalError
-import org.thp.scalligraph.steps.Converter
-
-import scala.util.{Failure, Try}
-//import gremlin.scala.dsl.{Converter, DomainRoot}
 import org.thp.scalligraph.NotFoundError
 import org.thp.scalligraph.macros.ModelMacro
+import org.thp.scalligraph.steps.Converter
 
 import scala.annotation.StaticAnnotation
 import scala.collection.JavaConverters._
@@ -25,17 +20,17 @@ object IndexType extends Enumeration {
 }
 class DefineIndex(indexType: IndexType.Value, fields: String*) extends StaticAnnotation
 
-trait HasModel[E <: Product] {
-  val model: Model.Base[E]
-}
-
-trait HasVertexModel[E <: Product] extends HasModel[E] {
-  val model: Model.Vertex[E]
-}
-
-trait HasEdgeModel[E <: Product, FROM <: Product, TO <: Product] extends HasModel[E] {
-  val model: Model.Edge[E, FROM, TO]
-}
+//trait HasModel[E <: Product] {
+//  val model: Model.Base[E]
+//}
+//
+//trait HasVertexModel[E <: Product] extends HasModel[E] {
+//  val model: Model.Vertex[E]
+//}
+//
+//trait HasEdgeModel[E <: Product, FROM <: Product, TO <: Product] extends HasModel[E] {
+//  val model: Model.Edge[E, FROM, TO]
+//}
 
 trait Entity {
   def _id: String
@@ -60,9 +55,9 @@ object Model {
     type E = E0
   }
 
-  def vertex[E <: Product]: Vertex[E] = macro ModelMacro.mkVertexModel[E]
+  def buildVertexModel[E <: Product]: Vertex[E] = macro ModelMacro.mkVertexModel[E]
 
-  def edge[E <: Product, FROM <: Product, TO <: Product]: Edge[E, FROM, TO] =
+  def buildEdgeModel[E <: Product, FROM <: Product, TO <: Product]: Edge[E, FROM, TO] =
     macro ModelMacro.mkEdgeModel[E, FROM, TO]
 
   def printElement(e: Element): String =
@@ -74,29 +69,8 @@ object Model {
         )
         .mkString
 
-  def getVertexModel[E <: Product: ru.TypeTag]: Model.Vertex[E] = {
-    val rm = ru.runtimeMirror(getClass.getClassLoader)
-    Try(rm.reflectModule(ru.typeOf[E].typeSymbol.companion.asModule).instance)
-      .collect {
-        case hm: HasVertexModel[_] => hm.model.asInstanceOf[Model.Vertex[E]]
-      }
-      .recoverWith {
-        case error => Failure(InternalError(s"${ru.typeOf[E].typeSymbol} is not a vertex model", error))
-      }
-      .get
-  }
-
-  def getEdgeModel[E <: Product: ru.TypeTag, FROM <: Product, TO <: Product]: Model.Edge[E, FROM, TO] = {
-    val rm = ru.runtimeMirror(getClass.getClassLoader)
-    Try(rm.reflectModule(ru.typeOf[E].typeSymbol.companion.asModule).instance)
-      .collect {
-        case hm: HasEdgeModel[_, _, _] => hm.model.asInstanceOf[Model.Edge[E, FROM, TO]]
-      }
-      .recoverWith {
-        case error => Failure(InternalError(s"${ru.typeOf[E].typeSymbol} is not an edge model", error))
-      }
-      .get
-  }
+  implicit def vertex[E <: Product]: Vertex[E] = macro ModelMacro.getModel[E]
+  implicit def edge[E <: Product, FROM <: Product, TO <: Product]: Edge[E, FROM, TO] = macro ModelMacro.getModel[E]
 }
 
 abstract class Model {
@@ -111,14 +85,79 @@ abstract class Model {
 
   def get(id: String)(implicit db: Database, graph: Graph): ElementType
   val fields: Map[String, Mapping[_, _, _]]
-  def toDomain(element: ElementType)(implicit db: Database): EEntity
   def addEntity(e: E, entity: Entity): EEntity
+  val converter: Converter[EEntity, ElementType]
 
-  val converter: Converter[EEntity, ElementType] = ???
-//    new Converter[EEntity] {
+  //    new Converter[EEntity] {
 //      override type GraphType = ElementType
 //      override def toDomain(v: ElementType): E with Entity = thisModel.toDomain(v)(db)
 //      override def toGraph(e: EEntity): GraphType          = thisModel.get(e._id)(db, graph)
+//    }
+//  def setProperty[V](
+//      traversal: Traversal[EEntity, ElementType, Converter[EEntity, ElementType]],
+//      name: String,
+//      value: V
+//  ): Traversal[EEntity, ElementType, Converter[EEntity, ElementType]] = {
+//    lazy val label = UUID.randomUUID().toString
+//    val mapping    = fields(name)
+//
+//    mapping match {
+//      case m: SingleMapping[V, _] =>
+//        m.toGraphOpt(value).fold(traversal.removeProperty(name))(v => traversal.onDeepRaw(_.property(name, v)))
+//      case m: OptionMapping[v, _] =>
+//        value
+//          .asInstanceOf[Option[v]]
+//          .flatMap(m.toGraphOpt)
+//          .fold(traversal.removeProperty(name))(v => traversal.onDeepRaw(_.property(name, v)))
+//      case m: ListMapping[v, _] =>
+//        traversal.onDeepRaw { gt =>
+//          value
+//            .asInstanceOf[Seq[v]]
+//            .flatMap(m.toGraphOpt)
+//            .foldLeft(gt.as(label).properties(name).drop().iterate().select(label))(_.property(Cardinality.list, name, _))
+//            .asInstanceOf[gt.type]
+//        }
+//      case m: SetMapping[v, _] =>
+//        traversal.onDeepRaw { gt =>
+//          value
+//            .asInstanceOf[Set[v]]
+//            .flatMap(m.toGraphOpt)
+//            .foldLeft(gt.as(label).properties(name).drop().iterate().select(label))(_.property(Cardinality.set, name, _))
+//            .asInstanceOf[gt.type]
+//        }
+//    }
+//  }
+//
+//  def setProperty[V](
+//      element: ElementType,
+//      name: String,
+//      value: V
+//  ): Unit = setProperty(element, name, value, fields(name))
+//
+//  def setProperty[V](
+//      element: ElementType,
+//      name: String,
+//      value: V,
+//      mapping: Mapping[_, _, _]
+//  ): Unit =
+//    (element, mapping) match {
+//      case (_, m: SingleMapping[V, _]) =>
+//        m.toGraphOpt(value).fold(element.property(name).remove())(v => element.property(name, v))
+//      case (_, m: OptionMapping[v, _]) =>
+//        value
+//          .asInstanceOf[Option[v]]
+//          .flatMap(m.toGraphOpt)
+//          .fold(element.property(name).remove())(v => element.property(name, v))
+//      case (v: Vertex, m: ListMapping[v, _]) =>
+//        value
+//          .asInstanceOf[Seq[v]]
+//          .flatMap(m.toGraphOpt)
+//          .foreach(v.property(Cardinality.list, name, _))
+//      case (v: Vertex, m: SetMapping[v, _]) =>
+//        value
+//          .asInstanceOf[Set[v]]
+//          .flatMap(m.toGraphOpt)
+//          .foreach(v.property(Cardinality.set, name, _))
 //    }
 }
 

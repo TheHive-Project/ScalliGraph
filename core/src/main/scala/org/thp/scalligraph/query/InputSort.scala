@@ -9,8 +9,8 @@ import org.thp.scalligraph.InvalidFormatAttributeError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FSeq, FString, FieldsParser}
 import org.thp.scalligraph.models.{Database, MappingCardinality}
-import org.thp.scalligraph.steps.{ByResult, Converter, IdentityConverter, SortBySelector, Traversal}
 import org.thp.scalligraph.steps.StepsOps._
+import org.thp.scalligraph.steps.{Converter, SortBySelector, Traversal}
 
 import scala.reflect.runtime.{universe => ru}
 
@@ -21,33 +21,30 @@ case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
       traversal.by(f(__[Vertex]).traversal, order)
   }
 
-  override def apply[D, G](
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       traversalType: ru.Type,
-      traversal: Traversal[_, _, _],
+      traversal: Traversal.ANY,
       authContext: AuthContext
-  ): Traversal[D, G, Converter[D, G]] = {
+  ): Traversal.ANY = {
     val orderBys = fieldOrder.map {
       case (fieldName, order) =>
-        def compute[PD, PG]: SortBySelector[D, G, Converter[D, G]] => ByResult[G, G, G, IdentityConverter[G]] = {
-          val property = PublicProperty.getProperty[PD, PG](publicProperties, traversalType, fieldName)
-          if (property.mapping.cardinality == MappingCardinality.single) {
-            (_: SortBySelector[D, G, Converter[D, G]]).by(property.get(_, FPath(fieldName)), order)
-          } else {
-            (_: SortBySelector[D, G, Converter[D, G]])
-              .by(
-                _.coalesce[PD, PG, Converter[PD, PG]](
-                  property.get(_, FPath(fieldName)),
-                  _.constant[PG](null.asInstanceOf[PG]).map(property.mapping.converter) // FIXME check if mapping can accept null
-                ),
-                order
-              )
-          }
+        val property = PublicProperty.getProperty(publicProperties, traversalType, fieldName)
+        if (property.mapping.cardinality == MappingCardinality.single) {
+          (_: SortBySelector[Any, Any, Converter[Any, Any]]).by(property.select(_, FPath(fieldName)).cast[Any, Any], order)
+        } else {
+          (_: SortBySelector[Any, Any, Converter[Any, Any]])
+            .by(
+              _.coalesce(
+                property.select(_, FPath(fieldName)).cast[Any, Any],
+                _.constant[Any](null.asInstanceOf[Any])
+              ),
+              order
+            )
         }
-        compute
     }
-    traversal.cast[D, G].sort(orderBys: _*)
+    traversal.cast[Any, Any].sort(orderBys: _*)
   }
 }
 

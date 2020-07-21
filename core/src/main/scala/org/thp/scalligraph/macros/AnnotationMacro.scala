@@ -11,24 +11,19 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
     annottees.toList match {
       case (modelClass @ ClassDef(classMods, className, Nil, _)) :: tail if classMods.hasFlag(Flag.CASE) =>
         val modelDef = Seq(
-          q"val model = org.thp.scalligraph.models.Model.vertex[$className]"
+          q"val model = org.thp.scalligraph.models.Model.buildVertexModel[$className]"
         )
 
         val modelModule = tail match {
           case ModuleDef(moduleMods, moduleName, moduleTemplate) :: Nil =>
-            val parents = tq"org.thp.scalligraph.models.HasVertexModel[$className]" :: moduleTemplate.parents.filterNot {
-              case Select(_, TypeName("AnyRef")) => true
-              case _                             => false
-            }
-
             ModuleDef(
               moduleMods,
               moduleName,
-              Template(parents = parents, self = moduleTemplate.self, body = moduleTemplate.body ++ modelDef)
+              Template(parents = moduleTemplate.parents, self = moduleTemplate.self, body = moduleTemplate.body ++ modelDef)
             )
           case Nil =>
             val moduleName = className.toTermName
-            q"object $moduleName extends org.thp.scalligraph.models.HasVertexModel[$className] { ..$modelDef }"
+            q"object $moduleName { ..$modelDef }"
         }
 
         Block(modelClass :: modelModule :: Nil, Literal(Constant(())))
@@ -45,26 +40,22 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
     annottees.toList match {
       case (modelClass @ ClassDef(classMods, className, Nil, _)) :: tail if classMods.hasFlag(Flag.CASE) =>
         val modelDef = Seq(
-          q"val model = org.thp.scalligraph.models.Model.edge[$className, $fromType, $toType]"
+          q"val model = org.thp.scalligraph.models.Model.buildEdgeModel[$className, $fromType, $toType]"
         )
         val modelModule = tail match {
           case ModuleDef(moduleMods, moduleName, moduleTemplate) :: Nil =>
-            val parents = tq"org.thp.scalligraph.models.HasEdgeModel[$className, $fromType, $toType]" :: moduleTemplate.parents.filterNot {
-              case Select(_, TypeName("AnyRef")) => true
-              case _                             => false
-            }
             ModuleDef(
               moduleMods,
               moduleName,
               Template(
-                parents = parents,
+                parents = moduleTemplate.parents,
                 self = moduleTemplate.self,
                 body = moduleTemplate.body ++ modelDef
               )
             )
           case Nil =>
             val moduleName = className.toTermName
-            q"object $moduleName extends org.thp.scalligraph.models.HasEdgeModel[$className, $fromType, $toType] { ..$modelDef }"
+            q"object $moduleName { ..$modelDef }"
         }
 
         Block(modelClass :: modelModule :: Nil, Literal(Constant(())))

@@ -10,117 +10,113 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.{Database, Mapping}
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{Converter, IdMapping, Traversal}
+import org.thp.scalligraph.steps.{IdMapping, Traversal}
 import play.api.Logger
 
 import scala.collection.JavaConverters._
 import scala.reflect.runtime.{universe => ru}
 
 case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputQuery {
-  override def apply[D, G](
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       traversalType: ru.Type,
-      traversal: Traversal[_, _, _],
+      traversal: Traversal.ANY,
       authContext: AuthContext
-  ): Traversal[D, G, Converter[D, G]] = {
-    def compute[PD, PG]: Traversal[D, G, Converter[D, G]] = {
-      val property = PublicProperty.getProperty[PD, PG](publicProperties, traversalType, fieldName)
-      if (property.mapping == IdMapping) {
-        val newValue = predicate.getValue match {
-          case c: JCollection[_] => c.asScala.map(db.toId).asJavaCollection
-          case other             => db.toId(other)
-        }
-        predicate.asInstanceOf[P[Any]].setValue(newValue)
+  ): Traversal.ANY = {
+    val property = PublicProperty.getProperty(publicProperties, traversalType, fieldName)
+    if (property.mapping == IdMapping) {
+      val newValue = predicate.getValue match {
+        case c: JCollection[_] => c.asScala.map(db.toId).asJavaCollection
+        case other             => db.toId(other)
       }
-      traversal.cast[D, G].filter { t =>
-        property.get(t, FPath(fieldName)).is(db.mapPredicate(predicate.asInstanceOf[P[PG]]))
-      }
+      predicate.asInstanceOf[P[Any]].setValue(newValue)
     }
-    compute
+    traversal.cast[Any, Any].filter { t =>
+      property.select(t, FPath(fieldName)).cast[Any, Any].is(db.mapPredicate(predicate.asInstanceOf[P[Any]]))
+    }
   }
 }
 
 case class IsDefinedFilter(fieldName: String) extends InputQuery {
-  override def apply[D, G](
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       traversalType: ru.Type,
-      traversal: Traversal[_, _, _],
+      traversal: Traversal.ANY,
       authContext: AuthContext
-  ): Traversal[D, G, Converter[D, G]] = {
+  ): Traversal.ANY = {
     val property = PublicProperty.getProperty(publicProperties, traversalType, fieldName)
-    traversal.cast[D, G].filter(t => property.get(t, FPath(fieldName)))
+    traversal.cast[Any, Any].filter(t => property.select(t, FPath(fieldName)).cast[Any, Any])
   }
 }
 
 case class OrFilter(inputFilters: Seq[InputQuery]) extends InputQuery {
 
-  override def apply[D, G](
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       traversalType: ru.Type,
-      traversal: Traversal[_, _, _],
+      traversal: Traversal.ANY,
       authContext: AuthContext
-  ): Traversal[D, G, Converter[D, G]] =
-    inputFilters.map(ff => (t: Traversal[D, G, Converter[D, G]]) => ff(db, publicProperties, traversalType, t, authContext).cast[D, G]) match {
-      case Seq(f) => traversal.cast[D, G].filter(f)
-      case Seq()  => traversal.cast[D, G].limit(0)
-      case f      => traversal.cast[D, G].filter(_.or(f: _*))
+  ): Traversal.ANY =
+    inputFilters.map(ff => (t: Traversal.ANY) => ff(db, publicProperties, traversalType, t, authContext)) match {
+      case Seq(f) => traversal.filter(f)
+      case Seq()  => traversal.limit(0)
+      case f      => traversal.filter(_.or(f: _*))
     }
 }
 
 case class AndFilter(inputFilters: Seq[InputQuery]) extends InputQuery {
 
-  override def apply[D, G](
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       traversalType: ru.Type,
-      traversal: Traversal[_, _, _],
+      traversal: Traversal.ANY,
       authContext: AuthContext
-  ): Traversal[D, G, Converter[D, G]] =
-    inputFilters.map(ff => (t: Traversal[D, G, Converter[D, G]]) => ff(db, publicProperties, traversalType, t, authContext).cast[D, G]) match {
-      case Seq(f)      => traversal.cast[D, G].filter(f)
-      case Seq()       => traversal.cast[D, G].filter(_.not(identity))
-      case Seq(f @ _*) => traversal.cast[D, G].filter(_.and(f: _*))
+  ): Traversal.ANY =
+    inputFilters.map(ff => (t: Traversal.ANY) => ff(db, publicProperties, traversalType, t, authContext)) match {
+      case Seq(f)      => traversal.filter(f)
+      case Seq()       => traversal.filter(_.not(identity))
+      case Seq(f @ _*) => traversal.filter(_.and(f: _*))
     }
 }
 
 case class NotFilter(inputFilter: InputQuery) extends InputQuery {
 
-  override def apply[D, G](
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       traversalType: ru.Type,
-      traversal: Traversal[_, _, _],
+      traversal: Traversal.ANY,
       authContext: AuthContext
-  ): Traversal[D, G, Converter[D, G]] = {
-    val criteria: Traversal[D, G, Converter[D, G]] => Traversal[D, G, Converter[D, G]] = (s: Traversal[D, G, Converter[D, G]]) =>
-      inputFilter(db, publicProperties, traversalType, s, authContext)
-    traversal.cast[D, G].filter(_.not(criteria))
-  }
+  ): Traversal.ANY =
+//    val criteria: Traversal.ANY => Traversal.ANY = (s: Traversal.ANY) =>
+//      inputFilter(db, publicProperties, traversalType, s, authContext)
+    traversal.cast[Any, Any].filter(_.not(t => inputFilter(db, publicProperties, traversalType, t, authContext).cast[Any, Any]))
 }
 
 object YesFilter extends InputQuery {
 
-  override def apply[D, G](
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       traversalType: ru.Type,
-      traversal: Traversal[_, _, _],
+      traversal: Traversal.ANY,
       authContext: AuthContext
-  ): Traversal[D, G, Converter[D, G]] = traversal.cast[D, G]
+  ): Traversal.ANY = traversal
 }
 
 class IdFilter(id: String) extends InputQuery {
 
-  override def apply[D, G](
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
       traversalType: ru.Type,
-      traversal: Traversal[_, _, _],
+      traversal: Traversal.ANY,
       authContext: AuthContext
-  ): Traversal[D, G, Converter[D, G]] = traversal.cast[D, G].getByIds(id)
+  ): Traversal.ANY = traversal.cast[Any, Any].getByIds(id)
 }
 
 object InputFilter {

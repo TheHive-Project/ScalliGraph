@@ -4,6 +4,7 @@ import gremlin.scala.P
 import org.thp.scalligraph.controllers.{FieldsParser, Renderer}
 import org.thp.scalligraph.query._
 import org.thp.scalligraph.steps.StepsOps._
+import org.thp.scalligraph.steps.Traversal
 import play.api.libs.json.{Json, OWrites}
 
 case class OutputPerson(createdBy: String, label: String, name: String, age: Int)
@@ -20,16 +21,19 @@ object OutputSoftware {
 
 object ModernOutputs {
   implicit val personOutput: Renderer[Person with Entity] =
-    Renderer.json[Person with Entity, OutputPerson](person => new OutputPerson(person._createdBy, s"Mister ${person.name}", person.name, person.age))
+    Renderer.toJson[Person with Entity, OutputPerson](person => new OutputPerson(person._createdBy, s"Mister ${person.name}", person.name, person.age)
+    )
   implicit val softwareOutput: Renderer[Software with Entity] =
-    Renderer.json[Software with Entity, OutputSoftware](software => new OutputSoftware(software._createdBy, software.name, software.lang))
+    Renderer.toJson[Software with Entity, OutputSoftware](software => new OutputSoftware(software._createdBy, software.name, software.lang))
 }
 
 case class SeniorAgeThreshold(age: Int)
 case class FriendLevel(level: Double)
 
 class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
+  import ModernOps._
   import ModernOutputs._
+
   val personSrv   = new PersonSrv
   val softwareSrv = new SoftwareSrv
 
@@ -37,19 +41,19 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
 
   override lazy val publicProperties: List[PublicProperty[_, _]] = {
     val labelMapping = SingleMapping[String, String](
-      toGraphOptFn = {
-        case d if d startsWith "Mister " => Some(d.drop(7))
-        case d                           => Some(d)
+      toGraph = {
+        case d if d startsWith "Mister " => d.drop(7)
+        case d                           => d
       },
-      toDomainFn = (g: String) => "Mister " + g
+      toDomain = (g: String) => "Mister " + g
     )
-    PublicPropertyListBuilder[PersonSteps]
+    PublicPropertyListBuilder[Person]
       .property("createdBy", UniMapping.string)(_.rename("_createdBy").readonly)
       .property("label", labelMapping)(_.rename("name").updatable)
       .property("name", UniMapping.string)(_.field.updatable)
       .property("age", UniMapping.int)(_.field.updatable)
       .build :::
-      PublicPropertyListBuilder[SoftwareSteps]
+      PublicPropertyListBuilder[Software]
         .property("createdBy", UniMapping.string)(_.rename("_createdBy").readonly)
         .property("name", UniMapping.string)(_.field.updatable)
         .property("lang", UniMapping.string)(_.field.updatable)
@@ -60,21 +64,21 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
   }
 
   override lazy val queries: Seq[ParamQuery[_]] = Seq(
-    Query.init[PersonSteps]("allPeople", (graph, _) => personSrv.initSteps(graph)),
-    Query.init[SoftwareSteps]("allSoftware", (graph, _) => softwareSrv.initSteps(graph)),
-    Query.initWithParam[SeniorAgeThreshold, PersonSteps](
+    Query.init[Traversal.V[Person]]("allPeople", (graph, _) => personSrv.initSteps(graph)),
+    Query.init[Traversal.V[Software]]("allSoftware", (graph, _) => softwareSrv.initSteps(graph)),
+    Query.initWithParam[SeniorAgeThreshold, Traversal.V[Person]](
       "seniorPeople",
       FieldsParser[SeniorAgeThreshold], { (seniorAgeThreshold, graph, _) =>
         personSrv.initSteps(graph).has("age", P.gte(seniorAgeThreshold.age))
       }
     ),
-    Query[PersonSteps, SoftwareSteps]("created", (personSteps, _) => personSteps.created),
-    Query.withParam[FriendLevel, PersonSteps, PersonSteps](
+    Query[Traversal.V[Person], Traversal.V[Software]]("created", (personSteps, _) => personSteps.created),
+    Query.withParam[FriendLevel, Traversal.V[Person], Traversal.V[Person]](
       "friends",
       FieldsParser[FriendLevel],
       (friendLevel, personSteps, _) => personSteps.friends(friendLevel.level)
     ),
-    Query.output[Person with Entity, PersonSteps],
-    Query.output[Software with Entity, SoftwareSteps]
+    Query.output[Person with Entity, Traversal.V[Person]],
+    Query.output[Software with Entity, Traversal.V[Software]]
   )
 }

@@ -1,12 +1,11 @@
 package org.thp.scalligraph.models
 
-import gremlin.scala.{Graph, GremlinScala, Vertex}
+import gremlin.scala.Graph
 import org.specs2.specification.core.Fragments
 import org.thp.scalligraph.BuildVertexEntity
 import org.thp.scalligraph.auth.{AuthContext, UserSrv}
 import org.thp.scalligraph.services.VertexSrv
 import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.VertexSteps
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
@@ -20,8 +19,7 @@ object MyEntity {
   val initialValues: Seq[MyEntity] = Seq(MyEntity("ini1", 1), MyEntity("ini1", 2))
 }
 
-class MyEntitySrv(implicit db: Database) extends VertexSrv[MyEntity, VertexSteps[MyEntity]] {
-  override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): VertexSteps[MyEntity]         = new VertexSteps[MyEntity](raw)
+class MyEntitySrv(implicit db: Database) extends VertexSrv[MyEntity] {
   def create(e: MyEntity)(implicit graph: Graph, authContext: AuthContext): Try[MyEntity with Entity] = createEntity(e)
 }
 
@@ -33,8 +31,8 @@ class SimpleEntityTest extends PlaySpecification {
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
     implicit val db: Database = dbProvider.get()
-    db.createSchema(db.getModel[MyEntity])
-    db.addSchemaIndexes(db.getModel[MyEntity])
+    db.createSchema(Model.vertex[MyEntity])
+    db.addSchemaIndexes(Model.vertex[MyEntity])
     val myEntitySrv: MyEntitySrv = new MyEntitySrv
 
     s"[${dbProvider.name}] simple entity" should {
@@ -58,7 +56,7 @@ class SimpleEntityTest extends PlaySpecification {
 
       "update an entity" in db.transaction { implicit graph =>
         myEntitySrv.create(MyEntity("super", 7)) must beASuccessfulTry.which { entity =>
-          myEntitySrv.getByIds(entity._id).update("value" -> 8) must beSuccessfulTry
+          myEntitySrv.getByIds(entity._id).update(_.value, 8)
           myEntitySrv.getOrFail(entity._id) must beSuccessfulTry.which((_: MyEntity with Entity).value must_=== 8)
         }
       }

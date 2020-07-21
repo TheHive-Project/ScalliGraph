@@ -2,10 +2,12 @@ package org.thp.scalligraph.query
 
 import java.lang.{Long => JLong}
 import java.time.temporal.ChronoUnit
-import java.util.{Calendar, Date, List => JList, Map => JMap}
+import java.util.{Calendar, Date}
 
 import org.apache.tinkerpop.gremlin.process.traversal.Order
-import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError}
+import org.scalactic.Accumulation._
+import org.scalactic._
+import org.thp.scalligraph.InvalidFormatAttributeError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.steps.StepsOps._
@@ -14,9 +16,6 @@ import play.api.Logger
 import play.api.libs.json.JsObject
 
 import scala.reflect.runtime.{universe => ru}
-import org.scalactic._
-import org.scalactic.Accumulation._
-
 import scala.util.Try
 import scala.util.matching.Regex
 
@@ -137,12 +136,22 @@ object GroupAggregation {
 }
 
 abstract class Aggregation(val name: String) {
-  def apply[TD, TG](
+
+  implicit class AggOps(traversal: Traversal.ANY) {
+    def withProperty(property: PublicProperty[_, _])(
+        body: Traversal[Any, Any, Converter[Any, Any]] => Traversal[Any, Any, Converter[Any, Any]]
+    ): Traversal[Output[Any], Any, Converter[Output[Any], Any]] = {
+      val p = property.asInstanceOf[PublicProperty[Any, Any]]
+      body(p.select(traversal.cast[Any, Any], FPath("FIXME")).cast[Any, Any]).map(p.mapping.selectRenderer.toOutput)
+    }
+  }
+
+  def apply(
       publicProperties: List[PublicProperty[_, _]],
       traversalType: ru.Type,
-      fromStep: Traversal[_, _, _],
+      traversal: Traversal.ANY,
       authContext: AuthContext
-  ): Traversal[Output[TD], TG, Converter[Output[TD], TG]]
+  ): Traversal[Output[Any], Any, Converter[Output[Any], Any]]
 }
 
 abstract class GroupAggregation(name: String) extends Aggregation(name)
@@ -158,77 +167,58 @@ abstract class AggFunction(name: String) extends Aggregation(name) {
 }
 
 case class AggSum(aggName: Option[String], fieldName: String) extends AggFunction(s"sum_$fieldName") {
-  override def apply[TD, TG](
+  override def apply(
       publicProperties: List[PublicProperty[_, _]],
       traversalType: ru.Type,
-      fromStep: Traversal[_, _, _],
+      traversal: Traversal.ANY,
       authContext: AuthContext
-  ): Traversal[Output[TD], TG, Converter[Output[TD], TG]] = {
-    def compute[D, G, PD, PG]: Traversal[Output[PD], PG, Converter[Output[PD], PG]] = {
-      val property = PublicProperty.getProperty[PD, PG](publicProperties, traversalType, fieldName)
-      property.get(fromStep.cast[D, G], FPath(fieldName)).mapAsNumber(_.sum).map(property.mapping.toOutput)
-    }
-    compute
-  }
+  ): Traversal[Output[Any], Any, Converter[Output[Any], Any]] =
+    traversal.withProperty(PublicProperty.getProperty(publicProperties, traversalType, fieldName))(x => x.sum)
 }
+
 case class AggAvg(aggName: Option[String], fieldName: String) extends AggFunction(s"sum_$fieldName") {
-  override def apply[TD, TG](
+  override def apply(
       publicProperties: List[PublicProperty[_, _]],
       traversalType: ru.Type,
-      fromStep: Traversal[_, _, _],
+      traversal: Traversal.ANY,
       authContext: AuthContext
-  ): Traversal[Output[TD], TG, Converter[Output[TD], TG]] = {
-    def compute[D, G, PD, PG]: Traversal[Output[PD], PG, Converter[Output[PD], PG]] = {
-      val property = PublicProperty.getProperty[PD, PG](publicProperties, traversalType, fieldName)
-      property.get(fromStep.cast[D, G], FPath(fieldName)).mapAsNumber(_.mean).map(property.mapping.toOutput)
-    }
-    compute
-  }
+  ): Traversal[Output[Any], Any, Converter[Output[Any], Any]] =
+    traversal.withProperty(PublicProperty.getProperty(publicProperties, traversalType, fieldName))(_.mean)
 }
 
 case class AggMin(aggName: Option[String], fieldName: String) extends AggFunction(s"min_$fieldName") {
-  override def apply[TD, TG](
+  override def apply(
       publicProperties: List[PublicProperty[_, _]],
       traversalType: ru.Type,
-      fromStep: Traversal[_, _, _],
+      traversal: Traversal.ANY,
       authContext: AuthContext
-  ): Traversal[Output[TD], TG, Converter[Output[TD], TG]] = {
-    def compute[D, G, PD, PG]: Traversal[Output[PD], PG, Converter[Output[PD], PG]] = {
-      val property = PublicProperty.getProperty[PD, PG](publicProperties, traversalType, fieldName)
-      property.get(fromStep.cast[D, G], FPath(fieldName)).min.map(property.mapping.toOutput)
-    }
-
-    compute
-  }
+  ): Traversal[Output[Any], Any, Converter[Output[Any], Any]] =
+    traversal.withProperty(PublicProperty.getProperty(publicProperties, traversalType, fieldName))(_.min)
 }
 
 case class AggMax(aggName: Option[String], fieldName: String) extends AggFunction(s"max_$fieldName") {
-  override def apply[TD, TG](
+  override def apply(
       publicProperties: List[PublicProperty[_, _]],
       traversalType: ru.Type,
-      fromStep: Traversal[_, _, _],
+      traversal: Traversal.ANY,
       authContext: AuthContext
-  ): Traversal[Output[TD], TG, Converter[Output[TD], TG]] = {
-    def compute[D, G, PD, PG]: Traversal[Output[PD], PG, Converter[Output[PD], PG]] = {
-      val property = PublicProperty.getProperty[PD, PG](publicProperties, traversalType, fieldName)
-      property.get(fromStep.cast[D, G], FPath(fieldName)).max.map(property.mapping.toOutput)
-    }
-
-    compute
-  }
+  ): Traversal[Output[Any], Any, Converter[Output[Any], Any]] =
+    traversal.withProperty(PublicProperty.getProperty(publicProperties, traversalType, fieldName))(_.max)
 }
 
 case class AggCount(aggName: Option[String]) extends GroupAggregation(aggName.getOrElse("count")) {
-  override def apply[TD, TG](
+  override def apply(
       publicProperties: List[PublicProperty[_, _]],
       traversalType: ru.Type,
-      fromStep: Traversal[_, _, _],
+      traversal: Traversal.ANY,
       authContext: AuthContext
-  ): Traversal[Output[TD], TG, Converter[Output[TD], TG]] = {
-    def compute[D, G]: Traversal[Long, JLong, Converter[Long, JLong]] = fromStep.cast[D, G].count
-    compute.asInstanceOf[Traversal[Output[TD], TG, Converter[Output[TD], TG]]]
-  }
+  ): Traversal[Output[Any], Any, Converter[Output[Any], Any]] =
+    traversal.cast[Any, Any].count.map(c => Output(c.longValue())).cast[Output[Any], Any]
+
+  //    def compute[D, G]: Traversal[Long, JLong, Converter[Long, JLong]] = traversal.cast[D, G].count
+  //    compute.asInstanceOf[Traversal[Output[Any], Any, Converter[Output[Any], Any]]]
 }
+
 //case class AggCount(aggName: Option[String]) extends GroupAggregation[Long](aggName.getOrElse("count")) {
 //  override def apply(
 //      publicProperties: List[PublicProperty[_, _]],
@@ -243,7 +233,7 @@ case class AggCount(aggName: Option[String]) extends GroupAggregation(aggName.ge
 //    propertyTraversal(_).mapAsNumber(_.sum).map(property.mapping.toOutput)
 
 //  override def toOutput[D, G, C <: Converter[D, G]](
-//      publicProperties: List[PublicProperty[_, _, _]],
+//      publicProperties: List[PublicProperty[_, _]],
 //      traversalType: ru.Type,
 //      fromStep: Traversal[D, G, C],
 //      authContext: AuthContext
@@ -268,13 +258,13 @@ case class AggCount(aggName: Option[String]) extends GroupAggregation(aggName.ge
 //}
 //
 //case class AggMin(aggName: Option[String], fieldName: String) extends AggFunction(s"min_$fieldName") {
-//  override def apply[D, G, TD, TG](
+//  override def apply[D, G, Any, Any](
 //      publicProperties: List[PublicProperty[_, _]],
 //      traversalType: ru.Type,
 //      fromStep: Traversal[D, G, Converter[D, G]],
 //      authContext: AuthContext
-//  ): Traversal[Output[TD], TG, Converter[Output[TD], TG]] = {
-//    val property = PublicProperty.getProperty[TD, TG](publicProperties, traversalType, fieldName)
+//  ): Traversal[Output[Any], Any, Converter[Output[Any], Any]] = {
+//    val property = PublicProperty.getProperty[Any, Any](publicProperties, traversalType, fieldName)
 //    property.get(fromStep, FPath(fieldName)).mapAsNumber(_.min).map(property.mapping.toOutput)
 //  }
 //}
@@ -303,62 +293,101 @@ case class FieldAggregation(
 ) extends GroupAggregation(aggName.getOrElse(s"field_$fieldName")) {
   lazy val logger: Logger = Logger(getClass)
 
-  override def apply[TD, TG](
+  override def apply(
       publicProperties: List[PublicProperty[_, _]],
       traversalType: ru.Type,
-      fromStep: Traversal[_, _, _],
+      traversal: Traversal.ANY,
       authContext: AuthContext
-  ): Traversal[Output[TD], TG, Converter[Output[TD], TG]] = {
-    def compute[D, G, PD, PG]
-        : Traversal[Output[Map[PD, Map[String, Any]]], JList[JMap[String, Any]], Converter[Output[Map[PD, Map[String, Any]]], JList[
-          JMap[String, Any]
-        ]]] = {
-      //  ): Traversal[Output[Map[PD, Map[String, Any]]], JList[JMap[String, Any]], Converter[
-      //    Output[Map[PD, Map[String, Any]]],
-      //    JList[JMap[String, Any]]
-      //  ]] = {
-      val property        = PublicProperty.getProperty[PD, PG](publicProperties, traversalType, fieldName)
-      val groupedVertices = fromStep.cast[D, G].group(_.by(property.get(_, FPath(fieldName)))).unfold
-
-      val sortedAndGroupedVertex = orders
-        .map {
-          case order if order.headOption.contains('-') => order.tail -> Order.desc
-          case order if order.headOption.contains('+') => order.tail -> Order.asc
-          case order                                   => order      -> Order.asc
-        }
-        .foldLeft(groupedVertices) {
-          case (acc, (field, order)) if field == fieldName => acc.sort(_.by(_.selectKeys, order))
-          case (acc, (field, order)) if field == "count"   => acc.sort(_.by(_.selectValues.localCount, order))
-          case (acc, (field, _)) =>
-            logger.warn(s"In field aggregation you can only sort by the field ($fieldName) or by count, not by $field")
-            acc
-        }
-      val sizedSortedAndGroupedVertex = size.fold(sortedAndGroupedVertex)(sortedAndGroupedVertex.limit)
-
-      def subAggProjection[X, Y]: Seq[GenericBySelector[D, G, Converter[D, G]] => ByResult[G, Output[X], Y, Converter[Output[X], Y]]] = subAggs.map {
-        agg => (s: GenericBySelector[D, G, Converter[D, G]]) =>
-          s.by(t => agg[X, Y](publicProperties, traversalType, t, authContext))
+  ): Traversal[Output[Any], Any, Converter[Output[Any], Any]] = {
+    val property        = PublicProperty.getProperty(publicProperties, traversalType, fieldName)
+    val groupedVertices = traversal.cast[Any, Any].group(_.by(t => property.select(t, FPath(fieldName)).cast[Any, Any])).unfold
+    val sortedAndGroupedVertex = orders
+      .map {
+        case order if order.headOption.contains('-') => order.tail -> Order.desc
+        case order if order.headOption.contains('+') => order.tail -> Order.asc
+        case order                                   => order      -> Order.asc
       }
-
-      sizedSortedAndGroupedVertex
-        .project(
-          _.by(_.selectKeys)
-            .by(
-              _.selectValues
-                .unfold
-                .flatProject(subAggProjection: _*)
-                .map { aggResult =>
-                  val outputs = subAggs.zip(aggResult.asInstanceOf[Seq[Output[_]]])
-                  Output(outputs.map(kv => kv._1.name -> kv._2.toValue).toMap, JsObject(outputs.map(kv => kv._1.name -> kv._2.toJson)))
-                }
-            )
-        )
-        .fold
-        .map(x => Output(x.map(kv => kv._1 -> kv._2.toValue).toMap, JsObject(x.map(kv => kv._1.toString -> kv._2.toJson))))
+      .foldLeft(groupedVertices) {
+        case (acc, (field, order)) if field == fieldName => acc.sort(_.by(_.selectKeys, order))
+        case (acc, (field, order)) if field == "count"   => acc.sort(_.by(_.selectValues.localCount, order))
+        case (acc, (field, _)) =>
+          logger.warn(s"In field aggregation you can only sort by the field ($fieldName) or by count, not by $field")
+          acc
+      }
+    val sizedSortedAndGroupedVertex = size.fold(sortedAndGroupedVertex)(sortedAndGroupedVertex.limit)
+    val subAggProjection = subAggs.map { agg => (s: GenericBySelector[Any, Any, Converter[Any, Any]]) =>
+      s.by(t => agg(publicProperties, traversalType, t, authContext))
     }
-    compute.asInstanceOf[Traversal[Output[TD], TG, Converter[Output[TD], TG]]]
+
+    sizedSortedAndGroupedVertex
+      .project(
+        _.by(_.selectKeys)
+          .by(
+            _.selectValues
+              .unfold
+              .flatProject(subAggProjection: _*)
+              .map { aggResult =>
+                val outputs = subAggs.zip(aggResult.asInstanceOf[Seq[Output[_]]])
+                Output(outputs.map(kv => kv._1.name -> kv._2.toValue).toMap, JsObject(outputs.map(kv => kv._1.name -> kv._2.toJson)))
+              }
+          )
+      )
+      .fold
+      .map(x => Output(x.map(kv => kv._1 -> kv._2.toValue).toMap, JsObject(x.map(kv => kv._1.toString -> kv._2.toJson))))
+      .cast[Output[Any], Any]
   }
 }
+//    def compute[D, G, PD, PG]
+//        : Traversal[Output[Map[PD, Map[String, Any]]], JList[JMap[String, Any]], Converter[Output[Map[PD, Map[String, Any]]], JList[
+//          JMap[String, Any]
+//        ]]] = {
+//      //  ): Traversal[Output[Map[PD, Map[String, Any]]], JList[JMap[String, Any]], Converter[
+//      //    Output[Map[PD, Map[String, Any]]],
+//      //    JList[JMap[String, Any]]
+//      //  ]] = {
+//      val property        = PublicProperty.getProperty[Any, Any](publicProperties, traversalType, fieldName)
+//      val groupedVertices = traversal.cast[Any, Any].group(_.by(property.get(_, FPath(fieldName)))).unfold
+//
+//      val sortedAndGroupedVertex = orders
+//        .map {
+//          case order if order.headOption.contains('-') => order.tail -> Order.desc
+//          case order if order.headOption.contains('+') => order.tail -> Order.asc
+//          case order                                   => order      -> Order.asc
+//        }
+//        .foldLeft(groupedVertices) {
+//          case (acc, (field, order)) if field == fieldName => acc.sort(_.by(_.selectKeys, order))
+//          case (acc, (field, order)) if field == "count"   => acc.sort(_.by(_.selectValues.localCount, order))
+//          case (acc, (field, _)) =>
+//            logger.warn(s"In field aggregation you can only sort by the field ($fieldName) or by count, not by $field")
+//            acc
+//        }
+//      val sizedSortedAndGroupedVertex = size.fold(sortedAndGroupedVertex)(sortedAndGroupedVertex.limit)
+//
+//      def subAggProjection[X, Y]: Seq[GenericBySelector[D, G, Converter[D, G]] => ByResult[G, Output[X], Y, Converter[Output[X], Y]]] = subAggs.map {
+//        agg => (s: GenericBySelector[D, G, Converter[D, G]]) =>
+//          s.by(t => agg[X, Y](publicProperties, traversalType, t, authContext))
+//      }
+//
+//      sizedSortedAndGroupedVertex
+//        .project(
+//          _.by(_.selectKeys)
+//            .by(
+//              _.selectValues
+//                .unfold
+//                .flatProject(subAggProjection: _*)
+//                .map { aggResult =>
+//                  val outputs = subAggs.zip(aggResult.asInstanceOf[Seq[Output[_]]])
+//                  Output(outputs.map(kv => kv._1.name -> kv._2.toValue).toMap, JsObject(outputs.map(kv => kv._1.name -> kv._2.toJson)))
+//                }
+//            )
+//        )
+//        .fold
+//        .map(x => Output(x.map(kv => kv._1 -> kv._2.toValue).toMap, JsObject(x.map(kv => kv._1.toString -> kv._2.toJson))))
+//    }
+//
+//    compute.asInstanceOf[Traversal[Output[Any], Any, Converter[Output[Any], Any]]]
+//  }
+//}
 
 case class CategoryAggregation() // Map[String,
 case class TimeAggregation(
@@ -395,43 +424,40 @@ case class TimeAggregation(
 
   def keyToDate(key: Long): Date = new Date(key)
 
-  override def apply[TD, TG](
+  override def apply(
       publicProperties: List[PublicProperty[_, _]],
       traversalType: ru.Type,
-      fromStep: Traversal[_, _, _],
+      traversal: Traversal.ANY,
       authContext: AuthContext
-  ): Traversal[Output[TD], TG, Converter[Output[TD], TG]] = {
-    def compute[D, G, PD, PG]
-        : Traversal[Output[Map[Long, Map[String, Any]]], JList[JMap[String, Any]], Converter[Output[Map[Long, Map[String, Any]]], JList[
-          JMap[String, Any]
-        ]]] = {
-      val property = PublicProperty.getProperty[PD, Date](publicProperties, traversalType, fieldName)
-      val groupedVertex =
-        fromStep
-          .cast[D, G]
-          .group(_.by(t => property.get(t, FPath(fieldName)).graphMap[Long, JLong, Converter[Long, JLong]](dateToKey, _ => Converter.long)))
-
-      def subAggProjection[X, Y]: Seq[GenericBySelector[D, G, Converter[D, G]] => ByResult[G, Output[X], Y, Converter[Output[X], Y]]] = subAggs.map {
-        a => (s: GenericBySelector[D, G, Converter[D, G]]) =>
-          s.by(t => a.apply[X, Y](publicProperties, traversalType, t, authContext))
-      }
-
-      groupedVertex
-        .project(
-          _.by(_.selectKeys)
-            .by(
-              _.selectValues
-                .unfold
-                .flatProject(subAggProjection: _*)
-                .map { aggResult =>
-                  val outputs = subAggs.zip(aggResult.asInstanceOf[Seq[Output[_]]])
-                  Output(outputs.map(kv => kv._1.name -> kv._2.toValue).toMap, JsObject(outputs.map(kv => kv._1.name -> kv._2.toJson)))
-                }
-            )
+  ): Traversal[Output[Any], Any, Converter[Output[Any], Any]] = {
+    val property = PublicProperty.getProperty(publicProperties, traversalType, fieldName)
+    val groupedVertex =
+      traversal
+        .cast[Any, Any]
+        .group(
+          _.by(t => property.select(t, FPath(fieldName)).cast[Date, Date].graphMap[Long, JLong, Converter[Long, JLong]](dateToKey, Converter.long))
         )
-        .fold
-        .map(x => Output(x.map(kv => kv._1 -> kv._2.toValue).toMap, JsObject(x.map(kv => kv._1.toString -> kv._2.toJson))))
+
+    val subAggProjection = subAggs.map { agg => (s: GenericBySelector[Any, Any, Converter[Any, Any]]) =>
+      s.by(t => agg(publicProperties, traversalType, t, authContext))
     }
-    compute.asInstanceOf[Traversal[Output[TD], TG, Converter[Output[TD], TG]]]
+
+    groupedVertex
+      .project(
+        _.by(_.selectKeys)
+          .by(
+            _.selectValues
+              .unfold
+              .flatProject(subAggProjection: _*)
+              .map { aggResult =>
+                val outputs = subAggs.zip(aggResult.asInstanceOf[Seq[Output[_]]])
+                Output(outputs.map(kv => kv._1.name -> kv._2.toValue).toMap, JsObject(outputs.map(kv => kv._1.name -> kv._2.toJson)))
+              }
+          )
+      )
+      .fold
+      .map(x => Output(x.map(kv => kv._1 -> kv._2.toValue).toMap, JsObject(x.map(kv => kv._1.toString -> kv._2.toJson))))
+      .cast[Output[Any], Any]
   }
+
 }

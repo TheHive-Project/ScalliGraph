@@ -1,9 +1,9 @@
 package org.thp.scalligraph.services
 
-import gremlin.scala.{Element, Graph, Vertex}
+import gremlin.scala.{Element, Graph}
 import org.thp.scalligraph.models.{Entity, Model}
-import org.thp.scalligraph.steps.{Converter, Traversal}
 import org.thp.scalligraph.steps.StepsOps._
+import org.thp.scalligraph.steps.{Converter, Traversal}
 import play.api.Logger
 
 abstract class ElementSrv[E <: Product, G <: Element] {

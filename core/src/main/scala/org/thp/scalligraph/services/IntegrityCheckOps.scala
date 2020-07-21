@@ -158,14 +158,14 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
   def firstCreatedElement[ELEMENT <: Element](elements: Seq[ELEMENT]): Option[(ELEMENT, Seq[ELEMENT])] =
     if (elements.isEmpty) None
     else {
-      val firstIndex = elements.map(e => db.getSingleProperty(e, "_createdAt", UniMapping.date)).zipWithIndex.minBy(_._1)._2
+      val firstIndex = elements.map(e => UniMapping.date.getProperty(e, "_createdAt")).zipWithIndex.minBy(_._1)._2
       Some((elements(firstIndex), elements.patch(firstIndex, Nil, 1)))
     }
 
   def lastCreatedElement[ELEMENT <: Element](elements: Seq[ELEMENT]): Option[(ELEMENT, Seq[ELEMENT])] =
     if (elements.isEmpty) None
     else {
-      val lastIndex = elements.map(e => db.getSingleProperty(e, "_createdAt", UniMapping.date)).zipWithIndex.maxBy(_._1)._2
+      val lastIndex = elements.map(e => UniMapping.date.getProperty(e, "_createdAt")).zipWithIndex.maxBy(_._1)._2
       Some((elements(lastIndex), elements.patch(lastIndex, Nil, 1)))
     }
 
@@ -174,8 +174,11 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
     else {
       val firstIndex = elements
         .map(e =>
-          db.getOptionProperty(e, "_updatedAt", UniMapping.date.optional)
-            .getOrElse(db.getSingleProperty(e, "_createdAt", UniMapping.date))
+          UniMapping
+            .date
+            .optional
+            .getProperty(e, "_updatedAt")
+            .getOrElse(UniMapping.date.getProperty(e, "_createdAt"))
         )
         .zipWithIndex
         .minBy(_._1)
@@ -188,8 +191,11 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
     else {
       val lastIndex = elements
         .map(e =>
-          db.getOptionProperty(e, "_updatedAt", UniMapping.date.optional)
-            .getOrElse(db.getSingleProperty(e, "_createdAt", UniMapping.date))
+          UniMapping
+            .date
+            .optional
+            .getProperty(e, "_updatedAt")
+            .getOrElse(UniMapping.date.getProperty(e, "_createdAt"))
         )
         .zipWithIndex
         .maxBy(_._1)

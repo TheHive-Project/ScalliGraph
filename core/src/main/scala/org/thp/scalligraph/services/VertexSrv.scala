@@ -14,10 +14,7 @@ import play.api.libs.json.JsObject
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
 
-abstract class VertexSrv[V <: Product: ru.TypeTag](implicit db: Database) extends ElementSrv[V, Vertex] {
-
-  override val model: Model.Vertex[V] = db.getVertexModel[V]
-
+abstract class VertexSrv[V <: Product: ru.TypeTag](implicit db: Database, val model: Model.Vertex[V]) extends ElementSrv[V, Vertex] {
   override def initSteps(implicit graph: Graph): Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]] =
     new Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]](db.labelFilter(model)(graph.V), model.converter)
 
@@ -64,8 +61,8 @@ abstract class VertexSrv[V <: Product: ru.TypeTag](implicit db: Database) extend
           propertyUpdaters
             .toTry(u => u(vertex, db, graph, authContext))
             .map { o =>
-              db.setOptionProperty(vertex, "_updatedAt", Some(new Date), db.updatedAtMapping)
-              db.setOptionProperty(vertex, "_updatedBy", Some(authContext.userId), db.updatedByMapping)
+              db.updatedAtMapping.setProperty(vertex, "_updatedAt", Some(new Date))
+              db.updatedByMapping.setProperty(vertex, "_updatedBy", Some(authContext.userId))
               myClone -> o.reduceOption(_ ++ _).getOrElse(JsObject.empty)
             }
       }

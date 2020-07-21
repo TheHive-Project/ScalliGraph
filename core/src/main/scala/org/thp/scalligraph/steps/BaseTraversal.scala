@@ -1,15 +1,14 @@
 package org.thp.scalligraph.steps
 
-import scala.language.higherKinds
-import gremlin.scala.{GremlinScala, Vertex}
 import java.lang.{Double => JDouble, Long => JLong}
-import java.util.{UUID, Collection => JCollection, List => JList, Map => JMap, Set => JSet}
+import java.util.{UUID, Collection => JCollection, List => JList, Map => JMap}
 
-import scala.collection.JavaConverters._
-import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, DefaultGraphTraversal, GraphTraversal}
+import gremlin.scala.{GremlinScala, Vertex}
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
 import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.models.Entity
 
+import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
 
@@ -21,7 +20,7 @@ class StepLabel[D, G, C <: Converter[D, G]] {
   def setConverter(conv: C): Unit = _converter = Success(conv)
 }
 trait BiConverter[D, G] extends Converter[D, G] {
-  def reverse: Converter[G, D]
+  val reverse: Converter[G, D]
 }
 trait Converter[+D, -G] extends (G => D) {
   def untypedApply(g: Any): Any = apply(g.asInstanceOf[G])
@@ -108,8 +107,10 @@ trait Poly2Converter[+SD, -SG, DK, DV, GK, GV, CK <: Converter[DK, GK], CV <: Co
 //}
 
 object Traversal {
-  type VERTEX[E] = Traversal[E with Entity, Vertex, Converter[E with Entity, Vertex]]
+  type V[E]      = Traversal[E with Entity, Vertex, Converter[E with Entity, Vertex]]
+  type Domain[D] = Traversal[D, _, Converter[D, _]]
   def apply[T: ClassTag](raw: GremlinScala[T]) = new Traversal[T, T, Converter[T, T]](raw, identity[T])
+  type ANY = Traversal[Any, Any, Converter[Any, Any]]
 }
 
 //class UntypedTraversal(val traversal: GraphTraversal[_, _], val converter: Converter[_, _]) {
@@ -125,7 +126,7 @@ object Traversal {
 //  def start: UntypedTraversal = new UntypedTraversal(__.start(), Converter.identity)
 //}
 
-class Traversal[+D, G, C <: Converter[D, G]](val raw: GremlinScala[G], val converter: C) {
+class Traversal[+D, G, +C <: Converter[D, G]](val raw: GremlinScala[G], val converter: C) {
 //  def typeName: String                                              = classTag[G].runtimeClass.getSimpleName
   def deepRaw: GraphTraversal[_, G]                                    = raw.traversal
   def onRaw(f: GremlinScala[G] => GremlinScala[G]): Traversal[D, G, C] = new Traversal[D, G, C](f(raw), converter)
@@ -144,7 +145,8 @@ class Traversal[+D, G, C <: Converter[D, G]](val raw: GremlinScala[G], val conve
     new Traversal[DD, G, Converter[DD, G]](raw, g => converter.andThen(f).apply(g))
   def graphMap[DD, GG, CC <: Converter[DD, GG]](d: G => GG, conv: CC): Traversal[DD, GG, CC] =
     new Traversal[DD, GG, CC](raw.map(d), conv)
-  def start = new Traversal[D, G, C](gremlin.scala.__[G], converter)
+  def setConverter[DD, CC <: Converter[DD, G]](conv: CC): Traversal[DD, G, CC] = new Traversal[DD, G, CC](raw, conv)
+  def start                                                                    = new Traversal[D, G, C](gremlin.scala.__[G], converter)
 
 //  def mapping: UniMapping[D]
 //  def converter: Converter.Aux[D, G] = mapping

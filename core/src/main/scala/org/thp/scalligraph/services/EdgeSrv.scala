@@ -10,10 +10,10 @@ import org.thp.scalligraph.steps.{Converter, Traversal}
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
 
-class EdgeSrv[E <: Product: ru.TypeTag, FROM <: Product: ru.TypeTag, TO <: Product: ru.TypeTag](implicit val db: Database)
-    extends ElementSrv[E, Edge] {
-  override val model: Model.Edge[E, FROM, TO] = db.getEdgeModel[E, FROM, TO]
-
+class EdgeSrv[E <: Product: ru.TypeTag, FROM <: Product: ru.TypeTag, TO <: Product: ru.TypeTag](
+    implicit val db: Database,
+    val model: Model.Edge[E, FROM, TO]
+) extends ElementSrv[E, Edge] {
   override def getByIds(ids: String*)(implicit graph: Graph): Traversal[E with Entity, Edge, Converter[E with Entity, Edge]] =
     if (ids.isEmpty) new Traversal[E with Entity, Edge, Converter[E with Entity, Edge]](graph.inject(), model.converter)
     else new Traversal[E with Entity, Edge, Converter[E with Entity, Edge]](db.labelFilter(model)(graph.E(ids: _*)), model.converter)

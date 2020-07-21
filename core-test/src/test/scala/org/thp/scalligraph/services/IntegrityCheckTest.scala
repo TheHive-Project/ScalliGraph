@@ -4,6 +4,7 @@ import gremlin.scala.Graph
 import org.specs2.specification.core.Fragments
 import org.thp.scalligraph.AppBuilder
 import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
+import org.thp.scalligraph.models.ModernOps._
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.steps.StepsOps._
 import play.api.libs.logback.LogbackLoggerConfigurator

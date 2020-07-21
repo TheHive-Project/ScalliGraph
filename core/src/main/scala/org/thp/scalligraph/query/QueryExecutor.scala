@@ -1,16 +1,15 @@
 package org.thp.scalligraph.query
 
-import gremlin.scala.{Graph, GremlinScala}
+import gremlin.scala.Graph
 import org.scalactic._
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.Database
-import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{PagedResult, Traversal}
+import org.thp.scalligraph.steps.{IteratorOutput, Traversal}
 import org.thp.scalligraph.utils.RichType
 import play.api.Logger
-import play.api.libs.json.{JsArray, JsNull, JsNumber, JsString, JsValue}
+import play.api.libs.json._
 import play.api.mvc.{Result, Results}
 
 import scala.reflect.runtime.{universe => ru}
@@ -29,22 +28,22 @@ abstract class QueryExecutor { executor =>
   final lazy val filterQuery: FilterQuery           = FilterQuery.default(db, publicProperties) ++ customFilterQuery
   val customFilterQuery: FilterQuery                = FilterQuery.empty(db, publicProperties)
 
+  private lazy val graphType: ru.Type = ru.typeOf[Graph]
+
   def versionCheck(v: Int): Boolean = version._1 <= v && v <= version._2
 
   final def execute(query: Query, authContext: AuthContext): Try[Result] = {
-    val outputType = query.toType(ru.typeOf[Graph])
+    val outputType = query.toType(graphType)
     getRenderer(outputType, authContext).map {
-      case renderer if renderer.isStreamable =>
+      case renderer: StreamRenderer[input, _] =>
         val (source, totalSize) = db.source[JsValue, Option[Long]] { graph =>
-          val pagedResult = renderer.toOutput(query((), graph, authContext)).asInstanceOf[PagedResult[Any]]
-//          pagedResult.result.toIterator.map(pagedResult.subRenderer.toJson) -> pagedResult.totalSize.map(_.head())
-          pagedResult.toSource
+          renderer.toStream(query((), graphType, graph, authContext))
         }
         val result = Results.Ok.chunked(source.map(_.toString).intersperse("[", ",", "]"), Some("application/json"))
         totalSize.fold(result)(s => result.withHeaders("X-Total" -> s.toString))
       case renderer =>
         db.roTransaction { g =>
-          val value = query((), g, authContext)
+          val value = query((), graphType, g, authContext)
           Results.Ok(renderer.toJson(value))
         }
     }
@@ -54,14 +53,13 @@ abstract class QueryExecutor { executor =>
     execute(q, authGraph.graph, authGraph.auth)
 
   final def execute(q: Query, graph: Graph, authContext: AuthContext): Try[Output[_]] = {
-    val outputType  = q.toType(ru.typeOf[Graph])
-    val outputValue = q((), graph, authContext)
+    val outputType  = q.toType(graphType)
+    val outputValue = q((), graphType, graph, authContext)
     getRenderer(outputType, authContext).map(_.toOutput(outputValue))
   }
 
   private def getRenderer(tpe: ru.Type, authContext: AuthContext): Try[Renderer[Any]] =
-    if (SubType(tpe, ru.typeOf[PagedResult[_]])) Success(Renderer.stream[Any](_.asInstanceOf[PagedResult[Any]]))
-    else if (SubType(tpe, ru.typeOf[Output[_]])) Success(Renderer[Any](_.asInstanceOf[Output[Any]]))
+    if (SubType(tpe, ru.typeOf[Output[_]])) Success(Renderer[Any](_.asInstanceOf[Output[Any]]))
     else if (SubType(tpe, ru.typeOf[AnyVal])) Success(Renderer[Any] {
       case l: Long    => Output(l)
       case d: Double  => Output(d)
@@ -94,22 +92,17 @@ abstract class QueryExecutor { executor =>
       allQueries
         .find(q => q.checkFrom(tpe) && SubType(q.toType(tpe), ru.typeOf[Output[_]]) && q.paramType == ru.typeOf[Unit])
         .fold[Try[Renderer[Any]]] {
-          if (SubType(tpe, ru.typeOf[Traversal[_, _, _]])) {
-            val subType = RichType.getTypeArgs(tpe, ru.typeOf[Traversal[_, _, _]]).head
+          if (SubType(tpe, ru.typeOf[Traversal.ANY])) {
+            val subType = RichType.getTypeArgs(tpe, ru.typeOf[Traversal.ANY]).head
             getRenderer(subType, authContext).map(subRenderer =>
-              Renderer.stream[Any](traversal => PagedResult(traversal.asInstanceOf[Traversal[Any, _, _]], None)(subRenderer))
-            )
-          } else if (SubType(tpe, ru.typeOf[GremlinScala[_]])) {
-            val subType = RichType.getTypeArgs(tpe, ru.typeOf[GremlinScala[_]]).head
-            getRenderer(subType, authContext).map(subRenderer =>
-              Renderer.stream[Any](traversal => PagedResult(Traversal(traversal.asInstanceOf[GremlinScala[Any]]), None)(subRenderer))
+              Renderer.stream[Any, Any](t => IteratorOutput[Any](t.asInstanceOf[Traversal.ANY]))(subRenderer)
             )
           } else Failure(BadRequestError(s"Value of type $tpe can't be output"))
         } { q =>
-          if (SubType(q.toType(tpe), ru.typeOf[PagedResult[_]]))
-            Success(Renderer.stream(value => q.asInstanceOf[Query]((), value, authContext).asInstanceOf[PagedResult[Any]]))
-          else
-            Success(Renderer(value => q.asInstanceOf[Query]((), value, authContext).asInstanceOf[Output[Any]]))
+          if (SubType(tpe, ru.typeOf[IteratorOutput[_]])) {
+            val subType = RichType.getTypeArgs(tpe, ru.typeOf[IteratorOutput[_]]).head
+            getRenderer(subType, authContext).map(subRenderer => Renderer.stream[Any, Any](_.asInstanceOf[IteratorOutput[Any]])(subRenderer))
+          } else Success(Renderer(value => q.asInstanceOf[Query]((), tpe, value, authContext).asInstanceOf[Output[Any]]))
         }
 
   private def getQuery(tpe: ru.Type, field: Field): Or[Query, Every[AttributeError]] = {
@@ -148,10 +141,10 @@ abstract class QueryExecutor { executor =>
 
   final def parser: FieldsParser[Query] = FieldsParser[Query]("query") {
     case (_, FSeq(fields)) =>
-      val initQuery = getQuery(ru.typeOf[Graph], fields.head)
+      val initQuery = getQuery(graphType, fields.head)
       fields
         .tail
-        .foldLeft(initQuery.map(q => q.toType(ru.typeOf[Graph]) -> q)) {
+        .foldLeft(initQuery.map(q => q.toType(graphType) -> q)) {
           case (Good((tpe, query)), field) => getQuery(tpe, field).map(q => q.toType(tpe) -> query.andThen(q))
           case (b: Bad[_], _)              => b
         }

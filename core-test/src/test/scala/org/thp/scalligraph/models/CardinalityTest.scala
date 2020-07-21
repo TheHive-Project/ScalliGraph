@@ -1,6 +1,6 @@
 package org.thp.scalligraph.models
 
-import gremlin.scala.{Graph, GremlinScala, Key, Vertex}
+import gremlin.scala.Graph
 import org.specs2.specification.core.Fragments
 import org.thp.scalligraph.BuildVertexEntity
 import org.thp.scalligraph.auth.{AuthContext, UserSrv}
@@ -29,8 +29,8 @@ class CardinalityTest extends PlaySpecification {
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
     implicit val db: Database = dbProvider.get()
-    db.createSchema(db.getModel[EntityWithSeq])
-    db.addSchemaIndexes(db.getModel[EntityWithSeq])
+    db.createSchema(Model.vertex[EntityWithSeq])
+    db.addSchemaIndexes(Model.vertex[EntityWithSeq])
     val entityWithSeqSrv: EntityWithSeqSrv = new EntityWithSeqSrv
 
     s"[${dbProvider.name}] entity" should {
