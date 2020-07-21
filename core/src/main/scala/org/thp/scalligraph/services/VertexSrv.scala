@@ -14,7 +14,7 @@ import play.api.libs.json.JsObject
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
 
-abstract class VertexSrv[V <: Product: ru.TypeTag](implicit db: Database, val model: Model.Vertex[V]) extends ElementSrv[V, Vertex] {
+abstract class VertexSrv[V <: Product](implicit db: Database, val model: Model.Vertex[V]) extends ElementSrv[V, Vertex] {
   override def initSteps(implicit graph: Graph): Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]] =
     new Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]](db.labelFilter(model)(graph.V), model.converter)
 

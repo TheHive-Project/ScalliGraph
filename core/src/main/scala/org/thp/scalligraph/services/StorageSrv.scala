@@ -109,7 +109,7 @@ class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
 }
 
 @Singleton
-class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Database) extends VertexSrv[Binary] with StorageSrv {
+class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Database) extends VertexSrv[Binary]()(db, Binary.model) with StorageSrv {
 
   val b64decoder: Base64.Decoder                                       = Base64.getDecoder
   implicit val binaryLinkModel: Model.Edge[BinaryLink, Binary, Binary] = BinaryLink.model

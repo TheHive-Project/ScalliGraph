@@ -288,7 +288,7 @@ object StepsOps {
         }
       )
 
-    def filter(f: Traversal[D, G, C] => Traversal.ANY): Traversal[D, G, C] = traversal.onDeepRaw(_.filter(f(traversal.start).deepRaw))
+    def filter(f: Traversal[D, G, C] => Traversal[_, _, _]): Traversal[D, G, C] = traversal.onDeepRaw(_.filter(f(traversal.start).deepRaw))
 
     def is(predicate: P[G]): Traversal[D, G, C] = traversal.onDeepRaw(_.is(predicate))
 

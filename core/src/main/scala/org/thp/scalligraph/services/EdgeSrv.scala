@@ -10,7 +10,7 @@ import org.thp.scalligraph.steps.{Converter, Traversal}
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
 
-class EdgeSrv[E <: Product: ru.TypeTag, FROM <: Product: ru.TypeTag, TO <: Product: ru.TypeTag](
+class EdgeSrv[E <: Product, FROM <: Product, TO <: Product](
     implicit val db: Database,
     val model: Model.Edge[E, FROM, TO]
 ) extends ElementSrv[E, Edge] {
