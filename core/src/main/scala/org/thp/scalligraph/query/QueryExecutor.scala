@@ -25,7 +25,7 @@ abstract class QueryExecutor { executor =>
 
   final lazy val allQueries                         = queries :+ sortQuery :+ filterQuery :+ aggregationQuery :+ CountQuery
   final lazy val sortQuery: SortQuery               = new SortQuery(db, publicProperties)
-  final lazy val aggregationQuery: AggregationQuery = new AggregationQuery(publicProperties)
+  final lazy val aggregationQuery: AggregationQuery = new AggregationQuery(db, publicProperties, filterQuery)
   final lazy val filterQuery: FilterQuery           = FilterQuery.default(db, publicProperties) ++ customFilterQuery
   val customFilterQuery: FilterQuery                = FilterQuery.empty(db, publicProperties)
 

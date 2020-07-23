@@ -153,13 +153,15 @@ final class FilterQuery(
   def ++(other: FilterQuery): FilterQuery = new FilterQuery(db, publicProperties, filterQuery.fieldsParsers ::: other.fieldsParsers)
 }
 
-class AggregationQuery(publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[GroupAggregation[_, _, _]] {
-  override def paramParser(tpe: ru.Type): FieldsParser[GroupAggregation[_, _, _]] = GroupAggregation.fieldsParser
+class AggregationQuery(db: Database, publicProperties: List[PublicProperty[_, _]], filterQuery: FilterQuery)
+    extends ParamQuery[GroupAggregation[_, _, _]] {
+  override def paramParser(tpe: ru.Type): FieldsParser[GroupAggregation[_, _, _]] = GroupAggregation.fieldsParser(filterQuery.paramParser(tpe))
   override val name: String                                                       = "aggregation"
   override def checkFrom(t: ru.Type): Boolean                                     = SubType(t, ru.typeOf[BaseVertexSteps])
   override def toType(t: ru.Type): ru.Type                                        = ru.typeOf[Output[_]]
   override def apply(aggregation: GroupAggregation[_, _, _], from: Any, authContext: AuthContext): Any =
     aggregation.get(
+      db,
       publicProperties,
       rm.classSymbol(from.getClass).toType,
       from.asInstanceOf[BaseVertexSteps],
