@@ -2,7 +2,7 @@
 //
 //import akka.actor.ActorSystem
 //import com.typesafe.config.ConfigFactory
-//import gremlin.scala._
+//
 //import org.specs2.specification.core.Fragments
 //import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
 //import org.thp.scalligraph.janus.JanusDatabase
@@ -83,7 +83,7 @@
 ////      def getOrCreate(entity: EntityWithUniqueName)(implicit graph: Graph): EntityWithUniqueName with Entity =
 ////        db.labelFilter("EntityWithUniqueName")(graph.V)
 ////          .has(Key("name") -> entity.name)
-////          .headOption()
+////          .headOption
 ////          .fold(db.createVertex(graph, authContext, model, entity))(vertex => model.toDomain(vertex))
 ////
 ////      db.createSchema(model)
@@ -123,7 +123,7 @@
 //      def getOrCreate(entity: EntityWithName)(implicit graph: Graph): EntityWithName with Entity =
 //        db.labelFilter("EntityWithName")(graph.V)
 //          .has(Key("name") -> entity.name)
-//          .headOption()
+//          .headOption
 //          .fold(db.createVertex(graph, authContext, model, entity))(vertex => model.toDomain(vertex)(db))
 //
 //      db.createSchema(model)

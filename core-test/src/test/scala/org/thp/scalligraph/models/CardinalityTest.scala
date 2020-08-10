@@ -1,28 +1,24 @@
 package org.thp.scalligraph.models
 
-import gremlin.scala.{Graph, GremlinScala, Key, Vertex}
+import org.apache.tinkerpop.gremlin.structure.Graph
 import org.specs2.specification.core.Fragments
-import org.thp.scalligraph.VertexEntity
+import org.thp.scalligraph.BuildVertexEntity
 import org.thp.scalligraph.auth.{AuthContext, UserSrv}
 import org.thp.scalligraph.services.VertexSrv
-import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.VertexSteps
+import org.thp.scalligraph.traversal.TraversalOps._
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
 
 import scala.util.{Success, Try}
 
-@VertexEntity
+@BuildVertexEntity
 case class EntityWithSeq(name: String, valueList: Seq[String], valueSet: Set[String])
 
-class EntityWithSeqSrv(implicit db: Database) extends VertexSrv[EntityWithSeq, VertexSteps[EntityWithSeq]] {
-  override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): VertexSteps[EntityWithSeq] = new VertexSteps[EntityWithSeq](raw)
-
+class EntityWithSeqSrv(implicit db: Database) extends VertexSrv[EntityWithSeq] {
   def create(e: EntityWithSeq)(implicit graph: Graph, authContext: AuthContext): Try[EntityWithSeq with Entity] = createEntity(e)
 
-  def getFromKey(key: String, value: String)(implicit graph: Graph): Try[EntityWithSeq] =
-    new VertexSteps[EntityWithSeq](initSteps.raw.has(Key(key) of value)).getOrFail()
+  def getFromKey(key: String, value: String)(implicit graph: Graph): Try[EntityWithSeq] = startTraversal.has(key, value).getOrFail("EntityWithSeq")
 }
 
 class CardinalityTest extends PlaySpecification {
@@ -33,8 +29,8 @@ class CardinalityTest extends PlaySpecification {
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
     implicit val db: Database = dbProvider.get()
-    db.createSchema(db.getModel[EntityWithSeq])
-    db.addSchemaIndexes(db.getModel[EntityWithSeq])
+    db.createSchema(Model.vertex[EntityWithSeq])
+    db.addSchemaIndexes(Model.vertex[EntityWithSeq])
     val entityWithSeqSrv: EntityWithSeqSrv = new EntityWithSeqSrv
 
     s"[${dbProvider.name}] entity" should {

@@ -1,66 +1,123 @@
 package org.thp.scalligraph.controllers
 
-import org.thp.scalligraph.steps.PagedResult
+import org.thp.scalligraph.traversal.IteratorOutput
 import play.api.libs.json._
 
-trait Renderer[M] {
-  type D
-  def toOutput(m: M): Output[D]
-  def toValue(m: M): D      = toOutput(m).toValue
-  def toJson(m: M): JsValue = toOutput(m).toJson
-  val isStreamable: Boolean
+trait Renderer[V] { renderer =>
+  type O
+  def toOutput(value: V): Output[O]
+  def toValue(value: V): O      = toOutput(value).toValue
+  def toJson(value: V): JsValue = toOutput(value).toJson
+
+  def opt: Renderer[Option[V]] =
+    new Renderer[Option[V]] {
+      type O = Option[renderer.O]
+      override def toOutput(value: Option[V]): Output[O] =
+        new Output[O] {
+          override def toValue: O      = value.map(renderer.toValue)
+          override def toJson: JsValue = value.fold[JsValue](JsNull)(renderer.toJson)
+        }
+    }
+
+  def list: Renderer[Seq[V]] =
+    new Renderer[Seq[V]] {
+      type O = Seq[renderer.O]
+      override def toOutput(value: Seq[V]): Output[O] =
+        new Output[O] {
+          override def toValue: O      = value.map(renderer.toValue)
+          override def toJson: JsValue = JsArray(value.map(renderer.toJson))
+        }
+    }
+
+  def set: Renderer[Set[V]] =
+    new Renderer[Set[V]] {
+      type O = Set[renderer.O]
+      override def toOutput(value: Set[V]): Output[O] =
+        new Output[O] {
+          override def toValue: O      = value.map(renderer.toValue)
+          override def toJson: JsValue = JsArray(value.map(renderer.toJson).toSeq)
+        }
+    }
 }
 
-object Renderer {
-  type Aux[M, DD] = Renderer[M] { type D = DD }
+class StreamRenderer[F](f: F => IteratorOutput) extends Renderer[F] {
+  type O = JsValue
+  override def toOutput(value: F): IteratorOutput = f(value)
+}
 
-  def json[M, DD: Writes](f: M => DD): Renderer.Aux[M, DD] = new Renderer[M] {
-    override type D = DD
-    override def toOutput(m: M): Output[D] = Output(f(m))
-    override val isStreamable: Boolean     = false
-  }
-
-  def stream[M](f: M => PagedResult[M]): Renderer.Aux[M, List[M]] = new Renderer[M] {
-    override type D = List[M]
-    override def toOutput(m: M): Output[List[M]] = f(m)
-    override val isStreamable: Boolean           = true
-  }
-
-  def apply[M](f: M => Output[M]): Renderer.Aux[M, M] = new Renderer[M] {
-    override type D = M
-    override def toOutput(m: M): Output[M] = f(m)
-    override val isStreamable: Boolean     = false
-  }
-
-  implicit def seqRenderer[M](implicit aRenderer: Renderer[M]): Renderer.Aux[Seq[M], Seq[aRenderer.D]] = new Renderer[Seq[M]] {
-    override type D = Seq[aRenderer.D]
-    override def toOutput(m: Seq[M]): Output[D] = {
-      val o = m.map(aRenderer.toOutput(_).toValue)
-      val j = JsArray(m.map(aRenderer.toOutput(_).toJson))
-      Output[D](o, j)
+trait RendererLowPriority {
+  implicit def json[V: Writes]: Renderer.Aux[V, V] =
+    new Renderer[V] {
+      type O = V
+      override def toOutput(value: V): Output[O] = Output(value)
     }
-    override val isStreamable: Boolean = false
-  }
+}
 
-  implicit def listRenderer[M](implicit aRenderer: Renderer[M]): Renderer.Aux[List[M], List[aRenderer.D]] = new Renderer[List[M]] {
-    override type D = List[aRenderer.D]
-    override def toOutput(m: List[M]): Output[D] = {
-      val o = m.map(aRenderer.toOutput(_).toValue)
-      val j = JsArray(m.map(aRenderer.toOutput(_).toJson))
-      Output[D](o, j)
-    }
-    override val isStreamable: Boolean = false
-  }
+//class StreamRenderer[F](f: F => IteratorOutput) extends Renderer[F] {
+//  type O = F
+//  override def toOutput(value: F): Output[F] = new Output[F] {
+//    override def toValue: F      = value
+//    override def toJson: JsValue = JsArray(f(value).iterator.map(renderer.toJson).toSeq)
+//  }
+//  def toStream(value: F): (Iterator[JsValue], Option[Long]) = {
+//    val iteratorOutput = f(value)
+//    iteratorOutput.iterator.map(renderer.toJson) -> iteratorOutput.totalSize.map(_.apply())
+//  }
+//}
 
-  implicit def setRenderer[M](implicit aRenderer: Renderer[M]): Renderer.Aux[Set[M], Set[aRenderer.D]] = new Renderer[Set[M]] {
-    override type D = Set[aRenderer.D]
-    override def toOutput(m: Set[M]): Output[D] = {
-      val o = m.map(aRenderer.toOutput(_).toValue)
-      val j = JsArray(m.map(aRenderer.toOutput(_).toJson).toSeq)
-      Output[D](o, j)
+object Renderer extends RendererLowPriority {
+  type Aux[V, OO] = Renderer[V] { type O = OO }
+  implicit def jsValue[J <: JsValue]: Renderer.Aux[J, J] =
+    new Renderer[J] {
+      override type O = J
+      override def toOutput(value: J): Output[O] = Output(value, Json.toJson(value))
     }
-    override val isStreamable: Boolean = false
-  }
+
+  def toJson[F, V: Writes](f: F => V): Renderer.Aux[F, V] =
+    new Renderer[F] {
+      override type O = V
+      override def toOutput(value: F): Output[O] = Output(f(value), Json.toJson(f(value)))
+    }
+
+  def stream[F](f: F => IteratorOutput): StreamRenderer[F] = new StreamRenderer[F](f)
+
+//  def stream[F, V](f: F => IteratorOutput)(implicit renderer: Renderer[V]): Renderer[F] = new StreamRenderer[F, V](f)
+//  def stream[T](t: Traversal[T, _, _], renderer: Renderer[T]): Renderer[Traversal[T, _, _]] = new Renderer[Traversal[T, _, _]] {
+//    override type O = Traversal[T, _, _]
+//
+//    override def toOutput2(value: Traversal[T, _, _]): Output[Traversal[T, _, _]] = new Output[Traversal[T, _, _]] {
+//      override def toValue: Traversal[T, _, _] = t
+//
+//      override def toJson: JsValue = t.map(renderer.toJson)
+//    }
+//  }
+
+  def apply[V](f: V => Output[V]): Renderer[V] =
+    new Renderer[V] {
+      override type O = V
+      override def toOutput(value: V): Output[O] = f(value)
+    }
+
+  implicit def seqRenderer[F, OO](implicit aRenderer: Renderer.Aux[F, OO]): Renderer.Aux[Seq[F], Seq[OO]] =
+    new Renderer[Seq[F]] {
+      type O = Seq[OO]
+
+      override def toOutput(value: Seq[F]): Output[Seq[OO]] =
+        Output[Seq[OO]](value.map(aRenderer.toOutput(_).toValue), JsArray(value.map(aRenderer.toOutput(_).toJson)))
+    }
+
+//  implicit def listRenderer[F, OO](implicit aRenderer: Renderer.Aux[F, OO]): Renderer.Aux[List[F], List[OO]] = new Renderer[List[F]] {
+//    override def toOutput(m: List[F]): Output[O] = {
+//      val o = m.map(aRenderer.toOutput(_).toValue)
+//      val j = JsArray(m.map(aRenderer.toOutput(_).toJson))
+//      Output[List[O]](o, j)
+//    }
+//  }
+
+//  implicit def setRenderer[V](implicit aRenderer: Renderer[V]): Renderer[Set[V]] = new Renderer[Set[V]] {
+//    override def toOutput(value: Set[V]): Output[Set[V]] =
+//      Output[Set[V]](value.map(aRenderer.toOutput(_).toValue), JsArray(value.map(aRenderer.toOutput(_).toJson).toSeq))
+//  }
 }
 
 trait Output[+O] {

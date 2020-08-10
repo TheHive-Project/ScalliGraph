@@ -5,7 +5,6 @@ import org.specs2.specification.core.{Fragment, Fragments}
 import org.thp.scalligraph.AppBuilder
 import org.thp.scalligraph.auth.UserSrv
 import org.thp.scalligraph.controllers.Field
-import org.thp.scalligraph.query.AuthGraph
 import play.api.libs.json.Json
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
@@ -38,7 +37,6 @@ class QueryTest extends PlaySpecification {
     s"[$name] Query executor" should {
       "execute simple query from Json" in {
         db.roTransaction { implicit graph =>
-          val authGraph = AuthGraph(userSrv.getSystemAuthContext, graph)
           val input =
             Field(
               Json.arr(
@@ -47,7 +45,7 @@ class QueryTest extends PlaySpecification {
               )
             )
           val result = queryExecutor.parser(input).flatMap { query =>
-            Or.from(queryExecutor.execute(query)(authGraph).map(_.toJson))
+            Or.from(queryExecutor.execute(query, graph, userSrv.getSystemAuthContext).map(_.toJson))
           }
           result must_=== Good(
             Json.arr(
@@ -64,7 +62,6 @@ class QueryTest extends PlaySpecification {
 
       "execute aggregation query" in {
         db.roTransaction { implicit graph =>
-          val authGraph = AuthGraph(userSrv.getSystemAuthContext, graph)
           val input = Field(
             Json.arr(
               Json.obj("_name" -> "allPeople"),
@@ -72,7 +69,7 @@ class QueryTest extends PlaySpecification {
             )
           )
           val result = queryExecutor.parser(input).flatMap { query =>
-            Or.from(queryExecutor.execute(query)(authGraph).map(_.toJson))
+            Or.from(queryExecutor.execute(query, graph, userSrv.getSystemAuthContext).map(_.toJson))
           }
           result must_== Good(
             Json.obj(
@@ -89,7 +86,6 @@ class QueryTest extends PlaySpecification {
 
       "execute aggregation query 2" in {
         db.roTransaction { implicit graph =>
-          val authGraph = AuthGraph(userSrv.getSystemAuthContext, graph)
           val input = Field(
             Json.arr(
               Json.obj("_name" -> "allSoftware"),
@@ -97,7 +93,7 @@ class QueryTest extends PlaySpecification {
             )
           )
           val result = queryExecutor.parser(input).flatMap { query =>
-            Or.from(queryExecutor.execute(query)(authGraph).map(_.toJson))
+            Or.from(queryExecutor.execute(query, graph, userSrv.getSystemAuthContext).map(_.toJson))
           }
           result must_== Good(
             Json.obj(

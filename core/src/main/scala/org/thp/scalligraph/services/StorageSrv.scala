@@ -10,15 +10,15 @@ import akka.stream.Materializer
 import akka.stream.alpakka.s3.scaladsl.S3
 import akka.stream.scaladsl.{Sink, Source, StreamConverters}
 import akka.util.ByteString
-import gremlin.scala._
 import javax.inject.{Inject, Singleton}
 import org.apache.hadoop.conf.{Configuration => HadoopConfig}
 import org.apache.hadoop.fs.{FileAlreadyExistsException => HadoopFileAlreadyExistsException, FileSystem => HDFileSystem, Path => HDPath}
 import org.apache.hadoop.io.IOUtils
+import org.apache.tinkerpop.gremlin.structure.{Graph, Vertex}
 import org.thp.scalligraph.auth.UserSrv
-import org.thp.scalligraph.models.{Binary, BinaryLink, Database, Entity}
-import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.VertexSteps
+import org.thp.scalligraph.models._
+import org.thp.scalligraph.traversal.TraversalOps._
+import org.thp.scalligraph.traversal.{Converter, Traversal}
 import play.api.{Configuration, Logger}
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
@@ -109,23 +109,26 @@ class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
 }
 
 @Singleton
-class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Database) extends StorageSrv {
+class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Database) extends VertexSrv[Binary]()(db, Binary.model) with StorageSrv {
 
-  val b64decoder: Base64.Decoder = Base64.getDecoder
-  val binaryLinkSrv              = new EdgeSrv[BinaryLink, Binary, Binary]()
+  val b64decoder: Base64.Decoder                       = Base64.getDecoder
+  implicit val binaryLinkModel: Model.Edge[BinaryLink] = BinaryLink.model
+  val binaryLinkSrv                                    = new EdgeSrv[BinaryLink, Binary, Binary]
 
   @Inject
   def this(configuration: Configuration, userSrv: UserSrv, db: Database) =
     this(configuration.underlying.getBytes("storage.database.chunkSize").toInt, userSrv, db)
 
+  def get(folder: String, attachmentId: String)(implicit graph: Graph): Traversal[Binary with Entity, Vertex, Converter[Binary with Entity, Vertex]] =
+    startTraversal.has("folder", folder).has("attachmentId", attachmentId)
+
   case class State(binary: Binary with Entity) {
 
     def next: Option[State] = db.roTransaction { implicit graph =>
-      new VertexSteps[Binary](
-        graph
-          .V(binary._id)
-          .out("nextChunk")
-      ).headOption()
+      getByIds(binary._id)
+        .out("nextChunk")
+        .v[Binary]
+        .headOption
         .map(State.apply)
     }
     def data: Array[Byte] = binary.data
@@ -134,10 +137,8 @@ class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Data
   object State {
 
     def apply(folder: String, id: String): Option[State] = db.roTransaction { implicit graph =>
-      new VertexSteps[Binary](graph.V)
-        .has("folder", folder)
-        .has("attachmentId", id)
-        .headOption()
+      get(folder, id)
+        .headOption
         .map(State.apply)
     }
   }
@@ -163,10 +164,7 @@ class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Data
     }
 
   override def exists(folder: String, id: String): Boolean = db.roTransaction { implicit graph =>
-    new VertexSteps[Binary](graph.V)
-      .has("folder", folder)
-      .has("attachmentId", id)
-      .exists()
+    get(folder, id).exists
   }
 
   override def saveBinary(folder: String, id: String, is: InputStream)(implicit graph: Graph): Try[Unit] = {

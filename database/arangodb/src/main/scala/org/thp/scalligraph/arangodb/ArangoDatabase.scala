@@ -1,6 +1,5 @@
 package org.thp.scalligraph.arangodb
 import com.typesafe.config.ConfigFactory
-import gremlin.scala.Graph
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.utils.Config

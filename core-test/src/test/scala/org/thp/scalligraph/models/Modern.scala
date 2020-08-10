@@ -1,72 +1,67 @@
 package org.thp.scalligraph.models
 
-import gremlin.scala.{Graph, GremlinScala, P, Vertex}
 import javax.inject.{Inject, Singleton}
+import org.apache.tinkerpop.gremlin.process.traversal.P
+import org.apache.tinkerpop.gremlin.structure.Graph
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.services._
-import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.VertexSteps
+import org.thp.scalligraph.traversal.TraversalOps._
+import org.thp.scalligraph.traversal.{Converter, Traversal}
 
 import scala.util.Try
 
-@VertexEntity
+@BuildVertexEntity
 case class Person(name: String, age: Int)
 
 object Person {
   val initialValues = Seq(Person("marc", 34), Person("franck", 28))
 }
 
-@VertexEntity
+@BuildVertexEntity
 case class Software(name: String, lang: String)
 
-@EdgeEntity[Person, Person]
+@BuildEdgeEntity[Person, Person]
 case class Knows(weight: Double)
 
-@EdgeEntity[Person, Software]
+@BuildEdgeEntity[Person, Software]
 case class Created(weight: Double)
 
-@EntitySteps[Person]
-class PersonSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph) extends VertexSteps[Person](raw) {
-  def created = new SoftwareSteps(this.outTo[Created].raw)
+object ModernOps {
+  implicit class PersonOpsDefs(traversal: Traversal.V[Person]) {
+    def created: Traversal.V[Software]               = traversal.out[Created].v[Software]
+    def getByName(name: String): Traversal.V[Person] = traversal.has("name", name)
+    def created(predicate: P[Double]): Traversal.V[Software] =
+      traversal
+        .outE[Created]
+        .has("weight", predicate)
+        .inV
+        .v[Software]
+    def connectedEdge: Seq[String]                            = traversal.outE().label.toSeq
+    def knownLevels: Seq[Double]                              = traversal.outE[Knows].property("weight", Converter.double).toSeq
+    def knows: Traversal.V[Person]                            = traversal.out[Knows].v[Person]
+    def friends(threshold: Double = 0.8): Traversal.V[Person] = traversal.outE[Knows].has("weight", P.gte(threshold)).inV.v[Person]
+  }
 
-  def getByName(name: String): PersonSteps = this.has("name", name)
+  implicit class SoftwareOpsDefs(traversal: Traversal.V[Software]) {
+    def createdBy: Traversal.V[Person]  = traversal.in("Created").v[Person]
+    def isRipple: Traversal.V[Software] = traversal.has("name", "ripple")
 
-  def created(predicate: P[Double]) = new SoftwareSteps(this.outToE[Created].has("weight", predicate).inV().raw)
-
-  def connectedEdge: List[String] = this.outE().label.toList
-
-  def knownLevels: List[Double] = this.outToE[Knows].value[Double]("weight").toList
-
-  def knows: PersonSteps = new PersonSteps(this.outTo[Knows].raw)
-
-  def friends(threshold: Double = 0.8): PersonSteps = new PersonSteps(this.outToE[Knows].has("weight", P.gte(threshold)).inV().raw)
-
-  override def newInstance(newRaw: GremlinScala[Vertex]): PersonSteps = new PersonSteps(newRaw)
+  }
 }
 
-@EntitySteps[Software]
-class SoftwareSteps(raw: GremlinScala[Vertex])(implicit db: Database, graph: Graph) extends VertexSteps[Software](raw) {
-  def createdBy = new PersonSteps(raw.in("Created"))
-
-  def isRipple: SoftwareSteps = this.has("name", "ripple")
-
-  override def newInstance(newRaw: GremlinScala[Vertex]): SoftwareSteps = new SoftwareSteps(newRaw)
-  override def newInstance(): SoftwareSteps                             = new SoftwareSteps(raw.clone())
-}
+import org.thp.scalligraph.models.ModernOps._
 
 @Singleton
-class PersonSrv @Inject() (implicit db: Database) extends VertexSrv[Person, PersonSteps] {
-  override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): PersonSteps               = new PersonSteps(raw)
+class PersonSrv @Inject() (implicit db: Database) extends VertexSrv[Person] {
   def create(e: Person)(implicit graph: Graph, authContext: AuthContext): Try[Person with Entity] = createEntity(e)
-  override def get(idOrNumber: String)(implicit graph: Graph): PersonSteps =
-    if (db.isValidId(idOrNumber)) initSteps.getByIds(idOrNumber)
-    else initSteps.getByName(idOrNumber)
+  override def get(idOrNumber: String)(implicit graph: Graph): Traversal.V[Person] =
+    if (db.isValidId(idOrNumber)) startTraversal.getByIds(idOrNumber)
+    else startTraversal.getByName(idOrNumber)
 }
 
 @Singleton
-class SoftwareSrv @Inject() (implicit db: Database) extends VertexSrv[Software, SoftwareSteps] {
-  override def steps(raw: GremlinScala[Vertex])(implicit graph: Graph): SoftwareSteps                 = new SoftwareSteps(raw)
+class SoftwareSrv @Inject() (implicit db: Database) extends VertexSrv[Software] {
   def create(e: Software)(implicit graph: Graph, authContext: AuthContext): Try[Software with Entity] = createEntity(e)
 }
 
@@ -76,7 +71,7 @@ class ModernSchema @Inject() (implicit db: Database) extends Schema {
   val softwareSrv                                  = new SoftwareSrv
   val knowsSrv                                     = new EdgeSrv[Knows, Person, Person]
   val createdSrv                                   = new EdgeSrv[Created, Person, Software]
-  val vertexServices: Seq[VertexSrv[_, _]]         = Seq(personSrv, softwareSrv)
+  val vertexServices: Seq[VertexSrv[_]]            = Seq(personSrv, softwareSrv)
   override def modelList: Seq[Model]               = (vertexServices :+ knowsSrv :+ createdSrv).map(_.model)
   override def initialValues: Seq[InitialValue[_]] = vertexServices.map(_.model.getInitialValues).flatten
 }

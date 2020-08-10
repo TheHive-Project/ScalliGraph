@@ -1,126 +1,158 @@
 package org.thp.scalligraph.query
 
-import gremlin.scala.{Graph, Vertex}
+import org.apache.tinkerpop.gremlin.structure.{Graph, Vertex}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FieldsParser}
 import org.thp.scalligraph.models.{Database, Mapping}
-import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
+import org.thp.scalligraph.traversal.TraversalOps._
+import org.thp.scalligraph.traversal.{Converter, Traversal}
 import play.api.libs.json.{JsObject, Json}
 
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Success, Try}
 
-class PropertyBuilder[S <: BaseVertexSteps, D, SD, G](stepType: ru.Type, propertyName: String, mapping: Mapping[D, SD, G], noValue: NoValue[G]) {
+class PropertyBuilder[E <: Product, P, U](traversalType: ru.Type, propertyName: String, mapping: Mapping[P, U, Traversal.UnkG]) {
 
   def field =
-    new SimpleUpdatePropertyBuilder[D, SD, G](
-      stepType,
+    new SimpleUpdatePropertyBuilder[E, P, U](
+      traversalType,
       propertyName,
       propertyName,
       mapping,
-      noValue,
-      Seq((_, s: BaseVertexSteps) => s.property(propertyName, mapping))
+      Seq((_, t) => t.asInstanceOf[Traversal.V[E]].property(propertyName, mapping))
     )
 
   def rename(newName: String) =
-    new SimpleUpdatePropertyBuilder[D, SD, G](
-      stepType,
+    new SimpleUpdatePropertyBuilder[E, P, U](
+      traversalType,
       propertyName,
       newName,
       mapping,
-      noValue,
-      Seq((_, s: BaseVertexSteps) => s.property(newName, mapping))
+      Seq((_, t) => t.asInstanceOf[Traversal.V[E]].property(newName, mapping))
     )
 
-  def select(definition: (S => Traversal[SD, G])*) =
-    new UpdatePropertyBuilder[D, SD, G](
-      stepType,
+  def select(definition: (Traversal.V[E] => Traversal[U, _, _])*) =
+    new UpdatePropertyBuilder[E, P, U](
+      traversalType,
       propertyName,
       mapping,
-      noValue,
-      definition.map(d => (_: FPath, s: BaseVertexSteps) => d(s.asInstanceOf[S]))
+      definition.map(d => (_: FPath, t: Traversal.Unk) => d(t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Domain[U]]),
+      (_, t) => definition.head(t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Domain[U]],
+      _ => mapping.reverse.asInstanceOf[Converter[Traversal.UnkG, Traversal.UnkD]]
     )
 
-  def subSelect(definition: ((FPath, S) => Traversal[SD, G])*) =
-    new UpdatePropertyBuilder[D, SD, G](
-      stepType,
+  def subSelect[D](definition: ((FPath, Traversal.V[E]) => Traversal[U, _, _])*) =
+    new UpdatePropertyBuilder[E, P, U](
+      traversalType,
       propertyName,
       mapping,
-      noValue,
-      definition.asInstanceOf[Seq[(FPath, BaseVertexSteps) => Traversal[SD, G]]]
+      definition.asInstanceOf[Seq[(FPath, Traversal.Unk) => Traversal.Domain[U]]],
+      definition.head.asInstanceOf[(FPath, Traversal.Unk) => Traversal.Unk],
+      _ => mapping.reverse.asInstanceOf[Converter[Traversal.UnkG, Traversal.UnkD]]
     )
 }
 
-class SimpleUpdatePropertyBuilder[D, SD, G](
-    stepType: ru.Type,
+class SimpleUpdatePropertyBuilder[E <: Product, P, U](
+    traversalType: ru.Type,
     propertyName: String,
     fieldName: String,
-    mapping: Mapping[D, SD, G],
-    noValue: NoValue[G],
-    definition: Seq[(FPath, BaseVertexSteps) => Traversal[SD, G]]
-) extends UpdatePropertyBuilder[D, SD, G](stepType, propertyName, mapping, noValue, definition) {
-
-  def updatable(implicit fieldsParser: FieldsParser[SD], updateFieldsParser: FieldsParser[D]): PublicProperty[SD, G] =
-    new PublicProperty[SD, G](
-      stepType,
+    mapping: Mapping[P, U, _],
+    definition: Seq[(FPath, Traversal.Unk) => Traversal.Domain[U]]
+) extends UpdatePropertyBuilder[E, P, U](
+      traversalType,
       propertyName,
       mapping,
-      noValue,
+      definition,
+      definition.head,
+      _ => mapping.reverse.asInstanceOf[Converter[Traversal.UnkG, Traversal.UnkD]]
+    ) {
+
+  def updatable(implicit fieldsParser: FieldsParser[U], updateFieldsParser: FieldsParser[P]): PublicProperty[P, U] =
+    new PublicProperty[P, U](
+      traversalType,
+      propertyName,
+      mapping,
       definition,
       fieldsParser,
-      Some(PropertyUpdater(updateFieldsParser, propertyName) { (_: FPath, value: D, vertex: Vertex, db: Database, _: Graph, _: AuthContext) =>
-        db.setProperty(vertex, fieldName, value, mapping)
+      Some(PropertyUpdater(updateFieldsParser, propertyName) { (_: FPath, value: P, vertex: Vertex, db: Database, _: Graph, _: AuthContext) =>
+        mapping.setProperty(vertex, fieldName, value)
         Success(Json.obj(fieldName -> value.toString))
-      })
+      }),
+      filterSelect,
+      filterConverter
     )
 }
 
-class UpdatePropertyBuilder[D, SD, G](
-    stepType: ru.Type,
-    propertyName: String,
-    mapping: Mapping[D, SD, G],
-    noValue: NoValue[G],
-    definition: Seq[(FPath, BaseVertexSteps) => Traversal[SD, G]]
+class PropertyFilter[E <: Product, P, U](updatePropertyBuilder: UpdatePropertyBuilder[E, P, U], select: (FPath, Traversal.Unk) => Traversal.Unk) {
+  def converter(c: FPath => Converter[Any, U]) = new UpdatePropertyBuilder[E, P, U](
+    updatePropertyBuilder.traversalType,
+    updatePropertyBuilder.propertyName,
+    updatePropertyBuilder.mapping,
+    updatePropertyBuilder.definition,
+    select,
+    c.asInstanceOf[FPath => Converter[Traversal.UnkG, Traversal.UnkD]]
+  )
+}
+
+class UpdatePropertyBuilder[E <: Product, P, U](
+    private[query] val traversalType: ru.Type,
+    private[query] val propertyName: String,
+    private[query] val mapping: Mapping[P, U, _],
+    private[query] val definition: Seq[(FPath, Traversal.Unk) => Traversal.Domain[U]],
+    private[query] val filterSelect: (FPath, Traversal.Unk) => Traversal.Unk,
+    private[query] val filterConverter: FPath => Converter[Traversal.UnkG, Traversal.UnkD]
 ) {
 
-  def readonly(implicit fieldsParser: FieldsParser[SD]): PublicProperty[SD, G] =
-    new PublicProperty[SD, G](
-      stepType,
+//  def filter(s: (FPath, Traversal.Unk) => Traversal.Unk, c: FPath => Converter[Traversal.UnkG, Traversal.UnkD]) = new UpdatePropertyBuilder[P, U](
+//    traversalType,
+//    propertyName,
+//    mapping,
+//    definition,
+//    s,
+//    c
+//  )
+  def filter(select: (FPath, Traversal.V[E]) => Traversal[_, _, _]) =
+    new PropertyFilter[E, P, U](this, select.asInstanceOf[(FPath, Traversal.Unk) => Traversal.Unk])
+
+  def readonly(implicit fieldsParser: FieldsParser[U]): PublicProperty[P, U] =
+    new PublicProperty[P, U](
+      traversalType,
       propertyName,
       mapping,
-      noValue,
       definition,
       fieldsParser,
-      None
+      None,
+      filterSelect,
+      filterConverter
     )
 
   def custom(
-      f: (FPath, D, Vertex, Database, Graph, AuthContext) => Try[JsObject]
-  )(implicit fieldsParser: FieldsParser[SD], updateFieldsParser: FieldsParser[D]): PublicProperty[SD, G] =
-    new PublicProperty[SD, G](
-      stepType,
+      f: (FPath, P, Vertex, Database, Graph, AuthContext) => Try[JsObject]
+  )(implicit fieldsParser: FieldsParser[U], updateFieldsParser: FieldsParser[P]): PublicProperty[P, U] =
+    new PublicProperty[P, U](
+      traversalType,
       propertyName,
       mapping,
-      noValue,
       definition,
       fieldsParser,
-      Some(PropertyUpdater(updateFieldsParser, propertyName)(f))
+      Some(PropertyUpdater(updateFieldsParser, propertyName)(f)),
+      filterSelect,
+      filterConverter
     )
 }
 
-class PublicPropertyListBuilder[S <: BaseVertexSteps: ru.TypeTag](properties: List[PublicProperty[_, _]]) {
+class PublicPropertyListBuilder[E <: Product: ru.TypeTag](properties: List[PublicProperty[_, _]]) {
   def build: List[PublicProperty[_, _]] = properties
 
-  def property[D, SD, G](
+  def property[P, U](
       name: String,
-      mapping: Mapping[D, SD, G]
-  )(prop: PropertyBuilder[S, D, SD, G] => PublicProperty[SD, G])(implicit noValue: NoValue[G]): PublicPropertyListBuilder[S] =
-    new PublicPropertyListBuilder(
-      prop(new PropertyBuilder(ru.typeOf[S], name, mapping, noValue)) :: properties
+      mapping: Mapping[P, U, _]
+  )(prop: PropertyBuilder[E, P, U] => PublicProperty[P, U]): PublicPropertyListBuilder[E] =
+    new PublicPropertyListBuilder[E](
+      prop(new PropertyBuilder[E, P, U](ru.typeOf[Traversal.V[E]], name, mapping.asInstanceOf[Mapping[P, U, Traversal.UnkG]])) :: properties
     )
 }
 
 object PublicPropertyListBuilder {
-  def apply[S <: BaseVertexSteps: ru.TypeTag] = new PublicPropertyListBuilder[S](Nil)
+  def apply[E <: Product: ru.TypeTag] = new PublicPropertyListBuilder[E](Nil)
 }

@@ -1,69 +1,90 @@
 package org.thp.scalligraph.query
 
-import gremlin.scala.{Graph, Vertex}
+import org.apache.tinkerpop.gremlin.structure.{Graph, Vertex}
 import org.thp.scalligraph.BadRequestError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FieldsParser}
 import org.thp.scalligraph.models.{Database, Mapping}
-import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{BaseVertexSteps, Traversal}
+import org.thp.scalligraph.traversal.TraversalOps._
+import org.thp.scalligraph.traversal.{Converter, Traversal}
 import play.api.libs.json.JsObject
 
 import scala.reflect.runtime.{universe => ru}
 import scala.util.Try
 
-class PublicProperty[D, G](
-    val stepType: ru.Type,
+class PublicProperty[P, U](
+    val traversalType: ru.Type,
     val propertyName: String,
-    val mapping: Mapping[_, D, G],
-    val noValue: NoValue[G],
-    definition: Seq[(FPath, BaseVertexSteps) => Traversal[D, G]],
-    val fieldsParser: FieldsParser[D],
-    val updateFieldsParser: Option[FieldsParser[PropertyUpdater]]
+    val mapping: Mapping[P, U, _],
+    definition: Seq[(FPath, Traversal.Unk) => Traversal.Domain[U]],
+    val fieldsParser: FieldsParser[U],
+    val updateFieldsParser: Option[FieldsParser[PropertyUpdater]],
+    val filterSelect: (FPath, Traversal.Unk) => Traversal.Unk,
+    val filterConverter: FPath => Converter[Traversal.UnkG, Traversal.UnkD]
 ) {
-  type Graph  = G
-  type Domain = D
-
   lazy val propertyPath: FPath = FPath(propertyName)
 
-  def get(steps: BaseVertexSteps, path: FPath): Traversal[D, G] =
+  def select(path: FPath, traversal: Traversal.Unk): Traversal.Domain[U] =
     if (definition.lengthCompare(1) == 0)
-      definition.head.apply(path, steps)
+      definition.head(path, traversal)
     else
-      steps.coalesce(mapping)(definition.map(d => d.apply(path, _)): _*)
+      traversal
+        .coalesce[U, Traversal.UnkG, Converter[U, Traversal.UnkG]](definition.map(t => t(path, _: Traversal.Unk).castDomain[U]): _*)
+
+  def get(path: FPath, traversal: Traversal.Unk): Traversal[P, Any, Converter[P, Any]] =
+    select(path, traversal).cast[U, Any].fold.domainMap(x => mapping.wrap(x)).cast[P, Any]
 }
 
 object PublicProperty {
 
-  def getPropertyTraversal(
+  def getProperty(
       properties: Seq[PublicProperty[_, _]],
-      stepType: ru.Type,
-      step: BaseVertexSteps,
-      fieldName: String,
-      authContext: AuthContext
-  ): Traversal[_, _] = {
-    val path = FPath(fieldName)
-    properties
-      .iterator
-      .collectFirst {
-        case p if p.stepType =:= stepType && path.startsWith(p.propertyPath).isDefined => p.get(step, path)
-      }
-      .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))
-  }
+      traversalType: ru.Type,
+      fieldName: String
+  ): PublicProperty[Traversal.UnkD, Traversal.UnkDU] = getProperty(properties, traversalType, FPath(fieldName))
 
   def getProperty(
       properties: Seq[PublicProperty[_, _]],
-      stepType: ru.Type,
-      fieldName: String
-  ): PublicProperty[_, _] = {
-    val path = FPath(fieldName)
+      traversalType: ru.Type,
+      fieldPath: FPath
+  ): PublicProperty[Traversal.UnkD, Traversal.UnkDU] =
     properties
       .iterator
       .collectFirst {
-        case p if p.stepType =:= stepType && path.startsWith(p.propertyPath).isDefined => p
+        case p if fieldPath.startsWith(p.propertyPath).isDefined && traversalType <:< p.traversalType =>
+          p.asInstanceOf[PublicProperty[Traversal.UnkD, Traversal.UnkDU]]
       }
-      .getOrElse(throw BadRequestError(s"Property $fieldName for type $stepType not found"))
-  }
+      .getOrElse(throw BadRequestError(s"Property $fieldPath for type $traversalType not found"))
+
+  //  def getPropertyTraversal(
+//      properties: Seq[PublicProperty[_, _]],
+//      traversalType: ru.Type,
+//      step: UntypedTraversal,
+//      fieldName: String,
+//      authContext: AuthContext
+//  ): UntypedTraversal = {
+//    val path = FPath(fieldName)
+//    properties
+//      .iterator
+//      .collectFirst {
+//        case p if p.traversalType =:= traversalType && path.startsWith(p.propertyPath).isDefined => p.get(step, path).untyped
+//      }
+//      .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
+//  }
+
+//  def getProperty(
+//      properties: Seq[PublicProperty[_, _]],
+//      traversalType: ru.Type,
+//      fieldName: String
+//  ): PublicProperty[_, _] = {
+//    val path = FPath(fieldName)
+//    properties
+//      .iterator
+//      .collectFirst {
+//        case p if p.traversalType =:= traversalType && path.startsWith(p.propertyPath).isDefined => p
+//      }
+//      .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
+//  }
 }
 
 object PropertyUpdater {

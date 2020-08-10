@@ -1,141 +1,126 @@
 package org.thp.scalligraph.query
 
-import java.util.{Collection => JCollection}
-
-import gremlin.scala.P
-import org.apache.tinkerpop.gremlin.process.traversal.TextP
+import org.apache.tinkerpop.gremlin.process.traversal.{P, TextP}
 import org.scalactic.Accumulation._
 import org.scalactic.Good
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
-import org.thp.scalligraph.models.{Database, Mapping}
-import org.thp.scalligraph.steps.StepsOps._
-import org.thp.scalligraph.steps.{BaseVertexSteps, IdMapping, Traversal}
+import org.thp.scalligraph.models.Database
+import org.thp.scalligraph.traversal.Traversal
+import org.thp.scalligraph.traversal.TraversalOps._
 import play.api.Logger
 
-import scala.collection.JavaConverters._
 import scala.reflect.runtime.{universe => ru}
 
-trait InputFilter extends InputQuery {
-
-  def apply[S <: BaseVertexSteps](
+case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputQuery[Traversal.Unk, Traversal.Unk] {
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
-      stepType: ru.Type,
-      step: S,
+      traversalType: ru.Type,
+      traversal: Traversal.Unk,
       authContext: AuthContext
-  ): S
-}
-
-case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilter {
-
-  override def apply[S <: BaseVertexSteps](
-      db: Database,
-      publicProperties: List[PublicProperty[_, _]],
-      stepType: ru.Type,
-      step: S,
-      authContext: AuthContext
-  ): S =
-    step.filter { s =>
-      val property: Traversal[Any, Any] =
-        PublicProperty.getPropertyTraversal(publicProperties, stepType, s, fieldName, authContext).asInstanceOf[Traversal[Any, Any]]
-      if (property.mapping == IdMapping) {
-        val newValue = predicate.getValue match {
-          case c: JCollection[_] => c.asScala.map(db.toId).asJavaCollection
-          case other             => db.toId(other)
-        }
-        predicate.asInstanceOf[P[Any]].setValue(newValue)
-      }
-      property.is(db.mapPredicate(predicate.asInstanceOf[P[Any]]))
+  ): Traversal.Unk = {
+    val propertyPath = FPath(fieldName)
+    val property     = PublicProperty.getProperty(publicProperties, traversalType, propertyPath)
+//    val predicate = getPredicate(property.mapping.reverse)
+//    if (property.mapping == IdMapping) {
+//      val newValue = predicate.getValue match {
+//        case c: JCollection[_] => c.asScala.map(db.toId).asJavaCollection
+//        case other             => db.toId(other)
+//      }
+//      predicate.asInstanceOf[P[Any]].setValue(newValue)
+//    }
+    traversal.filter { t =>
+      property.filterSelect(propertyPath, t).is(db.mapPredicate(predicate.asInstanceOf[P[Traversal.UnkG]]))
     }
-}
-
-case class IsDefinedFilter(fieldName: String) extends InputFilter {
-
-  override def apply[S <: BaseVertexSteps](
-      db: Database,
-      publicProperties: List[PublicProperty[_, _]],
-      stepType: ru.Type,
-      step: S,
-      authContext: AuthContext
-  ): S = {
-    val filter = (s: BaseVertexSteps) => PublicProperty.getPropertyTraversal(publicProperties, stepType, s, fieldName, authContext)
-    step.filter(filter)
   }
 }
 
-case class OrFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
-
-  override def apply[S <: BaseVertexSteps](
+case class IsDefinedFilter(fieldName: String) extends InputQuery[Traversal.Unk, Traversal.Unk] {
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
-      stepType: ru.Type,
-      step: S,
+      traversalType: ru.Type,
+      traversal: Traversal.Unk,
       authContext: AuthContext
-  ): S =
-    inputFilters.map(ff => (s: S) => ff(db, publicProperties, stepType, s, authContext)) match {
-      case Seq(f) => step.filter(f)
-      case Seq()  => step.filter(_.not(identity))
-      case f      => step.filter(_.or(f: _*))
-    }
-}
-
-case class AndFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
-
-  override def apply[S <: BaseVertexSteps](
-      db: Database,
-      publicProperties: List[PublicProperty[_, _]],
-      stepType: ru.Type,
-      step: S,
-      authContext: AuthContext
-  ): S =
-    inputFilters.map(ff => (s: S) => ff(db, publicProperties, stepType, s, authContext)) match {
-      case Seq(f)      => step.filter(f)
-      case Seq()       => step.filter(_.not(identity))
-      case Seq(f @ _*) => step.filter(_.and(f: _*))
-    }
-}
-
-case class NotFilter(inputFilter: InputFilter) extends InputFilter {
-
-  override def apply[S <: BaseVertexSteps](
-      db: Database,
-      publicProperties: List[PublicProperty[_, _]],
-      stepType: ru.Type,
-      step: S,
-      authContext: AuthContext
-  ): S = {
-    val criteria: BaseVertexSteps => BaseVertexSteps = (s: BaseVertexSteps) => inputFilter(db, publicProperties, stepType, s, authContext)
-    step.filter(_.not(criteria))
+  ): Traversal.Unk = {
+    val property = PublicProperty.getProperty(publicProperties, traversalType, fieldName)
+    traversal.filter(t => property.select(FPath(fieldName), t))
   }
 }
 
-object YesFilter extends InputFilter {
+case class OrFilter(inputFilters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]]) extends InputQuery[Traversal.Unk, Traversal.Unk] {
 
-  override def apply[S <: BaseVertexSteps](
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
-      stepType: ru.Type,
-      step: S,
+      traversalType: ru.Type,
+      traversal: Traversal.Unk,
       authContext: AuthContext
-  ): S = step
+  ): Traversal.Unk =
+    inputFilters.map(ff => (t: Traversal.Unk) => ff(db, publicProperties, traversalType, t, authContext)) match {
+      case Seq(f) => traversal.filter(f)
+      case Seq()  => traversal.limit(0)
+      case f      => traversal.filter(_.or(f: _*))
+    }
 }
 
-class IdFilter(id: String) extends InputFilter {
+case class AndFilter(inputFilters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]]) extends InputQuery[Traversal.Unk, Traversal.Unk] {
 
-  override def apply[S <: BaseVertexSteps](
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
-      stepType: ru.Type,
-      step: S,
+      traversalType: ru.Type,
+      traversal: Traversal.Unk,
       authContext: AuthContext
-  ): S = step.getByIds(id)
+  ): Traversal.Unk =
+    inputFilters.map(ff => (t: Traversal.Unk) => ff(db, publicProperties, traversalType, t, authContext)) match {
+      case Seq(f)      => traversal.filter(f)
+      case Seq()       => traversal.filter(_.not(identity))
+      case Seq(f @ _*) => traversal.filter(_.and(f: _*))
+    }
+}
+
+case class NotFilter(inputFilter: InputQuery[Traversal.Unk, Traversal.Unk]) extends InputQuery[Traversal.Unk, Traversal.Unk] {
+
+  override def apply(
+      db: Database,
+      publicProperties: List[PublicProperty[_, _]],
+      traversalType: ru.Type,
+      traversal: Traversal.Unk,
+      authContext: AuthContext
+  ): Traversal.Unk =
+//    val criteria: Traversal.ANY => Traversal.ANY = (s: Traversal.ANY) =>
+//      inputFilter(db, publicProperties, traversalType, s, authContext)
+    traversal.filter(_.not(t => inputFilter(db, publicProperties, traversalType, t, authContext)))
+}
+
+object YesFilter extends InputQuery[Traversal.Unk, Traversal.Unk] {
+
+  override def apply(
+      db: Database,
+      publicProperties: List[PublicProperty[_, _]],
+      traversalType: ru.Type,
+      traversal: Traversal.Unk,
+      authContext: AuthContext
+  ): Traversal.Unk = traversal
+}
+
+class IdFilter(id: String) extends InputQuery[Traversal.Unk, Traversal.Unk] {
+
+  override def apply(
+      db: Database,
+      publicProperties: List[PublicProperty[_, _]],
+      traversalType: ru.Type,
+      traversal: Traversal.Unk,
+      authContext: AuthContext
+  ): Traversal.Unk = traversal.getByIds(id)
 }
 
 object InputFilter {
   lazy val logger: Logger = Logger(getClass)
 
-  def is(field: String, value: Any): PredicateFilter = PredicateFilter(field, P.is(value))
+  def is(field: String, value: Any): PredicateFilter = PredicateFilter(field, P.eq(value))
 
   def neq(field: String, value: Any): PredicateFilter = PredicateFilter(field, P.neq(value))
 
@@ -159,15 +144,15 @@ object InputFilter {
 
   def endsWith(field: String, value: String): PredicateFilter = PredicateFilter(field, TextP.endingWith(value))
 
-  def or(filters: Seq[InputFilter]): OrFilter = OrFilter(filters)
+  def or(filters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]]): OrFilter = OrFilter(filters)
 
-  def and(filters: Seq[InputFilter]): AndFilter = AndFilter(filters)
+  def and(filters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]]): AndFilter = AndFilter(filters)
 
-  def not(filter: InputFilter): NotFilter = NotFilter(filter)
+  def not(filter: InputQuery[Traversal.Unk, Traversal.Unk]): NotFilter = NotFilter(filter)
 
   def yes: YesFilter.type = YesFilter
 
-  def withId(id: String): InputFilter = new IdFilter(id)
+  def withId(id: String): InputQuery[Traversal.Unk, Traversal.Unk] = new IdFilter(id)
 
   def like(field: String, value: String): PredicateFilter = {
     val s = value.headOption.contains('*')
@@ -181,11 +166,13 @@ object InputFilter {
   def fieldsParser(
       tpe: ru.Type,
       properties: Seq[PublicProperty[_, _]],
-      globalParser: ru.Type => FieldsParser[InputFilter]
-  ): FieldsParser[InputFilter] = {
+      globalParser: ru.Type => FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]]
+  ): FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]] = {
     def propParser(name: String): FieldsParser[Any] = {
-      val prop = PublicProperty.getProperty(properties, tpe, name)
-      prop.fieldsParser.map(prop.fieldsParser.formatName)(v => prop.mapping.asInstanceOf[Mapping[_, Any, Any]].toGraph(v))
+      val fieldPath         = FPath(name)
+      val property          = PublicProperty.getProperty(properties, tpe, fieldPath)
+      val propertyConverter = property.filterConverter(fieldPath)
+      property.fieldsParser.map(property.fieldsParser.formatName)(v => propertyConverter(v))
     }
 
     FieldsParser("query") {

@@ -1,48 +1,43 @@
 package org.thp.scalligraph.query
 
-import gremlin.scala.{__, GremlinScala, OrderBy, Vertex}
 import org.apache.tinkerpop.gremlin.process.traversal.Order
-import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
 import org.scalactic.Accumulation._
 import org.scalactic.{Bad, Good, One}
 import org.thp.scalligraph.InvalidFormatAttributeError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FSeq, FString, FieldsParser}
 import org.thp.scalligraph.models.{Database, MappingCardinality}
-import org.thp.scalligraph.steps.BaseVertexSteps
-import org.thp.scalligraph.steps.StepsOps._
+import org.thp.scalligraph.traversal.TraversalOps._
+import org.thp.scalligraph.traversal.{Converter, SortBySelector, Traversal}
 
 import scala.reflect.runtime.{universe => ru}
 
-case class InputSort(fieldOrder: (String, Order)*) extends InputQuery {
-
-  def orderby[A](f: GremlinScala[Vertex] => GremlinScala[_], order: Order): OrderBy[A] = new OrderBy[A] {
-    override def apply[End](traversal: GraphTraversal[_, End]): GraphTraversal[_, End] =
-      traversal.by(f(__[Vertex]).traversal, order)
-  }
-  override def apply[S <: BaseVertexSteps](
+case class InputSort(fieldOrder: (String, Order)*) extends InputQuery[Traversal.Unk, Traversal.Unk] {
+  override def apply(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
-      stepType: ru.Type,
-      step: S,
+      traversalType: ru.Type,
+      traversal: Traversal.Unk,
       authContext: AuthContext
-  ): S = {
+  ): Traversal.Unk = {
     val orderBys = fieldOrder.map {
       case (fieldName, order) =>
-        val property = PublicProperty.getProperty(publicProperties, stepType, fieldName)
-        val subField = FPath(fieldName.dropWhile(_ != '.').dropWhile(_ == '.'))
-        val orderDefs: GremlinScala[Vertex] => GremlinScala[property.Graph] =
-          (g: GremlinScala[Vertex]) => property.get(step.newInstance(g), subField).raw.asInstanceOf[GremlinScala[property.Graph]]
+        val property = PublicProperty.getProperty(publicProperties, traversalType, fieldName)
         if (property.mapping.cardinality == MappingCardinality.single) {
-          orderby(orderDefs, order)
+          (_: SortBySelector[Traversal.UnkD, Traversal.UnkG, Converter[Traversal.UnkD, Traversal.UnkG]])
+            .by(property.select(FPath(fieldName), _), order)
         } else {
-          val noValue: GremlinScala[Vertex] => GremlinScala[property.Graph] =
-            (_: GremlinScala[Vertex]).constant(property.noValue().asInstanceOf[property.Graph])
-          orderby(_.coalesce(orderDefs, noValue), order)
+          (_: SortBySelector[Traversal.UnkD, Traversal.UnkG, Converter[Traversal.UnkD, Traversal.UnkG]])
+            .by(
+              _.coalesce(
+                property.select(FPath(fieldName), _),
+                _.constant[Any](property.mapping.noValue).castDomain[Traversal.UnkDU]
+              ),
+              order
+            )
         }
     }
-    step
-      .sort(orderBys: _*)
+    traversal.sort(orderBys: _*)
   }
 }
 

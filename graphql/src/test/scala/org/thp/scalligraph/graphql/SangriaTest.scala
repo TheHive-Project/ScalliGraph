@@ -2,10 +2,8 @@ package org.thp.scalligraph.graphql
 
 import java.io.FileNotFoundException
 
-import gremlin.scala._
 import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
 import org.thp.scalligraph.models._
-import org.thp.scalligraph.query.AuthGraph
 import org.thp.scalligraph.utils.UnthreadedExecutionContext
 import play.api.libs.json.{JsObject, JsValue, Json}
 import play.api.{Configuration, Environment}
