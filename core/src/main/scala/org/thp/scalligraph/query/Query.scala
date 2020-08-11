@@ -24,37 +24,41 @@ abstract class ParamQuery[P: ru.TypeTag] { q =>
   def checkFrom(t: ru.Type): Boolean
   def toType(t: ru.Type): ru.Type
 
-  def toQuery(param: P): Query = new Query {
-    override val name: String                                                                        = q.name
-    override def checkFrom(t: ru.Type): Boolean                                                      = q.checkFrom(t)
-    override def toType(t: ru.Type): ru.Type                                                         = q.toType(t)
-    override def apply(unitParam: Unit, fromType: ru.Type, from: Any, authContext: AuthContext): Any = q(param, fromType, from, authContext)
-  }
+  def toQuery(param: P): Query =
+    new Query {
+      override val name: String                                                                        = q.name
+      override def checkFrom(t: ru.Type): Boolean                                                      = q.checkFrom(t)
+      override def toType(t: ru.Type): ru.Type                                                         = q.toType(t)
+      override def apply(unitParam: Unit, fromType: ru.Type, from: Any, authContext: AuthContext): Any = q(param, fromType, from, authContext)
+    }
   def apply(param: P, fromType: ru.Type, from: Any, authContext: AuthContext): Any
 }
 
 abstract class Query extends ParamQuery[Unit] { q =>
-  override def paramParser(tpe: ru.Type): FieldsParser[Unit] = FieldsParser[Unit]("unit") {
-    case _ => Good(())
-  }
+  override def paramParser(tpe: ru.Type): FieldsParser[Unit] =
+    FieldsParser[Unit]("unit") {
+      case _ => Good(())
+    }
 
-  def andThen(query: Query): Query = new Query {
-    override val name: String                   = q.name + "/" + query.name
-    override def checkFrom(t: ru.Type): Boolean = q.checkFrom(t)
-    override def toType(t: ru.Type): ru.Type    = query.toType(q.toType(t))
-    override def apply(param: Unit, fromType: ru.Type, from: Any, authContext: AuthContext): Any =
-      query(param, q.toType(fromType), q(param, fromType, from, authContext), authContext)
-  }
+  def andThen(query: Query): Query =
+    new Query {
+      override val name: String                   = q.name + "/" + query.name
+      override def checkFrom(t: ru.Type): Boolean = q.checkFrom(t)
+      override def toType(t: ru.Type): ru.Type    = query.toType(q.toType(t))
+      override def apply(param: Unit, fromType: ru.Type, from: Any, authContext: AuthContext): Any =
+        query(param, q.toType(fromType), q(param, fromType, from, authContext), authContext)
+    }
 }
 
 object Query {
 
-  def init[T: ru.TypeTag](queryName: String, f: (Graph, AuthContext) => T): Query = new Query {
-    override val name: String                                                                    = queryName
-    override def checkFrom(t: ru.Type): Boolean                                                  = SubType(t, ru.typeOf[Graph])
-    override def toType(t: ru.Type): ru.Type                                                     = ru.typeOf[T]
-    override def apply(param: Unit, fromType: ru.Type, from: Any, authContext: AuthContext): Any = f(from.asInstanceOf[Graph], authContext)
-  }
+  def init[T: ru.TypeTag](queryName: String, f: (Graph, AuthContext) => T): Query =
+    new Query {
+      override val name: String                                                                    = queryName
+      override def checkFrom(t: ru.Type): Boolean                                                  = SubType(t, ru.typeOf[Graph])
+      override def toType(t: ru.Type): ru.Type                                                     = ru.typeOf[T]
+      override def apply(param: Unit, fromType: ru.Type, from: Any, authContext: AuthContext): Any = f(from.asInstanceOf[Graph], authContext)
+    }
 
   def initWithParam[P: ru.TypeTag, T: ru.TypeTag](queryName: String, parser: FieldsParser[P], f: (P, Graph, AuthContext) => T): ParamQuery[P] =
     new ParamQuery[P] {
@@ -82,18 +86,19 @@ object Query {
       override def apply(param: P, fromType: ru.Type, from: Any, authContext: AuthContext): Any = f(param, from.asInstanceOf[F], authContext)
     }
 
-  def output[E: Renderer: ru.TypeTag]: Query = new Query {
-    override val name: String                   = "output"
-    override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[E])
-    override def toType(t: ru.Type): ru.Type    = ru.typeOf[Output[_]]
-    override def apply(param: Unit, fromType: ru.Type, from: Any, authContext: AuthContext): Any =
-      implicitly[Renderer[E]].toOutput(from.asInstanceOf[E])
-  }
+  def output[E: Renderer: ru.TypeTag]: Query =
+    new Query {
+      override val name: String                   = "output"
+      override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[E])
+      override def toType(t: ru.Type): ru.Type    = ru.typeOf[Output[_]]
+      override def apply(param: Unit, fromType: ru.Type, from: Any, authContext: AuthContext): Any =
+        implicitly[Renderer[E]].toOutput(from.asInstanceOf[E])
+    }
 
   def output[E: Renderer: ru.TypeTag, F <: Traversal[E, G, Converter[E, G]] forSome { type G }: ru.TypeTag]: Query = output(identity[F])
 
-  def outputWithContext[E: ru.TypeTag, F: ru.TypeTag](transform: (F, AuthContext) => Traversal[E, G, Converter[E, G]] forSome { type G })(
-      implicit renderer: Renderer[E]
+  def outputWithContext[E: ru.TypeTag, F: ru.TypeTag](transform: (F, AuthContext) => Traversal[E, G, Converter[E, G]] forSome { type G })(implicit
+      renderer: Renderer[E]
   ): Query =
     new Query {
       override val name: String                   = "output"
@@ -103,8 +108,8 @@ object Query {
         IteratorOutput(transform(from.asInstanceOf[F], authContext).domainMap(renderer.toJson), None)
 //        PagedResult(transform(from.asInstanceOf[F], authContext), None)(renderer)
     }
-  def output[E: ru.TypeTag, F: ru.TypeTag](transform: F => Traversal[E, G, Converter[E, G]] forSome { type G })(
-      implicit renderer: Renderer[E]
+  def output[E: ru.TypeTag, F: ru.TypeTag](transform: F => Traversal[E, G, Converter[E, G]] forSome { type G })(implicit
+      renderer: Renderer[E]
   ): Query =
     new Query {
       override val name: String                   = "output"
@@ -167,8 +172,8 @@ final class FilterQuery(
   def ++(other: FilterQuery): FilterQuery = new FilterQuery(db, publicProperties, filterQuery.fieldsParsers ::: other.fieldsParsers)
 }
 
-class AggregationQuery(db: Database, publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[Aggregation] {
-  override def paramParser(tpe: ru.Type): FieldsParser[Aggregation] = Aggregation.fieldsParser
+class AggregationQuery(db: Database, publicProperties: List[PublicProperty[_, _]], filterQuery: FilterQuery) extends ParamQuery[Aggregation] {
+  override def paramParser(tpe: ru.Type): FieldsParser[Aggregation] = Aggregation.fieldsParser(filterQuery.paramParser(tpe))
   override val name: String                                         = "aggregation"
   override def checkFrom(t: ru.Type): Boolean                       = SubType(t, ru.typeOf[Traversal[_, _, _]])
   override def toType(t: ru.Type): ru.Type                          = ru.typeOf[Output[_]]

@@ -63,86 +63,140 @@ object Aggregation {
       })
   }
 
-  def aggregationFieldParser: PartialFunction[String, FieldsParser[Aggregation]] = {
-    case "field" =>
-      FieldsParser("FieldAggregation") {
-        case (_, field) =>
-          withGood(
-            FieldsParser.string.optional.on("_name")(field),
-            FieldsParser.string.on("_field")(field),
-            FieldsParser.string.sequence.on("_order")(field).orElse(FieldsParser.string.on("_order").map("order")(Seq(_))(field)),
-            FieldsParser.long.optional.on("_size")(field),
-            fieldsParser.sequence.on("_select")(field)
-          )((aggName, fieldName, order, size, subAgg) => FieldAggregation(aggName, fieldName, order, size, subAgg))
-      }
-    case "count" =>
-      FieldsParser("CountAggregation") {
-        case (_, field) => FieldsParser.string.optional.on("_name")(field).map(aggName => AggCount(aggName))
-      }
-    case "time" =>
-      FieldsParser("TimeAggregation") {
-        case (_, field) =>
-          withGood(
-            FieldsParser.string.optional.on("_name")(field),
-            FieldsParser
-              .string
-              .sequence
-              .on("_fields")(field)
-              .orElse(FieldsParser.string.on("_fields")(field).map(Seq(_))), //.map("toSeq")(f => Good(Seq(f)))),
-            mergedIntervalParser.on("_interval").orElse(intervalParser)(field),
-            fieldsParser.sequence.on("_select")(field)
-          ) { (aggName, fieldNames, intervalUnit, subAgg) =>
-            if (fieldNames.lengthCompare(1) > 0)
-              logger.warn(s"Only one field is supported for time aggregation (aggregation $aggName, ${fieldNames.tail.mkString(",")} are ignored)")
-            TimeAggregation(aggName, fieldNames.head, intervalUnit._1, intervalUnit._2, subAgg)
-          }
-      }
-    case "avg" =>
-      FieldsParser("AvgAggregation") {
-        case (_, field) =>
-          withGood(
-            FieldsParser.string.optional.on("_name")(field),
-            FieldsParser.string.on("_field")(field)
-          )((aggName, fieldName) => AggAvg(aggName, fieldName))
-      }
-    case "min" =>
-      FieldsParser("MinAggregation") {
-        case (_, field) =>
-          withGood(
-            FieldsParser.string.optional.on("_name")(field),
-            FieldsParser.string.on("_field")(field)
-          )((aggName, fieldName) => AggMin(aggName, fieldName))
-      }
-    case "max" =>
-      FieldsParser("MaxAggregation") {
-        case (_, field) =>
-          withGood(
-            FieldsParser.string.optional.on("_name")(field),
-            FieldsParser.string.on("_field")(field)
-          )((aggName, fieldName) => AggMax(aggName, fieldName))
-      }
-    case "sum" =>
-      FieldsParser("SumAggregation") {
-        case (_, field) =>
-          withGood(
-            FieldsParser.string.optional.on("_name")(field),
-            FieldsParser.string.on("_field")(field)
-          )((aggName, fieldName) => AggSum(aggName, fieldName))
-      }
-    case other =>
-      new FieldsParser[Aggregation](
-        "unknownAttribute",
-        Set.empty,
-        {
-          case (path, _) =>
-            Bad(One(InvalidFormatAttributeError(path.toString, "string", Set("field", "time", "count", "avg", "min", "max", "sum"), FString(other))))
-        }
-      )
-  }
+//  def aggregationFieldParser(add[String, FieldsParser[Aggregation]] = {
+//    case "field" =>
+//      FieldsParser("FieldAggregation") {
+//        case (_, field) =>
+//          withGood(
+//            FieldsParser.string.optional.on("_name")(field),
+//            FieldsParser.string.on("_field")(field),
+//            FieldsParser.string.sequence.on("_order")(field).orElse(FieldsParser.string.on("_order").map("order")(Seq(_))(field)),
+//            FieldsParser.long.optional.on("_size")(field),
+//            fieldsParser.sequence.on("_select")(field)
+//          )((aggName, fieldName, order, size, subAgg) => FieldAggregation(aggName, fieldName, order, size, subAgg))
+//      }
+//    case "count" =>
+//      FieldsParser("CountAggregation") {
+//        case (_, field) => FieldsParser.string.optional.on("_name")(field).map(aggName => AggCount(aggName))
+//      }
+//    case "time" =>
+//      FieldsParser("TimeAggregation") {
+//        case (_, field) =>
+//          withGood(
+//            FieldsParser.string.optional.on("_name")(field),
+//            FieldsParser
+//              .string
+//              .sequence
+//              .on("_fields")(field)
+//              .orElse(FieldsParser.string.on("_fields")(field).map(Seq(_))), //.map("toSeq")(f => Good(Seq(f)))),
+//            mergedIntervalParser.on("_interval").orElse(intervalParser)(field),
+//            fieldsParser.sequence.on("_select")(field)
+//          ) { (aggName, fieldNames, intervalUnit, subAgg) =>
+//            if (fieldNames.lengthCompare(1) > 0)
+//              logger.warn(s"Only one field is supported for time aggregation (aggregation $aggName, ${fieldNames.tail.mkString(",")} are ignored)")
+//            TimeAggregation(aggName, fieldNames.head, intervalUnit._1, intervalUnit._2, subAgg)
+//          }
+//      }
+//    case "avg" =>
+//      FieldsParser("AvgAggregation") {
+//        case (_, field) =>
+//          withGood(
+//            FieldsParser.string.optional.on("_name")(field),
+//            FieldsParser.string.on("_field")(field)
+//          )((aggName, fieldName) => AggAvg(aggName, fieldName))
+//      }
+//    case "min" =>
+//      FieldsParser("MinAggregation") {
+//        case (_, field) =>
+//          withGood(
+//            FieldsParser.string.optional.on("_name")(field),
+//            FieldsParser.string.on("_field")(field)
+//          )((aggName, fieldName) => AggMin(aggName, fieldName))
+//      }
+//    case "max" =>
+//      FieldsParser("MaxAggregation") {
+//        case (_, field) =>
+//          withGood(
+//            FieldsParser.string.optional.on("_name")(field),
+//            FieldsParser.string.on("_field")(field)
+//          )((aggName, fieldName) => AggMax(aggName, fieldName))
+//      }
+//    case "sum" =>
+//      FieldsParser("SumAggregation") {
+//        case (_, field) =>
+//          withGood(
+//            FieldsParser.string.optional.on("_name")(field),
+//            FieldsParser.string.on("_field")(field)
+//          )((aggName, fieldName) => AggSum(aggName, fieldName))
+//      }
+//    case other =>
+//      new FieldsParser[Aggregation](
+//        "unknownAttribute",
+//        Set.empty,
+//        {
+//          case (path, _) =>
+//            Bad(One(InvalidFormatAttributeError(path.toString, "string", Set("field", "time", "count", "avg", "min", "max", "sum"), FString(other))))
+//        }
+//      )
+//  }
 
-  implicit val fieldsParser: FieldsParser[Aggregation] = FieldsParser("aggregation") {
-    case (_, AggObj(name, field)) => aggregationFieldParser(name)(field)
-  }
+  def fieldsParser(filterParser: FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]]): FieldsParser[Aggregation] =
+    FieldsParser("aggregation") {
+//      case (_, AggObj(name, field)) => aggregationFieldParser(name)(field)
+      case (_, AggObj("field", field)) =>
+        withGood(
+          FieldsParser.string.optional.on("_name")(field),
+          FieldsParser.string.on("_field")(field),
+          FieldsParser.string.sequence.on("_order")(field).orElse(FieldsParser.string.on("_order").map("order")(Seq(_))(field)),
+          FieldsParser.long.optional.on("_size")(field),
+          fieldsParser(filterParser).sequence.on("_select")(field),
+          filterParser.optional.on("_query")(field)
+        )((aggName, fieldName, order, size, subAgg, filter) => FieldAggregation(aggName, fieldName, order, size, subAgg, filter))
+      case (_, AggObj("count", field)) =>
+        withGood(FieldsParser.string.optional.on("_name")(field), filterParser.optional.on("_query")(field))((aggName, filter) =>
+          AggCount(aggName, filter)
+        )
+      case (_, AggObj("time", field)) =>
+        withGood(
+          FieldsParser.string.optional.on("_name")(field),
+          FieldsParser
+            .string
+            .sequence
+            .on("_fields")(field)
+            .orElse(FieldsParser.string.on("_fields")(field).map(Seq(_))), //.map("toSeq")(f => Good(Seq(f)))),
+          mergedIntervalParser.on("_interval").orElse(intervalParser)(field),
+          fieldsParser(filterParser).sequence.on("_select")(field),
+          filterParser.optional.on("_query")(field)
+        ) { (aggName, fieldNames, intervalUnit, subAgg, filter) =>
+          if (fieldNames.lengthCompare(1) > 0)
+            logger.warn(s"Only one field is supported for time aggregation (aggregation $aggName, ${fieldNames.tail.mkString(",")} are ignored)")
+          TimeAggregation(aggName, fieldNames.head, intervalUnit._1, intervalUnit._2, subAgg, filter)
+        }
+      case (_, AggObj("avg", field)) =>
+        withGood(
+          FieldsParser.string.optional.on("_name")(field),
+          FieldsParser.string.on("_field")(field),
+          filterParser.optional.on("_query")(field)
+        )((aggName, fieldName, filter) => AggAvg(aggName, fieldName, filter))
+      case (_, AggObj("min", field)) =>
+        withGood(
+          FieldsParser.string.optional.on("_name")(field),
+          FieldsParser.string.on("_field")(field),
+          filterParser.optional.on("_query")(field)
+        )((aggName, fieldName, filter) => AggMin(aggName, fieldName, filter))
+      case (_, AggObj("max", field)) =>
+        withGood(
+          FieldsParser.string.optional.on("_name")(field),
+          FieldsParser.string.on("_field")(field),
+          filterParser.optional.on("_query")(field)
+        )((aggName, fieldName, filter) => AggMax(aggName, fieldName, filter))
+      case (_, AggObj("sum", field)) =>
+        withGood(
+          FieldsParser.string.optional.on("_name")(field),
+          FieldsParser.string.on("_field")(field),
+          filterParser.optional.on("_query")(field)
+        )((aggName, fieldName, filter) => AggSum(aggName, fieldName, filter))
+    }
 }
 
 abstract class Aggregation(val name: String) extends InputQuery[Traversal.Unk, Output[_]] {
@@ -164,7 +218,8 @@ abstract class Aggregation(val name: String) extends InputQuery[Traversal.Unk, O
   ): Traversal.Domain[Output[_]]
 }
 
-case class AggSum(aggName: Option[String], fieldName: String) extends Aggregation(s"sum_$fieldName") {
+case class AggSum(aggName: Option[String], fieldName: String, filter: Option[InputQuery[Traversal.Unk, Traversal.Unk]])
+    extends Aggregation(s"sum_$fieldName") {
   override def getTraversal(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
@@ -173,18 +228,21 @@ case class AggSum(aggName: Option[String], fieldName: String) extends Aggregatio
       authContext: AuthContext
   ): Traversal.Domain[Output[_]] = {
     val property = PublicProperty.getProperty(publicProperties, traversalType, fieldName)
-    traversal.coalesce(
-      t =>
-        property
-          .select(FPath(fieldName), t)
-          .sum
-          .domainMap(sum => Output(sum, Json.obj(name -> JsNumber(BigDecimal(sum.toString)))))
-          .castDomain[Output[_]],
-      _.constant2(Output(null, JsNull))
-    )
+    filter
+      .fold(traversal)(_(db, publicProperties, traversalType, traversal, authContext))
+      .coalesce(
+        t =>
+          property
+            .select(FPath(fieldName), t)
+            .sum
+            .domainMap(sum => Output(sum, Json.obj(name -> JsNumber(BigDecimal(sum.toString)))))
+            .castDomain[Output[_]],
+        _.constant2(Output(null, JsNull))
+      )
   }
 }
-case class AggAvg(aggName: Option[String], fieldName: String) extends Aggregation(s"sum_$fieldName") {
+case class AggAvg(aggName: Option[String], fieldName: String, filter: Option[InputQuery[Traversal.Unk, Traversal.Unk]])
+    extends Aggregation(s"sum_$fieldName") {
   override def getTraversal(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
@@ -193,38 +251,21 @@ case class AggAvg(aggName: Option[String], fieldName: String) extends Aggregatio
       authContext: AuthContext
   ): Traversal.Domain[Output[_]] = {
     val property = PublicProperty.getProperty(publicProperties, traversalType, fieldName)
-    traversal.coalesce(
-      t =>
-        property
-          .select(FPath(fieldName), t)
-          .mean
-          .domainMap(avg => Output(Json.obj(name -> avg.asInstanceOf[Double]))),
-      _.constant2(Output(null, JsNull))
-    )
-  }
-}
-
-case class AggMin(aggName: Option[String], fieldName: String) extends Aggregation(s"min_$fieldName") {
-  override def getTraversal(
-      db: Database,
-      publicProperties: List[PublicProperty[_, _]],
-      traversalType: ru.Type,
-      traversal: Traversal.Unk,
-      authContext: AuthContext
-  ): Traversal.Domain[Output[_]] = {
-    val property = PublicProperty.getProperty(publicProperties, traversalType, fieldName)
-    traversal.coalesce(
-      t =>
-        property
-          .select(FPath(fieldName), t)
-          .min
-          .domainMap(min => Output(min, Json.obj(name -> property.mapping.selectRenderer.toJson(min)))),
-      _.constant2(Output(null, JsNull))
-    )
+    filter
+      .fold(traversal)(_(db, publicProperties, traversalType, traversal, authContext))
+      .coalesce(
+        t =>
+          property
+            .select(FPath(fieldName), t)
+            .mean
+            .domainMap(avg => Output(Json.obj(name -> avg.asInstanceOf[Double]))),
+        _.constant2(Output(null, JsNull))
+      )
   }
 }
 
-case class AggMax(aggName: Option[String], fieldName: String) extends Aggregation(s"max_$fieldName") {
+case class AggMin(aggName: Option[String], fieldName: String, filter: Option[InputQuery[Traversal.Unk, Traversal.Unk]])
+    extends Aggregation(s"min_$fieldName") {
   override def getTraversal(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
@@ -233,18 +274,44 @@ case class AggMax(aggName: Option[String], fieldName: String) extends Aggregatio
       authContext: AuthContext
   ): Traversal.Domain[Output[_]] = {
     val property = PublicProperty.getProperty(publicProperties, traversalType, fieldName)
-    traversal.coalesce(
-      t =>
-        property
-          .select(FPath(fieldName), t)
-          .max
-          .domainMap(max => Output(max, Json.obj(name -> property.mapping.selectRenderer.toJson(max)))),
-      _.constant2(Output(null, JsNull))
-    )
+    filter
+      .fold(traversal)(_(db, publicProperties, traversalType, traversal, authContext))
+      .coalesce(
+        t =>
+          property
+            .select(FPath(fieldName), t)
+            .min
+            .domainMap(min => Output(min, Json.obj(name -> property.mapping.selectRenderer.toJson(min)))),
+        _.constant2(Output(null, JsNull))
+      )
   }
 }
 
-case class AggCount(aggName: Option[String]) extends Aggregation(aggName.getOrElse("count")) {
+case class AggMax(aggName: Option[String], fieldName: String, filter: Option[InputQuery[Traversal.Unk, Traversal.Unk]])
+    extends Aggregation(s"max_$fieldName") {
+  override def getTraversal(
+      db: Database,
+      publicProperties: List[PublicProperty[_, _]],
+      traversalType: ru.Type,
+      traversal: Traversal.Unk,
+      authContext: AuthContext
+  ): Traversal.Domain[Output[_]] = {
+    val property = PublicProperty.getProperty(publicProperties, traversalType, fieldName)
+    filter
+      .fold(traversal)(_(db, publicProperties, traversalType, traversal, authContext))
+      .coalesce(
+        t =>
+          property
+            .select(FPath(fieldName), t)
+            .max
+            .domainMap(max => Output(max, Json.obj(name -> property.mapping.selectRenderer.toJson(max)))),
+        _.constant2(Output(null, JsNull))
+      )
+  }
+}
+
+case class AggCount(aggName: Option[String], filter: Option[InputQuery[Traversal.Unk, Traversal.Unk]])
+    extends Aggregation(aggName.getOrElse("count")) {
   override def getTraversal(
       db: Database,
       publicProperties: List[PublicProperty[_, _]],
@@ -252,7 +319,8 @@ case class AggCount(aggName: Option[String]) extends Aggregation(aggName.getOrEl
       traversal: Traversal.Unk,
       authContext: AuthContext
   ): Traversal.Domain[Output[_]] =
-    traversal
+    filter
+      .fold(traversal)(_(db, publicProperties, traversalType, traversal, authContext))
       .count
       .domainMap(count => Output(count.longValue(), Json.obj(name -> count)))
       .castDomain[Output[_]]
@@ -265,7 +333,8 @@ case class FieldAggregation(
     fieldName: String,
     orders: Seq[String],
     size: Option[Long],
-    subAggs: Seq[Aggregation]
+    subAggs: Seq[Aggregation],
+    filter: Option[InputQuery[Traversal.Unk, Traversal.Unk]]
 ) extends Aggregation(aggName.getOrElse(s"field_$fieldName")) {
   lazy val logger: Logger = Logger(getClass)
 
@@ -276,9 +345,10 @@ case class FieldAggregation(
       traversal: Traversal.Unk,
       authContext: AuthContext
   ): Traversal.Domain[Output[_]] = {
-    val label           = StepLabel[Traversal.UnkD, Traversal.UnkG, Converter[Traversal.UnkD, Traversal.UnkG]]
-    val property        = PublicProperty.getProperty(publicProperties, traversalType, fieldName)
-    val groupedVertices = property.select(FPath(fieldName), traversal.as(label)).group(_.by, _.by(_.select(label).fold)).unfold
+    val label             = StepLabel[Traversal.UnkD, Traversal.UnkG, Converter[Traversal.UnkD, Traversal.UnkG]]
+    val property          = PublicProperty.getProperty(publicProperties, traversalType, fieldName)
+    val filteredTraversal = filter.fold(traversal)(_(db, publicProperties, traversalType, traversal, authContext))
+    val groupedVertices   = property.select(FPath(fieldName), filteredTraversal.as(label)).group(_.by, _.by(_.select(label).fold)).unfold
 //    val groupedVertices = traversal.group(_.by(t => property.select(FPath(fieldName), t).cast[Any, Any])).unfold
     val sortedAndGroupedVertex = orders
       .map {
@@ -331,7 +401,8 @@ case class TimeAggregation(
     fieldName: String,
     interval: Long,
     unit: ChronoUnit,
-    subAggs: Seq[Aggregation]
+    subAggs: Seq[Aggregation],
+    filter: Option[InputQuery[Traversal.Unk, Traversal.Unk]]
 ) extends Aggregation(aggName.getOrElse(s"time_$fieldName")) {
   val calendar: Calendar = Calendar.getInstance()
 
@@ -376,10 +447,11 @@ case class TimeAggregation(
       traversal: Traversal.Unk,
       authContext: AuthContext
   ): Traversal.Domain[Output[_]] = {
-    val property = PublicProperty.getProperty(publicProperties, traversalType, fieldName)
-    val label    = StepLabel[Traversal.UnkD, Traversal.UnkG, Converter[Traversal.UnkD, Traversal.UnkG]]
+    val property          = PublicProperty.getProperty(publicProperties, traversalType, fieldName)
+    val label             = StepLabel[Traversal.UnkD, Traversal.UnkG, Converter[Traversal.UnkD, Traversal.UnkG]]
+    val filteredTraversal = filter.fold(traversal)(_(db, publicProperties, traversalType, traversal, authContext))
     val groupedVertex = property
-      .select(FPath(fieldName), traversal.as(label))
+      .select(FPath(fieldName), filteredTraversal.as(label))
       .cast[Date, Date]
       .graphMap[Long, JLong, Converter[Long, JLong]](dateToKey, Converter.long)
       .group(_.by, _.by(_.select(label).fold))
