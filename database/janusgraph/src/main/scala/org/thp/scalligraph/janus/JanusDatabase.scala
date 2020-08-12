@@ -17,11 +17,13 @@ import org.apache.tinkerpop.gremlin.structure.Transaction
 import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
 import org.janusgraph.core._
 import org.janusgraph.core.attribute.{Text => JanusText}
+import org.janusgraph.core.schema.JanusGraphManagement.IndexJobFuture
 import org.janusgraph.core.schema.{Mapping => JanusMapping, _}
 import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
 import org.janusgraph.graphdb.database.StandardJanusGraph
 import org.janusgraph.graphdb.database.management.ManagementSystem
+import org.janusgraph.graphdb.olap.job.IndexRepairJob
 import org.slf4j.MDC
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
@@ -29,6 +31,7 @@ import org.thp.scalligraph.utils.{Config, Retry}
 import org.thp.scalligraph.{InternalError, NotFoundError}
 import play.api.{Configuration, Environment}
 
+import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success, Try}
@@ -434,6 +437,19 @@ class JanusDatabase(
         }
       }
 
+  @tailrec
+  private def showIndexProgress(job: IndexJobFuture): Unit =
+    if (job.isCancelled)
+      logger.warn("Reindex job has been cancelled")
+    else if (job.isDone)
+      logger.info("Reindex job is finished")
+    else {
+      val scanMetrics = job.getIntermediateResult
+      logger.info(s"Reindex job is running: ${scanMetrics.getCustom(IndexRepairJob.ADDED_RECORDS_COUNT)} record scanned")
+      Thread.sleep(1000)
+      showIndexProgress(job)
+    }
+
   override def enableIndexes(): Try[Unit] =
     managementTransaction { mgmt => // wait for the index to become available
       Try {
@@ -446,7 +462,9 @@ class JanusDatabase(
         managementTransaction { mgmt => // enable index by reindexing the existing data
           (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).collect {
             case index if index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.REGISTERED) =>
-              mgmt.updateIndex(index, SchemaAction.REINDEX).get()
+              scala.concurrent.blocking {
+                showIndexProgress(mgmt.updateIndex(index, SchemaAction.REINDEX))
+              }
           }
           Success(())
         }
