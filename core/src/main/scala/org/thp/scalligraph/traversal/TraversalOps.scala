@@ -215,7 +215,8 @@ object TraversalOps {
 
     def select[LT <: Product, LL <: HList, CL <: HList, CT, LN <: HList](
         labels: LT
-    )(implicit
+    )(
+        implicit
         gen: Generic.Aux[LT, LL],
         folder: RightFolder.Aux[LL, (JMap[String, Any], HNil), SelectLabelConverter.type, (JMap[String, Any], CL)],
         tupler: Tupler.Aux[CL, CT],
@@ -250,7 +251,8 @@ object TraversalOps {
     def fold: Traversal[Seq[D], JList[G], Converter.CList[D, G, C]] =
       traversal.onRawMap[Seq[D], JList[G], Converter.CList[D, G, C]](_.fold())(Converter.clist[D, G, C](traversal.converter))
 
-    def unfold[DU, GU, CC <: Converter[DU, GU]](implicit
+    def unfold[DU, GU, CC <: Converter[DU, GU]](
+        implicit
         ev: C <:< Poly1Converter[_, _, DU, GU, CC]
     ): Traversal[DU, GU, CC] =
       traversal.onRawMap[DU, GU, CC](_.unfold[GU]())(traversal.converter.subConverter)
@@ -259,13 +261,15 @@ object TraversalOps {
       traversal.onRaw(t => f.map(_(sortBySelector)).foldLeft(t.order())((s, g) => g.app(s)))
 
     /* select only the keys from a map (e.g. groupBy) - see usage examples in SelectSpec.scala */
-    def selectKeys[DU, GU, CC <: Converter[DU, GU]](implicit
+    def selectKeys[DU, GU, CC <: Converter[DU, GU]](
+        implicit
         ev: C <:< Poly2Converter[_, _, DU, _, GU, _, CC, _]
     ): Traversal[DU, GU, CC] =
       traversal.onRawMap[DU, GU, CC](_.select(Column.keys).asInstanceOf[GraphTraversal[_, GU]])(traversal.converter.subConverterKey)
 
     /* select only the values from a map (e.g. groupBy) - see usage examples in SelectSpec.scala */
-    def selectValues[DU, GU, CC <: Converter[DU, GU]](implicit
+    def selectValues[DU, GU, CC <: Converter[DU, GU]](
+        implicit
         ev: C <:< Poly2Converter[_, _, _, DU, _, GU, _, CC]
     ): Traversal[DU, GU, CC] =
       traversal.onRawMap[DU, GU, CC](_.select(Column.values).asInstanceOf[GraphTraversal[_, GU]])(traversal.converter.subConverterValue)
@@ -340,7 +344,8 @@ object TraversalOps {
     def both()(implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
       traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.both())(Converter.identity[Vertex])
 
-    def v[E <: Product](implicit
+    def v[E <: Product](
+        implicit
         ev: G <:< Vertex,
         model: Model.Vertex[E]
     ): Traversal[E with Entity, Vertex, Converter[E with Entity, Vertex]] =
@@ -348,7 +353,8 @@ object TraversalOps {
         model.converter
       )
 
-    def e[E <: Product](implicit
+    def e[E <: Product](
+        implicit
         ev: G <:< Edge,
         model: Model.Edge[E]
     ): Traversal.E[E] =
@@ -407,12 +413,18 @@ object TraversalOps {
     def update[V](selector: D => V, value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
       macro TraversalMacro.update[V]
 
+    def iterate: Unit = {
+      raw.iterate()
+      ()
+    }
+
     def sideEffect[DD, GG, CC <: Converter[DD, GG]](effect: Traversal[D, G, C] => Traversal[DD, GG, CC]): Traversal[D, G, C] =
       traversal.onRaw(_.sideEffect(effect(traversal.start).raw))
 
     def value[DD](
         selector: D => DD
-    )(implicit
+    )(
+        implicit
         mapping: UMapping[DD],
         ev1: G <:< Element,
         ev2: D <:< Product with Entity

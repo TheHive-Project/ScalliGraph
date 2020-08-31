@@ -56,7 +56,7 @@ class SimpleEntityTest extends PlaySpecification {
 
       "update an entity" in db.transaction { implicit graph =>
         myEntitySrv.create(MyEntity("super", 7)) must beASuccessfulTry.which { entity =>
-          myEntitySrv.getByIds(entity._id).update(_.value, 8)
+          myEntitySrv.getByIds(entity._id).update(_.value, 8).iterate
           myEntitySrv.getOrFail(entity._id) must beSuccessfulTry.which((_: MyEntity with Entity).value must_=== 8)
         }
       }
