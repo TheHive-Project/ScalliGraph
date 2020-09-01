@@ -22,6 +22,7 @@ class StorageSrvTest extends Specification with Mockito {
   private def streamCompare(is1: InputStream, is2: InputStream): Boolean = {
     val n1 = is1.read()
     val n2 = is2.read()
+    println(s"$n1 -- $n2")
     if (n1 == -1 || n2 == -1) n1 == n2
     else (n1 == n2) && streamCompare(is1, is2)
   }

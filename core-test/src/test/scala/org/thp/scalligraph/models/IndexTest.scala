@@ -1,14 +1,14 @@
 package org.thp.scalligraph.models
 
 import org.specs2.specification.core.Fragments
-import org.thp.scalligraph.VertexEntity
+import org.thp.scalligraph.BuildVertexEntity
 import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
 
 @DefineIndex(IndexType.unique, "name")
-@VertexEntity
+@BuildVertexEntity
 case class EntityWithUniqueName(name: String, value: Int)
 
 class IndexTest extends PlaySpecification {

@@ -1,9 +1,9 @@
 package org.thp.scalligraph.models
 
-import gremlin.scala._
+import org.apache.tinkerpop.gremlin.structure.Vertex
 import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.steps.Traversal
+import org.thp.scalligraph.traversal.{Converter, Traversal}
 import play.api.Logger
 
 import scala.reflect.{classTag, ClassTag}
@@ -11,11 +11,11 @@ import scala.util.{Failure, Success, Try}
 
 sealed trait Operation
 
-case class AddProperty(model: String, propertyName: String, mapping: Mapping[_, _, _])                 extends Operation
-case class RemoveProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean)           extends Operation
-case class UpdateGraph(model: String, update: Traversal[Vertex, Vertex] => Try[Unit], comment: String) extends Operation
-case class AddIndex(model: String, indexType: IndexType.Value, properties: Seq[String])                extends Operation
-object RebuildIndexes                                                                                  extends Operation
+case class AddProperty(model: String, propertyName: String, mapping: Mapping[_, _, _])                                             extends Operation
+case class RemoveProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean)                                       extends Operation
+case class UpdateGraph(model: String, update: Traversal[Vertex, Vertex, Converter.Identity[Vertex]] => Try[Unit], comment: String) extends Operation
+case class AddIndex(model: String, indexType: IndexType.Value, properties: Seq[String])                                            extends Operation
+object RebuildIndexes                                                                                                              extends Operation
 case class DBOperation[DB <: Database: ClassTag](comment: String, op: DB => Try[Unit]) extends Operation {
   def apply(db: Database): Try[Unit] =
     if (classTag[DB].runtimeClass.isAssignableFrom(db.getClass))
@@ -33,11 +33,11 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
   lazy val logger: Logger                               = Logger(getClass)
   val lastVersion: Int                                  = operations.length + 2
   private def addOperations(op: Operation*): Operations = copy(operations = operations ++ op)
-  def addProperty[T](model: String, propertyName: String)(implicit mapping: UniMapping[T]): Operations =
+  def addProperty[T](model: String, propertyName: String)(implicit mapping: UMapping[T]): Operations =
     addOperations(AddProperty(model, propertyName, mapping.toMapping))
   def removeProperty[T](model: String, propertyName: String, usedOnlyByThisModel: Boolean): Operations =
     addOperations(RemoveProperty(model, propertyName, usedOnlyByThisModel))
-  def updateGraph(comment: String, model: String)(update: Traversal[Vertex, Vertex] => Try[Unit]): Operations =
+  def updateGraph(comment: String, model: String)(update: Traversal[Vertex, Vertex, Converter.Identity[Vertex]] => Try[Unit]): Operations =
     addOperations(UpdateGraph(model, update, comment))
   def addIndex(model: String, indexType: IndexType.Value, properties: String*): Operations =
     addOperations(AddIndex(model, indexType, properties))
@@ -65,7 +65,7 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
                 db.removeProperty(model, propertyName, usedOnlyByThisModel)
               case UpdateGraph(model, update, comment) =>
                 logger.info(s"$schemaName: Update graph: $comment")
-                db.tryTransaction(graph => update(Traversal(db.labelFilter(model)(graph.V))))
+                db.tryTransaction(graph => update(db.labelFilter(model)(Traversal.V()(graph))))
                   .recoverWith { case error => Failure(InternalError(s"Unable to execute migration operation: $comment", error)) }
               case AddIndex(model, indexType, properties) =>
                 logger.info(s"$schemaName: Add index in $model for properties: ${properties.mkString(", ")}")

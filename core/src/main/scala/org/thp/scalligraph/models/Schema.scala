@@ -1,7 +1,7 @@
 package org.thp.scalligraph.models
 
-import gremlin.scala.Graph
 import javax.inject.{Inject, Provider, Singleton}
+import org.apache.tinkerpop.gremlin.structure.Graph
 import org.thp.scalligraph.auth.AuthContext
 import play.api.Logger
 

@@ -1,8 +1,8 @@
 package org.thp.scalligraph.graphql
 
-import gremlin.scala.{Element, OrderBy, __}
+
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.query.{AuthGraph, PublicProperty}
+import org.thp.scalligraph.query.PublicProperty
 
 import scala.reflect.{ClassTag, classTag}
 import scala.util.Try
@@ -18,13 +18,13 @@ object Order {
     )
   )
 
-  def getField[S <: ScalliSteps[_, E, S]: ClassTag, E <: Element](
+  def getField[S <: Traversal.V[Scalli][_, E, S]: ClassTag, E <: Element](
       properties: List[PublicProperty[_ <: Element, _, _]],
-      stepType: OutputType[S]
+      traversalType: OutputType[S]
   ): Option[Field[AuthGraph, S]] = {
 
     case class FieldOrder[A <: Element](property: PublicProperty[A, _, _], order: org.apache.tinkerpop.gremlin.process.traversal.Order) {
-      def orderBy(authContext: AuthContext): OrderBy[_] = By(property.get(__[A], authContext), order)
+      def orderBy(authContext: AuthContext): OrderBy[_] = By(property.select(__[A], authContext), order)
     }
 
     val fields = properties.map(p => InputField(p.propertyName, OptionInputType(orderEnumeration)))
@@ -51,7 +51,7 @@ object Order {
     Some(
       Field[AuthGraph, S, S, S](
         "order",
-        stepType,
+        traversalType,
         arguments = List(arg),
         resolve = ctx => ctx.value.sort(ctx.arg(arg).map(_.orderBy(ctx.ctx.auth)): _*)
       )

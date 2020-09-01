@@ -6,7 +6,6 @@ import java.util.Date
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
-import gremlin.scala._
 import javax.inject.Singleton
 import org.apache.tinkerpop.gremlin.structure.Graph
 import org.thp.scalligraph.models._

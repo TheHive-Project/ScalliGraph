@@ -5,7 +5,6 @@ import java.util.{List => JList, Set => JSet}
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
-import gremlin.scala._
 import javax.inject.{Inject, Singleton}
 import org.apache.tinkerpop.gremlin.structure.Graph
 import org.slf4j.MDC
@@ -96,18 +95,18 @@ class OrientDatabase(
   override def source[A](query: Graph => Iterator[A]): Source[A, NotUsed]             = ???
   override def source[A, B](body: Graph => (Iterator[A], B)): (Source[A, NotUsed], B) = ???
 
-  private def getVariablesVertex(implicit graph: Graph): Option[Vertex] = graph.traversal().V().hasLabel("variables").headOption()
+  private def getVariablesVertex(implicit graph: Graph): Option[Vertex] = graph.traversal().V().hasLabel("variables").headOption
 
   override def version(module: String): Int =
     roTransaction { implicit graph =>
-      getVariablesVertex.fold(0)(v => getSingleProperty(v, s"${module}_version", UniMapping.int))
+      getVariablesVertex.fold(0)(v => getSingleProperty(v, s"${module}_version", UMapping.int))
     }
 
   override def setVersion(module: String, v: Int): Try[Unit] =
     tryTransaction { implicit graph =>
       Try {
         val variables = getVariablesVertex.getOrElse(graph.addVertex("variables"))
-        setSingleProperty(variables, s"${module}_version", v, UniMapping.int)
+        setSingleProperty(variables, s"${module}_version", v, UMapping.int)
       }
     }
 
@@ -212,7 +211,7 @@ class OrientDatabase(
 
 //  override def loadBinary(id: String)(implicit graph: Graph): InputStream =
 //    new InputStream {
-//      val vertex = graph.V().has("_id" of id).head()
+//      val vertex = graph.V().has("_id" of id).head
 //      private var recordIds                   = vertex.value[JList[OIdentifiable]]("binary").asScala.toList
 //      private var buffer: Option[Array[Byte]] = _
 //      private var index                       = 0

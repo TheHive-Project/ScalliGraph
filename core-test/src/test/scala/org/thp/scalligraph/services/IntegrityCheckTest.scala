@@ -1,11 +1,12 @@
 package org.thp.scalligraph.services
 
-import gremlin.scala.Graph
+import org.apache.tinkerpop.gremlin.structure.Graph
 import org.specs2.specification.core.Fragments
 import org.thp.scalligraph.AppBuilder
 import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
+import org.thp.scalligraph.models.ModernOps._
 import org.thp.scalligraph.models._
-import org.thp.scalligraph.steps.StepsOps._
+import org.thp.scalligraph.traversal.TraversalOps._
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
@@ -28,7 +29,7 @@ class IntegrityCheckTest extends PlaySpecification {
         ModernDatabaseBuilder.build(app[ModernSchema])(app[Database], authContext)
         val newLop = db.tryTransaction { implicit graph =>
           val lop   = softwareSrv.create(Software("lop", "asm")).get
-          val vadas = personSrv.get("vadas").head()
+          val vadas = personSrv.get("vadas").head
           createdSrv
             .create(Created(0.1), vadas, lop)
             .map(_ => lop)
@@ -38,7 +39,7 @@ class IntegrityCheckTest extends PlaySpecification {
           override val db: Database         = app[Database]
           override val service: SoftwareSrv = app[SoftwareSrv]
 
-          override def resolve(entities: List[Software with Entity])(implicit graph: Graph): Try[Unit] = Success(())
+          override def resolve(entities: Seq[Software with Entity])(implicit graph: Graph): Try[Unit] = Success(())
         }
         val duplicates = integrityCheckOps.getDuplicates(Seq("name"))
         duplicates must have size 1
@@ -53,7 +54,7 @@ class IntegrityCheckTest extends PlaySpecification {
         }
 
         db.roTransaction { implicit graph =>
-          softwareSrv.get(newLop).createdBy.toList.map(_.name) must contain(exactly("vadas", "marko", "josh", "peter"))
+          softwareSrv.get(newLop).createdBy.toSeq.map(_.name) must contain(exactly("vadas", "marko", "josh", "peter"))
         }
       }
     }

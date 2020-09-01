@@ -182,4 +182,10 @@ trait MacroUtil extends MacroLogger {
       })
   }
 
+//  object RefinType {
+//    def unapplySeq(tpe: Type): Option[Seq[Type]] = tpe match {
+//      case r: RefinedType => Some(r.parents)
+//      case _              => None
+//    }
+//  }
 }

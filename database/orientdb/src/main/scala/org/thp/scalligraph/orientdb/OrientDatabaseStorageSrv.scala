@@ -2,7 +2,6 @@ package org.thp.scalligraph.orientdb
 import java.io.InputStream
 import java.util.{Base64, List => JList}
 
-import gremlin.scala._
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.services.StorageSrv
 import play.api.Configuration
@@ -31,7 +30,7 @@ class OrientDatabaseStorageSrv(db: OrientDatabase, chunkSize: Int) extends Stora
         .V()
         .hasId(id)
         .value[JList[OIdentifiable]]("binary")
-        .headOption()
+        .headOption
         .fold(List.empty[OIdentifiable])(_.asScala.toList) match {
         case head :: tail =>
           val buffer = head.getRecord[ORecordBytes].toStream
@@ -65,7 +64,7 @@ class OrientDatabaseStorageSrv(db: OrientDatabase, chunkSize: Int) extends Stora
     }
 
   override def exists(folder: String, id: String): Boolean = db.roTransaction { implicit graph =>
-    graph.V(id).exists()
+    graph.V(id).exists
   }
 
   override def saveBinary(folder: String, id: String, is: InputStream)(implicit graph: Graph): Try[Unit] = {

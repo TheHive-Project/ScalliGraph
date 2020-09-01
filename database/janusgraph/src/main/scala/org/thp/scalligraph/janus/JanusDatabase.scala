@@ -10,12 +10,11 @@ import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Flow, Source}
 import com.typesafe.config.ConfigObject
-import gremlin.scala.{asScalaGraph, Edge, Element, Graph, GremlinScala, Key, P, Vertex}
 import javax.inject.{Inject, Singleton}
-import org.apache.tinkerpop.gremlin.process.traversal.Text
-import org.apache.tinkerpop.gremlin.structure.Transaction
+import org.apache.tinkerpop.gremlin.process.traversal.{P, Text}
+import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Graph, Transaction, Vertex}
 import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
-import org.janusgraph.core._
+import org.janusgraph.core.{Cardinality, JanusGraph, JanusGraphFactory, JanusGraphTransaction, SchemaViolationException}
 import org.janusgraph.core.attribute.{Text => JanusText}
 import org.janusgraph.core.schema.JanusGraphManagement.IndexJobFuture
 import org.janusgraph.core.schema.{Mapping => JanusMapping, _}
@@ -27,6 +26,8 @@ import org.janusgraph.graphdb.olap.job.IndexRepairJob
 import org.slf4j.MDC
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
+import org.thp.scalligraph.traversal.TraversalOps._
+import org.thp.scalligraph.traversal.{Converter, Traversal}
 import org.thp.scalligraph.utils.{Config, Retry}
 import org.thp.scalligraph.{InternalError, NotFoundError}
 import play.api.{Configuration, Environment}
@@ -277,7 +278,7 @@ class JanusDatabase(
           model.indexes.foreach {
             case (indexType, properties) => createIndex(mgmt, classOf[Vertex], vertexLabel, indexType, properties)
           }
-        case model: EdgeModel[_, _] =>
+        case model: EdgeModel =>
           val edgeLabel = mgmt.getEdgeLabel(model.label)
           model.indexes.foreach {
             case (indexType, properties) => createIndex(mgmt, classOf[Edge], edgeLabel, indexType, properties)
@@ -323,7 +324,7 @@ class JanusDatabase(
       case m: VertexModel if Option(mgmt.getVertexLabel(m.label)).isEmpty =>
         logger.trace(s"mgmt.getOrCreateVertexLabel(${m.label})")
         mgmt.getOrCreateVertexLabel(m.label)
-      case m: EdgeModel[_, _] if Option(mgmt.getEdgeLabel(m.label)).isEmpty =>
+      case m: EdgeModel if Option(mgmt.getEdgeLabel(m.label)).isEmpty =>
         logger.trace(s"mgmt.getOrCreateEdgeLabel(${m.label})")
         mgmt.getOrCreateEdgeLabel(m.label)
       case m =>
@@ -555,10 +556,10 @@ class JanusDatabase(
 
   override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
     val createdVertex = model.create(v)(this, graph)
-    val entity        = DummyEntity(model, createdVertex.id(), authContext.userId)
-    setSingleProperty(createdVertex, "_createdAt", entity._createdAt, createdAtMapping)
-    setSingleProperty(createdVertex, "_createdBy", entity._createdBy, createdByMapping)
-    setSingleProperty(createdVertex, "_label", model.label, UniMapping.string)
+    val entity        = DummyEntity(model.label, createdVertex.id(), authContext.userId)
+    createdAtMapping.setProperty(createdVertex, "_createdAt", entity._createdAt)
+    createdByMapping.setProperty(createdVertex, "_createdBy", entity._createdBy)
+    UMapping.string.setProperty(createdVertex, "_label", model.label)
     logger.trace(s"Created vertex is ${Model.printElement(createdVertex)}")
     model.addEntity(v, entity)
   }
@@ -566,31 +567,32 @@ class JanusDatabase(
   override def createEdge[E <: Product, FROM <: Product, TO <: Product](
       graph: Graph,
       authContext: AuthContext,
-      model: Model.Edge[E, FROM, TO],
+      model: Model.Edge[E],
       e: E,
       from: FROM with Entity,
       to: TO with Entity
   ): E with Entity = {
     val edgeMaybe = for {
-      f <- graph.V(from._id).headOption()
-      t <- graph.V(to._id).headOption()
+      f <- Traversal.V(from._id)(graph).headOption
+      t <- Traversal.V(to._id)(graph).headOption
     } yield {
       val createdEdge = model.create(e, f, t)(this, graph)
-      val entity      = DummyEntity(model, createdEdge.id(), authContext.userId)
-      setSingleProperty(createdEdge, "_createdAt", entity._createdAt, createdAtMapping)
-      setSingleProperty(createdEdge, "_createdBy", entity._createdBy, createdByMapping)
-      setSingleProperty(createdEdge, "_label", model.label, UniMapping.string)
+      val entity      = DummyEntity(model.label, createdEdge.id(), authContext.userId)
+      createdAtMapping.setProperty(createdEdge, "_createdAt", entity._createdAt)
+      createdByMapping.setProperty(createdEdge, "_createdBy", entity._createdBy)
+      UMapping.string.setProperty(createdEdge, "_label", model.label)
       logger.trace(s"Create edge ${model.label} from $f to $t: ${Model.printElement(createdEdge)}")
       model.addEntity(e, entity)
     }
     edgeMaybe.getOrElse {
-      val error = graph.V(from._id).headOption().map(_ => "").getOrElse(s"${from._model.label}:${from._id} not found ") +
-        graph.V(to._id).headOption().map(_ => "").getOrElse(s"${to._model.label}:${to._id} not found")
-      sys.error(s"Fail to create edge between ${from._model.label}:${from._id} and ${to._model.label}:${to._id}, $error")
+      val error = Traversal.V(from._id)(graph).headOption.map(_ => "").getOrElse(s"${from._label}:${from._id} not found ") +
+        Traversal.V(to._id)(graph).headOption.map(_ => "").getOrElse(s"${to._label}:${to._id} not found")
+      sys.error(s"Fail to create edge between ${from._label}:${from._id} and ${to._label}:${to._id}, $error")
     }
   }
 
-  override def labelFilter[E <: Element](label: String): GremlinScala[E] => GremlinScala[E] = _.has(Key("_label") of label).hasLabel(label)
+  override def labelFilter[D, G <: Element, C <: Converter[D, G]](label: String): Traversal[D, G, C] => Traversal[D, G, C] =
+    _.onRaw(_.has("_label", label).hasLabel(label))
 
   override def mapPredicate[T](predicate: P[T]): P[T] =
     predicate.getBiPredicate match {

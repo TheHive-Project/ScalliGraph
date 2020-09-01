@@ -1,7 +1,7 @@
 package org.thp.scalligraph.controllers
 
-import gremlin.scala.Graph
 import javax.inject.{Inject, Singleton}
+import org.apache.tinkerpop.gremlin.structure.Graph
 import org.thp.scalligraph.auth.{AuthSrv, Permission}
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.record.Record

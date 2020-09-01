@@ -68,7 +68,7 @@ lazy val core = (project in file("core"))
     name := "scalligraph-core",
     version := scalligraphVersion,
     libraryDependencies ++= Seq(
-      gremlinScala,
+      tinkerpop,
       scalactic,
       playGuice,
       scalaGuice,

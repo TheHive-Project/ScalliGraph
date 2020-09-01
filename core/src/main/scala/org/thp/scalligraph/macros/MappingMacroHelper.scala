@@ -55,7 +55,7 @@ trait MappingMacroHelper extends MacroUtil with MacroLogger {
   }
 
   private def getMappingFromImplicit(eType: Type): Option[Tree] = {
-    val mappingType = appliedType(typeOf[UniMapping[_]].typeConstructor, eType)
+    val mappingType = appliedType(typeOf[UMapping[_]].typeConstructor, eType)
     val mapping     = c.inferImplicitValue(mappingType, silent = true, withMacrosDisabled = true)
     if (mapping.tpe =:= NoType) None
     else Some(mapping)
@@ -71,7 +71,7 @@ trait MappingMacroHelper extends MacroUtil with MacroLogger {
               "Wrong value " + other +
               " for numeration " + ${symbol.toString} +
               ". Possible values are " + ${members.map(_._1).mkString(",")})"""
-        Some(q"""org.thp.scalligraph.models.SingleMapping[$eType, String](e ⇒ Some(e.toString), g ⇒ g match { case ..$valueCases })""")
+        Some(q"""org.thp.scalligraph.models.SingleMapping[$eType, String](e ⇒ e.toString, g ⇒ g match { case ..$valueCases })""")
       case _ => None
     }
 }
