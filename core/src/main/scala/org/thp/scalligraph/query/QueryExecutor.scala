@@ -59,7 +59,8 @@ abstract class QueryExecutor { executor =>
   }
 
   private def getRenderer(tpe: ru.Type, authContext: AuthContext): Try[Renderer[Any]] =
-    if (SubType(tpe, ru.typeOf[Output[_]])) Success(Renderer[Any](_.asInstanceOf[Output[Any]]))
+    if (SubType(tpe, ru.typeOf[IteratorOutput])) Success(Renderer.stream(value => value.asInstanceOf[IteratorOutput]))
+    else if (SubType(tpe, ru.typeOf[Output[_]])) Success(Renderer[Any](_.asInstanceOf[Output[Any]]))
     else if (SubType(tpe, ru.typeOf[AnyVal])) Success(Renderer[Any] {
       case l: Long    => Output(l)
       case d: Double  => Output(d)
