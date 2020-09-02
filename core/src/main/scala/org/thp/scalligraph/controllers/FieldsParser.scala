@@ -33,14 +33,19 @@ class FieldsParser[T](
     apply(FPath.empty, field)
 
   def on(pathElement: String): FieldsParser[T] =
-    new FieldsParser[T](formatName, acceptedInput.map(pathElement + "/" + _), {
-      case (path, field) => apply(path :/ pathElement, field.get(pathElement))
-    })
+    new FieldsParser[T](
+      formatName,
+      acceptedInput.map(pathElement + "/" + _),
+      {
+        case (path, field) => apply(path :/ pathElement, field.get(pathElement))
+      }
+    )
 
   def andThen[U, R](nextFormatName: String)(fp: FieldsParser[U])(f: (U, T) => R): FieldsParser[R] =
     new FieldsParser[R](
       s"$formatName&$nextFormatName",
-      acceptedInput ++ fp.acceptedInput, {
+      acceptedInput ++ fp.acceptedInput,
+      {
         case (path, field) =>
           val value1 = apply(path, field)
           val value2 = fp(path, field)
@@ -52,19 +57,28 @@ class FieldsParser[T](
     new FieldsParser[U](formatName, acceptedInput ++ fp.acceptedInput, parse orElse fp.parse)
 
   def map[U](newFormatName: String)(f: T => U): FieldsParser[U] =
-    new FieldsParser(newFormatName, acceptedInput, {
-      case (path, fields) => apply(path, fields).map(f)
-    })
+    new FieldsParser(
+      newFormatName,
+      acceptedInput,
+      {
+        case (path, fields) => apply(path, fields).map(f)
+      }
+    )
 
   def flatMap[U](newFormatName: String)(fp: FieldsParser[U])(implicit ev: T <:< Field): FieldsParser[U] =
-    new FieldsParser(newFormatName, acceptedInput, {
-      case (path, fields) => apply(path, fields).flatMap(f => fp(ev(f)))
-    })
+    new FieldsParser(
+      newFormatName,
+      acceptedInput,
+      {
+        case (path, fields) => apply(path, fields).flatMap(f => fp(ev(f)))
+      }
+    )
 
   def sequence: FieldsParser[Seq[T]] =
     new FieldsParser[Seq[T]](
       s"seq($formatName)",
-      acceptedInput.map(i => s"[$i]"), {
+      acceptedInput.map(i => s"[$i]"),
+      {
         case (path, field) =>
           field match {
             case FSeq(subFields) =>
@@ -83,7 +97,8 @@ class FieldsParser[T](
   def optional: FieldsParser[Option[T]] =
     new FieldsParser[Option[T]](
       s"option($formatName)",
-      acceptedInput.map(i => s"$i?"), {
+      acceptedInput.map(i => s"$i?"),
+      {
         case (path, field) =>
           field match {
             case FNull | FUndefined => Good(None)
@@ -116,19 +131,23 @@ object FieldsParser extends FieldsParserLowerPrio {
     new FieldsParser[T](formatName, Set(formatName), parse)
 
   def debug[T](formatName: String)(parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]]) =
-    new FieldsParser[T](formatName, Set(formatName), new PartialFunction[(FPath, Field), T Or Every[AttributeError]] {
-      override def isDefinedAt(input: (FPath, Field)): Boolean = {
-        val result = parse.isDefinedAt(input)
-        logger.debug(s"FieldsParser($formatName): $input => $result")
-        result
-      }
+    new FieldsParser[T](
+      formatName,
+      Set(formatName),
+      new PartialFunction[(FPath, Field), T Or Every[AttributeError]] {
+        override def isDefinedAt(input: (FPath, Field)): Boolean = {
+          val result = parse.isDefinedAt(input)
+          logger.debug(s"FieldsParser($formatName): $input => $result")
+          result
+        }
 
-      override def apply(input: (FPath, Field)): Or[T, Every[AttributeError]] = {
-        val result = parse.apply(input)
-        logger.debug(s"FieldsParser($formatName): $input => $result")
-        result
+        override def apply(input: (FPath, Field)): Or[T, Every[AttributeError]] = {
+          val result = parse.apply(input)
+          logger.debug(s"FieldsParser($formatName): $input => $result")
+          result
+        }
       }
-    })
+    )
   def update(name: String, properties: Seq[PublicProperty[_, _]]): FieldsParser[Seq[PropertyUpdater]] =
     FieldsParser(name) {
       case (_, FObject(fields)) =>
@@ -149,14 +168,22 @@ object FieldsParser extends FieldsParserLowerPrio {
     }
 
   def good[T](value: T): FieldsParser[T] =
-    new FieldsParser[T]("good", Set.empty, {
-      case _ => Good(value)
-    })
+    new FieldsParser[T](
+      "good",
+      Set.empty,
+      {
+        case _ => Good(value)
+      }
+    )
 
   def unknownAttribute[T](name: String): FieldsParser[T] =
-    new FieldsParser[T]("unknownAttribute", Set.empty, {
-      case (path, field) => Bad(One(UnknownAttributeError((path :/ name).toString, field)))
-    })
+    new FieldsParser[T](
+      "unknownAttribute",
+      Set.empty,
+      {
+        case (path, field) => Bad(One(UnknownAttributeError((path :/ name).toString, field)))
+      }
+    )
 
   def empty[T]: FieldsParser[T] = new FieldsParser[T]("empty", Set.empty, PartialFunction.empty)
 
@@ -193,6 +220,7 @@ object FieldsParser extends FieldsParserLowerPrio {
   implicit val date: FieldsParser[Date] = FieldsParser[Date]("date")(unlift {
     case (_, FNumber(n))   => Some(Good(new Date(n.toLong)))
     case (_, FAny(Seq(s))) => Try(Good(new Date(s.toLong))).toOption
+    case (_, FString(s))   => Try(Good(new Date(s.toLong))).toOption
     case _                 => None
   })
   implicit val float: FieldsParser[Float] = FieldsParser[Float]("float")(unlift {
