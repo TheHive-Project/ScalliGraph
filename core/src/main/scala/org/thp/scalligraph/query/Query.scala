@@ -106,7 +106,6 @@ object Query {
       override def toType(t: ru.Type): ru.Type    = ru.appliedType(ru.typeOf[IteratorOutput].typeConstructor, ru.typeOf[E])
       override def apply(param: Unit, fromType: ru.Type, from: Any, authContext: AuthContext): Any =
         IteratorOutput(transform(from.asInstanceOf[F], authContext).domainMap(renderer.toJson), None)
-//        PagedResult(transform(from.asInstanceOf[F], authContext), None)(renderer)
     }
   def output[E: ru.TypeTag, F: ru.TypeTag](transform: F => Traversal[E, G, Converter[E, G]] forSome { type G })(implicit
       renderer: Renderer[E]
@@ -117,7 +116,6 @@ object Query {
       override def toType(t: ru.Type): ru.Type    = ru.appliedType(ru.typeOf[IteratorOutput].typeConstructor, ru.typeOf[E])
       override def apply(param: Unit, fromType: ru.Type, from: Any, authContext: AuthContext): Any =
         IteratorOutput(transform(from.asInstanceOf[F]).domainMap(renderer.toJson), None)
-//        PagedResult(transform(from.asInstanceOf[F]), None)(renderer)
     }
 }
 

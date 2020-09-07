@@ -6,7 +6,7 @@ import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.Database
-import org.thp.scalligraph.traversal.IteratorOutput
+import org.thp.scalligraph.traversal.{IteratorOutput, Traversal}
 import org.thp.scalligraph.utils.RichType
 import play.api.Logger
 import play.api.libs.json._
@@ -94,7 +94,15 @@ abstract class QueryExecutor { executor =>
     else
       allQueries
         .find(q => q.checkFrom(tpe) && SubType(q.toType(tpe), ru.typeOf[Output[_]]) && q.paramType == ru.typeOf[Unit])
-        .fold[Try[Renderer[Any]]](Failure(BadRequestError(s"Value of type $tpe can't be output"))) {
+        .fold[Try[Renderer[Any]]] {
+          val traversalType = ru.typeOf[Traversal[_, _, _]]
+          if (SubType(tpe, traversalType)) {
+            val t = RichType.getTypeArgs(tpe, traversalType).head
+            getRenderer(t, authContext)
+              .map(subRenderer => Renderer.stream(value => IteratorOutput(value.asInstanceOf[Traversal[Any, _, _]].domainMap(subRenderer.toJson))))
+          } else
+            Failure(BadRequestError(s"Value of type $tpe can't be output"))
+        } {
           case q if SubType(q.toType(tpe), ru.typeOf[IteratorOutput]) =>
             Success(Renderer.stream(value => q.asInstanceOf[Query]((), tpe, value, authContext).asInstanceOf[IteratorOutput]))
           case q =>
