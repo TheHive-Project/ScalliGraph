@@ -1,7 +1,6 @@
 package org.thp.scalligraph.query
 
 import org.apache.tinkerpop.gremlin.structure.{Graph, Vertex}
-import org.thp.scalligraph.BadRequestError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FieldsParser}
 import org.thp.scalligraph.models.{Database, Mapping}
@@ -13,7 +12,7 @@ import scala.reflect.runtime.{universe => ru}
 import scala.util.Try
 
 class PublicProperty[P, U](
-    val traversalType: ru.Type,
+    val isApplicableFn: ru.Type => Boolean,
     val propertyName: String,
     val mapping: Mapping[P, U, _],
     definition: Seq[(FPath, Traversal.Unk) => Traversal.Domain[U]],
@@ -33,58 +32,8 @@ class PublicProperty[P, U](
 
   def get(path: FPath, traversal: Traversal.Unk): Traversal[P, Any, Converter[P, Any]] =
     select(path, traversal).cast[U, Any].fold.domainMap(x => mapping.wrap(x)).cast[P, Any]
-}
 
-object PublicProperty {
-
-  def getProperty(
-      properties: Seq[PublicProperty[_, _]],
-      traversalType: ru.Type,
-      fieldName: String
-  ): PublicProperty[Traversal.UnkD, Traversal.UnkDU] = getProperty(properties, traversalType, FPath(fieldName))
-
-  def getProperty(
-      properties: Seq[PublicProperty[_, _]],
-      traversalType: ru.Type,
-      fieldPath: FPath
-  ): PublicProperty[Traversal.UnkD, Traversal.UnkDU] =
-    properties
-      .iterator
-      .collectFirst {
-        case p if fieldPath.startsWith(p.propertyPath).isDefined && traversalType <:< p.traversalType =>
-          p.asInstanceOf[PublicProperty[Traversal.UnkD, Traversal.UnkDU]]
-      }
-      .getOrElse(throw BadRequestError(s"Property $fieldPath for type $traversalType not found"))
-
-  //  def getPropertyTraversal(
-//      properties: Seq[PublicProperty[_, _]],
-//      traversalType: ru.Type,
-//      step: UntypedTraversal,
-//      fieldName: String,
-//      authContext: AuthContext
-//  ): UntypedTraversal = {
-//    val path = FPath(fieldName)
-//    properties
-//      .iterator
-//      .collectFirst {
-//        case p if p.traversalType =:= traversalType && path.startsWith(p.propertyPath).isDefined => p.get(step, path).untyped
-//      }
-//      .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
-//  }
-
-//  def getProperty(
-//      properties: Seq[PublicProperty[_, _]],
-//      traversalType: ru.Type,
-//      fieldName: String
-//  ): PublicProperty[_, _] = {
-//    val path = FPath(fieldName)
-//    properties
-//      .iterator
-//      .collectFirst {
-//        case p if p.traversalType =:= traversalType && path.startsWith(p.propertyPath).isDefined => p
-//      }
-//      .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
-//  }
+  def isApplicable(traversalType: ru.Type): Boolean = isApplicableFn(traversalType)
 }
 
 object PropertyUpdater {
@@ -94,7 +43,8 @@ object PropertyUpdater {
   ): FieldsParser[PropertyUpdater] =
     new FieldsParser(
       fieldsParser.formatName,
-      fieldsParser.acceptedInput.map(propertyName + "/" + _), {
+      fieldsParser.acceptedInput.map(propertyName + "/" + _),
+      {
         case (path, field) =>
           fieldsParser(path, field).map(fieldValue =>
             new PropertyUpdater(propertyName /: path, fieldValue) {
@@ -108,9 +58,10 @@ object PropertyUpdater {
 
   def apply(path: FPath, value: Any)(
       f: (Vertex, Database, Graph, AuthContext) => Try[JsObject]
-  ): PropertyUpdater = new PropertyUpdater(path, value) {
-    override def apply(v: Vertex, db: Database, graph: Graph, authContext: AuthContext): Try[JsObject] = f(v, db, graph, authContext)
-  }
+  ): PropertyUpdater =
+    new PropertyUpdater(path, value) {
+      override def apply(v: Vertex, db: Database, graph: Graph, authContext: AuthContext): Try[JsObject] = f(v, db, graph, authContext)
+    }
 
   def unapply(updater: PropertyUpdater): Option[(FPath, Any, (Vertex, Database, Graph, AuthContext) => Try[JsObject])] =
     Some((updater.path, updater.value, updater.apply))
@@ -119,4 +70,24 @@ object PropertyUpdater {
 abstract class PropertyUpdater(val path: FPath, val value: Any) extends ((Vertex, Database, Graph, AuthContext) => Try[JsObject]) {
   override def toString(): String =
     s"PropertyUpdater($path, $value)"
+}
+
+class PublicProperties(private val map: Map[String, Seq[PublicProperty[_, _]]]) {
+  def get[P, U](propertyName: String): Option[PublicProperty[P, U]] =
+    map.get(propertyName).flatMap(_.headOption).asInstanceOf[Option[PublicProperty[P, U]]]
+  def get[P, U](propertyName: String, tpe: ru.Type): Option[PublicProperty[P, U]] =
+    map.get(propertyName).flatMap(_.find(_.isApplicable(tpe))).asInstanceOf[Option[PublicProperty[P, U]]]
+  def get[P, U](propertyPath: FPath, tpe: ru.Type): Option[PublicProperty[P, U]] =
+    propertyPath.headOption.flatMap(get(_, tpe))
+  def list: Seq[PublicProperty[_, _]] = map.flatMap(_._2.headOption).toSeq
+  def :+[P, U](property: PublicProperty[P, U]): PublicProperties =
+    new PublicProperties(map + (property.propertyName -> (map.getOrElse(property.propertyName, Nil) :+ property)))
+  def ++(properties: PublicProperties): PublicProperties = {
+    val newMap = (map.keySet ++ properties.map.keySet).map(k => k -> (map.getOrElse(k, Nil) ++ properties.map.getOrElse(k, Nil))).toMap
+    new PublicProperties(newMap)
+  }
+}
+
+object PublicProperties {
+  def empty: PublicProperties = new PublicProperties(Map.empty)
 }

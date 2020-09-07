@@ -115,7 +115,6 @@ class Entrypoint @Inject() (
       }
 
     /**
-      *
       * @param db necessary db instance for transaction
       * @param permission permission to check
       * @param block business login function that transforms request into response

@@ -12,12 +12,12 @@ import akka.stream.scaladsl.{Flow, Source}
 import com.typesafe.config.ConfigObject
 import javax.inject.{Inject, Singleton}
 import org.apache.tinkerpop.gremlin.process.traversal.{P, Text}
-import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Graph, Transaction, Vertex}
 import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
-import org.janusgraph.core.{Cardinality, JanusGraph, JanusGraphFactory, JanusGraphTransaction, SchemaViolationException}
+import org.apache.tinkerpop.gremlin.structure._
 import org.janusgraph.core.attribute.{Text => JanusText}
 import org.janusgraph.core.schema.JanusGraphManagement.IndexJobFuture
 import org.janusgraph.core.schema.{Mapping => JanusMapping, _}
+import org.janusgraph.core.{Transaction => _, _}
 import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
 import org.janusgraph.graphdb.database.StandardJanusGraph
@@ -92,12 +92,13 @@ class JanusDatabase(
     new JanusDatabase(JanusGraphFactory.open(config), maxAttempts, minBackoff, maxBackoff, randomFactor, chunkSize, system)
   }
 
-  def instanceId: String = janusGraph match {
-    case g: StandardJanusGraph => g.getConfiguration.getUniqueGraphId
-    case _ =>
-      logger.error(s"JanusGraph database instance is not a StandardJanusGraph (${janusGraph.getClass}). Instance ID cannot be retrieved.")
-      ""
-  }
+  def instanceId: String =
+    janusGraph match {
+      case g: StandardJanusGraph => g.getConfiguration.getUniqueGraphId
+      case _ =>
+        logger.error(s"JanusGraph database instance is not a StandardJanusGraph (${janusGraph.getClass}). Instance ID cannot be retrieved.")
+        ""
+    }
   def openInstances: Set[String] =
     managementTransaction { mgmt =>
       Success {
@@ -117,10 +118,11 @@ class JanusDatabase(
       Success(instanceIds.foreach(mgmt.forceCloseInstance))
     }.get
 
-  def dropOtherConnections: Try[Unit] = managementTransaction { mgmt =>
-    mgmt.getOpenInstances.asScala.filterNot(_.endsWith("(current)")).foreach(mgmt.forceCloseInstance)
-    Success(())
-  }
+  def dropOtherConnections: Try[Unit] =
+    managementTransaction { mgmt =>
+      mgmt.getOpenInstances.asScala.filterNot(_.endsWith("(current)")).foreach(mgmt.forceCloseInstance)
+      Success(())
+    }
 
   def close(): Unit = janusGraph.close()
 
@@ -353,9 +355,10 @@ class JanusDatabase(
           }
       }
 
-  def addProperty[T](model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit] = managementTransaction { mgmt =>
-    addProperty(mgmt, propertyName, mapping)
-  }
+  def addProperty[T](model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit] =
+    managementTransaction { mgmt =>
+      addProperty(mgmt, propertyName, mapping)
+    }
 
   def addProperty(mgmt: JanusGraphManagement, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit] = {
     logger.debug(s"Create property $propertyName of type ${mapping.graphTypeClass} (${mapping.cardinality})")
@@ -391,9 +394,9 @@ class JanusDatabase(
   }
 
   override def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit] =
-    if (usedOnlyByThisModel) {
+    if (usedOnlyByThisModel)
       managementTransaction(mgmt => removeProperty(mgmt, propertyName))
-    } else Success(())
+    else Success(())
 
   def removeProperty(mgmt: JanusGraphManagement, propertyName: String): Try[Unit] =
     Try {
@@ -423,9 +426,8 @@ class JanusDatabase(
         if (!index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.DISABLED)) {
           logger.debug(s"Disable index $indexName")
           mgmt.updateIndex(index, SchemaAction.DISABLE_INDEX)
-        } else {
+        } else
           logger.debug(s"Index $indexName is already disable")
-        }
         Success(())
       }
     }.map(_ => ManagementSystem.awaitGraphIndexStatus(janusGraph, indexName).status(SchemaStatus.DISABLED).call())

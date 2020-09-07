@@ -26,8 +26,8 @@ object Traversal {
     new Traversal[Edge, Edge, IdentityConverter[Edge]](graph.traversal().E(edgeIds: _*), Converter.identity)
   def empty[T](implicit graph: Graph) =
     new Traversal[T, T, IdentityConverter[T]](graph.traversal().inject[T](), Converter.identity)
-  def union[D, G, C <: Converter[D, G]](t: (Traversal[Vertex, Vertex, IdentityConverter[Vertex]] => Traversal[D, G, C])*)(
-      implicit graph: Graph
+  def union[D, G, C <: Converter[D, G]](t: (Traversal[Vertex, Vertex, IdentityConverter[Vertex]] => Traversal[D, G, C])*)(implicit
+      graph: Graph
   ): Traversal[D, G, C] = {
     val traversals: Seq[Traversal[D, G, C]] = t.map(_.apply(Traversal.V()))
     new Traversal[D, G, C](graph.traversal().inject(1).union(traversals.map(_.raw): _*), traversals.head.converter)

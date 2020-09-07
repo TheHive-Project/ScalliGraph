@@ -17,9 +17,9 @@ import scala.util.{Failure, Success, Try}
 
 abstract class QueryExecutor { executor =>
   val version: (Int, Int)
-  lazy val publicProperties: List[PublicProperty[_, _]] = Nil
-  lazy val queries: Seq[ParamQuery[_]]                  = Nil
-  lazy val logger: Logger                               = Logger(getClass)
+  lazy val publicProperties: PublicProperties = PublicProperties.empty
+  lazy val queries: Seq[ParamQuery[_]]        = Nil
+  lazy val logger: Logger                     = Logger(getClass)
   val db: Database
 
   final lazy val allQueries                         = queries :+ sortQuery :+ filterQuery :+ aggregationQuery :+ CountQuery
@@ -89,9 +89,9 @@ abstract class QueryExecutor { executor =>
             .fold[Output[_]](Output(None, JsNull))(v => subRenderer.toOutput(v))
         }
       }
-    } else if (SubType(tpe, ru.typeOf[JsValue])) {
+    } else if (SubType(tpe, ru.typeOf[JsValue]))
       Success(Renderer[Any](value => Output(value.asInstanceOf[JsValue])))
-    } else
+    else
       allQueries
         .find(q => q.checkFrom(tpe) && SubType(q.toType(tpe), ru.typeOf[Output[_]]) && q.paramType == ru.typeOf[Unit])
         .fold[Try[Renderer[Any]]](Failure(BadRequestError(s"Value of type $tpe can't be output"))) {
@@ -150,10 +150,10 @@ abstract class QueryExecutor { executor =>
 
   def ++(other: QueryExecutor): QueryExecutor =
     new QueryExecutor {
-      override val db: Database                                      = other.db
-      override val version: (Int, Int)                               = math.max(executor.version._1, other.version._1) -> math.min(executor.version._2, other.version._2)
-      override lazy val publicProperties: List[PublicProperty[_, _]] = executor.publicProperties ::: other.publicProperties
-      override lazy val queries: Seq[ParamQuery[_]]                  = executor.queries ++ other.queries
-      override val customFilterQuery: FilterQuery                    = executor.customFilterQuery ++ other.customFilterQuery
+      override val db: Database                            = other.db
+      override val version: (Int, Int)                     = math.max(executor.version._1, other.version._1) -> math.min(executor.version._2, other.version._2)
+      override lazy val publicProperties: PublicProperties = executor.publicProperties ++ other.publicProperties
+      override lazy val queries: Seq[ParamQuery[_]]        = executor.queries ++ other.queries
+      override val customFilterQuery: FilterQuery          = executor.customFilterQuery ++ other.customFilterQuery
     }
 }

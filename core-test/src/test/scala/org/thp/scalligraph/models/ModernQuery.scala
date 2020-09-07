@@ -21,7 +21,8 @@ object OutputSoftware {
 
 object ModernOutputs {
   implicit val personOutput: Renderer[Person with Entity] =
-    Renderer.toJson[Person with Entity, OutputPerson](person => new OutputPerson(person._createdBy, s"Mister ${person.name}", person.name, person.age)
+    Renderer.toJson[Person with Entity, OutputPerson](person =>
+      new OutputPerson(person._createdBy, s"Mister ${person.name}", person.name, person.age)
     )
   implicit val softwareOutput: Renderer[Software with Entity] =
     Renderer.toJson[Software with Entity, OutputSoftware](software => new OutputSoftware(software._createdBy, software.name, software.lang))
@@ -39,7 +40,7 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
 
   override val version: (Int, Int) = 1 -> 1
 
-  override lazy val publicProperties: List[PublicProperty[_, _]] = {
+  override lazy val publicProperties: PublicProperties = {
     val labelMapping = SingleMapping[String, String](
       toGraph = {
         case d if d startsWith "Mister " => d.drop(7)
@@ -52,7 +53,7 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
       .property("label", labelMapping)(_.rename("name").updatable)
       .property("name", UMapping.string)(_.field.updatable)
       .property("age", UMapping.int)(_.field.updatable)
-      .build :::
+      .build ++
       PublicPropertyListBuilder[Software]
         .property("createdBy", UMapping.string)(_.rename("_createdBy").readonly)
         .property("name", UMapping.string)(_.field.updatable)
@@ -72,9 +73,8 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
     Query.init[Traversal.V[Software]]("allSoftware", (graph, _) => softwareSrv.startTraversal(graph)),
     Query.initWithParam[SeniorAgeThreshold, Traversal.V[Person]](
       "seniorPeople",
-      FieldsParser[SeniorAgeThreshold], { (seniorAgeThreshold, graph, _) =>
-        personSrv.startTraversal(graph).has("age", P.gte(seniorAgeThreshold.age))
-      }
+      FieldsParser[SeniorAgeThreshold],
+      (seniorAgeThreshold, graph, _) => personSrv.startTraversal(graph).has("age", P.gte(seniorAgeThreshold.age))
     ),
     Query[Traversal.V[Person], Traversal.V[Software]]("created", (personSteps, _) => personSteps.created),
     Query.withParam[FriendLevel, Traversal.V[Person], Traversal.V[Person]](

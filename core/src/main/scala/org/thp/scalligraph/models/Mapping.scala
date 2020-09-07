@@ -71,7 +71,8 @@ object UMapping extends MappingLowerPrio {
   implicit def set[D, G](implicit subMapping: SingleMapping[D, G]): SetMapping[D, G]       = subMapping.set
   implicit def enum[E <: Enumeration: ClassTag]: SingleMapping[E#Value, String] =
     SingleMapping[E#Value, String](
-      _.toString, { s =>
+      _.toString,
+      { s =>
         val rm: ru.Mirror = ru.runtimeMirror(getClass.getClassLoader)
         val m             = rm.classSymbol(classTag[E].runtimeClass)
         val c             = m.module
@@ -128,17 +129,18 @@ abstract class Mapping[M, D: ClassTag, G: ClassTag: NoValue](
   def isCompatibleWith(m: Mapping[_, _, _]): Boolean =
     graphTypeClass.equals(m.graphTypeClass) && MappingCardinality.isCompatible(cardinality, m.cardinality)
 
-  def convertToJava(c: Class[_]): Class[_] = c match {
-    case JByte.TYPE     => classOf[JByte]
-    case JShort.TYPE    => classOf[Short]
-    case Character.TYPE => classOf[Character]
-    case Integer.TYPE   => classOf[Integer]
-    case JLong.TYPE     => classOf[JLong]
-    case JFloat.TYPE    => classOf[JFloat]
-    case JDouble.TYPE   => classOf[JDouble]
-    case JBoolean.TYPE  => classOf[JBoolean]
-    case _              => c
-  }
+  def convertToJava(c: Class[_]): Class[_] =
+    c match {
+      case JByte.TYPE     => classOf[JByte]
+      case JShort.TYPE    => classOf[Short]
+      case Character.TYPE => classOf[Character]
+      case Integer.TYPE   => classOf[Integer]
+      case JLong.TYPE     => classOf[JLong]
+      case JFloat.TYPE    => classOf[JFloat]
+      case JDouble.TYPE   => classOf[JDouble]
+      case JBoolean.TYPE  => classOf[JBoolean]
+      case _              => c
+    }
 
   def getProperty(element: Element, key: String): M
   def setProperty(element: Element, key: String, value: M): Unit
@@ -301,7 +303,13 @@ case class SetMapping[D: ClassTag: Renderer, G: ClassTag: NoValue](
     toDomain: G => D = (_: G).asInstanceOf[D],
     isReadonly: Boolean = false
 )(implicit renderer: Renderer[D])
-    extends Mapping[Set[D], D, G](toGraph, toDomain)(implicitly[ClassTag[D]], implicitly[ClassTag[G]], implicitly[NoValue[G]], renderer.set, renderer) {
+    extends Mapping[Set[D], D, G](toGraph, toDomain)(
+      implicitly[ClassTag[D]],
+      implicitly[ClassTag[G]],
+      implicitly[NoValue[G]],
+      renderer.set,
+      renderer
+    ) {
   override val cardinality: MappingCardinality.Value = MappingCardinality.set
   override def readonly: SetMapping[D, G] =
     SetMapping(toGraph, toDomain, isReadonly = true)(implicitly[ClassTag[D]], renderer, implicitly[ClassTag[G]], implicitly[NoValue[G]], renderer)

@@ -7,7 +7,8 @@ import org.scalactic._
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.Permission
 import org.thp.scalligraph.macros.FieldsParserMacro
-import org.thp.scalligraph.query.{PropertyUpdater, PublicProperty}
+import org.thp.scalligraph.query.{PropertyUpdater, PublicProperties}
+import org.thp.scalligraph.traversal.Traversal
 import org.thp.scalligraph.utils.Hash
 import play.api.Logger
 import play.api.libs.json.{JsObject, JsValue}
@@ -148,7 +149,7 @@ object FieldsParser extends FieldsParserLowerPrio {
         }
       }
     )
-  def update(name: String, properties: Seq[PublicProperty[_, _]]): FieldsParser[Seq[PropertyUpdater]] =
+  def update(name: String, properties: PublicProperties): FieldsParser[Seq[PropertyUpdater]] =
     FieldsParser(name) {
       case (_, FObject(fields)) =>
         fields
@@ -158,7 +159,7 @@ object FieldsParser extends FieldsParserLowerPrio {
           .flatMap {
             case (FPathElem(propertyName, path), value) =>
               properties
-                .find(_.propertyName == propertyName)
+                .get[Traversal.UnkD, Traversal.UnkDU](propertyName)
                 .flatMap(_.updateFieldsParser)
                 .map(_.apply(path, value).badMap(_.map(_.withName(propertyName))))
             case _ => None

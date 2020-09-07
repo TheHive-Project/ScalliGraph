@@ -121,7 +121,7 @@ object Query {
     }
 }
 
-class SortQuery(db: Database, publicProperties: List[PublicProperty[_, _]]) extends ParamQuery[InputSort] {
+class SortQuery(db: Database, publicProperties: PublicProperties) extends ParamQuery[InputSort] {
   override def paramParser(tpe: ru.Type): FieldsParser[InputSort] = InputSort.fieldsParser
   override val name: String                                       = "sort"
   override def checkFrom(t: ru.Type): Boolean                     = SubType(t, ru.typeOf[Traversal[_, _, _]])
@@ -137,20 +137,20 @@ class SortQuery(db: Database, publicProperties: List[PublicProperty[_, _]]) exte
 }
 
 object FilterQuery {
-  def apply(db: Database, publicProperties: List[PublicProperty[_, _]])(
+  def apply(db: Database, publicProperties: PublicProperties)(
       fieldsParser: (
           ru.Type,
           ru.Type => FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]]
       ) => FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]]
   ): FilterQuery = new FilterQuery(db, publicProperties, fieldsParser :: Nil)
-  def default(db: Database, publicProperties: List[PublicProperty[_, _]]): FilterQuery =
+  def default(db: Database, publicProperties: PublicProperties): FilterQuery =
     apply(db, publicProperties)(InputFilter.fieldsParser(_, publicProperties, _))
-  def empty(db: Database, publicProperties: List[PublicProperty[_, _]]) = new FilterQuery(db, publicProperties)
+  def empty(db: Database, publicProperties: PublicProperties) = new FilterQuery(db, publicProperties)
 }
 
 final class FilterQuery(
     db: Database,
-    publicProperties: List[PublicProperty[_, _]],
+    publicProperties: PublicProperties,
     protected val fieldsParsers: List[
       (ru.Type, ru.Type => FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]]) => FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]]
     ] = Nil
@@ -172,7 +172,7 @@ final class FilterQuery(
   def ++(other: FilterQuery): FilterQuery = new FilterQuery(db, publicProperties, filterQuery.fieldsParsers ::: other.fieldsParsers)
 }
 
-class AggregationQuery(db: Database, publicProperties: List[PublicProperty[_, _]], filterQuery: FilterQuery) extends ParamQuery[Aggregation] {
+class AggregationQuery(db: Database, publicProperties: PublicProperties, filterQuery: FilterQuery) extends ParamQuery[Aggregation] {
   override def paramParser(tpe: ru.Type): FieldsParser[Aggregation] = Aggregation.fieldsParser(filterQuery.paramParser(tpe))
   override val name: String                                         = "aggregation"
   override def checkFrom(t: ru.Type): Boolean                       = SubType(t, ru.typeOf[Traversal[_, _, _]])
@@ -198,7 +198,7 @@ object CountQuery extends Query {
 trait InputQuery[FROM, TO] {
   def apply(
       db: Database,
-      publicProperties: List[PublicProperty[_, _]],
+      publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: FROM,
       authContext: AuthContext

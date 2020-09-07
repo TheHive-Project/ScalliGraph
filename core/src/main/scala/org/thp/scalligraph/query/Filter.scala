@@ -3,6 +3,7 @@ package org.thp.scalligraph.query
 import org.apache.tinkerpop.gremlin.process.traversal.{P, TextP}
 import org.scalactic.Accumulation._
 import org.scalactic.Good
+import org.thp.scalligraph.BadRequestError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.Database
@@ -15,21 +16,16 @@ import scala.reflect.runtime.{universe => ru}
 case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputQuery[Traversal.Unk, Traversal.Unk] {
   override def apply(
       db: Database,
-      publicProperties: List[PublicProperty[_, _]],
+      publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
   ): Traversal.Unk = {
     val propertyPath = FPath(fieldName)
-    val property     = PublicProperty.getProperty(publicProperties, traversalType, propertyPath)
-//    val predicate = getPredicate(property.mapping.reverse)
-//    if (property.mapping == IdMapping) {
-//      val newValue = predicate.getValue match {
-//        case c: JCollection[_] => c.asScala.map(db.toId).asJavaCollection
-//        case other             => db.toId(other)
-//      }
-//      predicate.asInstanceOf[P[Any]].setValue(newValue)
-//    }
+    val property =
+      publicProperties
+        .get[Traversal.UnkD, Traversal.UnkDU](propertyPath, traversalType)
+        .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
     traversal.filter { t =>
       property.filterSelect(propertyPath, t).is(db.mapPredicate(predicate.asInstanceOf[P[Traversal.UnkG]]))
     }
@@ -39,13 +35,17 @@ case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputQuer
 case class IsDefinedFilter(fieldName: String) extends InputQuery[Traversal.Unk, Traversal.Unk] {
   override def apply(
       db: Database,
-      publicProperties: List[PublicProperty[_, _]],
+      publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
   ): Traversal.Unk = {
-    val property = PublicProperty.getProperty(publicProperties, traversalType, fieldName)
-    traversal.filter(t => property.select(FPath(fieldName), t))
+    val propertyPath = FPath(fieldName)
+    val property =
+      publicProperties
+        .get[Traversal.UnkD, Traversal.UnkDU](propertyPath, traversalType)
+        .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
+    traversal.filter(t => property.select(propertyPath, t))
   }
 }
 
@@ -53,7 +53,7 @@ case class OrFilter(inputFilters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]])
 
   override def apply(
       db: Database,
-      publicProperties: List[PublicProperty[_, _]],
+      publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
@@ -69,7 +69,7 @@ case class AndFilter(inputFilters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]]
 
   override def apply(
       db: Database,
-      publicProperties: List[PublicProperty[_, _]],
+      publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
@@ -85,7 +85,7 @@ case class NotFilter(inputFilter: InputQuery[Traversal.Unk, Traversal.Unk]) exte
 
   override def apply(
       db: Database,
-      publicProperties: List[PublicProperty[_, _]],
+      publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
@@ -99,7 +99,7 @@ object YesFilter extends InputQuery[Traversal.Unk, Traversal.Unk] {
 
   override def apply(
       db: Database,
-      publicProperties: List[PublicProperty[_, _]],
+      publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
@@ -110,7 +110,7 @@ class IdFilter(id: String) extends InputQuery[Traversal.Unk, Traversal.Unk] {
 
   override def apply(
       db: Database,
-      publicProperties: List[PublicProperty[_, _]],
+      publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
@@ -165,12 +165,13 @@ object InputFilter {
 
   def fieldsParser(
       tpe: ru.Type,
-      properties: Seq[PublicProperty[_, _]],
+      properties: PublicProperties,
       globalParser: ru.Type => FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]]
   ): FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]] = {
     def propParser(name: String): FieldsParser[Any] = {
-      val fieldPath         = FPath(name)
-      val property          = PublicProperty.getProperty(properties, tpe, fieldPath)
+      val fieldPath = FPath(name)
+      val property =
+        properties.get[Traversal.UnkD, Traversal.UnkDU](fieldPath, tpe).getOrElse(throw BadRequestError(s"Property $name for type $tpe not found"))
       val propertyConverter = property.filterConverter(fieldPath)
       property.fieldsParser.map(property.fieldsParser.formatName)(v => propertyConverter(v))
     }
