@@ -13,9 +13,9 @@ import org.thp.scalligraph.traversal.Converter.CMap
 import org.thp.scalligraph.{AuthorizationError, InternalError, NotFoundError}
 import play.api.Logger
 import shapeless.ops.hlist.{Mapper, RightFolder, ToTraversable, Tupler}
-import shapeless.poly._
 import shapeless.syntax.std.tuple._
 import shapeless.{Generic, HList, HNil}
+import scala.Predef.{identity => identityFn, _}
 
 import scala.collection.JavaConverters._
 import scala.language.experimental.macros
@@ -132,6 +132,8 @@ object TraversalOps {
       traversal.onRaw(_.as(stepLabel.name, otherLabels.map(_.name): _*))
     }
 
+    def identity: Traversal[D, G, C] = traversal.onRaw(_.identity())
+
     def constant[A](cst: A): Traversal[A, A, IdentityConverter[A]] =
       traversal.onRawMap[A, A, IdentityConverter[A]](_.constant(cst))(Converter.identity[A])
 
@@ -236,7 +238,7 @@ object TraversalOps {
     }
 
     def select[R](f: SelectBySelector[Unit] => SelectBySelector[R]): Traversal[R, JMap[String, Any], Converter[R, JMap[String, Any]]] = {
-      val selector = f(new SelectBySelector[Unit](Nil, identity, _ => ()))
+      val selector = f(new SelectBySelector[Unit](Nil, identityFn, _ => ()))
       selector.labels match {
         case first :: second :: other =>
           traversal.onRawMap[R, JMap[String, Any], Converter[R, JMap[String, Any]]](t => selector.addBys(t.select(first, second, other: _*)))(
@@ -445,7 +447,7 @@ object TraversalOps {
         }
       )
 
-    def page(from: Long, to: Long, withTotal: Boolean)(implicit renderer: Renderer[D]): IteratorOutput = richPage(from, to, withTotal)(identity)
+    def page(from: Long, to: Long, withTotal: Boolean)(implicit renderer: Renderer[D]): IteratorOutput = richPage(from, to, withTotal)(identityFn)
 
     def filter(f: Traversal[D, G, C] => Traversal[_, _, _]): Traversal[D, G, C] = traversal.onRaw(_.filter(f(traversal.start).raw))
     def filterNot(f: Traversal[D, G, C] => Traversal[_, _, _]): Traversal[D, G, C] =
