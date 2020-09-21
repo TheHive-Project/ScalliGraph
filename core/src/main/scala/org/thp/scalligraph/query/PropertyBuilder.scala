@@ -19,7 +19,7 @@ class PropertyBuilder[E <: Product, P, U](isApplicableFn: ru.Type => Boolean, pr
       propertyName,
       propertyName,
       mapping,
-      Seq((_, t) => t.asInstanceOf[Traversal.V[E]].property(propertyName, mapping))
+      (_, t) => t.asInstanceOf[Traversal.V[E]].property(propertyName, mapping)
     )
 
   def rename(newName: String) =
@@ -28,26 +28,26 @@ class PropertyBuilder[E <: Product, P, U](isApplicableFn: ru.Type => Boolean, pr
       propertyName,
       newName,
       mapping,
-      Seq((_, t) => t.asInstanceOf[Traversal.V[E]].property(newName, mapping))
+      (_, t) => t.asInstanceOf[Traversal.V[E]].property(newName, mapping)
     )
 
-  def select(definition: (Traversal.V[E] => Traversal[U, _, _])*) =
+  def select(definition: Traversal.V[E] => Traversal[U, _, _]) =
     new UpdatePropertyBuilder[E, P, U](
       isApplicableFn,
       propertyName,
       mapping,
-      definition.map(d => (_: FPath, t: Traversal.Unk) => d(t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Domain[U]]),
-      (_, t) => definition.head(t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Domain[U]],
+      (_: FPath, t: Traversal.Unk) => definition(t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Domain[U]],
+      (_, t) => definition(t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Domain[U]],
       _ => mapping.reverse.asInstanceOf[Converter[Traversal.UnkG, Traversal.UnkD]]
     )
 
-  def subSelect[D](definition: ((FPath, Traversal.V[E]) => Traversal[U, _, _])*) =
+  def subSelect[D](definition: (FPath, Traversal.V[E]) => Traversal[U, _, _]) =
     new UpdatePropertyBuilder[E, P, U](
       isApplicableFn,
       propertyName,
       mapping,
-      definition.asInstanceOf[Seq[(FPath, Traversal.Unk) => Traversal.Domain[U]]],
-      definition.head.asInstanceOf[(FPath, Traversal.Unk) => Traversal.Unk],
+      definition.asInstanceOf[(FPath, Traversal.Unk) => Traversal.Domain[U]],
+      definition.asInstanceOf[(FPath, Traversal.Unk) => Traversal.Unk],
       _ => mapping.reverse.asInstanceOf[Converter[Traversal.UnkG, Traversal.UnkD]]
     )
 }
@@ -57,13 +57,13 @@ class SimpleUpdatePropertyBuilder[E <: Product, P, U](
     propertyName: String,
     fieldName: String,
     mapping: Mapping[P, U, _],
-    definition: Seq[(FPath, Traversal.Unk) => Traversal.Domain[U]]
+    definition: (FPath, Traversal.Unk) => Traversal.Domain[U]
 ) extends UpdatePropertyBuilder[E, P, U](
       isApplicableFn,
       propertyName,
       mapping,
       definition,
-      definition.head,
+      definition,
       _ => mapping.reverse.asInstanceOf[Converter[Traversal.UnkG, Traversal.UnkD]]
     ) {
 
@@ -99,7 +99,7 @@ class UpdatePropertyBuilder[E <: Product, P, U](
     private[query] val isApplicableFn: ru.Type => Boolean,
     private[query] val propertyName: String,
     private[query] val mapping: Mapping[P, U, _],
-    private[query] val definition: Seq[(FPath, Traversal.Unk) => Traversal.Domain[U]],
+    private[query] val definition: (FPath, Traversal.Unk) => Traversal.Domain[U],
     private[query] val filterSelect: (FPath, Traversal.Unk) => Traversal.Unk,
     private[query] val filterConverter: FPath => Converter[Traversal.UnkG, Traversal.UnkD]
 ) {

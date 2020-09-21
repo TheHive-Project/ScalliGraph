@@ -58,13 +58,13 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
         .property("createdBy", UMapping.string)(_.rename("_createdBy").readonly)
         .property("name", UMapping.string)(_.field.updatable)
         .property("lang", UMapping.string)(_.field.updatable)
-        .property("any", UMapping.string)(
-          _.select(
-            _.property[String, String]("_createdBy", UMapping.string),
-            _.property("name", UMapping.string),
-            _.property("lang", UMapping.string)
-          ).readonly
-        )
+//        .property("any", UMapping.string)(
+//          _.select(
+//            _.property[String, String]("_createdBy", UMapping.string),
+//            _.property("name", UMapping.string),
+//            _.property("lang", UMapping.string)
+//          ).readonly
+//        )
         .build
   }
 

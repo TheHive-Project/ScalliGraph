@@ -22,6 +22,7 @@ import scala.language.experimental.macros
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
 
+object NO_VALUE
 object TraversalOps {
   lazy val logger: Logger = Logger(getClass)
 
@@ -138,7 +139,7 @@ object TraversalOps {
       traversal.onRawMap[A, A, IdentityConverter[A]](_.constant(cst))(Converter.identity[A])
 
     def constant2[DD, GG](cst: DD): Traversal[DD, GG, Converter[DD, GG]] =
-      traversal.onRawMap[DD, GG, Converter[DD, GG]](_.constant(1.asInstanceOf[GG]))((_: GG) => cst)
+      traversal.onRawMap[DD, GG, Converter[DD, GG]](_.constant(NO_VALUE.asInstanceOf[GG]))((_: GG) => cst)
 
     def group[DK, DV, GK, GV, CK <: Converter[DK, GK], CV <: Converter[DV, GV]](
         keysBy: GenericBySelector[D, G, C] => ByResult[G, DK, GK, CK],
@@ -272,11 +273,42 @@ object TraversalOps {
     ): Traversal[DU, GU, CC] =
       traversal.onRawMap[DU, GU, CC](_.select(Column.values).asInstanceOf[GraphTraversal[_, GU]])(traversal.converter.subConverterValue)
 
-    def coalesce[DD, GG, CC <: Converter[DD, GG]](f: (Traversal[D, G, C] => Traversal[DD, GG, CC])*): Traversal[DD, GG, CC] = {
-
+    def coalesceMulti[DD, GG](
+        f: (Traversal[D, G, C] => Traversal[DD, GG, _ <: Converter[DD, GG]])*
+    ): Traversal[DD, JMap[String, Any], Converter[DD, JMap[String, Any]]] = {
       val ts = f.map(_(traversal.start))
-      ts.headOption
-        .fold(traversal.limit(0).asInstanceOf[Traversal[DD, GG, CC]])(t => traversal.onRawMap[DD, GG, CC](_.coalesce(ts.map(_.raw): _*))(t.converter))
+      val gt = ts.zipWithIndex.map {
+        case (t, i) => t.raw.project[Any]("coalesceIndex", "coalesceValue").by(__.constant(i)).by()
+      }
+      val cs = ts.map(_.converter)
+      if (ts.isEmpty) traversal.limit(0).asInstanceOf[Traversal[DD, JMap[String, Any], Converter[DD, JMap[String, Any]]]]
+      else
+        traversal.onRawMap[DD, JMap[String, Any], Converter[DD, JMap[String, Any]]](_.coalesce(gt: _*)) { m =>
+          cs(m.get("coalesceIndex").asInstanceOf[Int]).apply(m.get("coalesceValue").asInstanceOf[GG])
+        }
+    }
+
+    def coalesceConv[DD, GG, CC <: Converter[DD, GG]](f: (Traversal[D, G, C] => Traversal[_, GG, _])*)(conv: CC): Traversal[DD, GG, CC] = {
+      val ts = f.map(_(traversal.start).raw)
+      if (ts.isEmpty) traversal.limit(0).asInstanceOf[Traversal[DD, GG, CC]]
+      else
+        traversal.onRawMap[DD, GG, CC](_.coalesce(ts: _*))(conv)
+    }
+
+    def coalesceIdent[GG](f: (Traversal[D, G, C] => Traversal[_, GG, _])*): Traversal[GG, GG, Converter.Identity[GG]] =
+      if (f.isEmpty) traversal.limit(0).asInstanceOf[Traversal[GG, GG, Converter.Identity[GG]]]
+      else
+        traversal.onRawMap[GG, GG, Converter.Identity[GG]](_.coalesce(f.map(_(traversal.start).raw): _*))(Converter.identity[GG])
+
+    def coalesce[DD, GG, CC <: Converter[DD, GG]](
+        f: Traversal[D, G, C] => Traversal[DD, GG, CC],
+        defaultValue: DD
+    ): Traversal[DD, GG, Converter[DD, GG]] = {
+      val t = f(traversal.start)
+      traversal.onRawMap[DD, GG, Converter[DD, GG]](_.coalesce(t.raw, __.constant(NO_VALUE.asInstanceOf[GG]))) {
+        case NO_VALUE => defaultValue
+        case value    => t.converter(value)
+      }
     }
 
     def project[A <: Product](

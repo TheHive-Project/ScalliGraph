@@ -15,7 +15,7 @@ class PublicProperty[P, U](
     val isApplicableFn: ru.Type => Boolean,
     val propertyName: String,
     val mapping: Mapping[P, U, _],
-    definition: Seq[(FPath, Traversal.Unk) => Traversal.Domain[U]],
+    definition: (FPath, Traversal.Unk) => Traversal.Domain[U],
     val fieldsParser: FieldsParser[U],
     val updateFieldsParser: Option[FieldsParser[PropertyUpdater]],
     val filterSelect: (FPath, Traversal.Unk) => Traversal.Unk,
@@ -24,11 +24,7 @@ class PublicProperty[P, U](
   lazy val propertyPath: FPath = FPath(propertyName)
 
   def select(path: FPath, traversal: Traversal.Unk): Traversal.Domain[U] =
-    if (definition.lengthCompare(1) == 0)
-      definition.head(path, traversal)
-    else
-      traversal
-        .coalesce[U, Traversal.UnkG, Converter[U, Traversal.UnkG]](definition.map(t => t(path, _: Traversal.Unk).castDomain[U]): _*)
+    definition(path, traversal)
 
   def get(path: FPath, traversal: Traversal.Unk): Traversal[P, Any, Converter[P, Any]] =
     select(path, traversal).cast[U, Any].fold.domainMap(x => mapping.wrap(x)).cast[P, Any]

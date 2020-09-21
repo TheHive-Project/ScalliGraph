@@ -239,7 +239,7 @@ case class AggSum(aggName: Option[String], fieldName: String, filter: Option[Inp
             .sum
             .domainMap(sum => Output(sum, Json.obj(name -> JsNumber(BigDecimal(sum.toString)))))
             .castDomain[Output[_]],
-        _.constant2(Output(null, JsNull))
+        Output(null, JsNull)
       )
   }
 }
@@ -263,7 +263,7 @@ case class AggAvg(aggName: Option[String], fieldName: String, filter: Option[Inp
             .select(FPath(fieldName), t)
             .mean
             .domainMap(avg => Output(Json.obj(name -> avg.asInstanceOf[Double]))),
-        _.constant2(Output(null, JsNull))
+        Output(null, JsNull)
       )
   }
 }
@@ -288,7 +288,7 @@ case class AggMin(aggName: Option[String], fieldName: String, filter: Option[Inp
             .select(FPath(fieldName), t)
             .min
             .domainMap(min => Output(min, Json.obj(name -> property.mapping.selectRenderer.toJson(min)))),
-        _.constant2(Output(null, JsNull))
+        Output(null, JsNull)
       )
   }
 }
@@ -313,7 +313,7 @@ case class AggMax(aggName: Option[String], fieldName: String, filter: Option[Inp
             .select(FPath(fieldName), t)
             .max
             .domainMap(max => Output(max, Json.obj(name -> property.mapping.selectRenderer.toJson(max)))),
-        _.constant2(Output(null, JsNull))
+        Output(null, JsNull)
       )
   }
 }

@@ -32,9 +32,9 @@ case class InputSort(fieldOrder: (String, Order)*) extends InputQuery[Traversal.
         else
           (_: SortBySelector[Traversal.UnkD, Traversal.UnkG, Converter[Traversal.UnkD, Traversal.UnkG]])
             .by(
-              _.coalesce(
+              _.coalesceIdent(
                 property.select(FPath(fieldName), _),
-                _.constant[Any](property.mapping.noValue).castDomain[Traversal.UnkDU]
+                _.constant(property.mapping.noValue.asInstanceOf[Traversal.UnkDU])
               ),
               order
             )
