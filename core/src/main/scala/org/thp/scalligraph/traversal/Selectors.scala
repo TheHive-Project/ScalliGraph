@@ -18,8 +18,8 @@ class GenericBySelector[D, G, C <: Converter[D, G]](origin: Traversal[D, G, C]) 
 
   def byValue[DD, DU, GG](
       selector: D => DD
-  )(
-      implicit mapping: Mapping[DD, DU, GG],
+  )(implicit
+      mapping: Mapping[DD, DU, GG],
       ev1: D <:< Product with Entity,
       ev2: G <:< Element
   ): ByResult[G, DU, GG, Converter[DU, GG]] = macro TraversalMacro.genericSelectorByValue[G, DD, DU, GG]
@@ -42,8 +42,8 @@ class GroupBySelector[D, G, C <: Converter[D, G]](origin: Traversal[D, G, C]) {
 
   def byValue[DD, DU, GG](
       selector: D => DD
-  )(
-      implicit mapping: Mapping[DD, DU, GG],
+  )(implicit
+      mapping: Mapping[DD, DU, GG],
       ev1: D <:< Product with Entity,
       ev2: G <:< Element
   ): ByResult[G, Seq[DU], JCollection[GG], Converter.CCollection[DU, GG, _ <: Converter[DU, GG]]] =

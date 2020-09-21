@@ -202,7 +202,7 @@ object TraversalOps {
       traversal.onRawMap[DD, GG, CC](_.choose(p, t.raw, f.raw))(t.converter)
     }
     def `match`(
-        elements: (MatchElementBuilder.type => MatchElement[_, _, _, _, _, _])*
+        elements: (MatchElementBuilder.type => MatchElement)*
     ): Traversal[Map[String, Any], JMap[String, Any], CMap[String, Any, String, Any, IdentityConverter[String], IdentityConverter[Any]]] =
       traversal.onRawMap[Map[String, Any], JMap[String, Any], CMap[String, Any, String, Any, IdentityConverter[String], IdentityConverter[Any]]](
         _.`match`(elements.map(_.apply(MatchElementBuilder).traversal): _*)
@@ -488,7 +488,8 @@ object TraversalOps {
     def dedup: Traversal[D, G, C]                              = traversal.onRaw(_.dedup())
     def dedup(labels: StepLabel[_, _, _]*): Traversal[D, G, C] = traversal.onRaw(_.dedup(labels.map(_.name): _*))
 
-    def aggregate(label: StepLabel[D, G, C]): Traversal[D, G, C] = traversal.onRaw(_.aggregate(label.name))
+    def aggregateLocal(label: StepLabel[D, G, C]): Traversal[D, G, C]  = traversal.onRaw(_.aggregate(Scope.local, label.name))
+    def aggregateGlobal(label: StepLabel[D, G, C]): Traversal[D, G, C] = traversal.onRaw(_.aggregate(Scope.global, label.name))
 
     def flatMap[DD, GG, CC <: Converter[DD, GG]](f: Traversal[D, G, C] => Traversal[DD, GG, CC]): Traversal[DD, GG, CC] = {
       val t = f(traversal.start)
