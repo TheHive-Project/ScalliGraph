@@ -18,6 +18,7 @@ import scala.collection.JavaConverters._
 import scala.language.experimental.macros
 import scala.reflect.runtime.{universe => ru}
 import scala.reflect.{classTag, ClassTag}
+import scala.util.Try
 
 object MappingCardinality extends Enumeration {
   val option, single, list, set = Value
@@ -201,7 +202,7 @@ object IdMapping extends Mapping[String, String, AnyRef] {
   override val isReadonly: Boolean                       = true
   override def readonly: Mapping[String, String, AnyRef] = this
 
-  override val reverse: Converter[AnyRef, String] = (v: String) => v
+  override val reverse: Converter[AnyRef, String] = (v: String) => Try(Integer.decode(v)).getOrElse(v)
 
   override def getProperty(element: Element, key: String): String = element.id().toString
 
