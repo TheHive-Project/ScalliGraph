@@ -1,6 +1,7 @@
 package org.thp.scalligraph.auth
 
 import javax.inject.{Inject, Singleton}
+import org.thp.scalligraph.EntityIdOrName
 import org.thp.scalligraph.controllers.AuthenticatedRequest
 import play.api.libs.json.Json
 import play.api.mvc._
@@ -55,7 +56,7 @@ class SessionAuthSrv(
     if (result.header.status / 100 < 4) {
       val newAuthContext = result.header.headers.get("X-Organisation").fold(authContext) { newOrganisation =>
         authContext.changeOrganisation(
-          newOrganisation,
+          EntityIdOrName(newOrganisation),
           Permission(result.header.headers.get("X-Permissions").fold(Set.empty[String])(_.split(',').toSet))
         )
       }
@@ -68,9 +69,10 @@ class SessionAuthSrv(
 
   def getAuthContext[A](request: Request[A]): Option[(AuthContext, AuthContext)] =
     for {
-      authSession <- request
-        .session
-        .get("authContext")
+      authSession <-
+        request
+          .session
+          .get("authContext")
       if expirationStatus(request) != ExpirationStatus.Error
       authContext <- AuthContext.fromJson(request, authSession).toOption
       orgAuthContext <- requestOrganisation(request) match {
@@ -98,7 +100,7 @@ class SessionAuthProvider @Inject() (userSrv: UserSrv, requestOrganisation: Requ
   override val name: String = "session"
   override def apply(config: Configuration): Try[AuthSrv] =
     for {
-      maxSessionInactivity <- config.getOrFail[FiniteDuration]("inactivity") // TODO rename settings
+      maxSessionInactivity <- config.getOrFail[FiniteDuration]("inactivity") // TODO rename settings => timeout
       sessionWarning       <- config.getOrFail[FiniteDuration]("warning")
     } yield new SessionAuthSrv(maxSessionInactivity, sessionWarning, userSrv, requestOrganisation, ec)
 }

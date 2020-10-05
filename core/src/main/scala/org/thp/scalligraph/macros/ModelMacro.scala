@@ -52,7 +52,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
 
       import scala.util.{Failure, Try}
       import org.apache.tinkerpop.gremlin.structure.{Graph, Vertex}
-      import org.thp.scalligraph.InternalError
+      import org.thp.scalligraph.{EntityId, InternalError}
       import org.thp.scalligraph.controllers.FPath
       import org.thp.scalligraph.models.{Database, Entity, IndexType, Mapping, Model, UMapping, VertexModel}
       import org.thp.scalligraph.traversal.Converter
@@ -76,7 +76,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
         override val fields: Map[String, Mapping[_, _, _]] = Map(..$fieldMap)
 
         override val converter: Converter[EEntity, ElementType] = (element: ElementType) => new $entityType(..$domainBuilder) with Entity {
-          val _id        = element.id().toString
+          val _id        = EntityId(element.id())
           val _label     = $label
           val _createdAt = UMapping.date.getProperty(element, "_createdAt")
           val _createdBy = UMapping.string.getProperty(element, "_createdBy")
@@ -86,7 +86,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
 
         override def addEntity(e: $entityType, entity: Entity): EEntity = new $entityType(..${mappings
       .map(m => q"e.${TermName(m.name)}")}) with Entity {
-          override def _id: String                = entity._id
+          override def _id: EntityId              = entity._id
           override def _label: String             = entity._label
           override def _createdBy: String         = entity._createdBy
           override def _updatedBy: Option[String] = entity._updatedBy
@@ -114,7 +114,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
       import scala.util.Try
       import org.apache.tinkerpop.gremlin.structure.{Edge, Graph, Vertex}
 
-      import org.thp.scalligraph.InternalError
+      import org.thp.scalligraph.{EntityId, InternalError}
       import org.thp.scalligraph.controllers.FPath
       import org.thp.scalligraph.models.{Database, EdgeModel, Entity, IndexType, Mapping, MappingCardinality, Model, UMapping}
       import org.thp.scalligraph.traversal.Converter
@@ -137,7 +137,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
         override val fields: Map[String, Mapping[_, _, _]] = Map(..$fieldMap)
 
         override val converter: Converter[EEntity, ElementType] = (edge: ElementType) => new $entityType(..$getProperties) with Entity {
-          val _id        = edge.id().toString
+          val _id        = EntityId(edge.id())
           val _label     = $label
           val _createdAt = UMapping.date.getProperty(edge, "_createdAt")
           val _createdBy = UMapping.string.getProperty(edge, "_createdBy")
@@ -147,7 +147,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
 
         override def addEntity(e: $entityType, entity: Entity): EEntity =
           new $entityType(..${mappings.map(m => q"e.${TermName(m.name)}")}) with Entity {
-            override def _id: String                = entity._id
+            override def _id: EntityId              = entity._id
             override def _label: String             = entity._label
             override def _createdBy: String         = entity._createdBy
             override def _updatedBy: Option[String] = entity._updatedBy

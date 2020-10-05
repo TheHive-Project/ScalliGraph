@@ -2,7 +2,7 @@ package org.thp.scalligraph.models
 
 import javax.inject.{Inject, Singleton}
 import org.apache.tinkerpop.gremlin.process.traversal.P
-import org.apache.tinkerpop.gremlin.structure.Graph
+import org.apache.tinkerpop.gremlin.structure.{Graph, Vertex}
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.services._
@@ -55,9 +55,9 @@ import org.thp.scalligraph.models.ModernOps._
 @Singleton
 class PersonSrv @Inject() (implicit db: Database) extends VertexSrv[Person] {
   def create(e: Person)(implicit graph: Graph, authContext: AuthContext): Try[Person with Entity] = createEntity(e)
-  override def get(idOrNumber: String)(implicit graph: Graph): Traversal.V[Person] =
-    if (db.isValidId(idOrNumber)) startTraversal.getByIds(idOrNumber)
-    else startTraversal.getByName(idOrNumber)
+
+  override def getByName(name: String)(implicit graph: Graph): Traversal.V[Person] =
+    startTraversal.getByName(name)
 }
 
 @Singleton

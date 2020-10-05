@@ -7,6 +7,7 @@ import akka.actor.ActorSystem
 import org.specs2.mock.Mockito
 import org.specs2.mutable.Specification
 import org.specs2.specification.core.{Fragment, Fragments}
+import org.thp.scalligraph.EntityName
 import org.thp.scalligraph.auth.{AuthContextImpl, UserSrv}
 import org.thp.scalligraph.models.{Database, DatabaseProvider, DatabaseProviders}
 import play.api.libs.logback.LogbackLoggerConfigurator
@@ -22,7 +23,7 @@ class StorageSrvTest extends Specification with Mockito {
   private def streamCompare(is1: InputStream, is2: InputStream): Boolean = {
     val n1 = is1.read()
     val n2 = is2.read()
-    println(s"$n1 -- $n2")
+    // println(s"$n1 -- $n2")
     if (n1 == -1 || n2 == -1) n1 == n2
     else (n1 == n2) && streamCompare(is1, is2)
   }
@@ -32,7 +33,7 @@ class StorageSrvTest extends Specification with Mockito {
   val actorSystem: ActorSystem = ActorSystem("AttachmentTest")
   val dbProviders              = new DatabaseProviders(actorSystem)
   val userSrv: UserSrv         = mock[UserSrv]
-  userSrv.getSystemAuthContext returns AuthContextImpl("test", "Test user", "test", "test-request-id", Set.empty)
+  userSrv.getSystemAuthContext returns AuthContextImpl("test", "Test user", EntityName("test"), "test-request-id", Set.empty)
 
   val dbProvStorageSrv: Seq[(DatabaseProvider, StorageSrv)] = dbProviders.list.map { db =>
     db -> new DatabaseStorageSrv(32 * 1024, userSrv, db.get())

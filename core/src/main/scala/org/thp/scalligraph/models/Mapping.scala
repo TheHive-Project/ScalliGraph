@@ -5,20 +5,17 @@ import java.util.{Base64, Date}
 
 import org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality
 import org.apache.tinkerpop.gremlin.structure.{Element, Vertex}
-import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.auth.Permission
 import org.thp.scalligraph.controllers.Renderer
-import org.thp.scalligraph.macros.MappingMacro
 import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.traversal.{BiConverter, Converter, IdentityConverter, Traversal}
 import org.thp.scalligraph.utils.Hash
+import org.thp.scalligraph.{EntityId, InternalError}
 import play.api.libs.json._
 
 import scala.collection.JavaConverters._
-import scala.language.experimental.macros
 import scala.reflect.runtime.{universe => ru}
 import scala.reflect.{classTag, ClassTag}
-import scala.util.Try
 
 object MappingCardinality extends Enumeration {
   val option, single, list, set = Value
@@ -37,39 +34,33 @@ trait UMapping[D] {
 }
 
 trait MappingLowestPrio {
-  implicit def build[T]: UMapping[T] = macro MappingMacro.getOrBuildMapping[T]
+//  implicit def build[T]: UMapping[T] = macro MappingMacro.getOrBuildMapping[T]
 }
 
 trait MappingLowerPrio extends MappingLowestPrio {
-  implicit val json: SingleMapping[JsValue, String] =
-    SingleMapping[JsValue, String](toGraph = j => j.toString, toDomain = s => Json.parse(s))
+  implicit object json extends SingleMapping[JsValue, String](toGraph = j => j.toString, toDomain = s => Json.parse(s))
 }
 
 object UMapping extends MappingLowerPrio {
-  implicit val permissionWrites: Writes[Permission] = Writes.stringableWrites(Predef.identity)
-  implicit val jsObject: SingleMapping[JsObject, String] =
-    SingleMapping[JsObject, String](toGraph = j => j.toString, toDomain = s => Json.parse(s).as[JsObject])
+  def apply[T](implicit mapping: UMapping[T]): UMapping[T] = mapping
+  implicit val permissionWrites: Writes[Permission]        = Writes.stringableWrites(Predef.identity)
+  implicit object jsObject extends SingleMapping[JsObject, String](toGraph = j => j.toString, toDomain = s => Json.parse(s).as[JsObject])
   def identity[T: ClassTag: Renderer: NoValue]: IdentityMapping[T] = IdentityMapping[T]()
-  val id: SingleMapping[String, AnyRef]                            = SingleMapping[String, AnyRef](toGraph = i => Some(i), toDomain = _.toString)
-  implicit val string: IdentityMapping[String]                     = IdentityMapping[String]()
-  implicit val long: SingleMapping[Long, JLong]                    = SingleMapping[Long, JLong](toGraph = Long.box, toDomain = Long.unbox)
-  implicit val int: SingleMapping[Int, JInt]                       = SingleMapping[Int, JInt](toGraph = Int.box, toDomain = Int.unbox)
-  implicit val date: IdentityMapping[Date]                         = IdentityMapping[Date]()
-  implicit val boolean: SingleMapping[Boolean, JBoolean]           = SingleMapping[Boolean, JBoolean](toGraph = Boolean.box, toDomain = Boolean.unbox)
-  implicit val double: SingleMapping[Double, JDouble]              = SingleMapping[Double, JDouble](toGraph = Double.box, toDomain = Double.unbox)
-  implicit val float: SingleMapping[Float, JFloat]                 = SingleMapping[Float, JFloat](toGraph = Float.box, toDomain = Float.unbox)
-  implicit val permission: SingleMapping[Permission, String]       = SingleMapping[Permission, String](toGraph = _.toString, toDomain = Permission.apply)
-  implicit val hash: SingleMapping[Hash, String] = SingleMapping[Hash, String](
-    toGraph = h => h.toString,
-    toDomain = Hash(_)
-  )
-  implicit val binary: SingleMapping[Array[Byte], String] = SingleMapping[Array[Byte], String](
-    toGraph = b => Base64.getEncoder.encodeToString(b),
-    toDomain = s => Base64.getDecoder.decode(s)
-  )
-  implicit def option[D, G](implicit subMapping: SingleMapping[D, G]): OptionMapping[D, G] = subMapping.optional
-  implicit def seq[D, G](implicit subMapping: SingleMapping[D, G]): ListMapping[D, G]      = subMapping.sequence
-  implicit def set[D, G](implicit subMapping: SingleMapping[D, G]): SetMapping[D, G]       = subMapping.set
+  implicit object entityId   extends SingleMapping[EntityId, String](_.toString, EntityId.read)
+  implicit object string     extends IdentityMapping[String]
+  implicit object long       extends SingleMapping[Long, JLong](toGraph = Long.box, toDomain = Long.unbox)
+  implicit object int        extends SingleMapping[Int, JInt](toGraph = Int.box, toDomain = Int.unbox)
+  implicit object date       extends IdentityMapping[Date]
+  implicit object boolean    extends SingleMapping[Boolean, JBoolean](toGraph = Boolean.box, toDomain = Boolean.unbox)
+  implicit object double     extends SingleMapping[Double, JDouble](toGraph = Double.box, toDomain = Double.unbox)
+  implicit object float      extends SingleMapping[Float, JFloat](toGraph = Float.box, toDomain = Float.unbox)
+  implicit object permission extends SingleMapping[Permission, String](toGraph = _.toString, toDomain = Permission.apply)
+  implicit object hash       extends SingleMapping[Hash, String](toGraph = h => h.toString, toDomain = Hash(_))
+  implicit object binary
+      extends SingleMapping[Array[Byte], String](toGraph = b => Base64.getEncoder.encodeToString(b), toDomain = s => Base64.getDecoder.decode(s))
+  implicit def option[D, G](implicit subMapping: SingleMapping[D, G]): OptionMapping[D, G] = OptionMapping(subMapping)
+  implicit def seq[D, G](implicit subMapping: SingleMapping[D, G]): ListMapping[D, G]      = ListMapping(subMapping)
+  implicit def set[D, G](implicit subMapping: SingleMapping[D, G]): SetMapping[D, G]       = SetMapping(subMapping)
   implicit def enum[E <: Enumeration: ClassTag]: SingleMapping[E#Value, String] =
     SingleMapping[E#Value, String](
       _.toString,
@@ -117,15 +108,9 @@ abstract class Mapping[M, D: ClassTag, G: ClassTag: NoValue](
   val domainTypeClass: Class[_] = Option(classTag[D]).fold[Class[_]](classOf[Any])(c => convertToJava(c.runtimeClass))
   val cardinality: MappingCardinality.Value
   val noValue: G = implicitly[NoValue[G]].apply()
-  val isReadonly: Boolean
 
   override def apply(g: G): D           = toDomain(g)
   override val reverse: Converter[G, D] = toGraph(_)
-
-  def sequence: Mapping[Seq[M], M, G]    = throw InternalError(s"Sequence of $this is not supported")
-  def set: Mapping[Set[M], M, G]         = throw InternalError(s"Set of $this is not supported")
-  def optional: Mapping[Option[M], M, G] = throw InternalError(s"Option of $this is not supported")
-  def readonly: Mapping[M, D, G]
 
   def isCompatibleWith(m: Mapping[_, _, _]): Boolean =
     graphTypeClass.equals(m.graphTypeClass) && MappingCardinality.isCompatible(cardinality, m.cardinality)
@@ -150,21 +135,14 @@ abstract class Mapping[M, D: ClassTag, G: ClassTag: NoValue](
   def wrap(us: Seq[D]): M
 }
 
-case class IdentityMapping[T: ClassTag: NoValue: Renderer](override val isReadonly: Boolean = false)
-    extends SingleMapping[T, T](identity[T], identity[T], isReadonly)
-    with IdentityConverter[T] {}
+case class IdentityMapping[T: ClassTag: NoValue: Renderer]() extends SingleMapping[T, T](identity[T], identity[T]) with IdentityConverter[T]
 
-class SingleMapping[D: ClassTag, G: ClassTag: NoValue](
-    toGraph: D => G,
-    toDomain: G => D,
-    override val isReadonly: Boolean = false
-)(implicit renderer: Renderer[D])
+class SingleMapping[D: ClassTag, G: ClassTag: NoValue](toGraph: D => G, toDomain: G => D)(implicit renderer: Renderer[D])
     extends Mapping[D, D, G](toGraph, toDomain) {
   override val cardinality: MappingCardinality.Value = MappingCardinality.single
-  override def readonly: SingleMapping[D, G]         = new SingleMapping[D, G](toGraph, toDomain, isReadonly = true)
-  override def optional: OptionMapping[D, G]         = OptionMapping[D, G](toGraph, toDomain, isReadonly)
-  override def sequence: ListMapping[D, G]           = ListMapping[D, G](toGraph, toDomain, isReadonly)
-  override def set: SetMapping[D, G]                 = SetMapping[D, G](toGraph, toDomain, isReadonly)
+  def optional: OptionMapping[D, G]                  = OptionMapping[D, G](this)
+  def sequence: ListMapping[D, G]                    = ListMapping[D, G](this)
+  def set: SetMapping[D, G]                          = SetMapping[D, G](this)
 
   def getProperty(element: Element, key: String): D = {
     val values = element.properties[G](key)
@@ -185,52 +163,25 @@ class SingleMapping[D: ClassTag, G: ClassTag: NoValue](
       traversal: Traversal[TD, TG, TC],
       key: String,
       value: D
-  ): Traversal[TD, TG, TC] =
-    traversal.onRaw(_.property(key, reverse(value)))
+  ): Traversal[TD, TG, TC] = traversal.onRaw(_.property(key, reverse(value)))
 
   override def wrap(us: Seq[D]): D = us.head
 }
 
 object SingleMapping {
-  def apply[D: ClassTag, G: ClassTag: NoValue](toGraph: D => G, toDomain: G => D, isReadonly: Boolean = false)(implicit renderer: Renderer[D]) =
-    new SingleMapping[D, G](toGraph, toDomain, isReadonly)
+  def apply[D: ClassTag, G: ClassTag: NoValue](toGraph: D => G, toDomain: G => D)(implicit renderer: Renderer[D]) =
+    new SingleMapping[D, G](toGraph, toDomain)
 }
 
-object IdMapping extends Mapping[String, String, AnyRef] {
-  override val cardinality: MappingCardinality.Value     = MappingCardinality.single
-  override def apply(g: AnyRef): String                  = g.toString
-  override val isReadonly: Boolean                       = true
-  override def readonly: Mapping[String, String, AnyRef] = this
-
-  override val reverse: Converter[AnyRef, String] = (v: String) => Try(Integer.decode(v)).getOrElse(v)
-
-  override def getProperty(element: Element, key: String): String = element.id().toString
-
-  override def setProperty(element: Element, key: String, value: String): Unit = throw InternalError("Property ID is readonly")
-
-  override def wrap(us: Seq[String]): String = us.head
-
-  override def setProperty[TD, TG <: Element, TC <: Converter[TD, TG]](
-      traversal: Traversal[TD, TG, TC],
-      key: String,
-      value: String
-  ): Traversal[TD, TG, TC] = throw InternalError("Id attribute is read-only")
-}
-
-case class OptionMapping[D: ClassTag, G: ClassTag: NoValue](
-    toGraph: D => G = (_: D).asInstanceOf[G],
-    toDomain: G => D = (_: G).asInstanceOf[D],
-    isReadonly: Boolean = false
-)(implicit renderer: Renderer[D])
-    extends Mapping[Option[D], D, G](toGraph, toDomain)(
-      implicitly[ClassTag[D]],
-      implicitly[ClassTag[G]],
-      implicitly[NoValue[G]],
-      renderer.opt,
-      renderer
-    ) { thisMapping =>
+case class OptionMapping[D, G](singleMapping: SingleMapping[D, G])
+    extends Mapping[Option[D], D, G](singleMapping.reverse, singleMapping.apply)(
+      ClassTag(singleMapping.domainTypeClass),
+      ClassTag(singleMapping.graphTypeClass),
+      NoValue(singleMapping.noValue),
+      singleMapping.getRenderer.opt,
+      singleMapping.getRenderer
+    ) {
   override val cardinality: MappingCardinality.Value = MappingCardinality.option
-  override def readonly: OptionMapping[D, G]         = copy(isReadonly = true)
   override def getProperty(element: Element, key: String): Option[D] = {
     val values = element.properties[G](key)
     if (values.hasNext) {
@@ -253,26 +204,20 @@ case class OptionMapping[D: ClassTag, G: ClassTag: NoValue](
       traversal: Traversal[TD, TG, TC],
       key: String,
       value: Option[D]
-  ): Traversal[TD, TG, TC] =
-    value.fold(traversal.removeProperty(key))(v => traversal.onRaw(_.property(key, reverse(v))))
+  ): Traversal[TD, TG, TC] = value.fold(traversal.removeProperty(key))(v => traversal.onRaw(_.property(key, reverse(v))))
 
   override def wrap(us: Seq[D]): Option[D] = us.headOption
 }
 
-case class ListMapping[D: ClassTag, G: ClassTag: NoValue](
-    toGraph: D => G = (_: D).asInstanceOf[G],
-    toDomain: G => D = (_: G).asInstanceOf[D],
-    isReadonly: Boolean = false
-)(implicit renderer: Renderer[D])
-    extends Mapping[Seq[D], D, G](toGraph, toDomain)(
-      implicitly[ClassTag[D]],
-      implicitly[ClassTag[G]],
-      implicitly[NoValue[G]],
-      renderer.list,
-      renderer
+case class ListMapping[D, G](singleMapping: SingleMapping[D, G])
+    extends Mapping[Seq[D], D, G](singleMapping.reverse, singleMapping.apply)(
+      ClassTag(singleMapping.domainTypeClass),
+      ClassTag(singleMapping.graphTypeClass),
+      NoValue(singleMapping.noValue),
+      singleMapping.getRenderer.list,
+      singleMapping.getRenderer
     ) {
   override val cardinality: MappingCardinality.Value = MappingCardinality.list
-  override def readonly: ListMapping[D, G]           = copy(isReadonly = true)
 
   override def getProperty(element: Element, key: String): Seq[D] =
     element
@@ -299,21 +244,15 @@ case class ListMapping[D: ClassTag, G: ClassTag: NoValue](
     value.foldLeft(traversal.removeProperty(key))((t, v) => t.onRaw(_.property(Cardinality.list, key, reverse(v))))
 }
 
-case class SetMapping[D: ClassTag: Renderer, G: ClassTag: NoValue](
-    toGraph: D => G = (_: D).asInstanceOf[G],
-    toDomain: G => D = (_: G).asInstanceOf[D],
-    isReadonly: Boolean = false
-)(implicit renderer: Renderer[D])
-    extends Mapping[Set[D], D, G](toGraph, toDomain)(
-      implicitly[ClassTag[D]],
-      implicitly[ClassTag[G]],
-      implicitly[NoValue[G]],
-      renderer.set,
-      renderer
+case class SetMapping[D, G](singleMapping: SingleMapping[D, G])
+    extends Mapping[Set[D], D, G](singleMapping.reverse, singleMapping.apply)(
+      ClassTag(singleMapping.domainTypeClass),
+      ClassTag(singleMapping.graphTypeClass),
+      NoValue(singleMapping.noValue),
+      singleMapping.getRenderer.set,
+      singleMapping.getRenderer
     ) {
   override val cardinality: MappingCardinality.Value = MappingCardinality.set
-  override def readonly: SetMapping[D, G] =
-    SetMapping(toGraph, toDomain, isReadonly = true)(implicitly[ClassTag[D]], renderer, implicitly[ClassTag[G]], implicitly[NoValue[G]], renderer)
 
   override def getProperty(element: Element, key: String): Set[D] =
     element

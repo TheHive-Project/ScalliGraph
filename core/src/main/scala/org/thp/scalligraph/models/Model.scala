@@ -3,7 +3,7 @@ package org.thp.scalligraph.models
 import java.util.Date
 
 import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Graph, Vertex}
-import org.thp.scalligraph.NotFoundError
+import org.thp.scalligraph.{EntityId, NotFoundError}
 import org.thp.scalligraph.macros.ModelMacro
 import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.traversal.{Converter, Traversal}
@@ -34,7 +34,7 @@ trait HasModel {
 //}
 
 trait Entity { _: Product =>
-  def _id: String
+  def _id: EntityId
   def _label: String
   def _createdBy: String
   def _updatedBy: Option[String]
@@ -84,7 +84,7 @@ abstract class Model {
 
   val indexes: Seq[(IndexType.Value, Seq[String])]
 
-  def get(id: String)(implicit db: Database, graph: Graph): ElementType
+  def get(id: EntityId)(implicit db: Database, graph: Graph): ElementType
   val fields: Map[String, Mapping[_, _, _]]
   def addEntity(e: E, entity: Entity): EEntity
   val converter: Converter[EEntity, ElementType]
@@ -170,7 +170,7 @@ abstract class VertexModel extends Model { thisModel =>
 
   def create(e: E)(implicit db: Database, graph: Graph): Vertex
 
-  override def get(id: String)(implicit db: Database, graph: Graph): Vertex =
+  override def get(id: EntityId)(implicit db: Database, graph: Graph): Vertex =
     Traversal.V(id).headOption.getOrElse(throw NotFoundError(s"Vertex $id not found"))
 }
 
@@ -179,10 +179,6 @@ abstract class EdgeModel extends Model { thisModel =>
 
   def create(e: E, from: Vertex, to: Vertex)(implicit db: Database, graph: Graph): Edge
 
-  override def get(id: String)(implicit db: Database, graph: Graph): Edge =
+  override def get(id: EntityId)(implicit db: Database, graph: Graph): Edge =
     Traversal.E(id).headOption.getOrElse(throw NotFoundError(s"Edge $id not found"))
 }
-
-class EdgeEntity[From <: VertexEntity, To <: VertexEntity]
-
-class VertexEntity

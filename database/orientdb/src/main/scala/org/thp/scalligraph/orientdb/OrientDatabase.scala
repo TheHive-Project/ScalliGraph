@@ -256,6 +256,5 @@ class OrientDatabase(
 //    v.property(attachmentPropertyName, chunkIds.asJava)
 //    v
 //  }
-  override def isValidId(id: String): Boolean             = ???
   override def currentTransactionId(graph: Graph): AnyRef = graph
 }

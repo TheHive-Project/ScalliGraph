@@ -205,6 +205,5 @@ class Neo4jDatabase(
 
   override def setOptionProperty[D, G](element: Element, key: String, value: Option[D], mapping: OptionMapping[D, _]): Unit =
     super.setOptionProperty(element, key, value, fixMapping(mapping))
-  override def isValidId(id: String): Boolean             = ???
   override def currentTransactionId(graph: Graph): AnyRef = ???
 }

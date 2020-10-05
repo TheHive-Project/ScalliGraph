@@ -1,14 +1,15 @@
 package org.thp.scalligraph.query
 
 import org.apache.tinkerpop.gremlin.process.traversal.{P, TextP}
+import org.apache.tinkerpop.gremlin.structure.Element
 import org.scalactic.Accumulation._
-import org.scalactic.Good
-import org.thp.scalligraph.BadRequestError
+import org.scalactic.{Bad, Good, One}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.traversal.Traversal
 import org.thp.scalligraph.traversal.TraversalOps._
+import org.thp.scalligraph.{BadRequestError, EntityId, EntityIdOrName, InvalidFormatAttributeError}
 import play.api.Logger
 
 import scala.reflect.runtime.{universe => ru}
@@ -106,7 +107,7 @@ object YesFilter extends InputQuery[Traversal.Unk, Traversal.Unk] {
   ): Traversal.Unk = traversal
 }
 
-class IdFilter(id: String) extends InputQuery[Traversal.Unk, Traversal.Unk] {
+class IdFilter(id: EntityId) extends InputQuery[Traversal.Unk, Traversal.Unk] {
 
   override def apply(
       db: Database,
@@ -114,7 +115,7 @@ class IdFilter(id: String) extends InputQuery[Traversal.Unk, Traversal.Unk] {
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
-  ): Traversal.Unk = traversal.getByIds(id)
+  ): Traversal.Unk = traversal.cast[Traversal.UnkD, Element].getByIds(id).asInstanceOf[Traversal.Unk]
 }
 
 object InputFilter {
@@ -152,7 +153,7 @@ object InputFilter {
 
   def yes: YesFilter.type = YesFilter
 
-  def withId(id: String): InputQuery[Traversal.Unk, Traversal.Unk] = new IdFilter(id)
+  def withId(id: EntityId): InputQuery[Traversal.Unk, Traversal.Unk] = new IdFilter(id)
 
   def like(field: String, value: String): PredicateFilter = {
     val s = value.headOption.contains('*')
@@ -199,8 +200,13 @@ object InputFilter {
       case (_, FObjOne("_startsWith", FDeprecatedObjOne(key, FString(value)))) => Good(startsWith(key, value))
       case (_, FObjOne("_endsWith", FFieldValue(key, FString(value))))         => Good(endsWith(key, value))
       case (_, FObjOne("_endsWith", FDeprecatedObjOne(key, FString(value))))   => Good(endsWith(key, value))
-      case (_, FObjOne("_id", FString(id)))                                    => Good(withId(id))
+      case (_, FObjOne("_id", FString(id))) =>
+        EntityIdOrName(id) match {
+          case entityId: EntityId => Good(withId(entityId))
+          case _                  => Bad(One(InvalidFormatAttributeError("_id", "id", Set.empty, FString(id))))
+        }
       case (_, FObjOne("_between", FFieldFromTo(key, fromField, toField))) =>
+        BadRequestError
         withGood(propParser(key)(fromField), propParser(key)(toField))(between(key, _, _))
       case (_, FObjOne("_string", _)) =>
         logger.warn("string filter is not supported, it is ignored")

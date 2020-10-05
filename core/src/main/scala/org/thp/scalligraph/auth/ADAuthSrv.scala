@@ -6,7 +6,7 @@ import java.util
 import javax.inject.{Inject, Singleton}
 import javax.naming.Context
 import javax.naming.directory._
-import org.thp.scalligraph.{AuthenticationError, AuthorizationError}
+import org.thp.scalligraph.{AuthenticationError, AuthorizationError, EntityIdOrName}
 import play.api.mvc.RequestHeader
 import play.api.{Configuration, Logger}
 
@@ -19,8 +19,8 @@ class ADAuthSrv(adConfig: ADConfig, userSrv: UserSrv) extends AuthSrv {
   val name: String                                     = "ad"
   override val capabilities: Set[AuthCapability.Value] = Set(AuthCapability.changePassword)
 
-  override def authenticate(username: String, password: String, organisation: Option[String], code: Option[String])(
-      implicit request: RequestHeader
+  override def authenticate(username: String, password: String, organisation: Option[EntityIdOrName], code: Option[String])(implicit
+      request: RequestHeader
   ): Try[AuthContext] =
     connect(adConfig.winDomain + "\\" + username, password)(_ => Success(()))
       .flatMap(_ => userSrv.getAuthContext(request, username, organisation))
@@ -51,12 +51,13 @@ class ADAuthSrv(adConfig: ADConfig, userSrv: UserSrv) extends AuthSrv {
   private val noADServerAvailableException = AuthenticationError("No AD server found")
 
   @scala.annotation.tailrec
-  private def isFatal(t: Throwable): Boolean = t match {
-    case null                           => true
-    case `noADServerAvailableException` => false
-    case _: ConnectException            => false
-    case _                              => isFatal(t.getCause)
-  }
+  private def isFatal(t: Throwable): Boolean =
+    t match {
+      case null                           => true
+      case `noADServerAvailableException` => false
+      case _: ConnectException            => false
+      case _                              => isFatal(t.getCause)
+    }
 
   private def connect[A](username: String, password: String)(f: InitialDirContext => Try[A]): Try[A] =
     adConfig.hosts.foldLeft[Try[A]](Failure(noADServerAvailableException)) {

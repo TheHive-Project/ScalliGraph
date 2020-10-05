@@ -8,7 +8,7 @@ import akka.stream.scaladsl.Source
 import org.apache.tinkerpop.gremlin.process.traversal.P
 import org.apache.tinkerpop.gremlin.structure.Transaction.Status
 import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Graph, Vertex}
-import org.thp.scalligraph.InternalError
+import org.thp.scalligraph.{EntityId, InternalError}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.traversal.{Converter, Traversal}
@@ -45,7 +45,7 @@ trait Database {
 
   def version(module: String): Int
   def setVersion(module: String, v: Int): Try[Unit]
-  def isValidId(id: String): Boolean
+  val idMapping: Mapping[EntityId, EntityId, AnyRef]
 
   def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Try[Unit]
   def createSchema(model: Model, models: Model*): Try[Unit] = createSchema(model +: models)
@@ -53,7 +53,7 @@ trait Database {
   def addSchemaIndexes(schemaObject: Schema): Try[Unit]
   def addSchemaIndexes(model: Model, models: Model*): Try[Unit] = addSchemaIndexes(model +: models)
   def addSchemaIndexes(models: Seq[Model]): Try[Unit]
-  def addProperty[T](model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit]
+  def addProperty(model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit]
   def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit]
   def addIndex(model: String, indexType: IndexType.Value, properties: Seq[String]): Try[Unit]
   def enableIndexes(): Try[Unit]
@@ -138,9 +138,10 @@ abstract class BaseDatabase extends Database {
 
   private var callbacks: List[(AnyRef, () => Try[Unit])] = Nil
 
-  def addCallback(callback: () => Try[Unit])(implicit graph: Graph): Unit = synchronized {
-    callbacks = (currentTransactionId(graph) -> callback) :: callbacks
-  }
+  def addCallback(callback: () => Try[Unit])(implicit graph: Graph): Unit =
+    synchronized {
+      callbacks = (currentTransactionId(graph) -> callback) :: callbacks
+    }
 
   def takeCallbacks(graph: Graph): List[() => Try[Unit]] = {
     val tx = currentTransactionId(graph)
@@ -170,7 +171,7 @@ abstract class BaseDatabase extends Database {
       _updatedBy: Option[String] = None,
       _updatedAt: Option[Date] = None
   ) extends Entity {
-    val _id: String = id.toString
+    val _id: EntityId = EntityId(id)
   }
 
   override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
@@ -243,7 +244,7 @@ object Binary {
       val attachmentId = UMapping.string.optional.getProperty(element, "attachmentId")
 
       new Binary(attachmentId, folder, data) with Entity {
-        override def _id: String                = element.id().toString
+        override def _id: EntityId              = EntityId(element.id())
         override val _label: String             = "Binary"
         override def _createdBy: String         = ""
         override def _updatedBy: Option[String] = None
@@ -254,7 +255,7 @@ object Binary {
 
     override def addEntity(binary: Binary, entity: Entity): EEntity =
       new Binary(binary.attachmentId, binary.folder, binary.data) with Entity {
-        override def _id: String                = entity._id
+        override def _id: EntityId              = entity._id
         override def _label: String             = entity._label
         override def _createdBy: String         = entity._createdBy
         override def _updatedBy: Option[String] = entity._updatedBy
@@ -274,7 +275,7 @@ object BinaryLink {
 
     override val converter: Converter[BinaryLink with Entity, Edge] = (element: Edge) =>
       new BinaryLink with Entity {
-        override def _id: String                = element.id().toString
+        override def _id: EntityId              = EntityId(element.id())
         override val _label: String             = "NextChunk"
         override def _createdBy: String         = ""
         override def _updatedBy: Option[String] = None
@@ -282,13 +283,14 @@ object BinaryLink {
         override def _updatedAt: Option[Date]   = None
       }
 
-    override def addEntity(binaryLink: BinaryLink, entity: Entity): EEntity = new BinaryLink with Entity {
-      override def _id: String                = entity._id
-      override def _label: String             = entity._label
-      override def _createdBy: String         = entity._createdBy
-      override def _updatedBy: Option[String] = entity._updatedBy
-      override def _createdAt: Date           = entity._createdAt
-      override def _updatedAt: Option[Date]   = entity._updatedAt
-    }
+    override def addEntity(binaryLink: BinaryLink, entity: Entity): EEntity =
+      new BinaryLink with Entity {
+        override def _id: EntityId              = entity._id
+        override def _label: String             = entity._label
+        override def _createdBy: String         = entity._createdBy
+        override def _updatedBy: Option[String] = entity._updatedBy
+        override def _createdAt: Date           = entity._createdAt
+        override def _updatedAt: Option[Date]   = entity._updatedAt
+      }
   }
 }

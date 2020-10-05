@@ -6,7 +6,7 @@ import java.util
 import javax.inject.{Inject, Singleton}
 import javax.naming.Context
 import javax.naming.directory._
-import org.thp.scalligraph.{AuthenticationError, AuthorizationError}
+import org.thp.scalligraph.{AuthenticationError, AuthorizationError, EntityIdOrName}
 import play.api.mvc.RequestHeader
 import play.api.{Configuration, Logger}
 
@@ -19,8 +19,8 @@ class LdapAuthSrv(ldapConfig: LdapConfig, userSrv: UserSrv) extends AuthSrv {
   val name                                             = "ldap"
   override val capabilities: Set[AuthCapability.Value] = Set(AuthCapability.changePassword)
 
-  override def authenticate(username: String, password: String, organisation: Option[String], code: Option[String])(
-      implicit request: RequestHeader
+  override def authenticate(username: String, password: String, organisation: Option[EntityIdOrName], code: Option[String])(implicit
+      request: RequestHeader
   ): Try[AuthContext] =
     connect(ldapConfig.bindDN, ldapConfig.bindPW)(ctx => getUserDN(ctx, username))
       .flatMap(userDN => connect(userDN, password)(_ => Success(())))
@@ -48,12 +48,13 @@ class LdapAuthSrv(ldapConfig: LdapConfig, userSrv: UserSrv) extends AuthSrv {
   private val noLdapServerAvailableException = AuthenticationError("No LDAP server found")
 
   @scala.annotation.tailrec
-  private def isFatal(t: Throwable): Boolean = t match {
-    case null                             => true
-    case `noLdapServerAvailableException` => false
-    case _: ConnectException              => false
-    case _                                => isFatal(t.getCause)
-  }
+  private def isFatal(t: Throwable): Boolean =
+    t match {
+      case null                             => true
+      case `noLdapServerAvailableException` => false
+      case _: ConnectException              => false
+      case _                                => isFatal(t.getCause)
+    }
 
   private def connect[A](username: String, password: String)(f: InitialDirContext => Try[A]): Try[A] =
     ldapConfig.hosts.foldLeft[Try[A]](Failure(noLdapServerAvailableException)) {

@@ -2,7 +2,7 @@ package org.thp.scalligraph.auth
 
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.controllers.AuthenticatedRequest
-import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError}
+import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError, EntityIdOrName}
 import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
 import play.api.{ConfigLoader, Configuration}
 
@@ -16,7 +16,7 @@ object AuthCapability extends Enumeration {
 
 @Singleton
 class RequestOrganisation(header: Option[String], parameter: Option[String], pathSegment: Option[Regex], cookie: Option[String])
-    extends (Request[_] => Option[String]) {
+    extends (Request[_] => Option[EntityIdOrName]) {
   @Inject() def this(configuration: Configuration) =
     this(
       configuration.getOptional[String]("auth.organisationHeader"),
@@ -24,11 +24,11 @@ class RequestOrganisation(header: Option[String], parameter: Option[String], pat
       configuration.getOptional[String]("auth.organisationPathExtractor").map(_.r),
       configuration.getOptional[String]("auth.organisationCookieName")
     )
-  override def apply(request: Request[_]): Option[String] =
-    header.flatMap(request.headers.get(_)) orElse
+  override def apply(request: Request[_]): Option[EntityIdOrName] =
+    (header.flatMap(request.headers.get(_)) orElse
       parameter.flatMap(request.queryString.getOrElse(_, Nil).headOption) orElse
       pathSegment.flatMap(r => r.findFirstMatchIn(request.path).flatMap(m => Option(m.group(0)))) orElse
-      cookie.flatMap(request.cookies.get).map(_.value)
+      cookie.flatMap(request.cookies.get).map(_.value)).map(EntityIdOrName.apply)
 }
 
 trait AuthSrvProvider extends (Configuration => Try[AuthSrv]) {
@@ -49,12 +49,12 @@ trait AuthSrv {
   def actionFunction(nextFunction: ActionFunction[Request, AuthenticatedRequest]): ActionFunction[Request, AuthenticatedRequest] =
     nextFunction
 
-  def authenticate(username: String, password: String, organisation: Option[String], code: Option[String])(
-      implicit request: RequestHeader
+  def authenticate(username: String, password: String, organisation: Option[EntityIdOrName], code: Option[String])(implicit
+      request: RequestHeader
   ): Try[AuthContext] =
     Failure(AuthenticationError("Operation not supported"))
 
-  def authenticate(key: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
+  def authenticate(key: String, organisation: Option[EntityIdOrName])(implicit request: RequestHeader): Try[AuthContext] =
     Failure(AuthenticationError("Operation not supported"))
 
   def setSessionUser(authContext: AuthContext): Result => Result = identity

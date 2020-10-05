@@ -1,7 +1,7 @@
 package org.thp.scalligraph.models
 
 import org.specs2.specification.core.Fragments
-import org.thp.scalligraph.BuildVertexEntity
+import org.thp.scalligraph.{BuildVertexEntity, EntityName}
 import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
@@ -13,7 +13,7 @@ case class EntityWithUniqueName(name: String, value: Int)
 
 class IndexTest extends PlaySpecification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
-  val authContext: AuthContext = AuthContextImpl("me", "", "", "", Set.empty)
+  val authContext: AuthContext = AuthContextImpl("me", "", EntityName(""), "", Set.empty)
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
     implicit val db: Database = dbProvider.get()

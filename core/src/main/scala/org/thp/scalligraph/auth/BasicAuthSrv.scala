@@ -30,9 +30,11 @@ class BasicAuthSrv(realm: Option[String], authSrv: AuthSrv, requestOrganisation:
           decodedAuth.split(":")
       }
       .flatMap {
-        case Array(username, password)       => authSrv.authenticate(username, password, requestOrganisation(request), None)(request).toOption
-        case Array(username, password, code) => authSrv.authenticate(username, password, requestOrganisation(request), Some(code))(request).toOption
-        case _                               => None
+        case Array(username, password) =>
+          authSrv.authenticate(username, password, requestOrganisation(request), None)(request).toOption
+        case Array(username, password, code) =>
+          authSrv.authenticate(username, password, requestOrganisation(request), Some(code))(request).toOption
+        case _ => None
       }
 
   def addAuthenticateHeader[A](request: Request[A], result: Future[Result]): Future[Result] =

@@ -10,7 +10,7 @@ import org.thp.scalligraph.controllers.Renderer
 import org.thp.scalligraph.macros.TraversalMacro
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.traversal.Converter.CMap
-import org.thp.scalligraph.{AuthorizationError, InternalError, NotFoundError}
+import org.thp.scalligraph.{AuthorizationError, EntityId, InternalError, NotFoundError}
 import play.api.Logger
 import shapeless.ops.hlist.{Mapper, RightFolder, ToTraversable, Tupler}
 import shapeless.syntax.std.tuple._
@@ -401,7 +401,7 @@ object TraversalOps {
 
             override def productArity: Int = 0
 
-            override val _id: String                = element.id().toString
+            override val _id: EntityId              = EntityId(element.id())
             override val _label: String             = element.label()
             override val _createdBy: String         = UMapping.string.getProperty(element, "_createdBy")
             override val _updatedBy: Option[String] = UMapping.string.optional.getProperty(element, "_updatedBy")
@@ -471,13 +471,9 @@ object TraversalOps {
     def _updatedBy(implicit ev: G <:< Element): Traversal[String, String, Converter[String, String]] = property("_updatedBy", UMapping.string)
     def _updatedAt(implicit ev: G <:< Element): Traversal[Date, Date, Converter[Date, Date]]         = property("_updatedAt", UMapping.date)
 
-    def getByIds(ids: String*): Traversal[D, G, C] =
-      traversal.onRaw(t =>
-        ids.headOption match {
-          case Some(i) => t.hasId(i, ids.tail: _*)
-          case None    => t.limit(0)
-        }
-      )
+    def getEntity(entity: D with Entity)(implicit ev: G <:< Element): Traversal[D, G, C] = getByIds(entity._id)
+    def getElement(element: Element): Traversal[D, G, C]                                 = traversal.onRaw(_.hasId(element.id()))
+    def getByIds(ids: EntityId*)(implicit ev: G <:< Element): Traversal[D, G, C]         = hasId(ids: _*)
 
     def page(from: Long, to: Long, withTotal: Boolean)(implicit renderer: Renderer[D]): IteratorOutput = richPage(from, to, withTotal)(identityFn)
 

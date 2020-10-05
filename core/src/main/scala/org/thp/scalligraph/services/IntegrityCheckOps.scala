@@ -2,6 +2,7 @@ package org.thp.scalligraph.services
 
 import org.apache.tinkerpop.gremlin.process.traversal.P
 import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Graph, Vertex}
+import org.thp.scalligraph.EntityId
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.{Database, Entity, IndexType, UMapping}
 import org.thp.scalligraph.traversal.TraversalOps._
@@ -34,13 +35,13 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
         if (singleProperty) (_: Vertex).value[Any](properties.head)
         else (v: Vertex) => properties.map(v.property[Any](_).orElse(noValue))
       db.roTransaction { implicit graph =>
-        val map = mutable.Map.empty[Any, mutable.Buffer[String]]
+        val map = mutable.Map.empty[Any, mutable.Buffer[EntityId]]
         service
           .startTraversal
           .setConverter[Vertex, IdentityConverter[Vertex]](Converter.identity)
           .toIterator
           .foreach { v =>
-            map.getOrElseUpdate(getValues(v), mutable.Buffer.empty[String]) += v.id.toString
+            map.getOrElseUpdate(getValues(v), mutable.Buffer.empty[EntityId]) += EntityId(v.id)
           }
         map
           .values
@@ -56,9 +57,9 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
     service.get(from).outE().toSeq.filter(predicate).foreach { edge =>
       val props = edge.properties[Any]().asScala.map(p => p.key() -> p.value())
       val label = edge.label()
-      logger.debug(s"create edge from $toVertex to ${Traversal.E(edge.id().toString).inV.head} with properties: $props")
+      logger.debug(s"create edge from $toVertex to ${Traversal.E(EntityId(edge.id())).inV.head} with properties: $props")
       val rawTraversal = Traversal
-        .E(edge.id().toString)
+        .E(EntityId(edge.id()))
         .inV
         .raw
       props
@@ -70,9 +71,9 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
     service.get(from).inE().toSeq.filter(predicate).foreach { edge =>
       val props = edge.properties[Any]().asScala.map(p => p.key() -> p.value()).toSeq
       val label = edge.label()
-      logger.debug(s"create edge from ${Traversal.E(edge.id().toString).outV.head} to $toVertex with properties: $props")
+      logger.debug(s"create edge from ${Traversal.E(EntityId(edge.id())).outV.head} to $toVertex with properties: $props")
       val rawTraversal = Traversal
-        .E(edge.id().toString)
+        .E(EntityId(edge.id()))
         .outV
         .raw
       props
@@ -85,13 +86,13 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
 
   def removeVertices(vertices: Seq[Vertex])(implicit graph: Graph): Unit =
     if (vertices.nonEmpty) {
-      Traversal.V(vertices.map(_.id().toString).distinct: _*).remove()
+      Traversal.V(vertices.map(v => EntityId(v.id())).distinct: _*).remove()
       ()
     }
 
   def removeEdges(edges: Seq[Edge])(implicit graph: Graph): Unit =
     if (edges.nonEmpty) {
-      Traversal.E(edges.map(_.id().toString).distinct: _*).remove()
+      Traversal.E(edges.map(e => EntityId(e.id())).distinct: _*).remove()
       ()
     }
 

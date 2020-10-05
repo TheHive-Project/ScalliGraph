@@ -5,7 +5,7 @@ import java.util.UUID
 import com.google.inject.Provider
 import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.controllers.AuthenticatedRequest
-import org.thp.scalligraph.{AuthenticationError, BadConfigurationError, BadRequestError, CreateError, NotFoundError}
+import org.thp.scalligraph.{AuthenticationError, BadConfigurationError, BadRequestError, CreateError, EntityName, NotFoundError}
 import play.api.libs.json.JsObject
 import play.api.libs.ws.WSClient
 import play.api.mvc._
@@ -40,8 +40,8 @@ class OAuth2Srv(
     userSrv: UserSrv,
     WSClient: WSClient,
     sessionAuthProvider: Provider[AuthSrv]
-)(
-    implicit ec: ExecutionContext
+)(implicit
+    ec: ExecutionContext
 ) extends AuthSrv {
   lazy val logger: Logger          = Logger(getClass)
   lazy val sessionAuthSrv: AuthSrv = sessionAuthProvider.get()
@@ -64,20 +64,20 @@ class OAuth2Srv(
               if (!isSecuredAuthCode(request)) {
                 logger.debug("Code or state is not provided, redirect to authorizationUrl")
                 Future.successful(authRedirect())
-              } else {
+              } else
                 for {
                   token    <- getToken(request)
                   userData <- getUserData(token)
-                  authReq <- Future
-                    .fromTry(authenticate(request, userData))
-                    .recoverWith {
-                      case _: NotFoundError => Future.fromTry(createUser(request, userData))
-                    }
-                    .recoverWith {
-                      case _: CreateError => Future.failed(NotFoundError("User not found"))
-                    }
+                  authReq <-
+                    Future
+                      .fromTry(authenticate(request, userData))
+                      .recoverWith {
+                        case _: NotFoundError => Future.fromTry(createUser(request, userData))
+                      }
+                      .recoverWith {
+                        case _: CreateError => Future.failed(NotFoundError("User not found"))
+                      }
                 } yield sessionAuthSrv.setSessionUser(authReq.authContext)(Results.Found(httpContext))
-              }
 
             case x => Future.failed(BadConfigurationError(s"OAuth GrantType $x not supported yet"))
           }
@@ -126,18 +126,16 @@ class OAuth2Srv(
         state   <- request.session.get("state")
         stateQs <- request.queryString.get("state").flatMap(_.headOption)
         if state == stateQs
-      } yield {
-        request.queryString.get("code").flatMap(_.headOption) match {
-          case Some(code) =>
-            logger.debug(s"Attempting to retrieve OAuth2 token from ${OAuth2Config.tokenUrl} with code $code")
-            getAuthTokenFromCode(code, state)
-              .map { t =>
-                logger.trace(s"Got token $t")
-                t
-              }
-          case None =>
-            Future.failed(AuthenticationError(s"OAuth2 server code missing ${request.queryString.get("error")}"))
-        }
+      } yield request.queryString.get("code").flatMap(_.headOption) match {
+        case Some(code) =>
+          logger.debug(s"Attempting to retrieve OAuth2 token from ${OAuth2Config.tokenUrl} with code $code")
+          getAuthTokenFromCode(code, state)
+            .map { t =>
+              logger.trace(s"Got token $t")
+              t
+            }
+        case None =>
+          Future.failed(AuthenticationError(s"OAuth2 server code missing ${request.queryString.get("error")}"))
       }
     token.getOrElse(Future.failed(BadRequestError("OAuth2 states mismatch")))
   }
@@ -198,7 +196,7 @@ class OAuth2Srv(
   private def authenticate[A](request: Request[A], userData: JsObject): Try[AuthenticatedRequest[A]] =
     for {
       userId      <- getUserId(userData)
-      authContext <- userSrv.getAuthContext(request, userId, getUserOrganisation(userData))
+      authContext <- userSrv.getAuthContext(request, userId, getUserOrganisation(userData).map(EntityName.apply))
     } yield new AuthenticatedRequest[A](authContext, request)
 
   private def getUserOrganisation(jsonUser: JsObject): Option[String] =

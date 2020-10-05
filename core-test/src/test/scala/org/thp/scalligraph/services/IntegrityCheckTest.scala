@@ -2,11 +2,11 @@ package org.thp.scalligraph.services
 
 import org.apache.tinkerpop.gremlin.structure.Graph
 import org.specs2.specification.core.Fragments
-import org.thp.scalligraph.AppBuilder
 import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
 import org.thp.scalligraph.models.ModernOps._
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.traversal.TraversalOps._
+import org.thp.scalligraph.{AppBuilder, EntityName}
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
@@ -15,7 +15,7 @@ import scala.util.{Success, Try}
 
 class IntegrityCheckTest extends PlaySpecification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
-  implicit val authContext: AuthContext = AuthContextImpl("me", "", "", "", Set.empty)
+  implicit val authContext: AuthContext = AuthContextImpl("me", "", EntityName(""), "", Set.empty)
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
     s"[${dbProvider.name}] integrity check" should {
@@ -29,7 +29,7 @@ class IntegrityCheckTest extends PlaySpecification {
         ModernDatabaseBuilder.build(app[ModernSchema])(app[Database], authContext)
         val newLop = db.tryTransaction { implicit graph =>
           val lop   = softwareSrv.create(Software("lop", "asm")).get
-          val vadas = personSrv.get("vadas").head
+          val vadas = personSrv.getByName("vadas").head
           createdSrv
             .create(Created(0.1), vadas, lop)
             .map(_ => lop)

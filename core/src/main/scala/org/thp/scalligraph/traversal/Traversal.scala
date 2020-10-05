@@ -3,6 +3,7 @@ package org.thp.scalligraph.traversal
 import org.apache.tinkerpop.gremlin.process.traversal.Traverser
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, DefaultGraphTraversal, GraphTraversal}
 import org.apache.tinkerpop.gremlin.structure.{Edge, Graph, Vertex}
+import org.thp.scalligraph.EntityId
 import org.thp.scalligraph.models.Entity
 
 import scala.language.existentials
@@ -20,10 +21,10 @@ object Traversal {
   type SomeDomain[D] = Traversal[D, G, C] forSome { type G; type C <: Converter[D, G] }
   type Domain[D]     = Traversal[D, UnkG, Converter[D, UnkG]]
 
-  def V(vertexIds: String*)(implicit graph: Graph) =
-    new Traversal[Vertex, Vertex, IdentityConverter[Vertex]](graph.traversal().V(vertexIds: _*), Converter.identity)
-  def E(edgeIds: String*)(implicit graph: Graph) =
-    new Traversal[Edge, Edge, IdentityConverter[Edge]](graph.traversal().E(edgeIds: _*), Converter.identity)
+  def V(vertexIds: EntityId*)(implicit graph: Graph) =
+    new Traversal[Vertex, Vertex, IdentityConverter[Vertex]](graph.traversal().V(vertexIds.map(_.value): _*), Converter.identity)
+  def E(edgeIds: EntityId*)(implicit graph: Graph) =
+    new Traversal[Edge, Edge, IdentityConverter[Edge]](graph.traversal().E(edgeIds.map(_.value): _*), Converter.identity)
   def empty[T](implicit graph: Graph) =
     new Traversal[T, T, IdentityConverter[T]](graph.traversal().inject[T](), Converter.identity)
   def union[D, G, C <: Converter[D, G]](t: (Traversal[Vertex, Vertex, IdentityConverter[Vertex]] => Traversal[D, G, C])*)(implicit

@@ -1,5 +1,6 @@
 package org.thp.scalligraph.models
 
+import org.thp.scalligraph.{EntityIdOrName, EntityName}
 import org.thp.scalligraph.auth._
 import play.api.libs.json.JsObject
 import play.api.mvc.RequestHeader
@@ -14,8 +15,10 @@ case class DummyUserSrv(
     requestId: String = "testRequest"
 ) extends UserSrv { userSrv =>
 
-  val authContext: AuthContext                                                                                            = AuthContextImpl(userSrv.userId, userSrv.userName, userSrv.organisation, userSrv.requestId, userSrv.permissions)
-  override def getAuthContext(request: RequestHeader, userId: String, organisationName: Option[String]): Try[AuthContext] = Success(authContext)
+  val authContext: AuthContext =
+    AuthContextImpl(userSrv.userId, userSrv.userName, EntityName(userSrv.organisation), userSrv.requestId, userSrv.permissions)
+  override def getAuthContext(request: RequestHeader, userId: String, organisationName: Option[EntityIdOrName]): Try[AuthContext] =
+    Success(authContext)
 
   override def getSystemAuthContext: AuthContext = authContext
 

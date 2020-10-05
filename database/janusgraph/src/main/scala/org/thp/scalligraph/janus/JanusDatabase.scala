@@ -23,18 +23,20 @@ import org.janusgraph.diskstorage.locking.PermanentLockingException
 import org.janusgraph.graphdb.database.StandardJanusGraph
 import org.janusgraph.graphdb.database.management.ManagementSystem
 import org.janusgraph.graphdb.olap.job.IndexRepairJob
+import org.janusgraph.graphdb.relations.RelationIdentifier
 import org.slf4j.MDC
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.models._
+import org.thp.scalligraph.models.{MappingCardinality, _}
 import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.traversal.{Converter, Traversal}
 import org.thp.scalligraph.utils.{Config, Retry}
-import org.thp.scalligraph.{InternalError, NotFoundError}
+import org.thp.scalligraph.{EntityId, InternalError, NotFoundError}
 import play.api.{Configuration, Environment}
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
+import scala.tools.nsc.interpreter.JCollection
 import scala.util.{Failure, Success, Try}
 
 object JanusDatabase {
@@ -124,9 +126,22 @@ class JanusDatabase(
       Success(())
     }
 
-  def close(): Unit = janusGraph.close()
+  override def close(): Unit = janusGraph.close()
 
-  def isValidId(id: String): Boolean = id.forall(_.isDigit)
+  private def parseId(s: String): AnyRef = Try(JLong.valueOf(s)).getOrElse(RelationIdentifier.parse(s))
+  override val idMapping: Mapping[EntityId, EntityId, AnyRef] = new Mapping[EntityId, EntityId, AnyRef](id => parseId(id.value), EntityId.apply) {
+    override val cardinality: MappingCardinality.Value                = MappingCardinality.single
+    override def getProperty(element: Element, key: String): EntityId = throw InternalError(s"ID mapping can't be used for attribute $key")
+    override def setProperty(element: Element, key: String, value: EntityId): Unit =
+      throw InternalError(s"ID mapping can't be used for attribute $key")
+    override def setProperty[TD, TG <: Element, TC <: Converter[TD, TG]](
+        traversal: Traversal[TD, TG, TC],
+        key: String,
+        value: EntityId
+    ): Traversal[TD, TG, TC] =
+      throw InternalError(s"ID mapping can't be used for attribute $key")
+    override def wrap(us: Seq[EntityId]): EntityId = us.head
+  }
 
   override def roTransaction[R](body: Graph => R): R = {
     val graph             = janusGraph.buildTransaction().readOnly().start()
@@ -355,7 +370,7 @@ class JanusDatabase(
           }
       }
 
-  def addProperty[T](model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit] =
+  def addProperty(model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit] =
     managementTransaction { mgmt =>
       addProperty(mgmt, propertyName, mapping)
     }
@@ -596,7 +611,7 @@ class JanusDatabase(
   override def labelFilter[D, G <: Element, C <: Converter[D, G]](label: String): Traversal[D, G, C] => Traversal[D, G, C] =
     _.onRaw(_.has("_label", label).hasLabel(label))
 
-  override def mapPredicate[T](predicate: P[T]): P[T] =
+  override def mapPredicate[V](predicate: P[V]): P[V] =
     predicate.getBiPredicate match {
       case Text.containing    => JanusText.textContains(predicate.getValue)
       case Text.notContaining => JanusText.textContains(predicate.getValue).negate()

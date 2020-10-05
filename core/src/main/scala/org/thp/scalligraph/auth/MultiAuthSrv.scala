@@ -4,7 +4,7 @@ import javax.inject.{Inject, Provider, Singleton}
 import org.thp.scalligraph.controllers.AuthenticatedRequest
 import org.thp.scalligraph.services.config.ApplicationConfig.configurationFormat
 import org.thp.scalligraph.services.config.{ApplicationConfig, ConfigItem}
-import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError, RichSeq}
+import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError, EntityIdOrName, RichSeq}
 import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
 import play.api.{Configuration, Logger}
 
@@ -65,8 +65,8 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
   override def actionFunction(nextFunction: ActionFunction[Request, AuthenticatedRequest]): ActionFunction[Request, AuthenticatedRequest] =
     authProviders.foldRight(nextFunction)((authSrv, af) => authSrv.actionFunction(af))
 
-  override def authenticate(username: String, password: String, organisation: Option[String], code: Option[String])(
-      implicit request: RequestHeader
+  override def authenticate(username: String, password: String, organisation: Option[EntityIdOrName], code: Option[String])(implicit
+      request: RequestHeader
   ): Try[AuthContext] =
     forAllAuthProvider(authProviders)(_.authenticate(username, password, organisation, code))
       .recoverWith {
@@ -75,7 +75,7 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
           Failure(AuthenticationError("Authentication failure"))
       }
 
-  override def authenticate(key: String, organisation: Option[String])(implicit request: RequestHeader): Try[AuthContext] =
+  override def authenticate(key: String, organisation: Option[EntityIdOrName])(implicit request: RequestHeader): Try[AuthContext] =
     forAllAuthProvider(authProviders)(_.authenticate(key, organisation))
       .recoverWith {
         case authError =>

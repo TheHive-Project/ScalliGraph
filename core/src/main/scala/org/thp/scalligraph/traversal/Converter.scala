@@ -3,6 +3,7 @@ package org.thp.scalligraph.traversal
 import java.lang.{Double => JDouble, Long => JLong}
 import java.util.{Collection => JCollection, List => JList, Map => JMap}
 
+import org.apache.tinkerpop.gremlin.process.traversal.P
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__
 
 import scala.collection.JavaConverters._
@@ -12,8 +13,21 @@ trait BiConverter[D, G] extends Converter[D, G] {
 }
 
 trait Converter[+D, G] extends (G => D) {
-  def untypedApply(g: Any): Any                  = apply(g.asInstanceOf[G])
   def startTraversal: Traversal[D, G, this.type] = new Traversal[D, G, this.type](__.start[G](), this)
+  def apply(predicate: P[G]): P[_] =
+    Option(predicate.getValue).fold(predicate.asInstanceOf[P[D]]) {
+      case c: JCollection[_] =>
+        if (c.isEmpty) predicate.asInstanceOf[P[D]]
+        else {
+          val p = predicate.clone().asInstanceOf[P[D]]
+          p.setValue(c.asScala.map(v => apply(v.asInstanceOf[G])).asJavaCollection.asInstanceOf[D])
+          p
+        }
+      case v =>
+        val p = predicate.clone().asInstanceOf[P[D]]
+        p.setValue(apply(v))
+        p
+    }
 }
 
 object Converter {
@@ -27,10 +41,11 @@ object Converter {
   def clist[D, G, C <: Converter[D, G]](converter: C): CList[D, G, C] =
     new Poly1Converter[Seq[D], JList[G], D, G, C] {
       override val subConverter: C = converter
-      override def apply(l: JList[G]): Seq[D] = converter match {
-        case _: IdentityConverter[_] => l.asScala.asInstanceOf[Seq[D]]
-        case c                       => l.asScala.map(c)
-      }
+      override def apply(l: JList[G]): Seq[D] =
+        converter match {
+          case _: IdentityConverter[_] => l.asScala.asInstanceOf[Seq[D]]
+          case c                       => l.asScala.map(c)
+        }
     }
   def ccollection[D, G, C <: Converter[D, G]](converter: C): CCollection[D, G, C] = new CollectionConverter[D, G, C](converter)
   val cid: Converter[String, AnyRef]                                              = _.toString

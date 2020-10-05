@@ -1,7 +1,7 @@
 package org.thp.scalligraph.models
 
 import org.specs2.specification.core.{Fragment, Fragments}
-import org.thp.scalligraph.AppBuilder
+import org.thp.scalligraph.{AppBuilder, EntityName}
 import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
 import org.thp.scalligraph.traversal.TraversalOps._
 import play.api.test.PlaySpecification
@@ -10,7 +10,7 @@ import scala.util.Try
 
 class ModernTest extends PlaySpecification {
 
-  implicit val authContext: AuthContext = AuthContextImpl("me", "", "", "", Set.empty)
+  implicit val authContext: AuthContext = AuthContextImpl("me", "", EntityName(""), "", Set.empty)
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
     val app: AppBuilder = new AppBuilder()
