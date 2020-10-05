@@ -14,11 +14,11 @@ import javax.inject.{Inject, Singleton}
 import org.apache.hadoop.conf.{Configuration => HadoopConfig}
 import org.apache.hadoop.fs.{FileAlreadyExistsException => HadoopFileAlreadyExistsException, FileSystem => HDFileSystem, Path => HDPath}
 import org.apache.hadoop.io.IOUtils
-import org.apache.tinkerpop.gremlin.structure.{Graph, Vertex}
+import org.apache.tinkerpop.gremlin.structure.Graph
 import org.thp.scalligraph.auth.UserSrv
 import org.thp.scalligraph.models._
+import org.thp.scalligraph.traversal.Traversal
 import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, Traversal}
 import play.api.{Configuration, Logger}
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
@@ -119,28 +119,30 @@ class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Data
   def this(configuration: Configuration, userSrv: UserSrv, db: Database) =
     this(configuration.underlying.getBytes("storage.database.chunkSize").toInt, userSrv, db)
 
-  def get(folder: String, attachmentId: String)(implicit graph: Graph): Traversal[Binary with Entity, Vertex, Converter[Binary with Entity, Vertex]] =
-    startTraversal.has("folder", folder).has("attachmentId", attachmentId)
+  def get(folder: String, attachmentId: String)(implicit graph: Graph): Traversal.V[Binary] =
+    startTraversal.unsafeHas("folder", folder).unsafeHas("attachmentId", attachmentId) // "has" macro can't be used because it is in the same project
 
   case class State(binary: Binary with Entity) {
 
-    def next: Option[State] = db.roTransaction { implicit graph =>
-      getByIds(binary._id)
-        .out("nextChunk")
-        .v[Binary]
-        .headOption
-        .map(State.apply)
-    }
+    def next: Option[State] =
+      db.roTransaction { implicit graph =>
+        get(binary)
+          .out("nextChunk")
+          .v[Binary]
+          .headOption
+          .map(State.apply)
+      }
     def data: Array[Byte] = binary.data
   }
 
   object State {
 
-    def apply(folder: String, id: String): Option[State] = db.roTransaction { implicit graph =>
-      get(folder, id)
-        .headOption
-        .map(State.apply)
-    }
+    def apply(folder: String, id: String): Option[State] =
+      db.roTransaction { implicit graph =>
+        get(folder, id)
+          .headOption
+          .map(State.apply)
+      }
   }
 
   override def loadBinary(folder: String, id: String): InputStream =
@@ -163,9 +165,10 @@ class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Data
         }
     }
 
-  override def exists(folder: String, id: String): Boolean = db.roTransaction { implicit graph =>
-    get(folder, id).exists
-  }
+  override def exists(folder: String, id: String): Boolean =
+    db.roTransaction { implicit graph =>
+      get(folder, id).exists
+    }
 
   override def saveBinary(folder: String, id: String, is: InputStream)(implicit graph: Graph): Try[Unit] = {
 

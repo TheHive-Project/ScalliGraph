@@ -17,8 +17,6 @@ case class EntityWithSeq(name: String, valueList: Seq[String], valueSet: Set[Str
 
 class EntityWithSeqSrv(implicit db: Database) extends VertexSrv[EntityWithSeq] {
   def create(e: EntityWithSeq)(implicit graph: Graph, authContext: AuthContext): Try[EntityWithSeq with Entity] = createEntity(e)
-
-  def getFromKey(key: String, value: String)(implicit graph: Graph): Try[EntityWithSeq] = startTraversal.has(key, value).getOrFail("EntityWithSeq")
 }
 
 class CardinalityTest extends PlaySpecification {
@@ -62,7 +60,7 @@ class CardinalityTest extends PlaySpecification {
       "be searchable from its list property" in db.transaction { implicit graph =>
         val initialEntity = EntityWithSeq("list", Seq("1", "2", "3"), Set.empty)
         entityWithSeqSrv.create(initialEntity) must beSuccessfulTry.which { createdEntity =>
-          entityWithSeqSrv.getFromKey("valueList", "1") must beSuccessfulTry(createdEntity)
+          entityWithSeqSrv.startTraversal.has(_.valueList, "1").getOrFail("EntityWithSeq") must beSuccessfulTry(createdEntity)
         // This test fails with OrientDB : https://github.com/orientechnologies/orientdb-gremlin/issues/120
         }
       }

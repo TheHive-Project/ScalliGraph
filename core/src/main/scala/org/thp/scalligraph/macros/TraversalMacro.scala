@@ -56,6 +56,43 @@ class TraversalMacro(val c: blackbox.Context) extends MacroUtil {
     q"$traversal.property(${name.toString}, $mapping)"
   }
 
+  def hasV[A, B](selector: Tree, value: Tree)(mapping: Tree, ev: Tree): Tree = {
+    val traversalOps: Tree = c.prefix.tree
+    val traversal          = q"$traversalOps.traversal"
+    val name: Name         = getSelectorName(q"$selector").getOrElse(fatal(s"$selector is an invalid selector"))
+    q"$traversal.onRaw(_.has(${name.toString}, $mapping.reverse($value)))"
+  }
+  def hasP[A, B](selector: Tree, predicate: Tree)(mapping: Tree, ev: Tree): Tree = {
+    val traversalOps: Tree = c.prefix.tree
+    val traversal          = q"$traversalOps.traversal"
+    val name: Name         = getSelectorName(q"$selector").getOrElse(fatal(s"$selector is an invalid selector"))
+    q"$traversal.onRaw(_.has(${name.toString}, $mapping.reverse($predicate)))"
+  }
+  def has[A](selector: Tree)(ev: Tree): Tree = {
+    val traversalOps: Tree = c.prefix.tree
+    val traversal          = q"$traversalOps.traversal"
+    val name: Name         = getSelectorName(q"$selector").getOrElse(fatal(s"$selector is an invalid selector"))
+    q"$traversal.onRaw(_.has(${name.toString}))"
+  }
+  def hasNotP[A, B](selector: Tree, predicate: Tree)(mapping: Tree, ev: Tree): Tree = {
+    val traversalOps: Tree = c.prefix.tree
+    val traversal          = q"$traversalOps.traversal"
+    val name: Name         = getSelectorName(q"$selector").getOrElse(fatal(s"$selector is an invalid selector"))
+    q"$traversal.onRaw(_.not(org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__.start().has(${name.toString}, $mapping.reverse($predicate))))"
+  }
+  def hasNotV[A, B](selector: Tree, value: Tree)(mapping: Tree, ev: Tree): Tree = {
+    val traversalOps: Tree = c.prefix.tree
+    val traversal          = q"$traversalOps.traversal"
+    val name: Name         = getSelectorName(q"$selector").getOrElse(fatal(s"$selector is an invalid selector"))
+    q"$traversal.onRaw(_.not(org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__.start().has(${name.toString}, $mapping.reverse($value))))"
+  }
+  def hasNot[A](selector: Tree): Tree = {
+    val traversalOps: Tree = c.prefix.tree
+    val traversal          = q"$traversalOps.traversal"
+    val name: Name         = getSelectorName(q"$selector").getOrElse(fatal(s"$selector is an invalid selector"))
+    q"$traversal.onRaw(_.hasNot(${name.toString}))"
+  }
+
   def update[V: WeakTypeTag](selector: Tree, value: Tree)(ev1: Tree, ev2: Tree): Tree = {
     val traversalOps: Tree = c.prefix.tree
     val traversal          = q"$traversalOps.traversal"
@@ -64,11 +101,11 @@ class TraversalMacro(val c: blackbox.Context) extends MacroUtil {
     val valueType          = c.weakTypeOf[V]
 
     entityType match {
-      case RefinedType((baseEntityType @ CaseClassType(members @ _*)) :: _, _) =>
+      case RefinedType((baseEntityType @ CaseClassType(_ @_*)) :: _, _) =>
         val entityModule: Symbol = baseEntityType.typeSymbol.companion
         val model: Tree          = q"$entityModule.model"
         val name: Name           = getSelectorName(q"$selector").getOrElse(fatal(s"$selector is an invalid selector"))
-        val mapping: Tree        = q"$model.fields(${name.toString}).asInstanceOf[org.thp.scalligraph.models.Mapping[$valueType, _, _]]"
+        val mapping: Tree        = q"$model.fields(${name.toString}).asInstanceOf[_root_.org.thp.scalligraph.models.Mapping[$valueType, _, _]]"
         ret("Update traversal", q"$mapping.setProperty($traversal, ${name.toString}, $value)")
       case _ => fatal(s"$entityType is not a valid entity type")
     }

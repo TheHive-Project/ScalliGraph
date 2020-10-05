@@ -74,7 +74,7 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
     Query.initWithParam[SeniorAgeThreshold, Traversal.V[Person]](
       "seniorPeople",
       FieldsParser[SeniorAgeThreshold],
-      (seniorAgeThreshold, graph, _) => personSrv.startTraversal(graph).has("age", P.gte(seniorAgeThreshold.age))
+      (seniorAgeThreshold, graph, _) => personSrv.startTraversal(graph).has(_.age, P.gte(seniorAgeThreshold.age))
     ),
     Query[Traversal.V[Person], Traversal.V[Software]]("created", (personSteps, _) => personSteps.created),
     Query.withParam[FriendLevel, Traversal.V[Person], Traversal.V[Person]](

@@ -62,14 +62,14 @@ class GroupBySelector[D, G, C <: Converter[D, G]](origin: Traversal[D, G, C]) {
   }
 }
 
-class SelectBySelector[T](
+class SelectBySelector[S](
     val labels: List[String],
     val addBys: GraphTraversal[_, JMap[String, Any]] => GraphTraversal[_, JMap[String, Any]],
-    val converter: JMap[String, Any] => T
+    val converter: JMap[String, Any] => S
 ) {
   def apply[D, G, C <: Converter[D, G], DD, GG, CC <: Converter[DD, GG], TR](label: StepLabel[D, G, C])(
       by: GenericBySelector[D, G, C] => ByResult[G, DD, GG, CC]
-  )(implicit prepend: Prepend.Aux[T, Tuple1[DD], TR]): SelectBySelector[TR] = {
+  )(implicit prepend: Prepend.Aux[S, Tuple1[DD], TR]): SelectBySelector[TR] = {
     val byResult = by(new GenericBySelector[D, G, C](label.converter.startTraversal))
 
     new SelectBySelector(

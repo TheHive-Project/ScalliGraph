@@ -30,22 +30,22 @@ case class Created(weight: Double)
 object ModernOps {
   implicit class PersonOpsDefs(traversal: Traversal.V[Person]) {
     def created: Traversal.V[Software]               = traversal.out[Created].v[Software]
-    def getByName(name: String): Traversal.V[Person] = traversal.has("name", name)
+    def getByName(name: String): Traversal.V[Person] = traversal.has(_.name, name)
     def created(predicate: P[Double]): Traversal.V[Software] =
       traversal
         .outE[Created]
-        .has("weight", predicate)
+        .has(_.weight, predicate)
         .inV
         .v[Software]
     def connectedEdge: Seq[String]                            = traversal.outE().label.toSeq
     def knownLevels: Seq[Double]                              = traversal.outE[Knows].property("weight", Converter.double).toSeq
     def knows: Traversal.V[Person]                            = traversal.out[Knows].v[Person]
-    def friends(threshold: Double = 0.8): Traversal.V[Person] = traversal.outE[Knows].has("weight", P.gte(threshold)).inV.v[Person]
+    def friends(threshold: Double = 0.8): Traversal.V[Person] = traversal.outE[Knows].has(_.weight, P.gte(threshold)).inV.v[Person]
   }
 
   implicit class SoftwareOpsDefs(traversal: Traversal.V[Software]) {
     def createdBy: Traversal.V[Person]  = traversal.in("Created").v[Person]
-    def isRipple: Traversal.V[Software] = traversal.has("name", "ripple")
+    def isRipple: Traversal.V[Software] = traversal.has(_.name, "ripple")
 
   }
 }
