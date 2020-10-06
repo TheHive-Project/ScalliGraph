@@ -6,7 +6,7 @@ import org.scalactic.Accumulation._
 import org.scalactic._
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.Permission
-import org.thp.scalligraph.macros.FieldsParserMacro
+import org.thp.scalligraph.`macro`.FieldsParserMacro
 import org.thp.scalligraph.query.{PropertyUpdater, PublicProperties}
 import org.thp.scalligraph.traversal.Traversal
 import org.thp.scalligraph.utils.Hash

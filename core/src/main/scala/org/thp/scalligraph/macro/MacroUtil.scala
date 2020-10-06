@@ -1,4 +1,4 @@
-package org.thp.scalligraph.macros
+package org.thp.scalligraph.`macro`
 
 import java.util.Date
 
@@ -9,10 +9,11 @@ trait MacroUtil extends MacroLogger {
 
   import c.universe._
 
-  def typeName(tpe: Type): String = tpe match {
-    case RefinedType(cl :: _, _) => symbolName(cl.typeSymbol)
-    case cl                      => symbolName(cl.typeSymbol)
-  }
+  def typeName(tpe: Type): String =
+    tpe match {
+      case RefinedType(cl :: _, _) => symbolName(cl.typeSymbol)
+      case cl                      => symbolName(cl.typeSymbol)
+    }
 
   def symbolName(s: Symbol): String = s.name.decodedName.toString.trim
 
@@ -161,22 +162,20 @@ trait MacroUtil extends MacroLogger {
     def extractEnum(tpe: Type, sym: Symbol): Option[Seq[(Tree, Tree)]] =
       (enumerationType(tpe) orElse sealedType(sym)).map(_.map { value =>
         val valueName = q"${value.name.decodedName.toString.trim}" // q"$value.toString"
-        if (value.isModuleClass) {
+        if (value.isModuleClass)
           if (value.owner.isModuleClass) {
             val v = value.owner.typeSignature.member(value.name.toTermName)
             if (value.asClass.toType.member(TermName("name")) == NoSymbol)
               valueName -> q"$v"
             else
               q"$v.name" -> q"$v"
-          } else {
+          } else
             valueName -> q"${value.name.toTermName}"
-          }
-        } else {
+        else {
           val moduleClass = tpe.asInstanceOf[TypeRef].pre.typeSymbol
           val ownerSymbol = moduleClass.owner.typeSignature.member(moduleClass.name.toTermName)
-          if (ownerSymbol == NoSymbol) {
+          if (ownerSymbol == NoSymbol)
             c.abort(c.enclosingPosition, s"Enumeration in a module is not supported. Put $moduleClass outside ${moduleClass.owner}")
-          }
           valueName -> q"$ownerSymbol.${value.asTerm.getter}"
         }
       })

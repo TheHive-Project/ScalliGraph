@@ -1,6 +1,6 @@
 package org.thp.scalligraph.controllers
 
-import org.thp.scalligraph.macros.FieldsParserMacro
+import org.thp.scalligraph.`macro`.FieldsParserMacro
 
 import scala.language.experimental.macros
 

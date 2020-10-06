@@ -54,7 +54,7 @@ object UMapping extends MappingLowerPrio {
   implicit object boolean    extends SingleMapping[Boolean, JBoolean](toGraph = Boolean.box, toDomain = Boolean.unbox)
   implicit object double     extends SingleMapping[Double, JDouble](toGraph = Double.box, toDomain = Double.unbox)
   implicit object float      extends SingleMapping[Float, JFloat](toGraph = Float.box, toDomain = Float.unbox)
-  implicit object permission extends SingleMapping[Permission, String](toGraph = _.toString, toDomain = Permission.apply)
+  implicit object permission extends SingleMapping[Permission, String](toGraph = _.asInstanceOf[String], toDomain = Permission.apply)
   implicit object hash       extends SingleMapping[Hash, String](toGraph = h => h.toString, toDomain = Hash(_))
   implicit object binary
       extends SingleMapping[Array[Byte], String](toGraph = b => Base64.getEncoder.encodeToString(b), toDomain = s => Base64.getDecoder.decode(s))
@@ -64,14 +64,10 @@ object UMapping extends MappingLowerPrio {
   implicit def enum[E <: Enumeration: ClassTag]: SingleMapping[E#Value, String] =
     SingleMapping[E#Value, String](
       _.toString,
-      { s =>
+      { value =>
         val rm: ru.Mirror = ru.runtimeMirror(getClass.getClassLoader)
-        val m             = rm.classSymbol(classTag[E].runtimeClass)
-        val c             = m.module
-        val mod           = c.asModule
-        val ref           = rm.reflectModule(mod)
-        val i             = ref.instance
-        i.asInstanceOf[E].withName(s)
+        val instance      = rm.reflectModule(rm.classSymbol(classTag[E].runtimeClass).asClass.module.asModule).instance
+        instance.asInstanceOf[E].withName(value)
       }
     )
 

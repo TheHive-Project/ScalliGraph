@@ -1,4 +1,4 @@
-package org.thp.scalligraph.macros
+package org.thp.scalligraph.`macro`
 
 import scala.reflect.macros.whitebox
 import scala.util.{Try => UTry}
@@ -62,28 +62,4 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
 
         Block(modelClass :: modelModule :: Nil, Literal(Constant(())))
     }
-
-  def entitySteps(annottees: Tree*): Tree = {
-    val entityClass: Tree = c.prefix.tree match {
-      case q"new $_[$typ]" => typ.asInstanceOf[Tree]
-      case _               => fatal("Transform annotation is malformed")
-    }
-    val entityClassType: Type = UTry(c.typecheck(q"0.asInstanceOf[$entityClass]").tpe)
-      .getOrElse(fatal(s"Type of target class ($entityClass) can't be identified. It must not be in the same scope of the annotated class."))
-    initLogger(entityClassType.typeSymbol)
-
-    annottees.toList match {
-      case ClassDef(classMods, className, tparams, classTemplate) :: _ =>
-        val entityFields = entityClassType match {
-          case CaseClassType(fields @ _*) =>
-            fields.map { field =>
-              val mapping   = getMapping(field, field.typeSignature)
-              val fieldName = field.name.decodedName.toString.trim
-              q"def ${TermName(field.name.toString)} = this.property($fieldName, $mapping)"
-            }
-        }
-        ClassDef(classMods, className, tparams, Template(classTemplate.parents, classTemplate.self, classTemplate.body ++ entityFields))
-      case other => fatal(s"unable to annotate $other")
-    }
-  }
 }

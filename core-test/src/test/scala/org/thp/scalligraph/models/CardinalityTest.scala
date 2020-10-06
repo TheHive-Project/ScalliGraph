@@ -65,7 +65,7 @@ class CardinalityTest extends PlaySpecification {
         }
       }
 
-//      "update an entity" in db.transaction { implicit graph ⇒
+//      "update an entity" in db.transaction { implicit graph =>
 //        val id = entityWithSeqSrv.create(EntityWithSeq("super", 7))._id
 //        entityWithSeqSrv.update(id, "value", 8)
 //

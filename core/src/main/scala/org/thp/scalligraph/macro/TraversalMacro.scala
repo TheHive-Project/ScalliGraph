@@ -1,4 +1,4 @@
-package org.thp.scalligraph.macros
+package org.thp.scalligraph.`macro`
 
 import java.util.{Collection => JCollection}
 

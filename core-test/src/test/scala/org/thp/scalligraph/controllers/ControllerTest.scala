@@ -44,7 +44,7 @@ class ControllerTest(implicit executionEnv: ExecutionEnv) extends PlaySpecificat
 //      val entrypoint    = new EntryPoint(mock[AuthenticateSrv], actionBuilder, new ErrorHandler, ee.ec, mat)
 //
 //      val action = entrypoint("find entity")
-//        .chunked(_ ⇒ Source(0 to 3).mapMaterializedValue(_ ⇒ 10))
+//        .chunked(_ => Source(0 to 3).mapMaterializedValue(_ => 10))
 //      val request = FakeRequest("GET", "/")
 //      val result  = Await.result(action(request), 1.second)
 //      result.header.headers("X-Total") must_=== "10"

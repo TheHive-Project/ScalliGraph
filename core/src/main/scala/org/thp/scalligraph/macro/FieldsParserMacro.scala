@@ -1,4 +1,4 @@
-package org.thp.scalligraph.macros
+package org.thp.scalligraph.`macro`
 
 import org.thp.scalligraph.controllers._
 
@@ -58,7 +58,7 @@ trait FieldsParserUtil extends MacroLogger with MacroUtil {
     val fieldsParserType =
       appliedType(typeOf[FieldsParser[_]].typeConstructor, eType)
     val fieldsParser = c.inferImplicitValue(fieldsParserType, silent = true, withMacrosDisabled)
-    trace(s"getParserFromImplicit($eType): search implicit of $fieldsParserType ⇒ $fieldsParser")
+    trace(s"getParserFromImplicit($eType): search implicit of $fieldsParserType => $fieldsParser")
     if (fieldsParser.tpe =:= NoType) None
     else Some(fieldsParser)
   }
@@ -88,10 +88,10 @@ trait FieldsParserUtil extends MacroLogger with MacroUtil {
 
                   val $builderName = $builder
                   $parser.apply(path :/ $symbolName, field.get($symbolName)).fold(
-                    param ⇒ $builderName.map(_.apply(param)),
-                    error ⇒ $builderName match {
-                      case Bad(errors: Every[_]) ⇒ Bad(errors.asInstanceOf[Every[AttributeError]] ++ error)
-                      case _ ⇒ Bad(error)
+                    param => $builderName.map(_.apply(param)),
+                    error => $builderName match {
+                      case Bad(errors: Every[_]) => Bad(errors.asInstanceOf[Every[AttributeError]] ++ error)
+                      case _ => Bad(error)
                     })
                 """
               }
@@ -102,14 +102,14 @@ trait FieldsParserUtil extends MacroLogger with MacroUtil {
           q"""
             import org.thp.scalligraph.controllers.FieldsParser
 
-            FieldsParser[$eType]($className) { case (path, field) ⇒ $builder }
+            FieldsParser[$eType]($className) { case (path, field) => $builder }
           """
         }
       case EnumerationType(values @ _*) =>
         trace(s"build FieldsParser enumeration of ${values.map(_._1).mkString("[", ",", "]")}")
         val caseValues = values
           .map {
-            case (name, value) => cq"(_, org.thp.scalligraph.controllers.FString($name)) ⇒ org.scalactic.Good($value)"
+            case (name, value) => cq"(_, org.thp.scalligraph.controllers.FString($name)) => org.scalactic.Good($value)"
           }
         Some(q"org.thp.scalligraph.controllers.FieldsParser(${eType.toString}, Set(..${values.map(_._1)})) { case ..$caseValues }")
       case _ =>
@@ -149,7 +149,7 @@ trait UpdateFieldsParserUtil extends FieldsParserUtil {
     val fieldsParserType =
       appliedType(typeOf[UpdateFieldsParser[_]].typeConstructor, eType)
     val fieldsParser = c.inferImplicitValue(fieldsParserType, silent = true)
-    trace(s"getParserFromImplicit($eType): search implicit of $fieldsParserType ⇒ $fieldsParser")
+    trace(s"getParserFromImplicit($eType): search implicit of $fieldsParserType => $fieldsParser")
     if (fieldsParser.tpe =:= NoType) None
     else Some(fieldsParser)
   }

@@ -4,7 +4,7 @@ import java.util.{UUID, Map => JMap}
 
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
 import org.apache.tinkerpop.gremlin.structure.Element
-import org.thp.scalligraph.macros.TraversalMacro
+import org.thp.scalligraph.`macro`.TraversalMacro
 import org.thp.scalligraph.models.{Entity, Mapping}
 import shapeless.ops.tuple.Prepend
 import shapeless.syntax.std.tuple._
@@ -43,15 +43,15 @@ class ProjectionBuilder[E <: Product, D, G, C <: Converter[D, G]](
   //  }
   def byValue[DD, DU, TR <: Product](
       selector: D => DD
-  )(
-      implicit mapping: Mapping[DD, DU, _],
+  )(implicit
+      mapping: Mapping[DD, DU, _],
       ev1: D <:< Product with Entity,
       ev2: G <:< Element,
       prepend: Prepend.Aux[E, Tuple1[DU], TR]
   ): ProjectionBuilder[TR, D, G, C] = macro TraversalMacro.projectionBuilderByValue[DD, DU, TR]
 
-  def _byValue[DD, GG, TR <: Product](name: String, converter: Converter[DD, GG])(
-      implicit prepend: Prepend.Aux[E, Tuple1[DD], TR]
+  def _byValue[DD, GG, TR <: Product](name: String, converter: Converter[DD, GG])(implicit
+      prepend: Prepend.Aux[E, Tuple1[DD], TR]
   ): ProjectionBuilder[TR, D, G, C] = {
     val label = UUID.randomUUID().toString
     new ProjectionBuilder[TR, D, G, C](

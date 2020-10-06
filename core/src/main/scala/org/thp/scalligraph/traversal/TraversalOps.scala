@@ -7,7 +7,7 @@ import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, GraphTraver
 import org.apache.tinkerpop.gremlin.process.traversal.{P, Scope}
 import org.apache.tinkerpop.gremlin.structure._
 import org.thp.scalligraph.controllers.Renderer
-import org.thp.scalligraph.macros.TraversalMacro
+import org.thp.scalligraph.`macro`.TraversalMacro
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.traversal.Converter.CMap
 import org.thp.scalligraph.{AuthorizationError, EntityId, InternalError, NotFoundError}

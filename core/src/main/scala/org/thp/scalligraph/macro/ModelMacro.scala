@@ -1,4 +1,4 @@
-package org.thp.scalligraph.macros
+package org.thp.scalligraph.`macro`
 
 import org.thp.scalligraph.models.Model
 
@@ -41,7 +41,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
         try {
           ${m.valName}.getProperty(element, ${m.name})
         } catch {
-          case t: Throwable ⇒
+          case t: Throwable =>
             throw InternalError($label + " " + element.id + " doesn't comply with its schema, field `" + ${m.name} + "` is missing (" + element.value(${m.name}) + "): " + Model.printElement(element), t)
         }
         """
@@ -57,7 +57,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
       import org.thp.scalligraph.models.{Database, Entity, IndexType, Mapping, Model, UMapping, VertexModel}
       import org.thp.scalligraph.traversal.Converter
 
-      new VertexModel { thisModel ⇒
+      new VertexModel { thisModel =>
         override type E = $entityType
 
         override val label: String = $label
@@ -119,7 +119,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
       import org.thp.scalligraph.models.{Database, EdgeModel, Entity, IndexType, Mapping, MappingCardinality, Model, UMapping}
       import org.thp.scalligraph.traversal.Converter
 
-      new EdgeModel { thisModel ⇒
+      new EdgeModel { thisModel =>
         override type E = $entityType
 
         override val label: String = $label

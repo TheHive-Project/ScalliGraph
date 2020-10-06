@@ -5,7 +5,7 @@ import java.util.{Collection => JCollection, Map => JMap}
 import org.apache.tinkerpop.gremlin.process.traversal.Order
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal
 import org.apache.tinkerpop.gremlin.structure.{Element, T}
-import org.thp.scalligraph.macros.TraversalMacro
+import org.thp.scalligraph.`macro`.TraversalMacro
 import org.thp.scalligraph.models.{Entity, Mapping}
 import shapeless.PolyDefns.->
 import shapeless.ops.tuple.Prepend

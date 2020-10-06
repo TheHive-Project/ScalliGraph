@@ -3,7 +3,7 @@ package org.thp.scalligraph.controllers
 import org.scalactic.Accumulation._
 import org.scalactic.{Every, Or}
 import org.thp.scalligraph.AttributeError
-import org.thp.scalligraph.macros.FieldsParserMacro
+import org.thp.scalligraph.`macro`.FieldsParserMacro
 
 import scala.language.experimental.macros
 

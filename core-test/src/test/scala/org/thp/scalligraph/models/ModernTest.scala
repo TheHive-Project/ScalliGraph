@@ -28,7 +28,7 @@ class ModernTest extends PlaySpecification {
     val personSrv             = app.apply[PersonSrv]
 
     s"[$name] graph" should {
-//      "remove connected edge when a vertex is removed" in db.transaction { implicit graph ⇒
+//      "remove connected edge when a vertex is removed" in db.transaction { implicit graph =>
 //        // Check that marko is connected to two other people, with known level 0.5 and 1.0
 //        personSrv.get("marko").knownLevels must contain(exactly(0.5, 1.0))
 //        // Remove vadas who is connected to marko
