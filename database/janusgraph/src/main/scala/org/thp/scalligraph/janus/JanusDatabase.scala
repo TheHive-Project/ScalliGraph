@@ -36,7 +36,6 @@ import play.api.{Configuration, Environment}
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
-import scala.tools.nsc.interpreter.JCollection
 import scala.util.{Failure, Success, Try}
 
 object JanusDatabase {
