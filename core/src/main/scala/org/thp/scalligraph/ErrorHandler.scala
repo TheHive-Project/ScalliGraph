@@ -3,7 +3,7 @@ package org.thp.scalligraph
 import play.api.Logger
 import play.api.http.Status.{BAD_REQUEST, FORBIDDEN, NOT_FOUND}
 import play.api.http.{HttpErrorHandler, Status, Writeable}
-import play.api.libs.json.{JsString, JsValue, Json}
+import play.api.libs.json.{JsObject, JsString, Json}
 import play.api.mvc.{RequestHeader, ResponseHeader, Result}
 
 import scala.concurrent.Future
@@ -24,27 +24,29 @@ class ErrorHandler extends HttpErrorHandler {
     Future.successful(toResult(statusCode, Json.obj("type" -> tpe, "message" -> message)))
   }
 
-  def toErrorResult(ex: Throwable): Option[(Int, JsValue)] =
+  def toErrorResult(ex: Throwable): (Int, JsObject) =
     ex match {
-      case e: AuthenticationError     => Some(Status.UNAUTHORIZED          -> e.toJson)
-      case e: AuthorizationError      => Some(Status.FORBIDDEN             -> e.toJson)
-      case e: MultiFactorCodeRequired => Some(Status.PAYMENT_REQUIRED      -> e.toJson)
-      case e: CreateError             => Some(Status.BAD_REQUEST           -> e.toJson)
-      case e: GetError                => Some(Status.INTERNAL_SERVER_ERROR -> e.toJson)
-      case e: SearchError             => Some(Status.BAD_REQUEST           -> e.toJson)
-      case e: UpdateError             => Some(Status.INTERNAL_SERVER_ERROR -> e.toJson)
-      case e: NotFoundError           => Some(Status.NOT_FOUND             -> e.toJson)
-      case e: BadRequestError         => Some(Status.BAD_REQUEST           -> e.toJson)
-      case e: MultiError              => Some(Status.MULTI_STATUS          -> e.toJson)
-      case e: AttributeCheckingError  => Some(Status.BAD_REQUEST           -> e.toJson)
-      case e: InternalError           => Some(Status.INTERNAL_SERVER_ERROR -> e.toJson)
-      case e: BadConfigurationError   => Some(Status.BAD_REQUEST           -> e.toJson)
-//      case e: OAuth2Redirect
+      case e: AuthenticationError     => Status.UNAUTHORIZED          -> e.toJson
+      case e: AuthorizationError      => Status.FORBIDDEN             -> e.toJson
+      case e: MultiFactorCodeRequired => Status.PAYMENT_REQUIRED      -> e.toJson
+      case e: CreateError             => Status.BAD_REQUEST           -> e.toJson
+      case e: GetError                => Status.INTERNAL_SERVER_ERROR -> e.toJson
+      case e: SearchError             => Status.BAD_REQUEST           -> e.toJson
+      case e: UpdateError             => Status.INTERNAL_SERVER_ERROR -> e.toJson
+      case e: NotFoundError           => Status.NOT_FOUND             -> e.toJson
+      case e: BadRequestError         => Status.BAD_REQUEST           -> e.toJson
+      case e: MultiError              => Status.MULTI_STATUS          -> e.toJson
+      case e: AttributeCheckingError  => Status.BAD_REQUEST           -> e.toJson
+      case e: InternalError           => Status.INTERNAL_SERVER_ERROR -> e.toJson
+      case e: BadConfigurationError   => Status.BAD_REQUEST           -> e.toJson
       case nfe: NumberFormatException =>
-        Some(Status.BAD_REQUEST -> Json.obj("type" -> "NumberFormatException", "message" -> ("Invalid format " + nfe.getMessage)))
-      case iae: IllegalArgumentException =>
-        Some(Status.BAD_REQUEST -> Json.obj("type" -> "IllegalArgument", "message" -> iae.getMessage))
-      case t: Throwable => Option(t.getCause).flatMap(toErrorResult)
+        Status.BAD_REQUEST -> Json.obj("type" -> "NumberFormatException", "message" -> ("Invalid format " + nfe.getMessage))
+      case iae: IllegalArgumentException      => Status.BAD_REQUEST -> Json.obj("type" -> "IllegalArgument", "message" -> iae.getMessage)
+      case _ if Option(ex.getCause).isDefined => toErrorResult(ex.getCause)
+      case _ =>
+        logger.error("Internal error", ex)
+        val json = Json.obj("type" -> ex.getClass.getName, "message" -> ex.getMessage)
+        Status.INTERNAL_SERVER_ERROR -> (if (ex.getCause == null) json else json + ("cause" -> JsString(ex.getCause.getMessage)))
     }
 
   def toResult[C](status: Int, c: C)(implicit writeable: Writeable[C]): Result =
@@ -52,11 +54,6 @@ class ErrorHandler extends HttpErrorHandler {
 
   def onServerError(request: RequestHeader, exception: Throwable): Future[Result] = {
     val (status, body) = toErrorResult(exception)
-      .getOrElse {
-        logger.error("Internal error", exception)
-        val json = Json.obj("type" -> exception.getClass.getName, "message" -> exception.getMessage)
-        Status.INTERNAL_SERVER_ERROR -> (if (exception.getCause == null) json else json + ("cause" -> JsString(exception.getCause.getMessage)))
-      }
     exception match {
       case AuthenticationError(message, _) => logger.warn(s"${request.method} ${request.uri} returned $status: $message")
       case ex                              => logger.warn(s"${request.method} ${request.uri} returned $status", ex)
