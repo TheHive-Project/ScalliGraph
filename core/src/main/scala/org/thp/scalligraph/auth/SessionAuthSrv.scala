@@ -18,6 +18,29 @@ object ExpirationStatus {
   case object Error                            extends Type
 }
 
+object SessionAuthSrv {
+  def now: Long = System.currentTimeMillis()
+  private def readLong(request: RequestHeader, name: String): Option[Long] =
+    request
+      .session
+      .get(name)
+      .flatMap(expireStr => Try(expireStr.toLong).toOption)
+
+  def isExpired(request: RequestHeader): Boolean = readLong(request, "expire").exists(_ < now)
+
+  def isWarning(request: RequestHeader): Boolean = readLong(request, "warning").exists(_ < now)
+
+  def expirationStatus(request: RequestHeader): Option[ExpirationStatus.Type] =
+    readLong(request, "expire")
+      .map {
+        case expiration if expiration < now => ExpirationStatus.Error
+        case expiration =>
+          readLong(request, "warning") match {
+            case Some(warning) if warning < now => ExpirationStatus.Warning((now - warning).millis)
+            case _                              => ExpirationStatus.Ok((now - expiration).millis)
+          }
+      }
+}
 class SessionAuthSrv(
     maxSessionInactivity: FiniteDuration,
     sessionWarning: FiniteDuration,
@@ -25,28 +48,10 @@ class SessionAuthSrv(
     requestOrganisation: RequestOrganisation,
     val ec: ExecutionContext
 ) extends AuthSrv {
+  import SessionAuthSrv._
+
   override val name: String = "session"
   lazy val logger: Logger   = Logger(getClass)
-
-  private def now: Long = System.currentTimeMillis()
-
-  def expirationStatus(request: RequestHeader): ExpirationStatus.Type =
-    request
-      .session
-      .get("expire")
-      .flatMap { expireStr =>
-        Try(expireStr.toLong).toOption
-      }
-      .map { expire =>
-        (expire - now).millis
-      }
-      .map {
-        case duration if duration.length < 0 => ExpirationStatus.Error
-        case duration if duration < sessionWarning =>
-          ExpirationStatus.Warning(duration)
-        case duration => ExpirationStatus.Ok(duration)
-      }
-      .getOrElse(ExpirationStatus.Error)
 
   /**
     * Insert or update session cookie containing user name and session expiration timestamp
@@ -62,7 +67,8 @@ class SessionAuthSrv(
       }
       val session = result.newSession.getOrElse(Session()) +
         ("authContext" -> Json.toJson(newAuthContext).toString) +
-        ("expire"      -> (now + maxSessionInactivity.toMillis).toString)
+        ("expire"      -> (now + maxSessionInactivity.toMillis).toString) +
+        ("warning"     -> (now + maxSessionInactivity.toMillis - sessionWarning.toMillis).toString)
       result.withSession(session)
     } else result
   }
@@ -73,7 +79,7 @@ class SessionAuthSrv(
         request
           .session
           .get("authContext")
-      if expirationStatus(request) != ExpirationStatus.Error
+      if !isExpired(request)
       authContext <- AuthContext.fromJson(request, authSession).toOption
       orgAuthContext <- requestOrganisation(request) match {
         case Some(organisation) if organisation != authContext.organisation =>
