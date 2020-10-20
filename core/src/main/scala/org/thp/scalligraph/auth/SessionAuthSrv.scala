@@ -1,7 +1,7 @@
 package org.thp.scalligraph.auth
 
 import javax.inject.{Inject, Singleton}
-import org.thp.scalligraph.EntityIdOrName
+import org.thp.scalligraph.{BadConfigurationError, EntityIdOrName}
 import org.thp.scalligraph.controllers.AuthenticatedRequest
 import play.api.libs.json.Json
 import play.api.mvc._
@@ -9,7 +9,7 @@ import play.api.{Configuration, Logger}
 
 import scala.concurrent.duration.{DurationLong, FiniteDuration}
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 object ExpirationStatus {
   sealed abstract class Type
@@ -36,8 +36,8 @@ object SessionAuthSrv {
         case expiration if expiration < now => ExpirationStatus.Error
         case expiration =>
           readLong(request, "warning") match {
-            case Some(warning) if warning < now => ExpirationStatus.Warning((now - warning).millis)
-            case _                              => ExpirationStatus.Ok((now - expiration).millis)
+            case Some(warning) if warning < now => ExpirationStatus.Warning((expiration - now).millis)
+            case _                              => ExpirationStatus.Ok((expiration - now).millis)
           }
       }
 }
@@ -106,7 +106,10 @@ class SessionAuthProvider @Inject() (userSrv: UserSrv, requestOrganisation: Requ
   override val name: String = "session"
   override def apply(config: Configuration): Try[AuthSrv] =
     for {
-      maxSessionInactivity <- config.getOrFail[FiniteDuration]("inactivity") // TODO rename settings => timeout
-      sessionWarning       <- config.getOrFail[FiniteDuration]("warning")
+      maxSessionInactivity <-
+        config
+          .getDeprecated[Option[FiniteDuration]]("timeout", "inactivity")
+          .fold[Try[FiniteDuration]](Failure(BadConfigurationError(s"Configuration timeout is missing")))(Success(_))
+      sessionWarning <- config.getOrFail[FiniteDuration]("warning")
     } yield new SessionAuthSrv(maxSessionInactivity, sessionWarning, userSrv, requestOrganisation, ec)
 }
