@@ -9,7 +9,7 @@ import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
 import play.api.{Configuration, Logger}
 
 import scala.collection.immutable
-import scala.util.{Failure, Try}
+import scala.util.{Failure, Success, Try}
 
 class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, availableAuthProviders: immutable.Set[AuthSrvProvider])
     extends AuthSrv {
@@ -52,15 +52,36 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
 
   override def capabilities: Set[AuthCapability.Value] = authProviders.flatMap(_.capabilities).toSet
 
-  private def forAllAuthProvider[A](providers: Seq[AuthSrv])(body: AuthSrv => Try[A]): Try[A] =
-    providers.foldLeft[Try[A]](Failure(AuthorizationError("no authentication provider found"))) { (f, a) =>
-      f.recoverWith {
-        case _: AuthorizationError | _: AuthenticationError =>
-          val r = body(a)
-          r.failed.foreach(error => logger.debug(s"${a.name} ${error.getClass.getSimpleName} ${error.getMessage}")) // FIXME
-          r
+  private def forAllAuthProvider[A](providers: Seq[AuthSrv])(body: AuthSrv => Try[A]): Try[A] = {
+    val either = providers.foldLeft[Either[Seq[(String, Throwable)], A]](Left(Seq())) {
+      case (Right(a), _)        => Right(a)
+      case (Left(errors), auth) => body(auth).fold(
+        error   => Left(errors :+ (auth.name, error)),
+        success => Right(success)
+      )
+    }.fold({
+      case Seq() => Seq(("", AuthorizationError("no authentication provider found")))
+      case otherwise => otherwise
+    },
+      a => a
+    )
+
+    either match {
+      case Right(auth: A) => Success(auth)
+      case Left(errors: Seq[(String, Throwable)]) =>
+        logAuthErrors(errors)
+        Failure(AuthenticationError(""))
+    }
+  }
+
+  private def logAuthErrors(errors: Seq[(String, Throwable)]): Unit = {
+    errors.foreach {
+      case (authName, e) => {
+        logger.warn(s"$authName ${e.getClass.getSimpleName} : ${e.getMessage}")
+        logger.debug(s"${e.getClass.getSimpleName} : ${e.printStackTrace()}")
       }
     }
+  }
 
   override def actionFunction(nextFunction: ActionFunction[Request, AuthenticatedRequest]): ActionFunction[Request, AuthenticatedRequest] =
     authProviders.foldRight(nextFunction)((authSrv, af) => authSrv.actionFunction(af))
@@ -69,19 +90,15 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
       request: RequestHeader
   ): Try[AuthContext] =
     forAllAuthProvider(authProviders)(_.authenticate(username, password, organisation, code))
-      .recoverWith {
-        case authError =>
-          logger.error("Authentication failure", authError)
-          Failure(AuthenticationError("Authentication failure"))
-      }
+      .recoverWith(authErrorHandler)
 
   override def authenticate(key: String, organisation: Option[EntityIdOrName])(implicit request: RequestHeader): Try[AuthContext] =
     forAllAuthProvider(authProviders)(_.authenticate(key, organisation))
-      .recoverWith {
-        case authError =>
-          logger.error("Authentication failure", authError)
-          Failure(AuthenticationError("Authentication failure"))
-      }
+      .recoverWith(authErrorHandler)
+
+  val authErrorHandler: PartialFunction[Throwable, Try[AuthContext]] = {
+    case authError => Failure(AuthenticationError("Authentication failure"))
+  }
 
   override def setSessionUser(authContext: AuthContext): Result => Result =
     authProviders.map(_.setSessionUser(authContext)).reduceLeft(_ andThen _)
