@@ -53,22 +53,16 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
   override def capabilities: Set[AuthCapability.Value] = authProviders.flatMap(_.capabilities).toSet
 
   private def forAllAuthProvider[A](providers: Seq[AuthSrv])(body: AuthSrv => Try[A]): Try[A] = {
-    val either = providers.foldLeft[Either[Seq[(String, Throwable)], A]](Left(Seq())) {
+    providers.foldLeft[Either[Seq[(String, Throwable)], A]](Left(Seq())) {
       case (Right(a), _)        => Right(a)
       case (Left(errors), auth) => body(auth).fold(
         error   => Left(errors :+ (auth.name, error)),
         success => Right(success)
       )
-    }.fold({
-      case Seq() => Left(Seq(("", AuthorizationError("no authentication provider found"))))
-      case otherwise => Left(otherwise)
-    },
-      a => Right(a)
-    )
-
-    either match {
-      case Right(auth: A) => Success(auth)
-      case Left(errors: Seq[(String, Throwable)]) =>
+    } match {
+      case Right(auth)  => Success(auth)
+      case Left(Seq())  => Failure(AuthorizationError("no authentication provider found"))
+      case Left(errors) =>
         logAuthErrors(errors)
         Failure(AuthenticationError(""))
     }
@@ -78,7 +72,7 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
     errors.foreach {
       case (authName, e) => {
         logger.warn(s"$authName ${e.getClass.getSimpleName} : ${e.getMessage}")
-        logger.debug(s"${e.getClass.getSimpleName} : ${e.printStackTrace()}")
+        logger.debug(s"$authName ${e.getClass.getSimpleName} : ${e.getMessage}", e)
       }
     }
   }
