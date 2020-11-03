@@ -60,10 +60,10 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
         success => Right(success)
       )
     }.fold({
-      case Seq() => Seq(("", AuthorizationError("no authentication provider found")))
-      case otherwise => otherwise
+      case Seq() => Left(Seq(("", AuthorizationError("no authentication provider found"))))
+      case otherwise => Left(otherwise)
     },
-      a => a
+      a => Right(a)
     )
 
     either match {
