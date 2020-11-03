@@ -25,9 +25,7 @@ class ADAuthSrv(adConfig: ADConfig, userSrv: UserSrv) extends AuthSrv {
     connect(adConfig.winDomain + "\\" + username, password)(_ => Success(()))
       .flatMap(_ => userSrv.getAuthContext(request, username, organisation))
       .recoverWith {
-        case t =>
-          logger.error("AD authentication failure", t)
-          Failure(AuthenticationError("Authentication failure"))
+        case t => Failure(AuthenticationError("Authentication failure", t))
       }
 
   override def changePassword(username: String, oldPassword: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] = {
@@ -42,9 +40,7 @@ class ADAuthSrv(adConfig: ADConfig, userSrv: UserSrv) extends AuthSrv {
         ctx.modifyAttributes(userDN, mods)
       }
     }.recoverWith {
-      case t =>
-        logger.error("AD change password failure", t)
-        Failure(AuthorizationError("Change password failure"))
+      case t => Failure(AuthorizationError("Change password failure", t))
     }
   }
 

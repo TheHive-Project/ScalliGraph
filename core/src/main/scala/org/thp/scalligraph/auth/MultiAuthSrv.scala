@@ -70,10 +70,9 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
 
   private def logAuthErrors(errors: Seq[(String, Throwable)]): Unit = {
     errors.foreach {
-      case (authName, e) => {
+      case (authName, e) =>
         logger.warn(s"$authName ${e.getClass.getSimpleName} : ${e.getMessage}")
         logger.debug(s"$authName ${e.getClass.getSimpleName} : ${e.getMessage}", e)
-      }
     }
   }
 
@@ -91,7 +90,7 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
       .recoverWith(authErrorHandler)
 
   val authErrorHandler: PartialFunction[Throwable, Try[AuthContext]] = {
-    case authError => Failure(AuthenticationError("Authentication failure"))
+    case _ => Failure(AuthenticationError("Authentication failure"))
   }
 
   override def setSessionUser(authContext: AuthContext): Result => Result =

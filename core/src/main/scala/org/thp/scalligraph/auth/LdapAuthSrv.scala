@@ -26,9 +26,8 @@ class LdapAuthSrv(ldapConfig: LdapConfig, userSrv: UserSrv) extends AuthSrv {
       .flatMap(userDN => connect(userDN, password)(_ => Success(())))
       .flatMap(_ => userSrv.getAuthContext(request, username, organisation))
       .recoverWith {
-        case t =>
-          logger.error("LDAP authentication failure", t)
-          Failure(AuthenticationError("Authentication failure"))
+        case AuthenticationError(_, cause) if cause != null => Failure(cause)
+        case t => Failure(AuthenticationError("Authentication failure", t))
       }
 
   override def changePassword(username: String, oldPassword: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] =
@@ -40,9 +39,7 @@ class LdapAuthSrv(ldapConfig: LdapConfig, userSrv: UserSrv) extends AuthSrv {
         }
       }
       .recoverWith {
-        case t =>
-          logger.error("LDAP change password failure", t)
-          Failure(AuthorizationError("Change password failure"))
+        case t => Failure(AuthorizationError("Change password failure", t))
       }
 
   private val noLdapServerAvailableException = AuthenticationError("No LDAP server found")
@@ -66,9 +63,15 @@ class LdapAuthSrv(ldapConfig: LdapConfig, userSrv: UserSrv) extends AuthSrv {
         env.put(Context.SECURITY_AUTHENTICATION, "simple")
         env.put(Context.SECURITY_PRINCIPAL, username)
         env.put(Context.SECURITY_CREDENTIALS, password)
-        val ctx = new InitialDirContext(env)
-        try f(ctx)
-        finally ctx.close()
+        Try(new InitialDirContext(env))
+          .fold(
+            t   => Failure(AuthenticationError("LDAP connection error", t)),
+            ctx => {
+              val connect = f(ctx)
+              ctx.close()
+              connect
+            }
+          )
       case (failure @ Failure(e), _) =>
         logger.debug("LDAP connect error", e)
         failure
