@@ -25,7 +25,7 @@ class LdapAuthSrv(ldapConfig: LdapConfig, userSrv: UserSrv) extends AuthSrv {
     connect(ldapConfig.bindDN, ldapConfig.bindPW)(ctx => getUserDN(ctx, username))
       .flatMap(userDN => connect(userDN, password)(_ => Success(())))
       .flatMap(_ => userSrv.getAuthContext(request, username, organisation))
-      .recoverWith { case AuthenticationError(_, cause) if cause != null => Failure(cause) }
+      .recoverWith { case t => Failure(AuthenticationError("Authentication failure", t)) }
 
   override def changePassword(username: String, oldPassword: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] =
     connect(ldapConfig.bindDN, ldapConfig.bindPW)(ctx => getUserDN(ctx, username))

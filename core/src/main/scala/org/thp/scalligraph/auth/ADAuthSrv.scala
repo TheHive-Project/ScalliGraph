@@ -24,9 +24,7 @@ class ADAuthSrv(adConfig: ADConfig, userSrv: UserSrv) extends AuthSrv {
   ): Try[AuthContext] =
     connect(adConfig.winDomain + "\\" + username, password)(_ => Success(()))
       .flatMap(_ => userSrv.getAuthContext(request, username, organisation))
-      .recoverWith {
-        case t => Failure(AuthenticationError("Authentication failure", t))
-      }
+      .recoverWith { case t => Failure(AuthenticationError("Authentication failure", t)) }
 
   override def changePassword(username: String, oldPassword: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] = {
     val unicodeOldPassword = ("\"" + oldPassword + "\"").getBytes("UTF-16LE")

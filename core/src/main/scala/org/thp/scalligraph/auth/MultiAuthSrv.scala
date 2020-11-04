@@ -52,28 +52,32 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
 
   override def capabilities: Set[AuthCapability.Value] = authProviders.flatMap(_.capabilities).toSet
 
-  private def forAllAuthProvider[A](providers: Seq[AuthSrv])(body: AuthSrv => Try[A]): Try[A] = {
+  private def forAllAuthProviders[A](providers: Seq[AuthSrv])(body: AuthSrv => Try[A]): Try[A] =
     providers.foldLeft[Either[Seq[(String, Throwable)], A]](Left(Seq())) {
-      case (Right(a), _)        => Right(a)
-      case (Left(errors), auth) => body(auth).fold(
-        error   => Left(errors :+ (auth.name, error)),
-        success => Right(success)
-      )
+      case (right: Right[_, _], _) => right
+      case (Left(errors), auth) =>
+        body(auth).fold(
+          error => Left(errors :+ (auth.name, error)),
+          success => Right(success)
+        )
     } match {
-      case Right(auth)  => Success(auth)
-      case Left(Seq())  => Failure(AuthorizationError("no authentication provider found"))
+      case Right(auth) => Success(auth)
+      case Left(Seq()) => Failure(AuthorizationError("no authentication provider found"))
       case Left(errors) =>
-        logAuthErrors(errors)
-        Failure(AuthenticationError(""))
+        errors.foreach {
+          case (authName, AuthenticationError(_, cause)) if cause != null => logAuthError(authName, cause)
+          case (authName, AuthorizationError(_, cause)) if cause != null  => logAuthError(authName, cause)
+          case (authName, error)                                          => logAuthError(authName, error)
+        }
+        if (errors.exists(_._2.isInstanceOf[AuthorizationError]))
+          Failure(AuthorizationError("Operation not permitted"))
+        else
+          Failure(AuthenticationError("Authentication failure"))
     }
-  }
 
-  private def logAuthErrors(errors: Seq[(String, Throwable)]): Unit = {
-    errors.foreach {
-      case (authName, e) =>
-        logger.warn(s"$authName ${e.getClass.getSimpleName} : ${e.getMessage}")
-        logger.debug(s"$authName ${e.getClass.getSimpleName} : ${e.getMessage}", e)
-    }
+  private def logAuthError(authName: String, error: Throwable): Unit = {
+    logger.warn(s"$authName fails: $error")
+    logger.debug(s"$authName fails: $error", error)
   }
 
   override def actionFunction(nextFunction: ActionFunction[Request, AuthenticatedRequest]): ActionFunction[Request, AuthenticatedRequest] =
@@ -82,11 +86,11 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
   override def authenticate(username: String, password: String, organisation: Option[EntityIdOrName], code: Option[String])(implicit
       request: RequestHeader
   ): Try[AuthContext] =
-    forAllAuthProvider(authProviders)(_.authenticate(username, password, organisation, code))
+    forAllAuthProviders(authProviders)(_.authenticate(username, password, organisation, code))
       .recoverWith(authErrorHandler)
 
   override def authenticate(key: String, organisation: Option[EntityIdOrName])(implicit request: RequestHeader): Try[AuthContext] =
-    forAllAuthProvider(authProviders)(_.authenticate(key, organisation))
+    forAllAuthProviders(authProviders)(_.authenticate(key, organisation))
       .recoverWith(authErrorHandler)
 
   val authErrorHandler: PartialFunction[Throwable, Try[AuthContext]] = {
@@ -97,19 +101,19 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
     authProviders.map(_.setSessionUser(authContext)).reduceLeft(_ andThen _)
 
   override def changePassword(username: String, oldPassword: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] =
-    forAllAuthProvider(authProviders)(_.changePassword(username, oldPassword, newPassword))
+    forAllAuthProviders(authProviders)(_.changePassword(username, oldPassword, newPassword))
 
   override def setPassword(username: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] =
-    forAllAuthProvider(authProviders)(_.setPassword(username, newPassword))
+    forAllAuthProviders(authProviders)(_.setPassword(username, newPassword))
 
   override def renewKey(username: String)(implicit authContext: AuthContext): Try[String] =
-    forAllAuthProvider(authProviders)(_.renewKey(username))
+    forAllAuthProviders(authProviders)(_.renewKey(username))
 
   override def getKey(username: String)(implicit authContext: AuthContext): Try[String] =
-    forAllAuthProvider(authProviders)(_.getKey(username))
+    forAllAuthProviders(authProviders)(_.getKey(username))
 
   override def removeKey(username: String)(implicit authContext: AuthContext): Try[Unit] =
-    forAllAuthProvider(authProviders)(_.removeKey(username))
+    forAllAuthProviders(authProviders)(_.removeKey(username))
 }
 
 @Singleton
