@@ -8,9 +8,9 @@ import play.api.{Configuration, Logger}
 
 import scala.util.{Failure, Success, Try}
 
-case class BasicLdapConfig(hosts: Seq[String], useSSL: Boolean, bindDN: String, bindPW: String, baseDN: String, filter: String) extends AbstractLdapConfig
+case class LdapConfig(hosts: Seq[String], useSSL: Boolean, bindDN: String, bindPW: String, baseDN: String, filter: String) extends AbstractLdapConfig
 
-class LdapAuthSrv(ldapConfig: BasicLdapConfig, userSrv: UserSrv) extends AbstractLdapSrv(ldapConfig: BasicLdapConfig) {
+class LdapAuthSrv(ldapConfig: LdapConfig, userSrv: UserSrv) extends AbstractLdapSrv(ldapConfig: LdapConfig) {
   lazy val logger: Logger                              = Logger(getClass)
   val name                                             = "ldap"
 
@@ -56,6 +56,6 @@ class LdapAuthProvider @Inject() (userSrv: UserSrv) extends AuthSrvProvider {
       filter <- config.getOrFail[String]("filter")
       hosts  <- config.getOrFail[Seq[String]]("hosts")
       useSSL <- config.getOrFail[Boolean]("useSSL")
-      ldapConfig = BasicLdapConfig(hosts, useSSL, bindDN, bindPW, baseDN, filter)
+      ldapConfig = LdapConfig(hosts, useSSL, bindDN, bindPW, baseDN, filter)
     } yield new LdapAuthSrv(ldapConfig, userSrv)
 }
