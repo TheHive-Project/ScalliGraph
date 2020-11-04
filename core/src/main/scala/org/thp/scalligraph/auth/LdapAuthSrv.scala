@@ -1,10 +1,6 @@
 package org.thp.scalligraph.auth
 
-import java.net.ConnectException
-import java.util
-
 import javax.inject.{Inject, Singleton}
-import javax.naming.Context
 import javax.naming.directory._
 import org.thp.scalligraph.{AuthenticationError, AuthorizationError, EntityIdOrName}
 import play.api.mvc.RequestHeader
@@ -12,12 +8,11 @@ import play.api.{Configuration, Logger}
 
 import scala.util.{Failure, Success, Try}
 
-case class LdapConfig(hosts: Seq[String], useSSL: Boolean, bindDN: String, bindPW: String, baseDN: String, filter: String)
+case class BasicLdapConfig(hosts: Seq[String], useSSL: Boolean, bindDN: String, bindPW: String, baseDN: String, filter: String) extends AbstractLdapConfig
 
-class LdapAuthSrv(ldapConfig: LdapConfig, userSrv: UserSrv) extends AuthSrv {
+class LdapAuthSrv(ldapConfig: BasicLdapConfig, userSrv: UserSrv) extends AbstractLdapSrv(ldapConfig: BasicLdapConfig) {
   lazy val logger: Logger                              = Logger(getClass)
   val name                                             = "ldap"
-  override val capabilities: Set[AuthCapability.Value] = Set(AuthCapability.changePassword)
 
   override def authenticate(username: String, password: String, organisation: Option[EntityIdOrName], code: Option[String])(implicit
       request: RequestHeader
@@ -39,39 +34,7 @@ class LdapAuthSrv(ldapConfig: LdapConfig, userSrv: UserSrv) extends AuthSrv {
         case t => Failure(AuthorizationError("Change password failure", t))
       }
 
-  private val noLdapServerAvailableException = AuthenticationError("No LDAP server found")
-
-  @scala.annotation.tailrec
-  private def isFatal(t: Throwable): Boolean =
-    t match {
-      case null                             => true
-      case `noLdapServerAvailableException` => false
-      case _: ConnectException              => false
-      case _                                => isFatal(t.getCause)
-    }
-
-  private def connect[A](username: String, password: String)(f: InitialDirContext => Try[A]): Try[A] =
-    ldapConfig.hosts.foldLeft[Try[A]](Failure(noLdapServerAvailableException)) {
-      case (Failure(e), host) if !isFatal(e) =>
-        val protocol = if (ldapConfig.useSSL) "ldaps://" else "ldap://"
-        val env      = new util.Hashtable[Any, Any]
-        env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.ldap.LdapCtxFactory")
-        env.put(Context.PROVIDER_URL, protocol + host)
-        env.put(Context.SECURITY_AUTHENTICATION, "simple")
-        env.put(Context.SECURITY_PRINCIPAL, username)
-        env.put(Context.SECURITY_CREDENTIALS, password)
-        Try {
-          val ctx = new InitialDirContext(env)
-          try f(ctx)
-          finally ctx.close()
-        }.flatten
-      case (failure @ Failure(e), _) =>
-        logger.debug("LDAP connect error", e)
-        failure
-      case (r, _) => r
-    }
-
-  private def getUserDN(ctx: InitialDirContext, username: String): Try[String] =
+  def getUserDN(ctx: InitialDirContext, username: String): Try[String] =
     Try {
       val controls = new SearchControls()
       controls.setSearchScope(SearchControls.SUBTREE_SCOPE)
@@ -93,6 +56,6 @@ class LdapAuthProvider @Inject() (userSrv: UserSrv) extends AuthSrvProvider {
       filter <- config.getOrFail[String]("filter")
       hosts  <- config.getOrFail[Seq[String]]("hosts")
       useSSL <- config.getOrFail[Boolean]("useSSL")
-      ldapConfig = LdapConfig(hosts, useSSL, bindDN, bindPW, baseDN, filter)
+      ldapConfig = BasicLdapConfig(hosts, useSSL, bindDN, bindPW, baseDN, filter)
     } yield new LdapAuthSrv(ldapConfig, userSrv)
 }
