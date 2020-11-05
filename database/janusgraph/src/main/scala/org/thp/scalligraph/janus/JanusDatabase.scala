@@ -612,8 +612,8 @@ class JanusDatabase(
 
   override def mapPredicate[V](predicate: P[V]): P[V] =
     predicate.getBiPredicate match {
-      case Text.containing    => JanusText.textContains(predicate.getValue)
-      case Text.notContaining => JanusText.textContains(predicate.getValue).negate()
+      //      case Text.containing    => JanusText.textContains(predicate.getValue) // warning, JanusText.textContains tokenizes the values
+      //      case Text.notContaining => JanusText.textContains(predicate.getValue).negate()
       //      case Text.endingWith      => JanusText.textRegex(s"${predicate.getValue}.*")
       //      case Text.notEndingWith   => JanusText.textRegex(s"${predicate.getValue}.*").negate()
       case Text.startingWith    => JanusText.textPrefix(predicate.getValue)
