@@ -122,7 +122,7 @@ object InputFilter {
   def isDefined(field: String): IsDefinedFilter                              = IsDefinedFilter(field)
   def between(field: String, from: Any, to: Any): PredicateFilter            = PredicateFilter(field, P.between(from, to))
   def inside(field: String, from: Any, to: Any): PredicateFilter             = PredicateFilter(field, P.inside(from, to))
-  def in(field: String, values: Any*): PredicateFilter                       = PredicateFilter(field, P.within(values))
+  def in(field: String, values: Any*): PredicateFilter                       = PredicateFilter(field, P.within(values: _*))
   def startsWith(field: String, value: String): PredicateFilter              = PredicateFilter(field, TextP.startingWith(value))
   def endsWith(field: String, value: String): PredicateFilter                = PredicateFilter(field, TextP.endingWith(value))
   def or(filters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]]): OrFilter   = OrFilter(filters)
