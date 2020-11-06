@@ -28,12 +28,12 @@ case class InputSort(fieldOrder: (String, Order)*) extends InputQuery[Traversal.
           .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
         if (property.mapping.cardinality == MappingCardinality.single)
           (_: SortBySelector[Traversal.UnkD, Traversal.UnkG, Converter[Traversal.UnkD, Traversal.UnkG]])
-            .by(property.select(fieldPath, _), order)
+            .by(property.select(fieldPath, _, authContext), order)
         else
           (_: SortBySelector[Traversal.UnkD, Traversal.UnkG, Converter[Traversal.UnkD, Traversal.UnkG]])
             .by(
               _.coalesceIdent(
-                property.select(FPath(fieldName), _),
+                property.select(FPath(fieldName), _, authContext),
                 _.constant(property.mapping.noValue.asInstanceOf[Traversal.UnkDU])
               ),
               order

@@ -235,7 +235,7 @@ case class AggSum(aggName: Option[String], fieldName: String, filter: Option[Inp
       .coalesce(
         t =>
           property
-            .select(FPath(fieldName), t)
+            .select(FPath(fieldName), t, authContext)
             .sum
             .domainMap(sum => Output(sum, Json.obj(name -> JsNumber(BigDecimal(sum.toString)))))
             .castDomain[Output[_]],
@@ -260,7 +260,7 @@ case class AggAvg(aggName: Option[String], fieldName: String, filter: Option[Inp
       .coalesce(
         t =>
           property
-            .select(FPath(fieldName), t)
+            .select(FPath(fieldName), t, authContext)
             .mean
             .domainMap(avg => Output(Json.obj(name -> avg.asInstanceOf[Double]))),
         Output(null, JsNull)
@@ -285,7 +285,7 @@ case class AggMin(aggName: Option[String], fieldName: String, filter: Option[Inp
       .coalesce(
         t =>
           property
-            .select(FPath(fieldName), t)
+            .select(FPath(fieldName), t, authContext)
             .min
             .domainMap(min => Output(min, Json.obj(name -> property.mapping.selectRenderer.toJson(min)))),
         Output(null, JsNull)
@@ -310,7 +310,7 @@ case class AggMax(aggName: Option[String], fieldName: String, filter: Option[Inp
       .coalesce(
         t =>
           property
-            .select(FPath(fieldName), t)
+            .select(FPath(fieldName), t, authContext)
             .max
             .domainMap(max => Output(max, Json.obj(name -> property.mapping.selectRenderer.toJson(max)))),
         Output(null, JsNull)
@@ -358,7 +358,7 @@ case class FieldAggregation(
       .get[Traversal.UnkD, Traversal.UnkDU](fieldName, traversalType)
       .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
     val filteredTraversal = filter.fold(traversal)(_(db, publicProperties, traversalType, traversal, authContext))
-    val groupedVertices   = property.select(FPath(fieldName), filteredTraversal.as(label)).group(_.by, _.by(_.select(label).fold)).unfold
+    val groupedVertices   = property.select(FPath(fieldName), filteredTraversal.as(label), authContext).group(_.by, _.by(_.select(label).fold)).unfold
 //    val groupedVertices = traversal.group(_.by(t => property.select(FPath(fieldName), t).cast[Any, Any])).unfold
     val sortedAndGroupedVertex = orders
       .map {
@@ -463,7 +463,7 @@ case class TimeAggregation(
     val label             = StepLabel[Traversal.UnkD, Traversal.UnkG, Converter[Traversal.UnkD, Traversal.UnkG]]
     val filteredTraversal = filter.fold(traversal)(_(db, publicProperties, traversalType, traversal, authContext))
     val groupedVertex = property
-      .select(FPath(fieldName), filteredTraversal.as(label))
+      .select(FPath(fieldName), filteredTraversal.as(label), authContext)
       .cast[Date, Date]
       .graphMap[Long, JLong, Converter[Long, JLong]](dateToKey, Converter.long)
       .group(_.by, _.by(_.select(label).fold))

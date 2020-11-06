@@ -4,7 +4,6 @@ import org.apache.tinkerpop.gremlin.structure.{Graph, Vertex}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FieldsParser}
 import org.thp.scalligraph.models.{Database, Mapping}
-import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.traversal.{Converter, Traversal}
 import play.api.libs.json.JsObject
 
@@ -15,19 +14,16 @@ class PublicProperty[P, U](
     val isApplicableFn: ru.Type => Boolean,
     val propertyName: String,
     val mapping: Mapping[P, U, _],
-    definition: (FPath, Traversal.Unk) => Traversal.Domain[U],
+    definition: (FPath, Traversal.Unk, AuthContext) => Traversal.Domain[U],
     val fieldsParser: FieldsParser[U],
     val updateFieldsParser: Option[FieldsParser[PropertyUpdater]],
-    val filterSelect: (FPath, Traversal.Unk) => Traversal.Unk,
+    val filterSelect: (FPath, Traversal.Unk, AuthContext) => Traversal.Unk,
     val filterConverter: FPath => Converter[Traversal.UnkG, Traversal.UnkD]
 ) {
   lazy val propertyPath: FPath = FPath(propertyName)
 
-  def select(path: FPath, traversal: Traversal.Unk): Traversal.Domain[U] =
-    definition(path, traversal)
-
-  def get(path: FPath, traversal: Traversal.Unk): Traversal[P, Any, Converter[P, Any]] =
-    select(path, traversal).cast[U, Any].fold.domainMap(x => mapping.wrap(x)).cast[P, Any]
+  def select(path: FPath, traversal: Traversal.Unk, authContext: AuthContext): Traversal.Domain[U] =
+    definition(path, traversal, authContext)
 
   def isApplicable(traversalType: ru.Type): Boolean = isApplicableFn(traversalType)
 }

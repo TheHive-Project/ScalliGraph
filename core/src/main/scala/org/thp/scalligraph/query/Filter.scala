@@ -28,7 +28,7 @@ case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputQuer
         .get[Traversal.UnkD, Traversal.UnkDU](propertyPath, traversalType)
         .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
     traversal.filter { t =>
-      property.filterSelect(propertyPath, t).is(db.mapPredicate(predicate.asInstanceOf[P[Traversal.UnkG]]))
+      property.filterSelect(propertyPath, t, authContext).is(db.mapPredicate(predicate.asInstanceOf[P[Traversal.UnkG]]))
     }
   }
 }
@@ -46,7 +46,7 @@ case class IsDefinedFilter(fieldName: String) extends InputQuery[Traversal.Unk, 
       publicProperties
         .get[Traversal.UnkD, Traversal.UnkDU](propertyPath, traversalType)
         .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
-    traversal.filter(t => property.select(propertyPath, t))
+    traversal.filter(t => property.select(propertyPath, t, authContext))
   }
 }
 

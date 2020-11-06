@@ -19,7 +19,7 @@ class PropertyBuilder[E <: Product, P, U](isApplicableFn: ru.Type => Boolean, pr
       propertyName,
       propertyName,
       mapping,
-      (_, t) => t.asInstanceOf[Traversal.V[E]].property(propertyName, mapping)
+      (_, t, _) => t.asInstanceOf[Traversal.V[E]].property(propertyName, mapping)
     )
 
   def rename(newName: String) =
@@ -28,7 +28,7 @@ class PropertyBuilder[E <: Product, P, U](isApplicableFn: ru.Type => Boolean, pr
       propertyName,
       newName,
       mapping,
-      (_, t) => t.asInstanceOf[Traversal.V[E]].property(newName, mapping)
+      (_, t, _) => t.asInstanceOf[Traversal.V[E]].property(newName, mapping)
     )
 
   def select(definition: Traversal.V[E] => Traversal[U, _, _]) =
@@ -36,8 +36,18 @@ class PropertyBuilder[E <: Product, P, U](isApplicableFn: ru.Type => Boolean, pr
       isApplicableFn,
       propertyName,
       mapping,
-      (_: FPath, t: Traversal.Unk) => definition(t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Domain[U]],
-      (_, t) => definition(t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Domain[U]],
+      (_, t, _) => definition(t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Domain[U]],
+      (_, t, _) => definition(t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Domain[U]],
+      _ => mapping.reverse.asInstanceOf[Converter[Traversal.UnkG, Traversal.UnkD]]
+    )
+
+  def authSelect(definition: (Traversal.V[E], AuthContext) => Traversal[U, _, _]) =
+    new UpdatePropertyBuilder[E, P, U](
+      isApplicableFn,
+      propertyName,
+      mapping,
+      (_, t, a) => definition(t.asInstanceOf[Traversal.V[E]], a).asInstanceOf[Traversal.Domain[U]],
+      (_, t, a) => definition(t.asInstanceOf[Traversal.V[E]], a).asInstanceOf[Traversal.Domain[U]],
       _ => mapping.reverse.asInstanceOf[Converter[Traversal.UnkG, Traversal.UnkD]]
     )
 
@@ -46,8 +56,8 @@ class PropertyBuilder[E <: Product, P, U](isApplicableFn: ru.Type => Boolean, pr
       isApplicableFn,
       propertyName,
       mapping,
-      definition.asInstanceOf[(FPath, Traversal.Unk) => Traversal.Domain[U]],
-      definition.asInstanceOf[(FPath, Traversal.Unk) => Traversal.Unk],
+      (p, t, _) => definition(p, t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Domain[U]],
+      (p, t, _) => definition(p, t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Unk],
       _ => mapping.reverse.asInstanceOf[Converter[Traversal.UnkG, Traversal.UnkD]]
     )
 }
@@ -57,7 +67,7 @@ class SimpleUpdatePropertyBuilder[E <: Product, P, U](
     propertyName: String,
     fieldName: String,
     mapping: Mapping[P, U, _],
-    definition: (FPath, Traversal.Unk) => Traversal.Domain[U]
+    definition: (FPath, Traversal.Unk, AuthContext) => Traversal.Domain[U]
 ) extends UpdatePropertyBuilder[E, P, U](
       isApplicableFn,
       propertyName,
@@ -83,7 +93,10 @@ class SimpleUpdatePropertyBuilder[E <: Product, P, U](
     )
 }
 
-class PropertyFilter[E <: Product, P, U](updatePropertyBuilder: UpdatePropertyBuilder[E, P, U], select: (FPath, Traversal.Unk) => Traversal.Unk) {
+class PropertyFilter[E <: Product, P, U](
+    updatePropertyBuilder: UpdatePropertyBuilder[E, P, U],
+    select: (FPath, Traversal.Unk, AuthContext) => Traversal.Unk
+) {
   def converter(c: FPath => Converter[Any, U]) =
     new UpdatePropertyBuilder[E, P, U](
       updatePropertyBuilder.isApplicableFn,
@@ -99,12 +112,18 @@ class UpdatePropertyBuilder[E <: Product, P, U](
     private[query] val isApplicableFn: ru.Type => Boolean,
     private[query] val propertyName: String,
     private[query] val mapping: Mapping[P, U, _],
-    private[query] val definition: (FPath, Traversal.Unk) => Traversal.Domain[U],
-    private[query] val filterSelect: (FPath, Traversal.Unk) => Traversal.Unk,
+    private[query] val definition: (FPath, Traversal.Unk, AuthContext) => Traversal.Domain[U],
+    private[query] val filterSelect: (FPath, Traversal.Unk, AuthContext) => Traversal.Unk,
     private[query] val filterConverter: FPath => Converter[Traversal.UnkG, Traversal.UnkD]
 ) {
   def filter(select: (FPath, Traversal.V[E]) => Traversal[_, _, _]) =
-    new PropertyFilter[E, P, U](this, select.asInstanceOf[(FPath, Traversal.Unk) => Traversal.Unk])
+    new PropertyFilter[E, P, U](
+      this,
+      (path: FPath, t: Traversal.Unk, _: AuthContext) => select(path, t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Unk]
+    )
+
+  def authFilter(select: (FPath, Traversal.V[E], AuthContext) => Traversal[_, _, _]) =
+    new PropertyFilter[E, P, U](this, select.asInstanceOf[(FPath, Traversal.Unk, AuthContext) => Traversal.Unk])
 
   def readonly(implicit fieldsParser: FieldsParser[U]): PublicProperty[P, U] =
     new PublicProperty[P, U](
