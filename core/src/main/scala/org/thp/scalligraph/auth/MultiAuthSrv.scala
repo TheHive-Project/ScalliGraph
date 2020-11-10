@@ -57,7 +57,7 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
       case (right: Right[_, _], _) => right
       case (Left(errors), auth) =>
         body(auth).fold(
-          error => Left(errors :+ (auth.name, error)),
+          error => Left(errors :+ ((auth.name, error))),
           success => Right(success)
         )
     } match {
