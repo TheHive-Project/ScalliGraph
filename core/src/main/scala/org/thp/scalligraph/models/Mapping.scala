@@ -220,7 +220,7 @@ case class ListMapping[D, G](singleMapping: SingleMapping[D, G])
       .properties[G](key)
       .asScala
       .map(p => apply(p.value()))
-      .toSeq
+      .toVector
 
   override def setProperty(element: Element, key: String, values: Seq[D]): Unit = {
     element.properties(key).forEachRemaining(_.remove())
