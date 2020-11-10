@@ -424,7 +424,8 @@ object TraversalOps {
       macro TraversalMacro.hasNotV[A, B]
     def hasNot[A](selector: D => A): Traversal[D, G, C] = macro TraversalMacro.hasNot[A]
 
-    def unsafeHas[A](key: String, value: A)(implicit ev: G <:< Element): Traversal[D, G, C] = traversal.onRaw(_.has(key, P.eq[A](value)))
+    def unsafeHas[A](key: String, predicate: P[A])(implicit ev: G <:< Element): Traversal[D, G, C] = traversal.onRaw(_.has(key, predicate))
+    def unsafeHas[A](key: String, value: A)(implicit ev: G <:< Element): Traversal[D, G, C]        = unsafeHas(key, P.eq[A](value))
 
     def hasId(ids: EntityId*)(implicit ev: G <:< Element): Traversal[D, G, C] =
       ids.map(_.value) match {
