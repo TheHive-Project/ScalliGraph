@@ -11,11 +11,22 @@ import scala.util.{Failure, Success, Try}
 
 sealed trait Operation
 
-case class AddProperty(model: String, propertyName: String, mapping: Mapping[_, _, _])                                             extends Operation
-case class RemoveProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean)                                       extends Operation
-case class UpdateGraph(model: String, update: Traversal[Vertex, Vertex, Converter.Identity[Vertex]] => Try[Unit], comment: String) extends Operation
-case class AddIndex(model: String, indexType: IndexType.Value, properties: Seq[String])                                            extends Operation
-object RebuildIndexes                                                                                                              extends Operation
+case class AddVertexModel(label: String, mapping: Map[String, Mapping[_, _, _]])
+  extends Operation
+case class AddEdgeModel(label: String, mapping: Map[String, Mapping[_, _, _]])
+  extends Operation
+case class AddProperty(model: String, propertyName: String, mapping: Mapping[_, _, _])
+  extends Operation
+case class RemoveProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean)
+  extends Operation
+case class UpdateGraph(model: String, update: Traversal[Vertex, Vertex, Converter.Identity[Vertex]] => Try[Unit], comment: String)
+  extends Operation
+case class AddVertices()
+case class AddIndex(model: String, indexType: IndexType.Value, properties: Seq[String])
+  extends Operation
+object RebuildIndexes
+  extends Operation
+
 case class DBOperation[DB <: Database: ClassTag](comment: String, op: DB => Try[Unit]) extends Operation {
   def apply(db: Database): Try[Unit] =
     if (classTag[DB].runtimeClass.isAssignableFrom(db.getClass))
@@ -33,6 +44,10 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
   lazy val logger: Logger                               = Logger(getClass)
   val lastVersion: Int                                  = operations.length + 2
   private def addOperations(op: Operation*): Operations = copy(operations = operations ++ op)
+  def addVertexModel[T](label: String, properties: Seq[String])(implicit mapping: UMapping[T]): Operations =
+    addOperations(AddVertexModel(label, properties.map(p => p -> mapping.toMapping).toMap))
+  def addEdgeModel[T](label: String, properties: Seq[String])(implicit mapping: UMapping[T]): Operations =
+    addOperations(AddEdgeModel(label, properties.map(p => p -> mapping.toMapping).toMap))
   def addProperty[T](model: String, propertyName: String)(implicit mapping: UMapping[T]): Operations =
     addOperations(AddProperty(model, propertyName, mapping.toMapping))
   def removeProperty[T](model: String, propertyName: String, usedOnlyByThisModel: Boolean): Operations =
