@@ -72,6 +72,12 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
         operations.zipWithIndex.foldLeft[Try[Unit]](Success(())) {
           case (Success(_), (ops, v)) if v + 1 >= version =>
             (ops match {
+              case AddVertexModel(label, mapping) =>
+                logger.info(s"Add vertex model $label to schema")
+                db.addVertexModel(label, mapping)
+              case AddEdgeModel(label, mapping) =>
+                logger.info(s"Add edge model $label to schema")
+                db.addEdgeModel(label, mapping)
               case AddProperty(model, propertyName, mapping) =>
                 logger.info(s"$schemaName: Add property $propertyName to $model")
                 db.addProperty(model, propertyName, mapping)
