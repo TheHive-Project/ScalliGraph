@@ -129,6 +129,15 @@ class Entrypoint @Inject() (
         else Failure(AuthorizationError(s"Your are not authorized to $name, you haven't the permission $permission"))
       }
 
+    def authPermittedRoTransaction(
+        db: Database,
+        permission: Permission
+    )(block: AuthenticatedRequest[Record[V]] => Graph => Try[Result]): Action[AnyContent] =
+      auth { request =>
+        if (request.isPermitted(permission)) db.roTransaction(graph => block(request)(graph))
+        else Failure(AuthorizationError(s"Your are not authorized to $name, you haven't the permission $permission"))
+      }
+
     def authRoTransaction(
         db: Database
     )(block: AuthenticatedRequest[Record[V]] => Graph => Try[Result]): Action[AnyContent] =
