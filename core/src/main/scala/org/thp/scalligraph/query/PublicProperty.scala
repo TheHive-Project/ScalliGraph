@@ -70,7 +70,8 @@ class PublicProperties(private val map: Map[String, Seq[PublicProperty[_, _]]]) 
   def get[P, U](propertyName: String, tpe: ru.Type): Option[PublicProperty[P, U]] =
     map.get(propertyName).flatMap(_.find(_.isApplicable(tpe))).asInstanceOf[Option[PublicProperty[P, U]]]
   def get[P, U](propertyPath: FPath, tpe: ru.Type): Option[PublicProperty[P, U]] =
-    propertyPath.headOption.flatMap(get(_, tpe))
+    get[P, U](propertyPath.toString, tpe) orElse propertyPath.headOption.flatMap(get[P, U](_, tpe))
+
   def list: Seq[PublicProperty[_, _]] = map.flatMap(_._2.headOption).toSeq
   def :+[P, U](property: PublicProperty[P, U]): PublicProperties =
     new PublicProperties(map + (property.propertyName -> (map.getOrElse(property.propertyName, Nil) :+ property)))
