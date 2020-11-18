@@ -142,12 +142,11 @@ class SingleMapping[D: ClassTag, G: ClassTag: NoValue](toGraph: D => G, toDomain
 
   def getProperty(element: Element, key: String): D = {
     val values = element.properties[G](key)
-    if (values.hasNext) {
-      val v = apply(values.next().value)
-      if (values.hasNext)
-        throw InternalError(s"Property $key must have only one value but is multivalued on element $element" + Model.printElement(element))
-      else v
-    } else throw InternalError(s"Property $key is missing on element $element" + Model.printElement(element))
+    if (values.hasNext) apply(values.next().value)
+    else {
+      logger.error(s"${element.label()} ${element.id} doesn't comply with its schema, field $key is missing:\n${Model.printElement(element)}")
+      apply(noValue)
+    }
   }
 
   def setProperty(element: Element, key: String, value: D): Unit = {
@@ -180,12 +179,8 @@ case class OptionMapping[D, G](singleMapping: SingleMapping[D, G])
   override val cardinality: MappingCardinality.Value = MappingCardinality.option
   override def getProperty(element: Element, key: String): Option[D] = {
     val values = element.properties[G](key)
-    if (values.hasNext) {
-      val v = apply(values.next().value)
-      if (values.hasNext)
-        throw InternalError(s"Property $key must have only one value but is multivalued on element $element" + Model.printElement(element))
-      else Some(v)
-    } else None
+    if (values.hasNext) Some(apply(values.next().value))
+    else None
   }
 
   override def setProperty(element: Element, key: String, value: Option[D]): Unit = {

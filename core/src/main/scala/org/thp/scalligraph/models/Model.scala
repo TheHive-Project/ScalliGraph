@@ -52,13 +52,11 @@ object Model {
     macro ModelMacro.mkEdgeModel[E]
 
   def printElement(e: Element): String =
-    e +
-      e.keys()
-        .asScala
-        .map(key =>
-          s"\n - $key = ${e.properties[Any](key).asScala.map(_.value()).mkString(",")} (${e.properties[Any](key).asScala.toSeq.headOption.fold("empty")(_.value.getClass.toString)})"
-        )
-        .mkString
+    e + e
+      .properties[Any]()
+      .asScala
+      .map(p => s"\n - ${p.key()} = ${p.orElse("<no value>")}")
+      .mkString
 
   implicit def vertex[E <: Product]: Vertex[E] = macro ModelMacro.getModel[E]
   implicit def edge[E <: Product]: Edge[E] = macro ModelMacro.getModel[E]

@@ -36,16 +36,8 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
           error(s"Unable to get initialValues from $label: $e")
           q"Nil"
       }
-    val domainBuilder = mappings.map { m =>
-      q"""
-        try {
-          ${m.valName}.getProperty(element, ${m.name})
-        } catch {
-          case t: Throwable =>
-            throw InternalError($label + " " + element.id + " doesn't comply with its schema, field `" + ${m.name} + "` is missing (" + element.value(${m.name}) + "): " + Model.printElement(element), t)
-        }
-        """
-    }
+    val domainBuilder = mappings.map(m => q"${m.valName}.getProperty(element, ${m.name})")
+
     val model = c.Expr[Model.Vertex[E]](q"""
       import java.util.Date
       import scala.concurrent.{ExecutionContext, Future}
@@ -57,7 +49,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
       import org.thp.scalligraph.models.{Database, Entity, IndexType, Mapping, Model, UMapping, VertexModel}
       import org.thp.scalligraph.traversal.Converter
 
-      new VertexModel { thisModel =>
+      new VertexModel {
         override type E = $entityType
 
         override val label: String = $label
@@ -119,7 +111,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
       import org.thp.scalligraph.models.{Database, EdgeModel, Entity, IndexType, Mapping, MappingCardinality, Model, UMapping}
       import org.thp.scalligraph.traversal.Converter
 
-      new EdgeModel { thisModel =>
+      new EdgeModel {
         override type E = $entityType
 
         override val label: String = $label

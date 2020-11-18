@@ -6,8 +6,8 @@ import java.util.{Date, NoSuchElementException, UUID, Collection => JCollection,
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, GraphTraversal}
 import org.apache.tinkerpop.gremlin.process.traversal.{P, Scope}
 import org.apache.tinkerpop.gremlin.structure._
-import org.thp.scalligraph.controllers.Renderer
 import org.thp.scalligraph.`macro`.TraversalMacro
+import org.thp.scalligraph.controllers.Renderer
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.traversal.Converter.CMap
 import org.thp.scalligraph.{AuthorizationError, EntityId, InternalError, NotFoundError}
@@ -16,6 +16,7 @@ import shapeless.ops.hlist.{Mapper, RightFolder, ToTraversable, Tupler}
 import shapeless.syntax.std.tuple._
 import shapeless.{Generic, HList, HNil}
 
+import scala.collection.{AbstractIterator, GenTraversableOnce}
 import scala.collection.JavaConverters._
 import scala.language.experimental.macros
 import scala.reflect.runtime.{universe => ru}
@@ -34,12 +35,44 @@ object TraversalOps {
     def raw: GraphTraversal[_, G] = traversal.raw
     def toDomain(g: G): D         = traversal.converter(g)
 
+    private def safeIterator[A](ite: Iterator[A]): Iterator[A] =
+      new AbstractIterator[A] {
+        private var cur: Option[A] = None
+
+        private def getNextValue: Option[A] =
+          if (ite.hasNext)
+            Try(ite.next()).fold(
+              error => {
+                logger.error("Traversal has generated an error", error)
+                getNextValue
+              },
+              Some(_)
+            )
+          else None
+
+        override def hasNext: Boolean = {
+          if (cur.isEmpty)
+            cur = getNextValue
+          cur.isDefined
+        }
+
+        override def next(): A = {
+          if (cur.isEmpty)
+            cur = getNextValue
+          val v = cur
+          cur = None
+          v.getOrElse(throw new NoSuchElementException)
+        }
+
+        override def map[B](f: A => B): Iterator[B]                         = safeIterator(ite.map(f))
+        override def flatMap[B](f: A => GenTraversableOnce[B]): Iterator[B] = safeIterator(ite.flatMap(f))
+      }
+
     def toIterator: Iterator[D] = {
       logger.debug(s"Execution of $raw (toIterator)")
-      val iterator = raw.asScala
       traversal.converter match {
-        case _: IdentityConverter[_] => iterator.asInstanceOf[Iterator[D]]
-        case _                       => iterator.map(traversal.converter)
+        case _: IdentityConverter[_] => safeIterator(raw.asScala).asInstanceOf[Iterator[D]]
+        case _                       => safeIterator(raw.asScala).map(traversal.converter)
       }
     }
 
@@ -55,23 +88,24 @@ object TraversalOps {
 
     def head: D = {
       logger.debug(s"Execution of $raw (head)")
-      toDomain(raw.next())
+      toIterator.next
     }
 
     def headOption: Option[D] = {
       logger.debug(s"Execution of $raw (headOption)")
-      if (raw.hasNext) Some(toDomain(raw.next()))
+      val ite = toIterator
+      if (ite.hasNext) Some(ite.next())
       else None
     }
 
     def toList: List[D] = {
       logger.debug(s"Execution of $raw (toList)")
-      raw.toList.asScala.map(toDomain).toList
+      toIterator.toList
     }
 
     def toSet: Set[D] = {
       logger.debug(s"Execution of $raw (toSet)")
-      raw.toList.asScala.map(toDomain).toSet
+      toIterator.toSet
     }
 
     def getOrFail(entityName: String): Try[D] = orFail(NotFoundError(s"$entityName not found"))
