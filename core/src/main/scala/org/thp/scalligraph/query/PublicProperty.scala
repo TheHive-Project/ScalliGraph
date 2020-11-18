@@ -10,6 +10,19 @@ import play.api.libs.json.JsObject
 import scala.reflect.runtime.{universe => ru}
 import scala.util.Try
 
+/**
+  * A property that can be handled by API
+  * @param isApplicableFn indicate if this property exists in this type
+  * @param propertyName name of the property
+  * @param mapping used in aggregation to render this property
+  * @param definition query used to select the property value
+  * @param fieldsParser used to build filter, from input fields
+  * @param updateFieldsParser used to update the property
+  * @param filterSelect query used to apply filter
+  * @param filterConverter transform the input filter to match the filter select
+  * @tparam P
+  * @tparam U
+  */
 class PublicProperty[P, U](
     val isApplicableFn: ru.Type => Boolean,
     val propertyName: String,
