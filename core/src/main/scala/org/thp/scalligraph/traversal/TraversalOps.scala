@@ -4,6 +4,7 @@ import java.lang.{Long => JLong}
 import java.util.{Date, NoSuchElementException, UUID, Collection => JCollection, List => JList, Map => JMap}
 
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, GraphTraversal}
+import org.apache.tinkerpop.gremlin.process.traversal.step.map.{OrderGlobalStep, OrderLocalStep}
 import org.apache.tinkerpop.gremlin.process.traversal.{P, Scope}
 import org.apache.tinkerpop.gremlin.structure._
 import org.thp.scalligraph.`macro`.TraversalMacro
@@ -70,37 +71,40 @@ object TraversalOps {
 
     def toIterator: Iterator[D] = {
       logger.debug(s"Execution of $raw (toIterator)")
+      _toIterator
+    }
+
+    def _toIterator: Iterator[D] =
       traversal.converter match {
         case _: IdentityConverter[_] => safeIterator(raw.asScala).asInstanceOf[Iterator[D]]
         case _                       => safeIterator(raw.asScala).map(traversal.converter)
       }
-    }
 
     def toSeq: Seq[D] = {
       logger.debug(s"Execution of $raw (toSeq)")
-      toIterator.toVector
+      _toIterator.toVector
     }
 
     def getCount: Long = {
       logger.debug(s"Execution of $raw (count)")
-      raw.count().next()
+      count.head
     }
 
     def head: D = {
       logger.debug(s"Execution of $raw (head)")
-      toIterator.next
+      _toIterator.next
     }
 
     def headOption: Option[D] = {
       logger.debug(s"Execution of $raw (headOption)")
-      val ite = toIterator
+      val ite = _toIterator
       if (ite.hasNext) Some(ite.next())
       else None
     }
 
     def toList: List[D] = {
       logger.debug(s"Execution of $raw (toList)")
-      toIterator.toList
+      _toIterator.toList
     }
 
     def toSet: Set[D] = {
@@ -129,8 +133,8 @@ object TraversalOps {
         f: Traversal[D, G, C] => Traversal[DD, GG, CC]
     ): IteratorOutput = {
       logger.debug(s"Execution of $raw (richPage)")
-      val size   = if (withTotal) Some(() => traversal.clone().count.head) else None
-      val values = f(traversal.range(from, to))
+      val size   = if (withTotal) Some(() => traversal.count.head) else None
+      val values = f(traversal.clone().range(from, to))
       IteratorOutput(values, size)
     }
 
@@ -143,8 +147,15 @@ object TraversalOps {
 //        override def apply(g: G): A = traversal.converter.andThen(f)(g)
 //      })
 
-    def count: Traversal[Long, JLong, Converter[Long, JLong]] =
+    def count: Traversal[Long, JLong, Converter[Long, JLong]] = {
+      val adminTraversal = traversal.raw.asAdmin()
+      adminTraversal.getSteps.asScala.last match {
+        case orderStep: OrderGlobalStep[_, _] => adminTraversal.removeStep(orderStep)
+        case orderStep: OrderLocalStep[_, _]  => adminTraversal.removeStep(orderStep)
+        case _                                =>
+      }
       traversal.onRawMap[Long, JLong, Converter[Long, JLong]](_.count())(Converter.long)
+    }
 
     def localCount: Traversal[Long, JLong, Converter[Long, JLong]] =
       traversal.onRawMap[Long, JLong, Converter[Long, JLong]](_.count(Scope.local))(Converter.long)
