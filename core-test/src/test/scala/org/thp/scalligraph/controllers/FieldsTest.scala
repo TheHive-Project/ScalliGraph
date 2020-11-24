@@ -17,7 +17,7 @@ case class FakeTemporaryFile(file: File) extends Files.TemporaryFile {
 object FakeTemporaryFile {
   def apply(): Files.TemporaryFile                    = FakeTemporaryFile.fromFile("temporaryFileName")
   def fromFile(name: String): Files.TemporaryFile     = FakeTemporaryFile(new File(name))
-  def fromResource(name: String): Files.TemporaryFile = FakeTemporaryFile(new File(getClass.getResource("/report-templates.zip").toURI))
+  def fromResource(name: String): Files.TemporaryFile = FakeTemporaryFile(new File(getClass.getResource(name).toURI))
 }
 
 class FieldsTest extends PlaySpecification {
