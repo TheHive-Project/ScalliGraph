@@ -279,6 +279,24 @@ class JanusDatabase(
       Success(())
     }
 
+  override def addVertexModel(label: String, properties: Map[String, Mapping[_, _, _]]): Try[Unit] = {
+    managementTransaction { mgmt =>
+      mgmt.getOrCreateVertexLabel(label)
+      properties.toTry {
+        case (property, mapping) => addProperty(mgmt, property, mapping)
+      }
+    }.map(_ => ())
+  }
+
+  override def addEdgeModel(label: String, properties: Map[String, Mapping[_, _, _]]): Try[Unit] = {
+    managementTransaction { mgmt =>
+      mgmt.getOrCreateEdgeLabel(label)
+      properties.toTry {
+        case (property, mapping) => addProperty(mgmt, property, mapping)
+      }
+    }.map(_ => ())
+  }
+
   override def addSchemaIndexes(models: Seq[Model]): Try[Unit] =
     managementTransaction { mgmt =>
       findFirstAvailableIndex(mgmt, "_label_vertex_index").foreach { indexName =>

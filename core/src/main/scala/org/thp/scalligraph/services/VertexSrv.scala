@@ -74,4 +74,8 @@ abstract class VertexSrv[V <: Product](implicit db: Database, val model: Model.V
           }
       }
   }
+
+  def delete(e: V with Entity)(implicit graph: Graph): Try[Unit] = {
+    Try(get(e).remove())
+  }
 }
