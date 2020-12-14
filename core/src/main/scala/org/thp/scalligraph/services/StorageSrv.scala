@@ -4,12 +4,16 @@ import java.io.{ByteArrayInputStream, InputStream}
 import java.net.URI
 import java.nio.file._
 import java.util.Base64
-
 import akka.NotUsed
+import akka.actor.ActorSystem
 import akka.stream.Materializer
+import akka.stream.alpakka.s3.{S3Attributes, S3Ext, S3Settings}
 import akka.stream.alpakka.s3.scaladsl.S3
 import akka.stream.scaladsl.{Sink, Source, StreamConverters}
 import akka.util.ByteString
+import com.amazonaws.auth.{AWSCredentials, AWSCredentialsProvider}
+import com.amazonaws.regions.AwsRegionProvider
+
 import javax.inject.{Inject, Singleton}
 import org.apache.hadoop.conf.{Configuration => HadoopConfig}
 import org.apache.hadoop.fs.{FileAlreadyExistsException => HadoopFileAlreadyExistsException, FileSystem => HDFileSystem, Path => HDPath}
@@ -224,14 +228,38 @@ class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Data
 }
 
 @Singleton
-class S3StorageSrv @Inject() (configuration: Configuration, implicit val ec: ExecutionContext, implicit val mat: Materializer) extends StorageSrv {
-  val bucketName: String           = configuration.get[String]("storage.s3.bucket")
-  val readTimeout: FiniteDuration  = configuration.get[FiniteDuration]("storage.s3.readTimeout")
-  val writeTimeout: FiniteDuration = configuration.get[FiniteDuration]("storage.s3.writeTimeout")
-  val chunkSize: Int               = configuration.get[Int]("storage.s3.chunkSize")
+class S3StorageSrv @Inject() (configuration: Configuration, system: ActorSystem, implicit val ec: ExecutionContext, implicit val mat: Materializer)
+    extends StorageSrv {
+  private val bucketName: String           = configuration.get[String]("storage.s3.bucket")
+  private val readTimeout: FiniteDuration  = configuration.get[FiniteDuration]("storage.s3.readTimeout")
+  private val writeTimeout: FiniteDuration = configuration.get[FiniteDuration]("storage.s3.writeTimeout")
+  private val chunkSize: Int               = configuration.underlying.getBytes("storage.s3.chunkSize").toInt
+  private val endpoint: String             = configuration.get[String]("storage.s3.endpoint")
+  private val region: String               = configuration.get[String]("storage.s3.region")
+  private val accessKey: String            = configuration.get[String]("storage.s3.accessKey")
+  private val secretKey: String            = configuration.get[String]("storage.s3.secretKey")
+
+  private val credentialsProvider: AWSCredentialsProvider = new AWSCredentialsProvider {
+    override def getCredentials: AWSCredentials =
+      new AWSCredentials {
+        override def getAWSAccessKeyId: String = accessKey
+        override def getAWSSecretKey: String   = secretKey
+      }
+
+    override def refresh(): Unit = ()
+  }
+  private val settings: S3Settings = S3Ext(system)
+    .settings
+    .withEndpointUrl(endpoint)
+    .withCredentialsProvider(credentialsProvider)
+    .withS3RegionProvider(new AwsRegionProvider {
+      override def getRegion: String = region
+    })
 
   override def loadBinary(folder: String, id: String): InputStream =
-    S3.download(bucketName, s"$folder/$id")
+    S3
+      .download(bucketName, s"$folder/$id")
+      .withAttributes(S3Attributes.settings(settings))
       .flatMapConcat(_.get._1)
       .runWith(
         StreamConverters.asInputStream(readTimeout)
@@ -239,13 +267,24 @@ class S3StorageSrv @Inject() (configuration: Configuration, implicit val ec: Exe
 
   override def saveBinary(folder: String, id: String, is: InputStream)(implicit graph: Graph): Try[Unit] =
     Try {
-      Await.ready(StreamConverters.fromInputStream(() => is, chunkSize).runWith(S3.multipartUpload(bucketName, s"$folder/$id")), writeTimeout)
+      Await.result(
+        StreamConverters
+          .fromInputStream(() => is, chunkSize)
+          .runWith(S3.multipartUpload(bucketName, s"$folder/$id").withAttributes(S3Attributes.settings(settings))),
+        writeTimeout
+      )
       ()
     }
 
   override def exists(folder: String, id: String): Boolean =
     Try {
-      Await.result(S3.getObjectMetadata(bucketName, s"$folder/$id").runWith(Sink.head).map(_.isDefined), readTimeout)
+      Await.result(
+        S3.getObjectMetadata(bucketName, s"$folder/$id")
+          .withAttributes(S3Attributes.settings(settings))
+          .runWith(Sink.head)
+          .map(_.isDefined),
+        readTimeout
+      )
     }.getOrElse(false)
 
   override def delete(folder: String, id: String)(implicit graph: Graph): Try[Unit] =
