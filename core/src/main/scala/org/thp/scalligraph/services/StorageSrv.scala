@@ -289,7 +289,12 @@ class S3StorageSrv @Inject() (configuration: Configuration, system: ActorSystem,
 
   override def delete(folder: String, id: String)(implicit graph: Graph): Try[Unit] =
     Try {
-      Await.ready(S3.deleteObject(bucketName, s"$folder/$id").runWith(Sink.ignore), readTimeout)
+      Await.ready(
+        S3.deleteObject(bucketName, s"$folder/$id")
+          .withAttributes(S3Attributes.settings(settings))
+          .runWith(Sink.ignore),
+        readTimeout
+      )
       ()
     }
 }
