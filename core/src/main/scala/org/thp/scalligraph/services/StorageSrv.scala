@@ -40,6 +40,8 @@ trait StorageSrv {
   def saveBinary(folder: String, id: String, data: Source[ByteString, NotUsed])(implicit graph: Graph, mat: Materializer): Try[Unit] =
     saveBinary(folder, id, data.runWith(StreamConverters.asInputStream(5.minutes)))
   def exists(folder: String, id: String): Boolean
+
+  def delete(folder: String, id: String)(implicit graph: Graph): Try[Unit]
 }
 
 @Singleton
@@ -66,6 +68,8 @@ class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
     }
 
   override def exists(folder: String, id: String): Boolean = Files.exists(directory.resolve(folder).resolve(id))
+
+  override def delete(folder: String, id: String)(implicit graph: Graph): Try[Unit] = Try(Files.delete(directory.resolve(folder).resolve(id)))
 }
 
 object HadoopStorageSrv {
@@ -110,6 +114,9 @@ class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
     }
 
   override def exists(folder: String, id: String): Boolean = fs.exists(new HDPath(new HDPath(location, folder), id))
+
+  override def delete(folder: String, id: String)(implicit graph: Graph): Try[Unit] =
+    Try(fs.delete(new HDPath(new HDPath(location, folder), id), false))
 }
 
 @Singleton
@@ -216,6 +223,8 @@ class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Data
       Success(())
     }
   }
+
+  override def delete(folder: String, id: String)(implicit graph: Graph): Try[Unit] = ???
 }
 
 @Singleton
@@ -277,4 +286,15 @@ class S3StorageSrv @Inject() (configuration: Configuration, system: ActorSystem,
         readTimeout
       )
     }.getOrElse(false)
+
+  override def delete(folder: String, id: String)(implicit graph: Graph): Try[Unit] =
+    Try {
+      Await.ready(
+        S3.deleteObject(bucketName, s"$folder/$id")
+          .withAttributes(S3Attributes.settings(settings))
+          .runWith(Sink.ignore),
+        readTimeout
+      )
+      ()
+    }
 }
