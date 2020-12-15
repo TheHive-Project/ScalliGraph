@@ -61,18 +61,14 @@ class FieldsParser[T](
     new FieldsParser(
       newFormatName,
       acceptedInput,
-      {
-        case (path, fields) => apply(path, fields).map(f)
-      }
+      parse.andThen(_.map(f))
     )
 
   def flatMap[U](newFormatName: String)(fp: FieldsParser[U])(implicit ev: T <:< Field): FieldsParser[U] =
     new FieldsParser(
       newFormatName,
       acceptedInput,
-      {
-        case (path, fields) => apply(path, fields).flatMap(f => fp(ev(f)))
-      }
+      parse.andThen(_.flatMap(f => fp(ev(f))))
     )
 
   def sequence: FieldsParser[Seq[T]] =
@@ -131,20 +127,20 @@ object FieldsParser extends FieldsParserLowerPrio {
   def apply[T](formatName: String)(parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]]) =
     new FieldsParser[T](formatName, Set(formatName), parse)
 
-  def debug[T](formatName: String)(parse: PartialFunction[(FPath, Field), T Or Every[AttributeError]]) =
+  def debug[T](message: String)(fieldsParser: FieldsParser[T]): FieldsParser[T] =
     new FieldsParser[T](
-      formatName,
-      Set(formatName),
+      fieldsParser.formatName,
+      fieldsParser.acceptedInput,
       new PartialFunction[(FPath, Field), T Or Every[AttributeError]] {
         override def isDefinedAt(input: (FPath, Field)): Boolean = {
-          val result = parse.isDefinedAt(input)
-          logger.debug(s"FieldsParser($formatName): $input => $result")
+          val result = fieldsParser.parse.isDefinedAt(input)
+          logger.debug(s"$message FieldsParser(${fieldsParser.formatName}, ${fieldsParser.acceptedInput}): $input => $result")
           result
         }
 
         override def apply(input: (FPath, Field)): Or[T, Every[AttributeError]] = {
-          val result = parse.apply(input)
-          logger.debug(s"FieldsParser($formatName): $input => $result")
+          val result = fieldsParser.parse.apply(input)
+          logger.debug(s"$message FieldsParser(${fieldsParser.formatName}, ${fieldsParser.acceptedInput}): $input => $result")
           result
         }
       }
