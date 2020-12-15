@@ -19,6 +19,7 @@ import org.apache.hadoop.conf.{Configuration => HadoopConfig}
 import org.apache.hadoop.fs.{FileAlreadyExistsException => HadoopFileAlreadyExistsException, FileSystem => HDFileSystem, Path => HDPath}
 import org.apache.hadoop.io.IOUtils
 import org.apache.tinkerpop.gremlin.structure.Graph
+import org.thp.scalligraph.NotFoundError
 import org.thp.scalligraph.auth.UserSrv
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.traversal.Traversal
@@ -42,6 +43,8 @@ trait StorageSrv {
   def exists(folder: String, id: String): Boolean
 
   def delete(folder: String, id: String)(implicit graph: Graph): Try[Unit]
+
+  def getSize(folder: String, id: String)(implicit graph: Graph): Try[Long]
 }
 
 @Singleton
@@ -70,6 +73,8 @@ class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
   override def exists(folder: String, id: String): Boolean = Files.exists(directory.resolve(folder).resolve(id))
 
   override def delete(folder: String, id: String)(implicit graph: Graph): Try[Unit] = Try(Files.delete(directory.resolve(folder).resolve(id)))
+
+  override def getSize(folder: String, id: String)(implicit graph: Graph): Try[Long] = Try(Files.size(directory.resolve(folder).resolve(id)))
 }
 
 object HadoopStorageSrv {
@@ -117,6 +122,9 @@ class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
 
   override def delete(folder: String, id: String)(implicit graph: Graph): Try[Unit] =
     Try(fs.delete(new HDPath(new HDPath(location, folder), id), false))
+
+  override def getSize(folder: String, id: String)(implicit graph: Graph): Try[Long] =
+    Try(fs.getFileStatus(new HDPath(new HDPath(location, folder), id)).getLen)
 }
 
 @Singleton
@@ -225,6 +233,8 @@ class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Data
   }
 
   override def delete(folder: String, id: String)(implicit graph: Graph): Try[Unit] = ???
+
+  override def getSize(folder: String, id: String)(implicit graph: Graph): Try[Long] = ???
 }
 
 @Singleton
@@ -296,5 +306,17 @@ class S3StorageSrv @Inject() (configuration: Configuration, system: ActorSystem,
         readTimeout
       )
       ()
+    }
+
+  override def getSize(folder: String, id: String)(implicit graph: Graph): Try[Long] =
+    Try {
+      Await
+        .result(
+          S3.getObjectMetadata(bucketName, s"folder/$id")
+            .withAttributes(S3Attributes.settings(settings))
+            .runWith(Sink.head),
+          readTimeout
+        )
+        .fold(throw NotFoundError(s"Attachment $folder/$id not found"))(_.contentLength)
     }
 }
