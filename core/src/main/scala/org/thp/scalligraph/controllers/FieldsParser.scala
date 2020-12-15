@@ -57,6 +57,15 @@ class FieldsParser[T](
   def orElse[U >: T](fp: FieldsParser[U]): FieldsParser[U] =
     new FieldsParser[U](formatName, acceptedInput ++ fp.acceptedInput, parse orElse fp.parse)
 
+  def recover[U >: T](fp: FieldsParser[U]): FieldsParser[U] =
+    new FieldsParser[U](
+      formatName,
+      acceptedInput ++ fp.acceptedInput,
+      {
+        case (path, field) => apply(path, field).recoverWith(_ => fp(path, field))
+      }
+    )
+
   def map[U](newFormatName: String)(f: T => U): FieldsParser[U] =
     new FieldsParser(
       newFormatName,
