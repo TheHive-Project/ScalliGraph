@@ -40,7 +40,7 @@ import scala.util.{Failure, Success, Try}
 
 object JanusDatabase {
 
-  def openDatabase(configuration: Configuration): JanusGraph = {
+  def openDatabase(configuration: Configuration, system: ActorSystem): JanusGraph = {
     val backend = configuration.get[String]("db.janusgraph.storage.backend")
     if (backend == "berkeleyje") {
       val jePropertyFile = Paths.get(configuration.get[String]("db.janusgraph.storage.directory"), "je.properties")
@@ -53,7 +53,17 @@ object JanusDatabase {
         finally propertyOutputStream.close()
       }
     }
-    JanusGraphFactory.open(new Config(configuration.get[Configuration]("db.janusgraph")))
+    val maxAttempts  = configuration.get[Int]("db.janusgraph.connect.maxAttempts")
+    val minBackoff   = configuration.get[FiniteDuration]("db.janusgraph.connect.minBackoff")
+    val maxBackoff   = configuration.get[FiniteDuration]("db.janusgraph.connect.maxBackoff")
+    val randomFactor = configuration.get[Double]("db.janusgraph.connect.randomFactor")
+
+    Retry(maxAttempts)
+      .on[IllegalArgumentException]
+      .withBackoff(minBackoff, maxBackoff, randomFactor)(system)
+      .sync {
+        JanusGraphFactory.open(new Config(configuration.get[Configuration]("db.janusgraph")))
+      }
   }
 }
 
@@ -74,7 +84,7 @@ class JanusDatabase(
 
   @Inject() def this(configuration: Configuration, system: ActorSystem) = {
     this(
-      JanusDatabase.openDatabase(configuration),
+      JanusDatabase.openDatabase(configuration, system),
       configuration.get[Int]("db.onConflict.maxAttempts"),
       configuration.get[FiniteDuration]("db.onConflict.minBackoff"),
       configuration.get[FiniteDuration]("db.onConflict.maxBackoff"),
@@ -279,23 +289,21 @@ class JanusDatabase(
       Success(())
     }
 
-  override def addVertexModel(label: String, properties: Map[String, Mapping[_, _, _]]): Try[Unit] = {
+  override def addVertexModel(label: String, properties: Map[String, Mapping[_, _, _]]): Try[Unit] =
     managementTransaction { mgmt =>
       mgmt.getOrCreateVertexLabel(label)
       properties.toTry {
         case (property, mapping) => addProperty(mgmt, property, mapping)
       }
     }.map(_ => ())
-  }
 
-  override def addEdgeModel(label: String, properties: Map[String, Mapping[_, _, _]]): Try[Unit] = {
+  override def addEdgeModel(label: String, properties: Map[String, Mapping[_, _, _]]): Try[Unit] =
     managementTransaction { mgmt =>
       mgmt.getOrCreateEdgeLabel(label)
       properties.toTry {
         case (property, mapping) => addProperty(mgmt, property, mapping)
       }
     }.map(_ => ())
-  }
 
   override def addSchemaIndexes(models: Seq[Model]): Try[Unit] =
     managementTransaction { mgmt =>
