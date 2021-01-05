@@ -27,9 +27,7 @@ case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputQuer
       publicProperties
         .get[Traversal.UnkD, Traversal.UnkDU](propertyPath, traversalType)
         .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
-    traversal.filter { t =>
-      property.filterSelect(propertyPath, t, authContext).is(db.mapPredicate(predicate.asInstanceOf[P[Traversal.UnkG]]))
-    }
+    property.filter(propertyPath, traversal, authContext, predicate)
   }
 }
 
@@ -73,11 +71,9 @@ case class AndFilter(inputFilters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]]
       traversal: Traversal.Unk,
       authContext: AuthContext
   ): Traversal.Unk =
-    inputFilters.map(ff => (t: Traversal.Unk) => ff(db, publicProperties, traversalType, t, authContext)) match {
-      case Seq(f)      => traversal.filter(f)
-      case Seq()       => traversal.filter(_.not(identity))
-      case Seq(f @ _*) => traversal.filter(_.and(f: _*))
-    }
+    inputFilters
+      .map(ff => (t: Traversal.Unk) => ff(publicProperties, traversalType, t, authContext))
+      .foldLeft(traversal)((t, f) => f(t))
 }
 
 case class NotFilter(inputFilter: InputQuery[Traversal.Unk, Traversal.Unk]) extends InputQuery[Traversal.Unk, Traversal.Unk] {
@@ -146,10 +142,12 @@ object InputFilter {
   ): FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]] = {
     def propParser(name: String): FieldsParser[Any] = {
       val fieldPath = FPath(name)
-      val property =
-        properties.get[Traversal.UnkD, Traversal.UnkDU](fieldPath, tpe).getOrElse(throw BadRequestError(s"Property $name for type $tpe not found"))
-      val propertyConverter = property.filterConverter(fieldPath)
-      property.fieldsParser.map(property.fieldsParser.formatName)(v => propertyConverter(v))
+      properties
+        .get[Traversal.UnkD, Traversal.UnkDU](fieldPath, tpe)
+        .getOrElse(throw BadRequestError(s"Property $name for type $tpe not found"))
+        .filter
+        .fieldsParser
+        .asInstanceOf[FieldsParser[Any]]
     }
 
     FieldsParser("query") {

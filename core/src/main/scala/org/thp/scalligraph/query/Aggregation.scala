@@ -287,7 +287,7 @@ case class AggMin(aggName: Option[String], fieldName: String, filter: Option[Inp
           property
             .select(FPath(fieldName), t, authContext)
             .min
-            .domainMap(min => Output(min, Json.obj(name -> property.mapping.selectRenderer.toJson(min)))),
+            .domainMap(min => Output(min, Json.obj(name -> property.toJson(min)))),
         Output(null, JsNull)
       )
   }
@@ -312,7 +312,7 @@ case class AggMax(aggName: Option[String], fieldName: String, filter: Option[Inp
           property
             .select(FPath(fieldName), t, authContext)
             .max
-            .domainMap(max => Output(max, Json.obj(name -> property.mapping.selectRenderer.toJson(max)))),
+            .domainMap(max => Output(max, Json.obj(name -> property.toJson(max)))),
         Output(null, JsNull)
       )
   }

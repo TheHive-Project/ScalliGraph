@@ -97,7 +97,9 @@ object SelectLabelName extends ->((_: StepLabel[_, _, _]).name)
 
 class SortBySelector[D, G, C <: Converter[D, G]](origin: Traversal[D, G, C]) {
   //  def by[B](f: Traversal[D, G] => Traversal[_, B]): ByResult[G, G]               = (_: GraphTraversal[_, G]).by(f(origin.start).raw)
-  def by[DD, GG](f: Traversal[D, G, C] => Traversal[DD, GG, _], order: Order): ByResult[G, G, G, IdentityConverter[G]] =
+//  def by[DD, GG](f: Traversal[D, G, C] => Traversal[DD, GG, _], order: Order): ByResult[G, G, G, IdentityConverter[G]] =
+//    ByResult[G, G, G, IdentityConverter[G]](Converter.identity)(_.by(f(origin.start).raw, order))
+  def by(f: Traversal[D, G, C] => Traversal[_, _, _], order: Order): ByResult[G, G, G, IdentityConverter[G]] =
     ByResult[G, G, G, IdentityConverter[G]](Converter.identity)(_.by(f(origin.start).raw, order))
   def by(key: String, order: Order): ByResult[G, G, G, IdentityConverter[G]] =
     ByResult[G, G, G, IdentityConverter[G]](Converter.identity)(_.by(key, order))

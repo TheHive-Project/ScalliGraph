@@ -1,44 +1,99 @@
 package org.thp.scalligraph.query
 
-import org.apache.tinkerpop.gremlin.structure.{Graph, Vertex}
+import org.apache.tinkerpop.gremlin.process.traversal.{Order, P}
+import org.apache.tinkerpop.gremlin.structure.Vertex
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.controllers.{FPath, FieldsParser}
+import org.thp.scalligraph.controllers.{FPath, FieldsParser, Renderer}
 import org.thp.scalligraph.models.{Database, Mapping}
-import org.thp.scalligraph.traversal.{Converter, Traversal}
-import play.api.libs.json.JsObject
+import org.thp.scalligraph.query.PredicateOps.PredicateOpsDefs
+import org.thp.scalligraph.traversal.Traversal.Unk
+import org.thp.scalligraph.traversal.TraversalOps.TraversalOpsDefs
+import org.thp.scalligraph.traversal.{Converter, Graph, IdentityConverter, Traversal}
+import play.api.libs.json.{JsObject, JsValue}
 
 import scala.reflect.runtime.{universe => ru}
 import scala.util.Try
 
-/**
-  * A property that can be handled by API
-  * @param isApplicableFn indicate if this property exists in this type
-  * @param propertyName name of the property
-  * @param mapping used in aggregation to render this property
-  * @param definition query used to select the property value
-  * @param fieldsParser used to build filter, from input fields
-  * @param updateFieldsParser used to update the property
-  * @param filterSelect query used to apply filter
-  * @param filterConverter transform the input filter to match the filter select
-  * @tparam P
-  * @tparam U
-  */
-class PublicProperty[P, U](
-    val isApplicableFn: ru.Type => Boolean,
-    val propertyName: String,
-    val mapping: Mapping[P, U, _],
-    definition: (FPath, Traversal.Unk, AuthContext) => Traversal.Domain[U],
-    val fieldsParser: FieldsParser[U],
-    val updateFieldsParser: Option[FieldsParser[PropertyUpdater]],
-    val filterSelect: (FPath, Traversal.Unk, AuthContext) => Traversal.Unk,
-    val filterConverter: FPath => Converter[Traversal.UnkG, Traversal.UnkD]
+///**
+//  * A property that can be handled by API
+//  * @param isApplicableFn indicate if this property exists in this type
+//  * @param propertyName name of the property
+//  * @param mapping used in aggregation to render this property
+//  * @param definition query used to select the property value
+//  * @param fieldsParser used to build filter, from input fields
+//  * @param updateFieldsParser used to update the property
+//  * @param filterSelect query used to apply filter
+//  * @param filterConverter transform the input filter to match the filter select
+//  * @tparam P
+//  * @tparam U
+//  */
+case class PublicProperty(
+    typeFilter: TypeFilter,
+    propertyName: String,
+    mapping: Mapping[_, _, _],
+    select: TraversalSelect,
+    updateFieldsParser: Option[FieldsParser[PropertyUpdater]],
+    filter: PropertyFilter[_],
+    sort: PropertyOrder
 ) {
-  lazy val propertyPath: FPath = FPath(propertyName)
+  def toJson[A](value: A): JsValue = mapping.selectRenderer.asInstanceOf[Renderer[A]].toJson(value)
+}
 
-  def select(path: FPath, traversal: Traversal.Unk, authContext: AuthContext): Traversal.Domain[U] =
-    definition(path, traversal, authContext)
+trait TypeFilter {
+  def apply(tpe: ru.Type): Boolean
+}
 
-  def isApplicable(traversalType: ru.Type): Boolean = isApplicableFn(traversalType)
+class TraversalTypeFilter[E <: Product: ru.TypeTag] extends TypeFilter {
+  val refType: ru.Type                    = ru.typeOf[Traversal.V[E]]
+  override def apply(t: ru.Type): Boolean = t <:< refType
+}
+
+trait TraversalSelect {
+  def apply(path: FPath, traversal: Traversal.Unk, authContext: AuthContext): Traversal.Unk
+//  def widen: TraversalSelect = this.asInstanceOf[TraversalSelect[Any]]
+}
+
+class FieldSelect(fieldName: String) extends TraversalSelect {
+  override def apply(path: FPath, traversal: Traversal.Unk, authContext: AuthContext): Traversal.Unk =
+    traversal.onRawMap[Any, Any, IdentityConverter[Any]](_.values[Any](fieldName))(Converter.identity)
+}
+
+trait PropertyFilter[M] {
+  val fieldsParser: FieldsParser[M]
+  def apply(path: FPath, traversal: Traversal.Unk, authContext: AuthContext, predicate: P[_]): Traversal.Unk
+  def existenceTest(path: FPath, traversal: Traversal.Unk, authContext: AuthContext, exist: Boolean): Traversal.Unk
+}
+
+class FieldPropertyFilter[E <: Product, D](fieldName: String, mapping: Mapping[_, D, _])(implicit val fieldsParser: FieldsParser[D])
+    extends PropertyFilter[D] {
+  override def apply(path: FPath, traversal: Traversal.Unk, authContext: AuthContext, predicate: P[_]): Traversal.Unk =
+    traversal.onRaw(_.has(fieldName, predicate.map(v => mapping.asInstanceOf[Mapping[Any, Any, Any]].reverse(v))))
+  override def existenceTest(path: FPath, traversal: Traversal.Unk, authContext: AuthContext, exist: Boolean): Traversal.Unk =
+    if (exist) traversal.onRaw(_.has(fieldName))
+    else traversal.onRaw(_.hasNot(fieldName))
+}
+
+class TraversalPropertyFilter[D](select: TraversalSelect, mapping: Mapping[_, D, _])(implicit val fieldsParser: FieldsParser[D])
+    extends PropertyFilter[D] {
+  override def apply(path: FPath, traversal: Traversal.Unk, authContext: AuthContext, predicate: P[_]): Traversal.Unk =
+    traversal.filter(t => select(path, t, authContext).is(predicate.map(v => mapping.asInstanceOf[Mapping[Any, Any, Any]].reverse(v))))
+  override def existenceTest(path: FPath, traversal: Traversal.Unk, authContext: AuthContext, exist: Boolean): Traversal.Unk =
+    if (exist) traversal.filter(t => select(path, t, authContext))
+    else traversal.filterNot(t => select(path, t, authContext))
+}
+
+trait PropertyOrder {
+  def apply(path: FPath, traversal: Traversal.Unk, authContext: AuthContext, order: Order): Traversal.Unk
+}
+
+class FieldPropertyOrder(fieldName: String) extends PropertyOrder {
+  override def apply(path: FPath, traversal: Traversal.Unk, authContext: AuthContext, order: Order): Traversal.Unk =
+    traversal.onRaw(_.by(fieldName, order))
+}
+
+class TraversalPropertyOrder(select: TraversalSelect) extends PropertyOrder {
+  override def apply(path: FPath, traversal: Traversal.Unk, authContext: AuthContext, order: Order): Traversal.Unk =
+    traversal.onRaw(_.by(select(path, traversal.start, authContext).raw, order))
 }
 
 object PropertyUpdater {
@@ -77,16 +132,16 @@ abstract class PropertyUpdater(val path: FPath, val value: Any) extends ((Vertex
     s"PropertyUpdater($path, $value)"
 }
 
-class PublicProperties(private val map: Map[String, Seq[PublicProperty[_, _]]]) {
-  def get[P, U](propertyName: String): Option[PublicProperty[P, U]] =
-    map.get(propertyName).flatMap(_.headOption).asInstanceOf[Option[PublicProperty[P, U]]]
-  def get[P, U](propertyName: String, tpe: ru.Type): Option[PublicProperty[P, U]] =
-    map.get(propertyName).flatMap(_.find(_.isApplicable(tpe))).asInstanceOf[Option[PublicProperty[P, U]]]
-  def get[P, U](propertyPath: FPath, tpe: ru.Type): Option[PublicProperty[P, U]] =
-    get[P, U](propertyPath.toString, tpe) orElse propertyPath.headOption.flatMap(get[P, U](_, tpe))
+class PublicProperties(private val map: Map[String, Seq[PublicProperty]]) {
+  def get[V, U](propertyName: String): Option[PublicProperty] =
+    map.get(propertyName).flatMap(_.headOption)
+  def get[V, U](propertyName: String, tpe: ru.Type): Option[PublicProperty] =
+    map.get(propertyName).flatMap(_.find(_.typeFilter(tpe)))
+  def get[V, U](propertyPath: FPath, tpe: ru.Type): Option[PublicProperty] =
+    get[V, U](propertyPath.toString, tpe) orElse propertyPath.headOption.flatMap(get[V, U](_, tpe))
 
-  def list: Seq[PublicProperty[_, _]] = map.flatMap(_._2.headOption).toSeq
-  def :+[P, U](property: PublicProperty[P, U]): PublicProperties =
+  def list: Seq[PublicProperty] = map.flatMap(_._2.headOption).toSeq
+  def :+[V, U](property: PublicProperty): PublicProperties =
     new PublicProperties(map + (property.propertyName -> (map.getOrElse(property.propertyName, Nil) :+ property)))
   def ++(properties: PublicProperties): PublicProperties = {
     val newMap = (map.keySet ++ properties.map.keySet).map(k => k -> (map.getOrElse(k, Nil) ++ properties.map.getOrElse(k, Nil))).toMap
