@@ -8,14 +8,15 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.query.PropertyUpdater
 import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, IdentityConverter, Traversal}
+import org.thp.scalligraph.traversal.{Converter, Graph, IdentityConverter, Traversal}
+import org.thp.scalligraph.{EntityId, EntityIdOrName, NotFoundError}
 import play.api.libs.json.JsObject
 
 import scala.util.{Failure, Success, Try}
 
-abstract class VertexSrv[V <: Product](implicit db: Database, val model: Model.Vertex[V]) extends ElementSrv[V, Vertex] {
-  override def startTraversal(implicit graph: Graph): Traversal.V[V] =
-    filterTraversal(Traversal.V())
+abstract class VertexSrv[V <: Product](implicit val model: Model.Vertex[V]) extends ElementSrv[V, Vertex] {
+  override def startTraversal(implicit graph: Graph): Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]] =
+    graph.V[V]()(model)
 
   override def filterTraversal(
       traversal: Traversal[Vertex, Vertex, Converter.Identity[Vertex]]

@@ -5,7 +5,8 @@ import org.thp.scalligraph.{EntityId, EntityIdOrName, NotFoundError}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, Traversal}
+import org.thp.scalligraph.traversal.{Converter, Graph, Traversal}
+import org.thp.scalligraph.{EntityId, EntityIdOrName, NotFoundError}
 
 import scala.util.{Failure, Success, Try}
 
@@ -14,13 +15,8 @@ class EdgeSrv[E <: Product, FROM <: Product, TO <: Product](implicit
     val model: Model.Edge[E]
 ) extends ElementSrv[E, Edge] {
 
-  override def startTraversal(implicit graph: Graph): Traversal.E[E] =
-    filterTraversal(Traversal.E())
-
-  override def filterTraversal(
-      traversal: Traversal[Edge, Edge, Converter.Identity[Edge]]
-  ): Traversal[E with Entity, Edge, Converter[E with Entity, Edge]] =
-    db.labelFilter(model)(traversal).domainMap(model.converter)
+//  override def startTraversal(strategy: GraphStrategy)(implicit graph: Graph): Traversal.E[E] =
+//    filterTraversal(Traversal.strategedE(strategy))
 
   override def getByIds(ids: EntityId*)(implicit graph: Graph): Traversal.E[E] =
     if (ids.isEmpty) Traversal.empty[Edge].domainMap(model.converter)
