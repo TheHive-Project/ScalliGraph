@@ -24,7 +24,7 @@ import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
 
 object NO_VALUE
-object TraversalOps {
+object TraversalOps extends TraversalPrinter {
   lazy val logger: Logger = Logger(getClass)
 
   implicit class TraversalCaster(traversal: Traversal[_, _, _]) {
@@ -70,7 +70,7 @@ object TraversalOps {
       }
 
     def toIterator: Iterator[D] = {
-      logger.debug(s"Execution of $raw (toIterator)")
+      logger.debug(s"Execution of ${traversal.print} (toIterator)")
       _toIterator
     }
 
@@ -81,34 +81,34 @@ object TraversalOps {
       }
 
     def toSeq: Seq[D] = {
-      logger.debug(s"Execution of $raw (toSeq)")
+      logger.debug(s"Execution of ${traversal.print} (toSeq)")
       _toIterator.toVector
     }
 
     def getCount: Long = {
-      logger.debug(s"Execution of $raw (count)")
+      logger.debug(s"Execution of ${traversal.print} (count)")
       count.head
     }
 
     def head: D = {
-      logger.debug(s"Execution of $raw (head)")
+      logger.debug(s"Execution of ${traversal.print} (head)")
       _toIterator.next
     }
 
     def headOption: Option[D] = {
-      logger.debug(s"Execution of $raw (headOption)")
+      logger.debug(s"Execution of ${traversal.print} (headOption)")
       val ite = _toIterator
       if (ite.hasNext) Some(ite.next())
       else None
     }
 
     def toList: List[D] = {
-      logger.debug(s"Execution of $raw (toList)")
+      logger.debug(s"Execution of ${traversal.print} (toList)")
       _toIterator.toList
     }
 
     def toSet: Set[D] = {
-      logger.debug(s"Execution of $raw (toSet)")
+      logger.debug(s"Execution of ${traversal.print} (toSet)")
       toIterator.toSet
     }
 
@@ -117,14 +117,14 @@ object TraversalOps {
     def orFail(ex: Exception): Try[D] = headOption.fold[Try[D]](Failure(ex))(Success.apply)
 
     def exists: Boolean = {
-      logger.debug(s"Execution of $raw (exists)")
+      logger.debug(s"Execution of ${traversal.print} (exists)")
       traversal.raw.hasNext
     }
 
     def existsOrFail: Try[Unit] = if (exists) Success(()) else Failure(AuthorizationError("Unauthorized action"))
 
     def remove(): Unit = {
-      logger.debug(s"Execution of $raw (drop)")
+      logger.debug(s"Execution of ${traversal.print} (drop)")
       traversal.raw.drop().iterate()
       ()
     }
@@ -132,7 +132,6 @@ object TraversalOps {
     def richPage[DD: Renderer, GG, CC <: Converter[DD, GG]](from: Long, to: Long, withTotal: Boolean)(
         f: Traversal[D, G, C] => Traversal[DD, GG, CC]
     ): IteratorOutput = {
-      logger.debug(s"Execution of $raw (richPage)")
       val size   = if (withTotal) Some(() => traversal.count.head) else None
       val values = f(traversal.clone().range(from, to))
       IteratorOutput(values, size)
@@ -538,7 +537,8 @@ object TraversalOps {
 
     def filter(f: Traversal[D, G, C] => Traversal[_, _, _]): Traversal[D, G, C] = traversal.onRaw(_.filter(f(traversal.start).raw))
     def filterNot(f: Traversal[D, G, C] => Traversal[_, _, _]): Traversal[D, G, C] =
-      traversal.onRaw(_.filter(f(traversal.start).raw.count().is(P.eq(0))))
+      traversal.onRaw(_.not(f(traversal.start).raw))
+//      traversal.onRaw(_.filter(f(traversal.start).raw.limit(1).count().is(P.eq(0))))
 
     def dedup: Traversal[D, G, C]                              = traversal.onRaw(_.dedup())
     def dedup(labels: StepLabel[_, _, _]*): Traversal[D, G, C] = traversal.onRaw(_.dedup(labels.map(_.name): _*))

@@ -24,15 +24,22 @@ import org.janusgraph.graphdb.database.StandardJanusGraph
 import org.janusgraph.graphdb.database.management.ManagementSystem
 import org.janusgraph.graphdb.olap.job.IndexRepairJob
 import org.janusgraph.graphdb.relations.RelationIdentifier
+import org.janusgraph.graphdb.tinkerpop.optimize.JanusGraphStepStrategy
 import org.slf4j.MDC
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.{MappingCardinality, _}
 import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.traversal.{Converter, Traversal}
 import org.thp.scalligraph.utils.{Config, Retry}
-import org.thp.scalligraph.{EntityId, InternalError, NotFoundError}
-import play.api.{Configuration, Environment}
+import org.thp.scalligraph.{EntityId, InternalError, NotFoundError, SingleInstance}
+import play.api.{Configuration, Logger}
+import org.thp.scalligraph.janus.strategies._
 
+import java.lang.{Long => JLong}
+import java.nio.file.{Files, Paths}
+import java.util.function.Consumer
+import java.util.regex.Pattern
+import java.util.{Date, Properties}
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration

@@ -122,6 +122,11 @@ trait Database {
   val extraModels: Seq[Model]
   val binaryLinkModel: Model.Edge[BinaryLink]
   val binaryModel: Model.Vertex[Binary]
+
+  var printByteCode: Boolean   = false
+  var printStrategies: Boolean = true
+  var printExplain: Boolean    = false
+  var printProfile: Boolean    = true
 }
 
 abstract class BaseDatabase extends Database {
