@@ -43,11 +43,11 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
       import scala.concurrent.{ExecutionContext, Future}
 
       import scala.util.{Failure, Try}
-      import org.apache.tinkerpop.gremlin.structure.{Graph, Vertex}
+      import org.apache.tinkerpop.gremlin.structure.Vertex
       import org.thp.scalligraph.{EntityId, InternalError}
       import org.thp.scalligraph.controllers.FPath
       import org.thp.scalligraph.models.{Database, Entity, IndexType, Mapping, Model, UMapping, VertexModel}
-      import org.thp.scalligraph.traversal.Converter
+      import org.thp.scalligraph.traversal.{Converter, Graph}
 
       new VertexModel {
         override type E = $entityType
@@ -59,7 +59,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
 
         ..$mappingDefinitions
 
-        override def create(e: E)(implicit db: Database, graph: Graph): Vertex = {
+        override def create(e: E)(implicit graph: Graph): Vertex = {
           val vertex = graph.addVertex(label)
           ..$setProperties
           vertex
@@ -104,7 +104,8 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
       import java.util.Date
       import scala.concurrent.{ExecutionContext, Future}
       import scala.util.Try
-      import org.apache.tinkerpop.gremlin.structure.{Edge, Graph, Vertex}
+      import org.apache.tinkerpop.gremlin.structure.{Edge, Vertex}
+      import org.thp.scalligraph.traversal.Graph
 
       import org.thp.scalligraph.{EntityId, InternalError}
       import org.thp.scalligraph.controllers.FPath
@@ -120,7 +121,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
 
         ..$mappingDefinitions
 
-        override def create(e: E, from: Vertex, to: Vertex)(implicit db: Database, graph: Graph): Edge = {
+        override def create(e: E, from: Vertex, to: Vertex)(implicit graph: Graph): Edge = {
           val edge = from.addEdge(label, to)
           ..$setProperties
           edge

@@ -14,7 +14,6 @@ import scala.reflect.runtime.{universe => ru}
 
 case class InputSort(fieldOrder: (String, Order)*) extends InputQuery[Traversal.Unk, Traversal.Unk] {
   override def apply(
-      db: Database,
       publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,

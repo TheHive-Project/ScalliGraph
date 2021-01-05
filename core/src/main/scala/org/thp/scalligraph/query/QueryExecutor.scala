@@ -1,12 +1,11 @@
 package org.thp.scalligraph.query
 
-import org.apache.tinkerpop.gremlin.structure.Graph
 import org.scalactic._
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
 import org.thp.scalligraph.models.Database
-import org.thp.scalligraph.traversal.{IteratorOutput, Traversal}
+import org.thp.scalligraph.traversal.{Graph, IteratorOutput, Traversal}
 import org.thp.scalligraph.utils.RichType
 import play.api.Logger
 import play.api.libs.json._
@@ -23,10 +22,10 @@ abstract class QueryExecutor { executor =>
   val db: Database
 
   final lazy val allQueries                         = queries :+ sortQuery :+ filterQuery :+ aggregationQuery :+ CountQuery
-  final lazy val sortQuery: SortQuery               = new SortQuery(db, publicProperties)
-  final lazy val aggregationQuery: AggregationQuery = new AggregationQuery(db, publicProperties, filterQuery)
-  final lazy val filterQuery: FilterQuery           = FilterQuery.default(db, publicProperties) ++ customFilterQuery
-  val customFilterQuery: FilterQuery                = FilterQuery.empty(db, publicProperties)
+  final lazy val sortQuery: SortQuery               = new SortQuery(publicProperties)
+  final lazy val aggregationQuery: AggregationQuery = new AggregationQuery(publicProperties, filterQuery)
+  final lazy val filterQuery: FilterQuery           = FilterQuery.default(publicProperties) ++ customFilterQuery
+  val customFilterQuery: FilterQuery                = FilterQuery.empty(publicProperties)
 
   private lazy val graphType: ru.Type = ru.typeOf[Graph]
 

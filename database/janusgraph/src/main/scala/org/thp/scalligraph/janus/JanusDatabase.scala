@@ -1,20 +1,13 @@
 package org.thp.scalligraph.janus
 
-import java.lang.{Long => JLong}
-import java.nio.file.{Files, Paths}
-import java.util.function.Consumer
-import java.util.regex.Pattern
-import java.util.{Date, Properties}
-
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Flow, Source}
 import com.typesafe.config.ConfigObject
-import javax.inject.{Inject, Singleton}
-import org.apache.tinkerpop.gremlin.process.traversal.{P, Text}
+import org.apache.tinkerpop.gremlin.process.traversal.TraversalSource
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource
 import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
-import org.apache.tinkerpop.gremlin.structure._
-import org.janusgraph.core.attribute.{Text => JanusText}
+import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Transaction, Vertex, Graph => TinkerGraph}
 import org.janusgraph.core.schema.JanusGraphManagement.IndexJobFuture
 import org.janusgraph.core.schema.{Mapping => JanusMapping, _}
 import org.janusgraph.core.{Transaction => _, _}
@@ -28,7 +21,7 @@ import org.slf4j.MDC
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.{MappingCardinality, _}
 import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, Traversal}
+import org.thp.scalligraph.traversal.{Converter, Graph, GraphWrapper, Traversal}
 import org.thp.scalligraph.utils.{Config, Retry}
 import org.thp.scalligraph.{EntityId, InternalError, NotFoundError, SingleInstance}
 import play.api.{Configuration, Logger}
@@ -181,7 +174,7 @@ class JanusDatabase(
   }
 
   override def roTransaction[R](body: Graph => R): R = {
-    val graph             = janusGraph.buildTransaction().readOnly().start()
+    val graph             = new GraphWrapper(this, janusGraph.buildTransaction().readOnly().start())
     val tx                = graph.tx()
     val (oldTx, oldTxMDC) = (localTransaction.get(), Option(MDC.get("tx")))
     try {
@@ -211,11 +204,11 @@ class JanusDatabase(
       () => janusGraph.buildTransaction().readOnly().start(),
       _.commit(),
       _.rollback(),
-      Flow[Graph].flatMapConcat(g => Source.fromIterator(() => query(g)))
+      Flow[TinkerGraph].flatMapConcat(g => Source.fromIterator(() => query(new GraphWrapper(this, g))))
     )
 
   override def source[A, B](body: Graph => (Iterator[A], B)): (Source[A, NotUsed], B) = {
-    val tx       = janusGraph.buildTransaction().readOnly().start()
+    val tx       = new GraphWrapper(this, janusGraph.buildTransaction().readOnly().start())
     val (ite, v) = body(tx)
     val src = TransactionHandler[Graph, A, NotUsed](
       () => tx,
@@ -256,7 +249,7 @@ class JanusDatabase(
         .on[PermanentLockingException]
         .withBackoff(minBackoff, maxBackoff, randomFactor)(system.scheduler, system.dispatcher)
         .withTry {
-          val graph = janusGraph.buildTransaction().start()
+          val graph = new GraphWrapper(this, janusGraph.buildTransaction().start())
           val tx    = graph.tx()
           localTransaction.set(Some(tx))
           MDC.put("tx", f"${System.identityHashCode(tx)}%08x")
@@ -667,7 +660,7 @@ class JanusDatabase(
   }
 
   override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
-    val createdVertex = model.create(v)(this, graph)
+    val createdVertex = model.create(v)(graph)
     val entity        = DummyEntity(model.label, createdVertex.id(), authContext.userId)
     createdAtMapping.setProperty(createdVertex, "_createdAt", entity._createdAt)
     createdByMapping.setProperty(createdVertex, "_createdBy", entity._createdBy)
@@ -688,7 +681,7 @@ class JanusDatabase(
       f <- Traversal.V(from._id)(graph).headOption
       t <- Traversal.V(to._id)(graph).headOption
     } yield {
-      val createdEdge = model.create(e, f, t)(this, graph)
+      val createdEdge = model.create(e, f, t)(graph)
       val entity      = DummyEntity(model.label, createdEdge.id(), authContext.userId)
       createdAtMapping.setProperty(createdEdge, "_createdAt", entity._createdAt)
       createdByMapping.setProperty(createdEdge, "_createdBy", entity._createdBy)
@@ -703,8 +696,10 @@ class JanusDatabase(
     }
   }
 
-  override def labelFilter[D, G <: Element, C <: Converter[D, G]](label: String): Traversal[D, G, C] => Traversal[D, G, C] =
-    _.onRaw(_.has("_label", label).hasLabel(label))
+  override def labelFilter[D, G, C <: Converter[D, G]](label: String, traversal: Traversal[D, G, C]): Traversal[D, G, C] =
+    traversal.onRaw(_.hasLabel(label).has("_label", label))
+//  override def labelFilter[D, G <: Element, C <: Converter[D, G]](label: String): Traversal[D, G, C] => Traversal[D, G, C] =
+//    _.onRaw(_.has("_label", label).hasLabel(label))
 
   def V[D <: Product](ids: EntityId*)(implicit model: Model.Vertex[D], graph: Graph): Traversal.V[D] =
     new Traversal[D with Entity, Vertex, Converter[D with Entity, Vertex]](

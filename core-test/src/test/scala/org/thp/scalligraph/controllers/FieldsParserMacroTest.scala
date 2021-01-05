@@ -190,7 +190,7 @@ class FieldsParserMacroTest extends Specification with TestUtils {
 
   "update using custom function" in {
     val properties: PublicProperties = PublicPropertyListBuilder[MyEntity]
-      .property("p1", UMapping.string)(_.rename("p2").custom { (path, value, _, _, _, _) =>
+      .property("p1", UMapping.string)(_.rename("p2").custom { (path, value, _, _, _) =>
         path must_=== FPath("p1.sp2")
         value must_== "yop"
         Success(Json.obj("p2" -> "yop"))
@@ -201,7 +201,7 @@ class FieldsParserMacroTest extends Specification with TestUtils {
     r must beRight.which { updaters =>
       val p1Updater: Matcher[PropertyUpdater] = beLike {
         case PropertyUpdater(FPath("p1", "sp2"), "yop", f) =>
-          f(null, null, null, null) must beSuccessfulTry
+          f(null, null, null) must beSuccessfulTry
       }
       updaters must contain(exactly(p1Updater))
     }

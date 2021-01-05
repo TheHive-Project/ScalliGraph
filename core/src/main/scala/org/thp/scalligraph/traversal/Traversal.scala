@@ -43,26 +43,26 @@ object Traversal {
   def strategedE(strategy: GraphStrategy, edgeIds: EntityId*)(implicit graph: Graph) =
     new Traversal[Edge, Edge, IdentityConverter[Edge]](graph, strategy(graph.traversal()).E(edgeIds.map(_.value): _*), Converter.identity)
   def empty[T](implicit graph: Graph) =
-    new Traversal[T, T, IdentityConverter[T]](graph.traversal().inject[T](), Converter.identity)
+    new Traversal[T, T, IdentityConverter[T]](graph, graph.traversal().inject[T](), Converter.identity)
   def union[D, G, C <: Converter[D, G]](t: (Traversal[Vertex, Vertex, IdentityConverter[Vertex]] => Traversal[D, G, C])*)(implicit
       graph: Graph
   ): Traversal[D, G, C] = {
     val traversals: Seq[Traversal[D, G, C]] = t.map(_.apply(Traversal.V()))
-    new Traversal[D, G, C](graph.traversal().inject(1).union(traversals.map(_.raw): _*), traversals.head.converter)
+    new Traversal[D, G, C](graph, graph.traversal().inject(1).union(traversals.map(_.raw): _*), traversals.head.converter)
   }
 }
 
-class Traversal[+D, G, +C <: Converter[D, G]](val raw: GraphTraversal[_, G], val converter: C) {
+class Traversal[+D, G, +C <: Converter[D, G]](val graph: Graph, val raw: GraphTraversal[_, G], val converter: C) {
   def onRaw(f: GraphTraversal[_, G] => GraphTraversal[_, G]): Traversal[D, G, C] =
-    new Traversal[D, G, C](f(raw), converter)
+    new Traversal[D, G, C](graph, f(raw), converter)
   def onRawMap[DD, GG, CC <: Converter[DD, GG]](f: GraphTraversal[_, G] => GraphTraversal[_, GG])(conv: CC): Traversal[DD, GG, CC] =
-    new Traversal[DD, GG, CC](f(raw), conv)
+    new Traversal[DD, GG, CC](graph, f(raw), conv)
   def domainMap[DD](f: D => DD): Traversal[DD, G, Converter[DD, G]] =
-    new Traversal[DD, G, Converter[DD, G]](raw, g => converter.andThen(f).apply(g))
+    new Traversal[DD, G, Converter[DD, G]](graph, raw, g => converter.andThen(f).apply(g))
   def graphMap[DD, GG, CC <: Converter[DD, GG]](d: G => GG, conv: CC): Traversal[DD, GG, CC] =
-    new Traversal[DD, GG, CC](raw.map[GG]((t: Traverser[G]) => d(t.get)), conv)
-  def setConverter[DD, CC <: Converter[DD, G]](conv: CC): Traversal[DD, G, CC] = new Traversal[DD, G, CC](raw, conv)
-  def start                                                                    = new Traversal[D, G, C](__.start[G](), converter)
+    new Traversal[DD, GG, CC](graph, raw.map[GG]((t: Traverser[G]) => d(t.get)), conv)
+  def setConverter[DD, CC <: Converter[DD, G]](conv: CC): Traversal[DD, G, CC] = new Traversal[DD, G, CC](graph, raw, conv)
+  def start                                                                    = new Traversal[D, G, C](graph, __.start[G](), converter)
   def mapAsNumber(
       f: Traversal[Number, Number, IdentityConverter[Number]] => Traversal[Number, Number, IdentityConverter[Number]]
   ): Traversal[D, G, C] =
@@ -71,6 +71,6 @@ class Traversal[+D, G, +C <: Converter[D, G]](val raw: GraphTraversal[_, G], val
     f(this.asInstanceOf[Traversal[Comparable[_], Comparable[G], _]]).asInstanceOf[Traversal[D, G, C]]
   override def clone(): Traversal[D, G, C] =
     raw match {
-      case dgt: DefaultGraphTraversal[_, G] => new Traversal[D, G, C](dgt.clone, converter)
+      case dgt: DefaultGraphTraversal[_, G] => new Traversal[D, G, C](graph, dgt.clone, converter)
     }
 }

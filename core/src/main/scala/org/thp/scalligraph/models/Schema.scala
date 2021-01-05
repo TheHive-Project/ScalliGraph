@@ -1,8 +1,8 @@
 package org.thp.scalligraph.models
 
 import javax.inject.{Inject, Provider, Singleton}
-import org.apache.tinkerpop.gremlin.structure.Graph
 import org.thp.scalligraph.auth.AuthContext
+import org.thp.scalligraph.traversal.Graph
 import play.api.Logger
 
 import scala.collection.immutable
@@ -10,8 +10,8 @@ import scala.util.{Success, Try}
 
 case class InitialValue[V <: Product](model: Model.Vertex[V], value: V) {
 
-  def create()(implicit db: Database, graph: Graph, authContext: AuthContext): V with Entity =
-    db.createVertex[V](graph, authContext, model, value)
+  def create()(implicit graph: Graph, authContext: AuthContext): V with Entity =
+    graph.db.createVertex[V](graph, authContext, model, value)
 }
 
 trait UpdatableSchema extends Schema {

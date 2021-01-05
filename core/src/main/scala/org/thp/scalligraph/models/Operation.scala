@@ -11,21 +11,14 @@ import scala.util.{Failure, Success, Try}
 
 sealed trait Operation
 
-case class AddVertexModel(label: String, mapping: Map[String, Mapping[_, _, _]])
-  extends Operation
-case class AddEdgeModel(label: String, mapping: Map[String, Mapping[_, _, _]])
-  extends Operation
-case class AddProperty(model: String, propertyName: String, mapping: Mapping[_, _, _])
-  extends Operation
-case class RemoveProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean)
-  extends Operation
-case class UpdateGraph(model: String, update: Traversal[Vertex, Vertex, Converter.Identity[Vertex]] => Try[Unit], comment: String)
-  extends Operation
+case class AddVertexModel(label: String, mapping: Map[String, Mapping[_, _, _]])                                                   extends Operation
+case class AddEdgeModel(label: String, mapping: Map[String, Mapping[_, _, _]])                                                     extends Operation
+case class AddProperty(model: String, propertyName: String, mapping: Mapping[_, _, _])                                             extends Operation
+case class RemoveProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean)                                       extends Operation
+case class UpdateGraph(model: String, update: Traversal[Vertex, Vertex, Converter.Identity[Vertex]] => Try[Unit], comment: String) extends Operation
 case class AddVertices()
-case class AddIndex(model: String, indexType: IndexType.Value, properties: Seq[String])
-  extends Operation
-object RebuildIndexes
-  extends Operation
+case class AddIndex(model: String, indexType: IndexType.Value, properties: Seq[String]) extends Operation
+object RebuildIndexes                                                                   extends Operation
 
 case class DBOperation[DB <: Database: ClassTag](comment: String, op: DB => Try[Unit]) extends Operation {
   def apply(db: Database): Try[Unit] =
@@ -86,7 +79,7 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
                 db.removeProperty(model, propertyName, usedOnlyByThisModel)
               case UpdateGraph(model, update, comment) =>
                 logger.info(s"$schemaName: Update graph: $comment")
-                db.tryTransaction(graph => update(db.labelFilter(model)(Traversal.V()(graph))))
+                db.tryTransaction(graph => update(db.V(model)(graph)))
                   .recoverWith { case error => Failure(InternalError(s"Unable to execute migration operation: $comment", error)) }
               case AddIndex(model, indexType, properties) =>
                 logger.info(s"$schemaName: Add index in $model for properties: ${properties.mkString(", ")}")

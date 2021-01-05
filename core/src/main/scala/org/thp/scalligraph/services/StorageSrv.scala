@@ -18,11 +18,10 @@ import javax.inject.{Inject, Singleton}
 import org.apache.hadoop.conf.{Configuration => HadoopConfig}
 import org.apache.hadoop.fs.{FileAlreadyExistsException => HadoopFileAlreadyExistsException, FileSystem => HDFileSystem, Path => HDPath}
 import org.apache.hadoop.io.IOUtils
-import org.apache.tinkerpop.gremlin.structure.Graph
 import org.thp.scalligraph.NotFoundError
 import org.thp.scalligraph.auth.UserSrv
 import org.thp.scalligraph.models._
-import org.thp.scalligraph.traversal.Traversal
+import org.thp.scalligraph.traversal.{Graph, Traversal}
 import org.thp.scalligraph.traversal.TraversalOps._
 import play.api.{Configuration, Logger}
 
@@ -128,7 +127,7 @@ class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
 }
 
 @Singleton
-class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Database) extends VertexSrv[Binary]()(db, Binary.model) with StorageSrv {
+class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Database) extends VertexSrv[Binary]()(Binary.model) with StorageSrv {
 
   val b64decoder: Base64.Decoder                       = Base64.getDecoder
   implicit val binaryLinkModel: Model.Edge[BinaryLink] = BinaryLink.model

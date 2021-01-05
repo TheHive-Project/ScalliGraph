@@ -1,12 +1,12 @@
 package org.thp.scalligraph.services
 
 import org.apache.tinkerpop.gremlin.process.traversal.P
-import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Graph, Vertex}
+import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex}
 import org.thp.scalligraph.EntityId
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.{Database, Entity, IndexType, UMapping}
 import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, IdentityConverter, StepLabel, Traversal}
+import org.thp.scalligraph.traversal.{Converter, Graph, IdentityConverter, StepLabel, Traversal}
 import play.api.Logger
 
 import scala.collection.JavaConverters._

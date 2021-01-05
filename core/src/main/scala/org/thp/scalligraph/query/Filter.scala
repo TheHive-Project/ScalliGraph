@@ -6,7 +6,6 @@ import org.scalactic.Accumulation._
 import org.scalactic.{Bad, Good, One}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
-import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.traversal.Traversal
 import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.{BadRequestError, EntityId, EntityIdOrName, InvalidFormatAttributeError}
@@ -16,7 +15,6 @@ import scala.reflect.runtime.{universe => ru}
 
 case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputQuery[Traversal.Unk, Traversal.Unk] {
   override def apply(
-      db: Database,
       publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
@@ -33,7 +31,6 @@ case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputQuer
 
 case class IsDefinedFilter(fieldName: String) extends InputQuery[Traversal.Unk, Traversal.Unk] {
   override def apply(
-      db: Database,
       publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
@@ -50,13 +47,12 @@ case class IsDefinedFilter(fieldName: String) extends InputQuery[Traversal.Unk, 
 
 case class OrFilter(inputFilters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]]) extends InputQuery[Traversal.Unk, Traversal.Unk] {
   override def apply(
-      db: Database,
       publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
   ): Traversal.Unk =
-    inputFilters.map(ff => (t: Traversal.Unk) => ff(db, publicProperties, traversalType, t, authContext)) match {
+    inputFilters.map(ff => (t: Traversal.Unk) => ff(publicProperties, traversalType, t, authContext)) match {
       case Seq(f) => traversal.filter(f)
       case Seq()  => traversal.limit(0)
       case f      => traversal.filter(_.or(f: _*))
@@ -65,7 +61,6 @@ case class OrFilter(inputFilters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]])
 
 case class AndFilter(inputFilters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]]) extends InputQuery[Traversal.Unk, Traversal.Unk] {
   override def apply(
-      db: Database,
       publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
@@ -78,18 +73,16 @@ case class AndFilter(inputFilters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]]
 
 case class NotFilter(inputFilter: InputQuery[Traversal.Unk, Traversal.Unk]) extends InputQuery[Traversal.Unk, Traversal.Unk] {
   override def apply(
-      db: Database,
       publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
   ): Traversal.Unk =
-    traversal.filter(_.not(t => inputFilter(db, publicProperties, traversalType, t, authContext)))
+    traversal.filter(_.not(t => inputFilter(publicProperties, traversalType, t, authContext)))
 }
 
 object YesFilter extends InputQuery[Traversal.Unk, Traversal.Unk] {
   override def apply(
-      db: Database,
       publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
@@ -99,7 +92,6 @@ object YesFilter extends InputQuery[Traversal.Unk, Traversal.Unk] {
 
 class IdFilter(id: EntityId) extends InputQuery[Traversal.Unk, Traversal.Unk] {
   override def apply(
-      db: Database,
       publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,

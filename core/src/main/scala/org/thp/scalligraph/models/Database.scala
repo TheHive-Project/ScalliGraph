@@ -2,16 +2,15 @@ package org.thp.scalligraph.models
 
 import java.util.Date
 import java.util.function.Consumer
-
 import akka.NotUsed
 import akka.stream.scaladsl.Source
 import org.apache.tinkerpop.gremlin.process.traversal.P
 import org.apache.tinkerpop.gremlin.structure.Transaction.Status
-import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Graph, Vertex}
+import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex}
 import org.thp.scalligraph.{EntityId, InternalError}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, Traversal}
+import org.thp.scalligraph.traversal.{Converter, Graph, Traversal}
 import play.api.Logger
 
 import scala.collection.JavaConverters._
@@ -76,17 +75,17 @@ trait Database {
       to: TO with Entity
   ): E with Entity
 
-  def getAllProperties(element: Element): Map[String, Seq[Any]] = {
-    val m = mutable.Map.empty[String, mutable.Builder[Any, Seq[Any]]]
-    for (property <- element.properties[Any]().asScala) {
-      val bldr = m.getOrElseUpdate(property.key(), Seq.newBuilder)
-      bldr += property.value()
-    }
-    val b = immutable.Map.newBuilder[String, Seq[Any]]
-    for ((k, v) <- m)
-      b += ((k, v.result))
-    b.result
-  }
+//  def getAllProperties(element: Element): Map[String, Seq[Any]] = {
+//    val m = mutable.Map.empty[String, mutable.Builder[Any, Seq[Any]]]
+//    for (property <- element.properties[Any]().asScala) {
+//      val bldr = m.getOrElseUpdate(property.key(), Seq.newBuilder)
+//      bldr += property.value()
+//    }
+//    val b = immutable.Map.newBuilder[String, Seq[Any]]
+//    for ((k, v) <- m)
+//      b += ((k, v.result))
+//    b.result
+//  }
 //  def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D
 //  def getOptionProperty[D, G](element: Element, key: String, mapping: OptionMapping[D, G]): Option[D]
 //  def getListProperty[D, G](element: Element, key: String, mapping: ListMapping[D, G]): Seq[D]
@@ -115,10 +114,16 @@ trait Database {
 //    }
 //  }
 
-  def mapPredicate[T](predicate: P[T]): P[T]
+//  def mapPredicate[T](predicate: P[T]): P[T]
   def toId(id: Any): Any
-  def labelFilter[D, G <: Element, C <: Converter[D, G]](model: Model): Traversal[D, G, C] => Traversal[D, G, C] = labelFilter(model.label)
-  def labelFilter[D, G <: Element, C <: Converter[D, G]](label: String): Traversal[D, G, C] => Traversal[D, G, C]
+
+//  @deprecated("Use V(model) or E(model)", "0.2")
+//  def labelFilter[D, G <: Element, C <: Converter[D, G]](model: Model): Traversal[D, G, C] => Traversal[D, G, C] = labelFilter(model.label)
+  def labelFilter[D, G, C <: Converter[D, G]](label: String, traversal: Traversal[D, G, C]): Traversal[D, G, C]
+  def V[D <: Product](ids: EntityId*)(implicit model: Model.Vertex[D], graph: Graph): Traversal.V[D]
+  def V(label: String, ids: EntityId*)(implicit graph: Graph): Traversal[Vertex, Vertex, Converter.Identity[Vertex]]
+  def E[D <: Product](ids: EntityId*)(implicit model: Model.Edge[D], graph: Graph): Traversal.E[D]
+  def E(label: String, ids: EntityId*)(implicit graph: Graph): Traversal[Edge, Edge, Converter.Identity[Edge]]
 
   val extraModels: Seq[Model]
   val binaryLinkModel: Model.Edge[BinaryLink]
@@ -165,7 +170,7 @@ abstract class BaseDatabase extends Database {
   override def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Try[Unit] =
     for {
       _ <- createSchema(schemaObject.modelList ++ extraModels)
-      _ <- tryTransaction(graph => Try(schemaObject.initialValues.foreach(_.create()(this, graph, authContext))))
+      _ <- tryTransaction(graph => Try(schemaObject.initialValues.foreach(_.create()(graph, authContext))))
       _ <- tryTransaction(graph => schemaObject.init(this)(graph, authContext))
     } yield ()
 
@@ -183,7 +188,7 @@ abstract class BaseDatabase extends Database {
   }
 
   override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
-    val createdVertex = model.create(v)(this, graph)
+    val createdVertex = model.create(v)(graph)
     val entity        = DummyEntity(model.label, createdVertex.id(), authContext.userId)
     createdAtMapping.setProperty(createdVertex, "_createdAt", entity._createdAt)
     createdByMapping.setProperty(createdVertex, "_createdBy", entity._createdBy)
@@ -203,7 +208,7 @@ abstract class BaseDatabase extends Database {
       f <- Traversal.V(from._id)(graph).headOption
       t <- Traversal.V(to._id)(graph).headOption
     } yield {
-      val createdEdge = model.create(e, f, t)(this, graph)
+      val createdEdge = model.create(e, f, t)(graph)
       val entity      = DummyEntity(model.label, createdEdge.id(), authContext.userId)
       createdAtMapping.setProperty(createdEdge, "_createdAt", entity._createdAt)
       createdByMapping.setProperty(createdEdge, "_createdBy", entity._createdBy)
@@ -223,8 +228,7 @@ abstract class BaseDatabase extends Database {
   override val binaryModel: Model.Vertex[Binary]       = Binary.model
   def labelFilter[D, G <: Element, C <: Converter[D, G]](label: String): Traversal[D, G, C] => Traversal[D, G, C] =
     _.onRaw(_.hasLabel(label))
-  override def mapPredicate[T](predicate: P[T]): P[T] = predicate
-  override def toId(id: Any): Any                     = id
+  override def toId(id: Any): Any = id
 
   override val extraModels: Seq[Model] = Seq(binaryModel, binaryLinkModel)
 
@@ -238,7 +242,7 @@ object Binary {
     override val fields: Map[String, Mapping[_, _, _]] =
       Map("data" -> UMapping.binary, "folder" -> UMapping.string.optional, "attachmentId" -> UMapping.string.optional)
 
-    override def create(binary: Binary)(implicit db: Database, graph: Graph): Vertex = {
+    override def create(binary: Binary)(implicit graph: Graph): Vertex = {
       val v = graph.addVertex(label)
       UMapping.binary.setProperty(v, "data", binary.data)
       UMapping.string.optional.setProperty(v, "folder", binary.folder)
@@ -275,7 +279,7 @@ object Binary {
 case class BinaryLink()
 object BinaryLink {
   lazy val model: Model.Edge[BinaryLink] = new EdgeModel {
-    override def create(e: BinaryLink, from: Vertex, to: Vertex)(implicit db: Database, graph: Graph): Edge = from.addEdge(label, to)
+    override def create(e: BinaryLink, from: Vertex, to: Vertex)(implicit graph: Graph): Edge = from.addEdge(label, to)
     override type E = BinaryLink
     override val label: String                                = "NextChunk"
     override val indexes: Seq[(IndexType.Value, Seq[String])] = Nil

@@ -25,6 +25,7 @@ object Dependencies {
   lazy val janusGraphInMemory      = "org.janusgraph"           % "janusgraph-inmemory"                 % janusVersion
   lazy val janusGraphDriver        = "org.janusgraph"           % "janusgraph-driver"                   % janusVersion
   lazy val tinkerpop               = "org.apache.tinkerpop"     % "gremlin-core"                        % "3.4.7"
+  lazy val gremlinDriver           = "org.apache.tinkerpop"     % "gremlin-driver"                      % "3.4.7"
   lazy val gremlinScala            = "com.michaelpollmeier"     %% "gremlin-scala"                      % "3.4.4.5"
   lazy val gremlinOrientdb         = "com.orientechnologies"    % "orientdb-gremlin"                    % "3.0.18"
   lazy val hbaseClient             = "org.apache.hbase"         % "hbase-shaded-client"                 % "1.4.9" exclude ("org.slf4j", "slf4j-log4j12")

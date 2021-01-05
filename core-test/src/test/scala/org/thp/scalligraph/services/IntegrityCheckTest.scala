@@ -1,10 +1,10 @@
 package org.thp.scalligraph.services
 
-import org.apache.tinkerpop.gremlin.structure.Graph
 import org.specs2.specification.core.Fragments
 import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
 import org.thp.scalligraph.models.ModernOps._
 import org.thp.scalligraph.models._
+import org.thp.scalligraph.traversal.Graph
 import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.{AppBuilder, EntityName}
 import play.api.libs.logback.LogbackLoggerConfigurator

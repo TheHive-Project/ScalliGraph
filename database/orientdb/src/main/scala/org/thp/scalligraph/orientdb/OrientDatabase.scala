@@ -6,7 +6,7 @@ import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
 import javax.inject.{Inject, Singleton}
-import org.apache.tinkerpop.gremlin.structure.Graph
+
 import org.slf4j.MDC
 import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.models._

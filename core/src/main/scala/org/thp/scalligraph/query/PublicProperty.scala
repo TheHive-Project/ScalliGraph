@@ -99,7 +99,7 @@ class TraversalPropertyOrder(select: TraversalSelect) extends PropertyOrder {
 object PropertyUpdater {
 
   def apply[D, V](fieldsParser: FieldsParser[V], propertyName: String)(
-      f: (FPath, V, Vertex, Database, Graph, AuthContext) => Try[JsObject]
+      f: (FPath, V, Vertex, Graph, AuthContext) => Try[JsObject]
   ): FieldsParser[PropertyUpdater] =
     new FieldsParser(
       fieldsParser.formatName,
@@ -109,25 +109,25 @@ object PropertyUpdater {
           fieldsParser(path, field).map(fieldValue =>
             new PropertyUpdater(propertyName /: path, fieldValue) {
 
-              override def apply(vertex: Vertex, db: Database, graph: Graph, authContext: AuthContext): Try[JsObject] =
-                f(path, fieldValue, vertex, db, graph, authContext)
+              override def apply(vertex: Vertex, graph: Graph, authContext: AuthContext): Try[JsObject] =
+                f(path, fieldValue, vertex, graph, authContext)
             }
           )
       }
     )
 
   def apply(path: FPath, value: Any)(
-      f: (Vertex, Database, Graph, AuthContext) => Try[JsObject]
+      f: (Vertex, Graph, AuthContext) => Try[JsObject]
   ): PropertyUpdater =
     new PropertyUpdater(path, value) {
-      override def apply(v: Vertex, db: Database, graph: Graph, authContext: AuthContext): Try[JsObject] = f(v, db, graph, authContext)
+      override def apply(v: Vertex, graph: Graph, authContext: AuthContext): Try[JsObject] = f(v, graph, authContext)
     }
 
-  def unapply(updater: PropertyUpdater): Option[(FPath, Any, (Vertex, Database, Graph, AuthContext) => Try[JsObject])] =
+  def unapply(updater: PropertyUpdater): Option[(FPath, Any, (Vertex, Graph, AuthContext) => Try[JsObject])] =
     Some((updater.path, updater.value, updater.apply))
 }
 
-abstract class PropertyUpdater(val path: FPath, val value: Any) extends ((Vertex, Database, Graph, AuthContext) => Try[JsObject]) {
+abstract class PropertyUpdater(val path: FPath, val value: Any) extends ((Vertex, Graph, AuthContext) => Try[JsObject]) {
   override def toString(): String =
     s"PropertyUpdater($path, $value)"
 }

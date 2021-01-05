@@ -1,10 +1,10 @@
 package org.thp.scalligraph.models
 
-import org.apache.tinkerpop.gremlin.structure.Graph
 import org.specs2.specification.core.Fragments
 import org.thp.scalligraph.BuildVertexEntity
 import org.thp.scalligraph.auth.{AuthContext, UserSrv}
 import org.thp.scalligraph.services.VertexSrv
+import org.thp.scalligraph.traversal.Graph
 import org.thp.scalligraph.traversal.TraversalOps._
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
@@ -15,7 +15,7 @@ import scala.util.{Success, Try}
 @BuildVertexEntity
 case class EntityWithSeq(name: String, valueList: Seq[String], valueSet: Set[String])
 
-class EntityWithSeqSrv(implicit db: Database) extends VertexSrv[EntityWithSeq] {
+class EntityWithSeqSrv extends VertexSrv[EntityWithSeq] {
   def create(e: EntityWithSeq)(implicit graph: Graph, authContext: AuthContext): Try[EntityWithSeq with Entity] = createEntity(e)
 }
 
@@ -26,7 +26,7 @@ class CardinalityTest extends PlaySpecification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    implicit val db: Database = dbProvider.get()
+    val db: Database = dbProvider.get()
     db.createSchema(Model.vertex[EntityWithSeq])
     db.addSchemaIndexes(Model.vertex[EntityWithSeq])
     val entityWithSeqSrv: EntityWithSeqSrv = new EntityWithSeqSrv
