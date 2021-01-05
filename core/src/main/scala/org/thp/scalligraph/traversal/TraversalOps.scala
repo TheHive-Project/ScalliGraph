@@ -350,6 +350,9 @@ object TraversalOps {
       }
     }
 
+    def optional(f: Traversal[D, G, C] => Traversal[D, G, C]): Traversal[D, G, C] =
+      traversal.onRaw(_.optional(f(traversal.start).raw))
+
     def project[A <: Product](
         builder: ProjectionBuilder[Nil.type, D, G, C] => ProjectionBuilder[A, D, G, C]
     ): Traversal[A, JMap[String, Any], Converter[A, JMap[String, Any]]] = {
