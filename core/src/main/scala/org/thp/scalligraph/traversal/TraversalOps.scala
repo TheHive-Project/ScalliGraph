@@ -493,6 +493,12 @@ object TraversalOps {
     def update[V](selector: D => V, value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
       macro TraversalMacro.update[V]
 
+    def addValue[V](selector: D => Seq[V], value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
+      macro TraversalMacro.addValue[V]
+
+    def removeValue[V](selector: D => Seq[V], value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
+      macro TraversalMacro.removeValue[V]
+
     def iterate(): Unit = {
       raw.iterate()
       ()

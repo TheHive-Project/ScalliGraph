@@ -110,4 +110,40 @@ class TraversalMacro(val c: blackbox.Context) extends MacroUtil {
       case _ => fatal(s"$entityType is not a valid entity type")
     }
   }
+
+  def addValue[V: WeakTypeTag](selector: Tree, value: Tree)(ev1: Tree, ev2: Tree): Tree = {
+    val traversalOps: Tree = c.prefix.tree
+    val traversal          = q"$traversalOps.traversal"
+    val traversalType      = c.typecheck(traversal).tpe
+    val entityType: Type   = traversalType.baseType(typeOf[Traversal[_, _, _]].typeSymbol).typeArgs.head
+    val valueType          = c.weakTypeOf[V]
+
+    entityType match {
+      case RefinedType((baseEntityType @ CaseClassType(_ @_*)) :: _, _) =>
+        val entityModule: Symbol = baseEntityType.typeSymbol.companion
+        val model: Tree          = q"$entityModule.model"
+        val name: Name           = getSelectorName(q"$selector").getOrElse(fatal(s"$selector is an invalid selector"))
+        val mapping: Tree        = q"$model.fields(${name.toString}).asInstanceOf[_root_.org.thp.scalligraph.models.MultiValueMapping[$valueType, _]]"
+        ret("Update traversal", q"$mapping.addValue($traversal, ${name.toString}, $value)")
+      case _ => fatal(s"$entityType is not a valid entity type")
+    }
+  }
+
+  def removeValue[V: WeakTypeTag](selector: Tree, value: Tree)(ev1: Tree, ev2: Tree): Tree = {
+    val traversalOps: Tree = c.prefix.tree
+    val traversal          = q"$traversalOps.traversal"
+    val traversalType      = c.typecheck(traversal).tpe
+    val entityType: Type   = traversalType.baseType(typeOf[Traversal[_, _, _]].typeSymbol).typeArgs.head
+    val valueType          = c.weakTypeOf[V]
+
+    entityType match {
+      case RefinedType((baseEntityType @ CaseClassType(_ @_*)) :: _, _) =>
+        val entityModule: Symbol = baseEntityType.typeSymbol.companion
+        val model: Tree          = q"$entityModule.model"
+        val name: Name           = getSelectorName(q"$selector").getOrElse(fatal(s"$selector is an invalid selector"))
+        val mapping: Tree        = q"$model.fields(${name.toString}).asInstanceOf[_root_.org.thp.scalligraph.models.MultiValueMapping[$valueType, _]]"
+        ret("Update traversal", q"$mapping.removeValue($traversal, ${name.toString}, $value)")
+      case _ => fatal(s"$entityType is not a valid entity type")
+    }
+  }
 }
