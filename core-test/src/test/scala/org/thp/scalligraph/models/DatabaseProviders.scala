@@ -21,7 +21,7 @@ class DatabaseProviders @Inject() (config: Configuration, system: ActorSystem) {
 
   lazy val logger: Logger = Logger(getClass)
 
-  lazy val janus: DatabaseProvider = new DatabaseProvider("janus", new JanusDatabase(config, system))
+  lazy val janus: DatabaseProvider = new DatabaseProvider("janus", new JanusDatabase(config, system, fullTextIndexAvailable = false))
 
 //  lazy val orientdb: DatabaseProvider = new DatabaseProvider("orientdb", new OrientDatabase(config, system))
 //

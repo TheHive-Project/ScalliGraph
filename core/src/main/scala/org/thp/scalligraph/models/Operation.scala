@@ -90,7 +90,7 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
                   .recoverWith { case error => Failure(InternalError(s"Unable to execute migration operation: $comment", error)) }
               case AddIndex(model, indexType, properties) =>
                 logger.info(s"$schemaName: Add index in $model for properties: ${properties.mkString(", ")}")
-                db.addIndex(model, indexType, properties)
+                db.addIndex(model, Seq(indexType -> properties))
               case dbOperation: DBOperation[_] =>
                 logger.info(s"$schemaName: Update database: ${dbOperation.comment}")
                 dbOperation(db)
