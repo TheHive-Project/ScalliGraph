@@ -14,9 +14,10 @@ case class InitialValue[V <: Product](model: Model.Vertex[V], value: V) {
     db.createVertex[V](graph, authContext, model, value)
 }
 
-trait UpdatableSchema { _: Schema =>
+trait UpdatableSchema extends Schema {
+  val authContext: AuthContext
   val operations: Operations
-  def update(db: Database)(implicit authContext: AuthContext): Try[Unit] = operations.execute(db, this)
+  def update(db: Database): Try[Unit] = operations.execute(db, this)(authContext)
 }
 
 trait Schema { schema =>
@@ -25,26 +26,28 @@ trait Schema { schema =>
   final def getModel(label: String): Option[Model]                                   = modelList.find(_.label == label)
   def init(db: Database)(implicit graph: Graph, authContext: AuthContext): Try[Unit] = Success(())
 
-  def +(other: Schema): Schema = new Schema {
-    override def modelList: Seq[Model]                                                          = schema.modelList ++ other.modelList
-    override def initialValues: Seq[InitialValue[_]]                                            = schema.initialValues ++ other.initialValues
-    override def init(db: Database)(implicit graph: Graph, authContext: AuthContext): Try[Unit] = schema.init(db).flatMap(_ => other.init(db))
-  }
+  def +(other: Schema): Schema =
+    new Schema {
+      override def modelList: Seq[Model]                                                          = schema.modelList ++ other.modelList
+      override def initialValues: Seq[InitialValue[_]]                                            = schema.initialValues ++ other.initialValues
+      override def init(db: Database)(implicit graph: Graph, authContext: AuthContext): Try[Unit] = schema.init(db).flatMap(_ => other.init(db))
+    }
 }
 
 object Schema {
 
-  def empty: Schema = new Schema {
-    override def modelList: Seq[Model] = Nil
-  }
+  def empty: Schema =
+    new Schema {
+      override def modelList: Seq[Model] = Nil
+    }
 }
 
 @Singleton
-class GlobalSchema @Inject() (schemas: immutable.Set[Schema]) extends Provider[Schema] {
+class GlobalSchema @Inject() (schemas: immutable.Set[UpdatableSchema]) extends Provider[Schema] {
   lazy val logger: Logger = Logger(getClass)
   lazy val schema: Schema = {
     logger.debug(s"Build global schema from ${schemas.map(_.getClass.getSimpleName).mkString("+")}")
-    schemas.reduceOption(_ + _).getOrElse(Schema.empty)
+    schemas.reduceOption[Schema](_ + _).getOrElse(Schema.empty)
   }
   override def get(): Schema = schema
 }
