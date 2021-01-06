@@ -6,7 +6,6 @@ import org.thp.scalligraph.EntityId
 import org.thp.scalligraph.models.{Database, Model}
 
 trait Graph {
-  @deprecated("use model", "0.2")
   def addVertex(label: String): Vertex
   def tx(): Transaction
   def traversal(): GraphTraversalSource
