@@ -169,8 +169,11 @@ object TraversalOps {
     def max: Traversal[D, G, C] =
       traversal.mapAsComparable(_.onRaw(_.max[Comparable[G]]))
 
-    def mean: Traversal[D, G, C] =
-      traversal.mapAsNumber(_.onRaw(_.mean[Number]))
+    def mean: Traversal[Double, JDouble, Converter[Double, JDouble]] =
+      traversal
+        .mapAsNumber(_.onRaw(_.mean[Number]))
+        .asInstanceOf[Traversal[JDouble, JDouble, IdentityConverter[JDouble]]]
+        .setConverter[Double, Converter[Double, JDouble]](UMapping.double)
 
     def as(stepLabel: StepLabel[D, G, C], otherLabels: StepLabel[D, G, C]*): Traversal[D, G, C] = {
       stepLabel.setConverter(traversal.converter)
