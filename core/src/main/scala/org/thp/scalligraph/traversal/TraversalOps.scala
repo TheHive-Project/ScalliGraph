@@ -290,6 +290,11 @@ object TraversalOps extends TraversalPrinter {
       }
     }
 
+    def option: Traversal[Option[D], JList[G], Converter[Option[D], JList[G]]] =
+      traversal.onRawMap[Option[D], JList[G], Converter[Option[D], JList[G]]](_.limit(1).fold()) { list: JList[G] =>
+        if (list.isEmpty) None else Some(traversal.converter(list.get(0)))
+      }
+
     def fold: Traversal[Seq[D], JList[G], Converter.CList[D, G, C]] =
       traversal.onRawMap[Seq[D], JList[G], Converter.CList[D, G, C]](_.fold())(Converter.clist[D, G, C](traversal.converter))
 
