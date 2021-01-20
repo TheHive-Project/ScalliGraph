@@ -139,6 +139,8 @@ object TraversalOps extends TraversalPrinter {
 
     def limit(max: Long): Traversal[D, G, C] = traversal.onRaw(_.limit(max))
 
+    def empty: Traversal[D, G, Converter[D, G]] = Traversal.empty[D, G](traversal.graph)
+
     def range(low: Long, high: Long): Traversal[D, G, C] = traversal.onRaw(_.range(low, high))
 
 //    def map[A: ClassTag](f: D => A): Traversal[A, G] =
@@ -319,7 +321,7 @@ object TraversalOps extends TraversalPrinter {
         case (t, i) => t.raw.project[Any]("coalesceIndex", "coalesceValue").by(__.constant(i)).by()
       }
       val cs = ts.map(_.converter)
-      if (ts.isEmpty) traversal.limit(0).asInstanceOf[Traversal[DD, JMap[String, Any], Converter[DD, JMap[String, Any]]]]
+      if (ts.isEmpty) traversal.empty.asInstanceOf[Traversal[DD, JMap[String, Any], Converter[DD, JMap[String, Any]]]]
       else
         traversal.onRawMap[DD, JMap[String, Any], Converter[DD, JMap[String, Any]]](_.coalesce(gt: _*)) { m =>
           cs(m.get("coalesceIndex").asInstanceOf[Int]).apply(m.get("coalesceValue").asInstanceOf[GG])
@@ -328,13 +330,13 @@ object TraversalOps extends TraversalPrinter {
 
     def coalesceConv[DD, GG, CC <: Converter[DD, GG]](f: (Traversal[D, G, C] => Traversal[_, GG, _])*)(conv: CC): Traversal[DD, GG, CC] = {
       val ts = f.map(_(traversal.start).raw)
-      if (ts.isEmpty) traversal.limit(0).asInstanceOf[Traversal[DD, GG, CC]]
+      if (ts.isEmpty) traversal.empty.asInstanceOf[Traversal[DD, GG, CC]]
       else
         traversal.onRawMap[DD, GG, CC](_.coalesce(ts: _*))(conv)
     }
 
     def coalesceIdent[GG](f: (Traversal[D, G, C] => Traversal[_, GG, _])*): Traversal[GG, GG, Converter.Identity[GG]] =
-      if (f.isEmpty) traversal.limit(0).asInstanceOf[Traversal[GG, GG, Converter.Identity[GG]]]
+      if (f.isEmpty) traversal.empty.asInstanceOf[Traversal[GG, GG, Converter.Identity[GG]]]
       else
         traversal.onRawMap[GG, GG, Converter.Identity[GG]](_.coalesce(f.map(_(traversal.start).raw): _*))(Converter.identity[GG])
 
@@ -477,7 +479,7 @@ object TraversalOps extends TraversalPrinter {
     def hasId(ids: EntityId*)(implicit ev: G <:< Element): Traversal[D, G, C] =
       ids.map(_.value) match {
         case Seq(head, tail @ _*) => traversal.onRaw(_.hasId(head, tail: _*))
-        case _                    => limit(0)
+        case _                    => empty.asInstanceOf[Traversal[D, G, C]]
       }
 
     def where(predicate: P[String]): Traversal[D, G, C] = traversal.onRaw(_.where(predicate))
@@ -513,6 +515,11 @@ object TraversalOps extends TraversalPrinter {
         ev1: G <:< Element,
         ev2: D <:< Product with Entity
     ): Traversal[mapping.SingleType, mapping.GraphType, Converter[mapping.SingleType, mapping.GraphType]] = macro TraversalMacro.getValue[DD]
+
+    def valueMap(propertyKeys: String*): Traversal[Map[String, Any], JMap[AnyRef, Any], Converter[Map[String, Any], JMap[AnyRef, Any]]] =
+      traversal.onRawMap[Map[String, Any], JMap[AnyRef, Any], Converter[Map[String, Any], JMap[AnyRef, Any]]](_.valueMap[Any](propertyKeys: _*))(
+        _.asScala.map(kv => kv._1.asInstanceOf[String] -> kv._2.asInstanceOf[JList[Any]].get(0)).toMap
+      )
 
     def removeProperty(name: String)(implicit ev: G <:< Element): Traversal[D, G, C] =
       traversal.sideEffect(
@@ -553,7 +560,7 @@ object TraversalOps extends TraversalPrinter {
 
     def unionFlat[DD, GG, CC <: Converter[DD, GG]](traversals: (Traversal[D, G, C] => Traversal[DD, GG, CC])*): Traversal[DD, GG, CC] = {
       val traversalResults = traversals.map(_.apply(traversal.start))
-      traversalResults.headOption.fold(traversal.limit(0).asInstanceOf[Traversal[DD, GG, CC]]) { firstTraversal =>
+      traversalResults.headOption.fold(traversal.empty.asInstanceOf[Traversal[DD, GG, CC]]) { firstTraversal =>
         traversal.onRawMap[DD, GG, CC](_.union(traversalResults.map(_.raw): _*))(firstTraversal.converter)
       }
     }

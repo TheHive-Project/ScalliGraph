@@ -54,7 +54,7 @@ case class OrFilter(inputFilters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]])
   ): Traversal.Unk =
     inputFilters.map(ff => (t: Traversal.Unk) => ff(publicProperties, traversalType, t, authContext)) match {
       case Seq(f) => traversal.filter(f)
-      case Seq()  => traversal.limit(0)
+      case Seq()  => traversal.empty
       case f      => traversal.filter(_.or(f: _*))
     }
 }

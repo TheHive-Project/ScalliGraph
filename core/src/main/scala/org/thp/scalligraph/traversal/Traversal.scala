@@ -42,8 +42,8 @@ object Traversal {
     new Traversal[Edge, Edge, IdentityConverter[Edge]](graph, graph.traversal().E(edgeIds.map(_.value): _*), Converter.identity)
   def strategedE(strategy: GraphStrategy, edgeIds: EntityId*)(implicit graph: Graph) =
     new Traversal[Edge, Edge, IdentityConverter[Edge]](graph, strategy(graph.traversal()).E(edgeIds.map(_.value): _*), Converter.identity)
-  def empty[T](implicit graph: Graph) =
-    new Traversal[T, T, IdentityConverter[T]](graph, graph.traversal().inject[T](), Converter.identity)
+  def empty[D, G](implicit graph: Graph) =
+    new Traversal[D, G, Converter[D, G]](graph, graph.traversal().inject[G](), (_: G).asInstanceOf[D])
   def union[D, G, C <: Converter[D, G]](t: (Traversal[Vertex, Vertex, IdentityConverter[Vertex]] => Traversal[D, G, C])*)(implicit
       graph: Graph
   ): Traversal[D, G, C] = {
