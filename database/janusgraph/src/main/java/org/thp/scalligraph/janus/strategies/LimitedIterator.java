@@ -6,9 +6,9 @@ import java.util.Iterator;
 
 public class LimitedIterator<E extends Element> implements Iterator<E> {
 
-    Iterator<E> iterator;
+    final Iterator<E> iterator;
     int count = 0;
-    int highLimit;
+    final int highLimit;
 
     public LimitedIterator(final Integer lowLimit, final Integer highLimit, final Iterator<E> iterator) {
         this.iterator = iterator;

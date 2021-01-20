@@ -1,7 +1,6 @@
 package org.thp.scalligraph.models
 
 import java.lang.{Boolean => JBoolean, Byte => JByte, Double => JDouble, Float => JFloat, Integer => JInt, Long => JLong, Short => JShort}
-import java.util.stream.StreamSupport
 import java.util.{Base64, Date}
 
 import org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality
@@ -147,7 +146,7 @@ abstract class Mapping[M, D: ClassTag, G: ClassTag: NoValue](
 trait MultiValueMapping[D, G] { _: Mapping[_, D, G] =>
   def addValue(element: Element, key: String, value: D): Unit =
     element match {
-      case vertex: Vertex => vertex.property(cardinality.gremlinCardinality, key, this.reverse(value))
+      case vertex: Vertex => vertex.property(cardinality.gremlinCardinality, key, this.reverse(value)); ()
       case _              => throw InternalError("Edge doesn't support multi-valued properties")
     }
   def removeValue(element: Element, key: String, value: D): Unit = {

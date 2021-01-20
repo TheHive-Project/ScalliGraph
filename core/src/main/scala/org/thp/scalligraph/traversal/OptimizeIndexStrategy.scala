@@ -29,13 +29,16 @@ object OptimizeIndexStrategy extends AbstractTraversalStrategy[TraversalStrategy
       }
     }
 
-  override def apply(traversal: Admin[_, _]): Unit =
+  override def apply(traversal: Admin[_, _]): Unit = {
     if (traversal.getStartStep.isInstanceOf[GraphStep[_, _]])
       if (logger.isDebugEnabled) {
         val in = traversal.toString
         apply(traversal, traversal.getSteps, 1)
         logger.trace(s"Run optimisation\nin:  $in\nout: $traversal")
-      } else apply(traversal, traversal.getSteps, 1)
+      } else
+        apply(traversal, traversal.getSteps, 1)
+    ()
+  }
 
   override lazy val applyPrior: JSet[Class[_ <: TraversalStrategy.OptimizationStrategy]] =
     new JHashSet(JArrays.asList(classOf[InlineFilterStrategy], classOf[FilterRankingStrategy]))

@@ -5,9 +5,7 @@ import org.scalactic.Accumulation._
 import org.scalactic.{Bad, Good, One}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FSeq, FString, FieldsParser}
-import org.thp.scalligraph.models.{Database, MappingCardinality}
-import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, SortBySelector, Traversal}
+import org.thp.scalligraph.traversal.Traversal
 import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError}
 
 import scala.reflect.runtime.{universe => ru}

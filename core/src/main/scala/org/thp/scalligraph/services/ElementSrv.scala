@@ -1,10 +1,10 @@
 package org.thp.scalligraph.services
 
 import org.apache.tinkerpop.gremlin.structure.Element
-import org.thp.scalligraph.{EntityId, EntityIdOrName, InternalError}
 import org.thp.scalligraph.models.{Entity, Model}
 import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, Graph, GraphStrategy, Traversal}
+import org.thp.scalligraph.traversal.{Converter, Graph, Traversal}
+import org.thp.scalligraph.{EntityId, EntityIdOrName, InternalError}
 import play.api.Logger
 
 abstract class ElementSrv[E <: Product, G <: Element] {

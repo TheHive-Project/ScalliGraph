@@ -1,20 +1,17 @@
 package org.thp.scalligraph.models
 
-import java.util.Date
-import java.util.function.Consumer
 import akka.NotUsed
 import akka.stream.scaladsl.Source
-import org.apache.tinkerpop.gremlin.process.traversal.P
 import org.apache.tinkerpop.gremlin.structure.Transaction.Status
 import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex}
-import org.thp.scalligraph.{EntityId, InternalError}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.traversal.{Converter, Graph, Traversal}
+import org.thp.scalligraph.{EntityId, InternalError}
 import play.api.Logger
 
-import scala.collection.JavaConverters._
-import scala.collection.{immutable, mutable}
+import java.util.Date
+import java.util.function.Consumer
 import scala.util.Try
 
 class DatabaseException(message: String = "Violation of database schema", cause: Exception) extends Exception(message, cause)
@@ -75,50 +72,8 @@ trait Database {
       to: TO with Entity
   ): E with Entity
 
-//  def getAllProperties(element: Element): Map[String, Seq[Any]] = {
-//    val m = mutable.Map.empty[String, mutable.Builder[Any, Seq[Any]]]
-//    for (property <- element.properties[Any]().asScala) {
-//      val bldr = m.getOrElseUpdate(property.key(), Seq.newBuilder)
-//      bldr += property.value()
-//    }
-//    val b = immutable.Map.newBuilder[String, Seq[Any]]
-//    for ((k, v) <- m)
-//      b += ((k, v.result))
-//    b.result
-//  }
-//  def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D
-//  def getOptionProperty[D, G](element: Element, key: String, mapping: OptionMapping[D, G]): Option[D]
-//  def getListProperty[D, G](element: Element, key: String, mapping: ListMapping[D, G]): Seq[D]
-//  def getSetProperty[D, G](element: Element, key: String, mapping: SetMapping[D, G]): Set[D]
-//
-//  def getProperty[D](element: Element, key: String, mapping: Mapping[D, _, _]): D =
-//    mapping match {
-//      case m: SingleMapping[_, _] => getSingleProperty(element, key, m).asInstanceOf[D]
-//      case m: OptionMapping[_, _] => getOptionProperty(element, key, m).asInstanceOf[D]
-//      case m: ListMapping[_, _]   => getListProperty(element, key, m).asInstanceOf[D]
-//      case m: SetMapping[_, _]    => getSetProperty(element, key, m).asInstanceOf[D]
-//    }
-//
-//  def setSingleProperty[D, G](element: Element, key: String, value: D, mapping: SingleMapping[D, _]): Unit
-//  def setOptionProperty[D, G](element: Element, key: String, value: Option[D], mapping: OptionMapping[D, _]): Unit
-//  def setListProperty[D, G](element: Element, key: String, values: Seq[D], mapping: ListMapping[D, _]): Unit
-//  def setSetProperty[D, G](element: Element, key: String, values: Set[D], mapping: SetMapping[D, _]): Unit
-//
-//  def setProperty[D](element: Element, key: String, value: D, mapping: Mapping[D, _, _]): Unit = {
-//    logger.trace(s"set ${element.id()}, $key = $value")
-//    mapping match {
-//      case m: SingleMapping[d, _] => setSingleProperty(element, key, value, m)
-//      case m: OptionMapping[d, _] => setOptionProperty(element, key, value.asInstanceOf[Option[d]], m)
-//      case m: ListMapping[d, _]   => setListProperty(element, key, value.asInstanceOf[Seq[d]], m)
-//      case m: SetMapping[d, _]    => setSetProperty(element, key, value.asInstanceOf[Set[d]], m)
-//    }
-//  }
-
-//  def mapPredicate[T](predicate: P[T]): P[T]
   def toId(id: Any): Any
 
-//  @deprecated("Use V(model) or E(model)", "0.2")
-//  def labelFilter[D, G <: Element, C <: Converter[D, G]](model: Model): Traversal[D, G, C] => Traversal[D, G, C] = labelFilter(model.label)
   def labelFilter[D, G, C <: Converter[D, G]](label: String, traversal: Traversal[D, G, C]): Traversal[D, G, C]
   def V[D <: Product](ids: EntityId*)(implicit model: Model.Vertex[D], graph: Graph): Traversal.V[D]
   def V(label: String, ids: EntityId*)(implicit graph: Graph): Traversal[Vertex, Vertex, Converter.Identity[Vertex]]
@@ -129,10 +84,10 @@ trait Database {
   val binaryLinkModel: Model.Edge[BinaryLink]
   val binaryModel: Model.Vertex[Binary]
 
-  var printByteCode: Boolean   = false
-  var printStrategies: Boolean = true
+  var printByteCode: Boolean   = true
+  var printStrategies: Boolean = false
   var printExplain: Boolean    = false
-  var printProfile: Boolean    = true
+  var printProfile: Boolean    = false
 }
 
 abstract class BaseDatabase extends Database {

@@ -1,12 +1,12 @@
 package org.thp.scalligraph.auth
 
-import javax.inject.{Inject, Singleton}
-import org.thp.scalligraph.{BadConfigurationError, EntityIdOrName}
 import org.thp.scalligraph.controllers.AuthenticatedRequest
+import org.thp.scalligraph.{BadConfigurationError, EntityIdOrName}
 import play.api.libs.json.Json
 import play.api.mvc._
 import play.api.{Configuration, Logger}
 
+import javax.inject.{Inject, Singleton}
 import scala.concurrent.duration.{DurationLong, FiniteDuration}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}

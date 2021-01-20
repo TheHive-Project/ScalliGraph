@@ -70,9 +70,11 @@ object TraversalOps extends TraversalPrinter {
       }
 
     def toIterator: Iterator[D] = {
-      logger.debug(s"Execution of ${traversal.print} (toIterator)")
+      logger.debug(s"Execution of: (toIterator)\n${traversal.print} ")
       _toIterator
     }
+
+    def foreach[U](body: D => U): Unit = toIterator.foreach(body)
 
     def _toIterator: Iterator[D] =
       traversal.converter match {
@@ -81,34 +83,34 @@ object TraversalOps extends TraversalPrinter {
       }
 
     def toSeq: Seq[D] = {
-      logger.debug(s"Execution of ${traversal.print} (toSeq)")
+      logger.debug(s"Execution of: (toSeq)\n${traversal.print}")
       _toIterator.toVector
     }
 
     def getCount: Long = {
-      logger.debug(s"Execution of ${traversal.print} (count)")
-      count.head
+      logger.debug(s"Execution of: (count)\n${traversal.print}")
+      count._toIterator.next
     }
 
     def head: D = {
-      logger.debug(s"Execution of ${traversal.print} (head)")
+      logger.debug(s"Execution of: (head)\n${traversal.print}")
       _toIterator.next
     }
 
     def headOption: Option[D] = {
-      logger.debug(s"Execution of ${traversal.print} (headOption)")
+      logger.debug(s"Execution of: (headOption)\n${traversal.print}")
       val ite = _toIterator
       if (ite.hasNext) Some(ite.next())
       else None
     }
 
     def toList: List[D] = {
-      logger.debug(s"Execution of ${traversal.print} (toList)")
+      logger.debug(s"Execution of: (toList)\n${traversal.print}")
       _toIterator.toList
     }
 
     def toSet: Set[D] = {
-      logger.debug(s"Execution of ${traversal.print} (toSet)")
+      logger.debug(s"Execution of: (toSet)\n${traversal.print}")
       toIterator.toSet
     }
 
@@ -117,14 +119,14 @@ object TraversalOps extends TraversalPrinter {
     def orFail(ex: Exception): Try[D] = headOption.fold[Try[D]](Failure(ex))(Success.apply)
 
     def exists: Boolean = {
-      logger.debug(s"Execution of ${traversal.print} (exists)")
+      logger.debug(s"Execution of: (exists)\n${traversal.print}")
       traversal.raw.hasNext
     }
 
     def existsOrFail: Try[Unit] = if (exists) Success(()) else Failure(AuthorizationError("Unauthorized action"))
 
     def remove(): Unit = {
-      logger.debug(s"Execution of ${traversal.print} (drop)")
+      logger.debug(s"Execution of: (drop)\n${traversal.print}")
       traversal.raw.drop().iterate()
       ()
     }
@@ -150,7 +152,7 @@ object TraversalOps extends TraversalPrinter {
 
     def count: Traversal[Long, JLong, Converter[Long, JLong]] = {
       val adminTraversal = traversal.raw.asAdmin()
-      adminTraversal.getSteps.asScala.last match {
+      adminTraversal.getSteps.asScala.last match { // TODO remove order step in a strategy
         case orderStep: OrderGlobalStep[_, _] => adminTraversal.removeStep(orderStep)
         case orderStep: OrderLocalStep[_, _]  => adminTraversal.removeStep(orderStep)
         case _                                =>

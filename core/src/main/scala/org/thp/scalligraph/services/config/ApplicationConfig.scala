@@ -25,7 +25,8 @@ class ApplicationConfig @Inject() (
 ) {
   lazy val logger: Logger                  = Logger(getClass)
   val ignoreDatabaseConfiguration: Boolean = configuration.get[Boolean]("ignoreDatabaseConfiguration")
-  if (ignoreDatabaseConfiguration) logger.warn("Emit warning !") // TODO
+  if (ignoreDatabaseConfiguration)
+    logger.warn("Stored configuration is ignored. Only file application.conf is used. You can revert by setting ignoreDatabaseConfiguration=false")
   private val itemsLock                                = new Object
   private var items: Map[String, ConfigItemImpl[_, _]] = Map.empty
 
@@ -72,10 +73,11 @@ class ApplicationConfig @Inject() (
 
   def list: Seq[ConfigItem[_, _]] = items.values.toSeq
 
-  def set(path: String, value: JsValue)(implicit authContext: AuthContext): Try[Unit] = items.get(path) match {
-    case Some(i) => i.setJson(value)
-    case None    => Failure(NotFoundError(s"Configuration $path not found"))
-  }
+  def set(path: String, value: JsValue)(implicit authContext: AuthContext): Try[Unit] =
+    items.get(path) match {
+      case Some(i) => i.setJson(value)
+      case None    => Failure(NotFoundError(s"Configuration $path not found"))
+    }
 
   def get(path: String): Option[ConfigItem[_, _]] = items.get(path)
 }

@@ -120,7 +120,10 @@ class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
   override def exists(folder: String, id: String): Boolean = fs.exists(new HDPath(new HDPath(location, folder), id))
 
   override def delete(folder: String, id: String)(implicit graph: Graph): Try[Unit] =
-    Try(fs.delete(new HDPath(new HDPath(location, folder), id), false))
+    Try {
+      fs.delete(new HDPath(new HDPath(location, folder), id), false)
+      ()
+    }
 
   override def getSize(folder: String, id: String)(implicit graph: Graph): Try[Long] =
     Try(fs.getFileStatus(new HDPath(new HDPath(location, folder), id)).getLen)

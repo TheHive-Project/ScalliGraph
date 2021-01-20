@@ -4,9 +4,8 @@ import org.apache.tinkerpop.gremlin.process.traversal.{Order, P}
 import org.apache.tinkerpop.gremlin.structure.Vertex
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FieldsParser, Renderer}
-import org.thp.scalligraph.models.{Database, Mapping}
+import org.thp.scalligraph.models.Mapping
 import org.thp.scalligraph.query.PredicateOps.PredicateOpsDefs
-import org.thp.scalligraph.traversal.Traversal.Unk
 import org.thp.scalligraph.traversal.TraversalOps.TraversalOpsDefs
 import org.thp.scalligraph.traversal.{Converter, Graph, IdentityConverter, Traversal}
 import play.api.libs.json.{JsObject, JsValue}
