@@ -13,6 +13,8 @@ import org.janusgraph.core.schema.{Mapping => JanusMapping, _}
 import org.janusgraph.core.{Transaction => _, _}
 import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
+import org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration
+import org.janusgraph.graphdb.database.StandardJanusGraph
 import org.janusgraph.graphdb.database.management.ManagementSystem
 import org.janusgraph.graphdb.olap.job.IndexRepairJob
 import org.janusgraph.graphdb.relations.RelationIdentifier
@@ -69,7 +71,11 @@ object JanusDatabase {
   def fullTextAvailable(db: JanusGraph, singleInstance: SingleInstance): Boolean = {
     val mgmt = db.openManagement()
     try {
-      lazy val location = mgmt.get("index.search.directory")
+      lazy val location = db
+        .asInstanceOf[StandardJanusGraph]
+        .getConfiguration
+        .getConfiguration
+        .get(GraphDatabaseConfiguration.INDEX_DIRECTORY, "search") //mgmt.get("index.search.directory")
       mgmt.get("index.search.backend") match {
         case "elasticsearch" =>
           logger.info(s"Full-text index is available (elasticsearch:${mgmt.get("index.search.hostname")}) $singleInstance")
@@ -335,7 +341,7 @@ class JanusDatabase(
 
   override def addSchemaIndexes(models: Seq[Model]): Try[Unit] =
     managementTransaction { mgmt =>
-      findFirstAvailableIndex(mgmt, "_label_vertex_index").left.foreach { indexName =>
+      findFirstAvailableCompositeIndex(mgmt, "_label_vertex_index").left.foreach { indexName =>
         mgmt
           .buildIndex(indexName, classOf[Vertex])
           .addKey(mgmt.getPropertyKey("_label"))
@@ -558,10 +564,10 @@ class JanusDatabase(
     * @param baseIndexName Base index name
     * @return the available index name or Right if index is present
     */
-  private def findFirstAvailableIndex(mgmt: JanusGraphManagement, baseIndexName: String): Either[String, String] = {
+  private def findFirstAvailableCompositeIndex(mgmt: JanusGraphManagement, baseIndexName: String): Either[String, String] = {
     val indexNamePattern: Pattern = s"$baseIndexName(?:_\\p{Digit}+)?".r.pattern
     val availableIndexes = (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).filter(i =>
-      indexNamePattern.matcher(i.name()).matches()
+      i.isCompositeIndex && indexNamePattern.matcher(i.name()).matches()
     )
     if (availableIndexes.isEmpty) Left(baseIndexName)
     else
@@ -575,16 +581,39 @@ class JanusDatabase(
         }(index => Right(index.name()))
   }
 
+  /**
+    * Find the available index name for the specified index base name. If this index is already present and not disable, return None
+    * @param mgmt JanusGraph management
+    * @param baseIndexName Base index name
+    * @return the available index name or Right if index is present
+    */
+  private def findFirstAvailableMixedIndex(mgmt: JanusGraphManagement, baseIndexName: String): Either[String, String] = {
+    val validBaseIndexName        = baseIndexName.replaceAll("[^\\p{Alnum}]", baseIndexName)
+    val indexNamePattern: Pattern = s"$validBaseIndexName(?:\\p{Digit}+)?".r.pattern
+    val availableIndexes = (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).filter(i =>
+      i.isMixedIndex && indexNamePattern.matcher(i.name()).matches()
+    )
+    if (availableIndexes.isEmpty) Left(baseIndexName)
+    else
+      availableIndexes
+        .find(index => !index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.DISABLED))
+        .fold[Either[String, String]] {
+          val lastIndex = availableIndexes.map(_.name()).toSeq.max
+          val version   = lastIndex.drop(baseIndexName.length)
+          if (version.isEmpty) Left(s"${baseIndexName}1")
+          else Left(s"$baseIndexName${version.tail.toInt + 1}")
+        }(index => Right(index.name()))
+  }
+
   def createMixedIndex(
       mgmt: JanusGraphManagement,
       elementClass: Class[_ <: Element],
       elementLabel: JanusGraphSchemaType,
       indexDefinitions: Seq[(IndexType.Value, Seq[String])]
   ): Unit = {
-    def getPropertyKey(name: String) = Option(mgmt.getPropertyKey(name)).getOrElse(throw InternalError(s"Property $name doesnt exist"))
+    def getPropertyKey(name: String) = Option(mgmt.getPropertyKey(name)).getOrElse(throw InternalError(s"Property $name doesn't exist"))
 
-    val indexBaseName = s"${elementLabel.name}_mixed"
-    findFirstAvailableIndex(mgmt, indexBaseName) match {
+    findFirstAvailableMixedIndex(mgmt, elementLabel.name) match {
       case Left(indexName) =>
         logger.debug(s"Creating index on fields $indexName")
         val index = mgmt.buildIndex(indexName, elementClass).indexOnly(elementLabel)
@@ -646,7 +675,7 @@ class JanusDatabase(
     compositeIndexes.foreach {
       case (indexType, properties) =>
         val baseIndexName = (elementLabel.name +: properties).map(_.replaceAll("[^\\p{Alnum}]", "").toLowerCase().capitalize).mkString
-        findFirstAvailableIndex(mgmt, baseIndexName).left.foreach { indexName =>
+        findFirstAvailableCompositeIndex(mgmt, baseIndexName).left.foreach { indexName =>
           val index = mgmt.buildIndex(indexName, elementClass).indexOnly(elementLabel)
           index.addKey(labelProperty)
           properties.foreach(p => index.addKey(getPropertyKey(p)))
@@ -698,8 +727,6 @@ class JanusDatabase(
 
   override def labelFilter[D, G, C <: Converter[D, G]](label: String, traversal: Traversal[D, G, C]): Traversal[D, G, C] =
     traversal.onRaw(_.hasLabel(label).has("_label", label))
-//  override def labelFilter[D, G <: Element, C <: Converter[D, G]](label: String): Traversal[D, G, C] => Traversal[D, G, C] =
-//    _.onRaw(_.has("_label", label).hasLabel(label))
 
   def V[D <: Product](ids: EntityId*)(implicit model: Model.Vertex[D], graph: Graph): Traversal.V[D] =
     new Traversal[D with Entity, Vertex, Converter[D with Entity, Vertex]](
@@ -715,6 +742,7 @@ class JanusDatabase(
         .has("_label", model.label),
       model.converter
     )
+
   def E[D <: Product](ids: EntityId*)(implicit model: Model.Edge[D], graph: Graph): Traversal.E[D] =
     new Traversal[D with Entity, Edge, Converter[D with Entity, Edge]](
       graph,
@@ -736,6 +764,7 @@ class JanusDatabase(
         .has("_label", label),
       Converter.identity[Vertex]
     )
+
   def E(label: String, ids: EntityId*)(implicit graph: Graph): Traversal[Edge, Edge, Converter.Identity[Edge]] =
     new Traversal[Edge, Edge, Converter.Identity[Edge]](
       graph,
