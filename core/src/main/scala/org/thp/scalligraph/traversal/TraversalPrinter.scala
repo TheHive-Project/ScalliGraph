@@ -6,6 +6,7 @@ import org.apache.tinkerpop.gremlin.process.traversal.step.branch.{ChooseStep, U
 import org.apache.tinkerpop.gremlin.process.traversal.step.filter.WhereTraversalStep.{WhereEndStep, WhereStartStep}
 import org.apache.tinkerpop.gremlin.process.traversal.step.filter._
 import org.apache.tinkerpop.gremlin.process.traversal.step.map._
+import org.apache.tinkerpop.gremlin.process.traversal.step.sideEffect.{AggregateStep, IdentityStep, StoreStep}
 import org.apache.tinkerpop.gremlin.process.traversal.step.util.ComputerAwareStep.EndStep
 import org.apache.tinkerpop.gremlin.process.traversal.{P, Pop, Step, Traversal => TinkerTraversal}
 import org.apache.tinkerpop.gremlin.structure.PropertyType
@@ -107,6 +108,15 @@ trait TraversalPrinter {
             if (s.getPop == Pop.last) ""
             else s"${s.getPop}, "
           s"select($pop${s.getScopeKeys.asScala.map('"' + _ + '"').mkString(", ")})${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"
+        case s: SelectOneStep[_, _] =>
+          val pop =
+            if (s.getPop == Pop.last) ""
+            else s"${s.getPop}, "
+          s"select($pop${s.getScopeKeys.asScala.map('"' + _ + '"').mkString(", ")})${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"
+        case s: StoreStep[_] =>
+          s"aggregate(local, ${s.getLabels.asScala.map('"' + _ + '"').mkString(", ")})${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"
+        case s: AggregateStep[_] =>
+          s"aggregate(global, ${s.getLabels.asScala.map('"' + _ + '"').mkString(", ")})${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"
         case s: OrderGlobalStep[_, _] => s"order()${s.getComparators.asScala.map(p => printBy(p.getValue0, Some(p.getValue1))).mkString}"
         case s: PropertiesStep[_] =>
           s.getReturnType match {
@@ -123,8 +133,10 @@ trait TraversalPrinter {
         case s: GroupCountStep[_, _] => s"group()${printChildrenBy(s)}"
         case s: ConstantStep[_, _]   => s"constant(${printValue(s.getConstant)})"
         case s: ChooseStep[_, _, _]  => s"choose(${printLocalChildren(s)}, ${printGlobalChildren(s)})"
-        case s: HasNextStep[_]       => ""
+        case _: HasNextStep[_]       => ""
         case s: NotStep[_]           => s"not(${printLocalChildren(s)})"
+        case _: LabelStep[_]         => "label()"
+        case _: IdentityStep[_]      => "identity()"
         case other                   => s"{UNKNOWN:$other}"
       }
       val labels = step.getLabels.asScala
