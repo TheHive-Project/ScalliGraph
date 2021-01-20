@@ -54,10 +54,8 @@ class ErrorHandler extends HttpErrorHandler {
 
   def onServerError(request: RequestHeader, exception: Throwable): Future[Result] = {
     val (status, body) = toErrorResult(exception)
-    exception match {
-      case AuthenticationError(message, _) => logger.warn(s"${request.method} ${request.uri} returned $status: $message")
-      case ex                              => logger.warn(s"${request.method} ${request.uri} returned $status", ex)
-    }
+    if (!exception.isInstanceOf[AuthenticationError])
+      logger.warn(s"${request.method} ${request.uri} returned $status", exception)
     Future.successful(toResult(status, body))
   }
 }
