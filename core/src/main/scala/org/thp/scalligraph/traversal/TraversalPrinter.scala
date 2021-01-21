@@ -126,14 +126,14 @@ trait TraversalPrinter {
         case s: DedupGlobalStep[_]   => s"dedup(${s.getScopeKeys.asScala.map('"' + _ + '"').mkString(",")})"
         case s: UnionStep[_, _]      => s"union(${printGlobalChildren(s)})"
         case s: CoalesceStep[_, _]   => s"coalesce(${printLocalChildren(s)})"
-        case _: EndStep[_]           => ""
+        case _: EndStep[_]           => "identity()"
         case s: OrStep[_]            => s"or(${printLocalChildren(s)})"
         case s: AndStep[_]           => s"and(${printLocalChildren(s)})"
         case s: RangeGlobalStep[_]   => s"range(${s.getLowRange}, ${s.getHighRange})"
         case s: GroupCountStep[_, _] => s"group()${printChildrenBy(s)}"
         case s: ConstantStep[_, _]   => s"constant(${printValue(s.getConstant)})"
         case s: ChooseStep[_, _, _]  => s"choose(${printLocalChildren(s)}, ${printGlobalChildren(s)})"
-        case _: HasNextStep[_]       => ""
+        case _: HasNextStep[_]       => "identity()"
         case s: NotStep[_]           => s"not(${printLocalChildren(s)})"
         case _: LabelStep[_]         => "label()"
         case _: IdentityStep[_]      => "identity()"
@@ -171,7 +171,7 @@ trait TraversalPrinter {
       value match {
         case s: String          => '"' + s + '"'
         case d: Date            => s"new Date(${d.getTime})"
-        case v if v == NO_VALUE => "<NO_VALUE>"
+        case v if v == NO_VALUE => """"<NO_VALUE>"""""
         case other              => other.toString
       }
   }
