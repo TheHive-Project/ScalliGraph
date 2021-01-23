@@ -1,6 +1,6 @@
 package org.thp.scalligraph.traversal
 
-import java.lang.{Long => JLong}
+import java.lang.{Long => JLong, Double => JDouble}
 import java.util.{Date, NoSuchElementException, UUID, Collection => JCollection, List => JList, Map => JMap}
 
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, GraphTraversal}
@@ -172,8 +172,11 @@ object TraversalOps extends TraversalPrinter {
     def max: Traversal[D, G, C] =
       traversal.mapAsComparable(_.onRaw(_.max[Comparable[G]]))
 
-    def mean: Traversal[D, G, C] =
-      traversal.mapAsNumber(_.onRaw(_.mean[Number]))
+    def mean: Traversal[Double, JDouble, Converter[Double, JDouble]] =
+      traversal
+        .mapAsNumber(_.onRaw(_.mean[Number]))
+        .asInstanceOf[Traversal[JDouble, JDouble, IdentityConverter[JDouble]]]
+        .setConverter[Double, Converter[Double, JDouble]](UMapping.double)
 
     def as(stepLabel: StepLabel[D, G, C], otherLabels: StepLabel[D, G, C]*): Traversal[D, G, C] = {
       stepLabel.setConverter(traversal.converter)
@@ -581,6 +584,9 @@ object TraversalOps extends TraversalPrinter {
     }
 
     def sack[R]: Traversal[R, R, Converter.Identity[R]] = traversal.onRawMap[R, R, Converter.Identity[R]](_.sack[R]())(Converter.identity)
+
+    def math(expression: String): Traversal[Double, JDouble, Converter[Double, JDouble]] =
+      traversal.onRawMap[Double, JDouble, Converter[Double, JDouble]](_.math(expression))(Converter.double)
 
     def is(predicate: P[G]): Traversal[D, G, C] = traversal.onRaw(_.is(predicate))
 

@@ -256,7 +256,8 @@ case class AggAvg(aggName: Option[String], fieldName: String, filter: Option[Inp
           property
             .select(FPath(fieldName), t, authContext)
             .mean
-            .domainMap(avg => Output(Json.obj(name -> avg.asInstanceOf[Double]))),
+            .domainMap(avg => Output(Json.obj(name -> avg)))
+            .asInstanceOf[Traversal.Domain[Output[_]]],
         Output(null, JsNull)
       )
   }

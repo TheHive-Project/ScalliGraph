@@ -140,14 +140,6 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
       .map(_.groupBy(_.id()).map(_._2.head).toSeq)
   }
 
-  /*
-  Error:(135, 68) type mismatch;
- found   : org.thp.scalligraph.steps.GenericBySelector[EDGE,EDGE,org.thp.scalligraph.steps.Converter.Identity[EDGE]] => org.thp.scalligraph.steps.ByResult[EDGE,Nothing,Nothing,Nothing]
-    (which expands to)  org.thp.scalligraph.steps.GenericBySelector[EDGE,EDGE,org.thp.scalligraph.steps.IdentityConverter[EDGE]] => org.thp.scalligraph.steps.ByResult[EDGE,Nothing,Nothing,Nothing]
-    (which expands to)  org.thp.scalligraph.steps.GenericBySelector[EDGE,EDGE,org.thp.scalligraph.steps.IdentityConverter[EDGE]] => org.thp.scalligraph.steps.ByResult[EDGE,DD,Nothing,Nothing]
- required: org.thp.scalligraph.steps.GenericBySelector[EDGE,EDGE,org.thp.scalligraph.steps.Converter.Identity[EDGE]] => org.thp.scalligraph.steps.ByResult[EDGE,DD,Nothing,Nothing]
-          .group(_.by(_.select(_(fromLabel)(_.by).apply(e1Label)(_.byLabel).apply(toLabel)(_.by)))) //, toLabel)).by().by(T.label).by()))
-   */
   def firstCreatedEntity(elements: Seq[E with Entity]): Option[(E with Entity, Seq[E with Entity])] =
     if (elements.isEmpty) None
     else {
