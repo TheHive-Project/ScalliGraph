@@ -11,7 +11,7 @@ import scala.util.{Failure, Success, Try}
 
 sealed trait Operation
 
-case class AddVertexModel(label: String, mapping: Map[String, Mapping[_, _, _]])                                                   extends Operation
+case class AddVertexModel(label: String)                                                                                           extends Operation
 case class AddEdgeModel(label: String, mapping: Map[String, Mapping[_, _, _]])                                                     extends Operation
 case class AddProperty(model: String, propertyName: String, mapping: Mapping[_, _, _])                                             extends Operation
 case class RemoveProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean)                                       extends Operation
@@ -37,8 +37,8 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
   lazy val logger: Logger                               = Logger(getClass)
   val lastVersion: Int                                  = operations.length + 2
   private def addOperations(op: Operation*): Operations = copy(operations = operations ++ op)
-  def addVertexModel[T](label: String, properties: Seq[String])(implicit mapping: UMapping[T]): Operations =
-    addOperations(AddVertexModel(label, properties.map(p => p -> mapping.toMapping).toMap))
+  def addVertexModel[T](label: String): Operations =
+    addOperations(AddVertexModel(label))
   def addEdgeModel[T](label: String, properties: Seq[String])(implicit mapping: UMapping[T]): Operations =
     addOperations(AddEdgeModel(label, properties.map(p => p -> mapping.toMapping).toMap))
   def addProperty[T](model: String, propertyName: String)(implicit mapping: UMapping[T]): Operations =
@@ -65,9 +65,9 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
         operations.zipWithIndex.foldLeft[Try[Unit]](Success(())) {
           case (Success(_), (ops, v)) if v + 1 >= version =>
             (ops match {
-              case AddVertexModel(label, mapping) =>
+              case AddVertexModel(label) =>
                 logger.info(s"Add vertex model $label to schema")
-                db.addVertexModel(label, mapping)
+                db.addVertexModel(label, Map.empty)
               case AddEdgeModel(label, mapping) =>
                 logger.info(s"Add edge model $label to schema")
                 db.addEdgeModel(label, mapping)
