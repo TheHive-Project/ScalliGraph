@@ -19,6 +19,7 @@ import scala.reflect.{classTag, ClassTag}
 
 sealed trait MappingCardinality {
   val gremlinCardinality: VertexProperty.Cardinality
+  override lazy val toString: String = getClass.getCanonicalName
 }
 object MappingCardinality {
   type Value = MappingCardinality
