@@ -471,7 +471,8 @@ object TraversalOps extends TraversalPrinter {
 
     def hasLabel(name: String): Traversal[D, G, C] = traversal.onRaw(_.hasLabel(name))
 
-    def has(accessor: T, predicate: P[_])(implicit ev: G <:< Element): Traversal[D, G, C] = traversal.onRaw(_.has(accessor, predicate))
+    def has(accessor: T, predicate: P[_])(implicit ev: G <:< Element): Traversal[D, G, C] =
+      traversal.onRaw(_.has(accessor, traversal.graph.db.mapPredicate(predicate)))
     def has[A, B](selector: D => A, value: B)(implicit mapping: Mapping[A, B, _], ev: G <:< Element): Traversal[D, G, C] =
       macro TraversalMacro.hasV[A, B]
     def has[A, B](selector: D => A, predicate: P[B])(implicit mapping: Mapping[A, B, _], ev: G <:< Element): Traversal[D, G, C] =

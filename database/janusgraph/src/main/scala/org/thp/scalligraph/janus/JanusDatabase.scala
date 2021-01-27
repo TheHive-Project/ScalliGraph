@@ -4,10 +4,11 @@ import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Flow, Source}
 import com.typesafe.config.ConfigObject
-import org.apache.tinkerpop.gremlin.process.traversal.TraversalSource
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource
+import org.apache.tinkerpop.gremlin.process.traversal.{P, Text, TraversalSource}
 import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
 import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Transaction, Vertex, Graph => TinkerGraph}
+import org.janusgraph.core.attribute.{Text => JanusText}
 import org.janusgraph.core.schema.JanusGraphManagement.IndexJobFuture
 import org.janusgraph.core.schema.{Mapping => JanusMapping, _}
 import org.janusgraph.core.{Transaction => _, _}
@@ -21,13 +22,13 @@ import org.janusgraph.graphdb.relations.RelationIdentifier
 import org.janusgraph.graphdb.tinkerpop.optimize.JanusGraphStepStrategy
 import org.slf4j.MDC
 import org.thp.scalligraph.auth.AuthContext
+import org.thp.scalligraph.janus.strategies._
 import org.thp.scalligraph.models.{MappingCardinality, _}
 import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.traversal.{Converter, Graph, GraphWrapper, Traversal}
 import org.thp.scalligraph.utils.{Config, Retry}
 import org.thp.scalligraph.{EntityId, InternalError, NotFoundError, SingleInstance}
 import play.api.{Configuration, Logger}
-import org.thp.scalligraph.janus.strategies._
 
 import java.lang.{Long => JLong}
 import java.nio.file.{Files, Paths}
@@ -518,7 +519,7 @@ class JanusDatabase(
       logger.info("Reindex job is finished")
     else {
       val scanMetrics = job.getIntermediateResult
-      logger.info(s"Reindex job is running: ${scanMetrics.getCustom(IndexRepairJob.ADDED_RECORDS_COUNT)} record indexed")
+      logger.info(s"Reindex job is running: ${scanMetrics.getCustom(IndexRepairJob.ADDED_RECORDS_COUNT)} record(s) indexed")
       Thread.sleep(1000)
       showIndexProgress(job)
     }
@@ -727,6 +728,17 @@ class JanusDatabase(
 
   override def labelFilter[D, G, C <: Converter[D, G]](label: String, traversal: Traversal[D, G, C]): Traversal[D, G, C] =
     traversal.onRaw(_.hasLabel(label).has("_label", label))
+
+  override def mapPredicate[T](predicate: P[T]): P[T] =
+    predicate.getBiPredicate match {
+      case Text.containing    => JanusText.textContainsRegex(s".*${predicate.getValue}.*").asInstanceOf[P[T]]
+      case Text.notContaining => JanusText.textContainsRegex(s".*${predicate.getValue}.*").negate().asInstanceOf[P[T]]
+      //      case Text.endingWith      => JanusText.textRegex(s"${predicate.getValue}.*")
+      //      case Text.notEndingWith   => JanusText.textRegex(s"${predicate.getValue}.*").negate()
+      case Text.startingWith    => JanusText.textPrefix(predicate.getValue)
+      case Text.notStartingWith => JanusText.textPrefix(predicate.getValue).negate()
+      case _                    => predicate
+    }
 
   def V[D <: Product](ids: EntityId*)(implicit model: Model.Vertex[D], graph: Graph): Traversal.V[D] =
     new Traversal[D with Entity, Vertex, Converter[D with Entity, Vertex]](

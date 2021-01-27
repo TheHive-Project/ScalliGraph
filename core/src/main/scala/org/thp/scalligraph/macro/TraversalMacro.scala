@@ -72,7 +72,17 @@ class TraversalMacro(val c: blackbox.Context) extends MacroUtil {
     val traversalOps: Tree = c.prefix.tree
     val traversal          = q"$traversalOps.traversal"
     val name: Name         = getSelectorName(q"$selector").getOrElse(fatal(s"$selector is an invalid selector"))
-    q"$traversal.onRaw(_.has(${name.toString}, $mapping.reverse($predicate)))"
+    val traversalVal       = Ident(TermName(c.freshName("traversal")))
+    val dbVal              = Ident(TermName(c.freshName("db")))
+    val predicateVal       = Ident(TermName(c.freshName("predicate")))
+    val mappedPredicateVal = Ident(TermName(c.freshName("mappedPredicate")))
+    q"""
+          val $traversalVal = $traversal
+          val $dbVal = $traversalVal.graph.db
+          val $predicateVal = $mapping.reverse($predicate)
+          val $mappedPredicateVal = $dbVal.mapPredicate($predicateVal)
+          $traversalVal.onRaw(_.has(${name.toString}, $mappedPredicateVal))
+        """
   }
   def has[A](selector: Tree)(ev: Tree): Tree = {
     val traversalOps: Tree = c.prefix.tree
@@ -84,7 +94,7 @@ class TraversalMacro(val c: blackbox.Context) extends MacroUtil {
     val traversalOps: Tree = c.prefix.tree
     val traversal          = q"$traversalOps.traversal"
     val name: Name         = getSelectorName(q"$selector").getOrElse(fatal(s"$selector is an invalid selector"))
-    q"$traversal.onRaw(_.not(org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__.start().has(${name.toString}, $mapping.reverse($predicate))))"
+    q"$traversal.onRaw(_.not(org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__.start().has(${name.toString}, $traversal.graph.db.mapPredicate($mapping.reverse($predicate)))))"
   }
   def hasNotV[A, B](selector: Tree, value: Tree)(mapping: Tree, ev: Tree): Tree = {
     val traversalOps: Tree = c.prefix.tree

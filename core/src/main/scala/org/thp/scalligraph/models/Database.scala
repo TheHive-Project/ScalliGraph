@@ -2,6 +2,7 @@ package org.thp.scalligraph.models
 
 import akka.NotUsed
 import akka.stream.scaladsl.Source
+import org.apache.tinkerpop.gremlin.process.traversal.P
 import org.apache.tinkerpop.gremlin.structure.Transaction.Status
 import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex}
 import org.thp.scalligraph.auth.AuthContext
@@ -75,6 +76,7 @@ trait Database {
   def toId(id: Any): Any
 
   def labelFilter[D, G, C <: Converter[D, G]](label: String, traversal: Traversal[D, G, C]): Traversal[D, G, C]
+  def mapPredicate[T](predicate: P[T]): P[T]
   def V[D <: Product](ids: EntityId*)(implicit model: Model.Vertex[D], graph: Graph): Traversal.V[D]
   def V(label: String, ids: EntityId*)(implicit graph: Graph): Traversal[Vertex, Vertex, Converter.Identity[Vertex]]
   def E[D <: Product](ids: EntityId*)(implicit model: Model.Edge[D], graph: Graph): Traversal.E[D]
@@ -125,7 +127,7 @@ abstract class BaseDatabase extends Database {
   override def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Try[Unit] =
     for {
       _ <- createSchema(schemaObject.modelList ++ extraModels)
-      _ <- tryTransaction(graph => Try(schemaObject.initialValues.foreach(_.create()(graph, authContext))))
+      _ <- tryTransaction(graph => Try(schemaObject.initialValues.foreach(_.create()(graph, authContext)))) // FIXME should not fail if already exists
       _ <- tryTransaction(graph => schemaObject.init(this)(graph, authContext))
     } yield ()
 
@@ -183,7 +185,8 @@ abstract class BaseDatabase extends Database {
   override val binaryModel: Model.Vertex[Binary]       = Binary.model
   def labelFilter[D, G <: Element, C <: Converter[D, G]](label: String): Traversal[D, G, C] => Traversal[D, G, C] =
     _.onRaw(_.hasLabel(label))
-  override def toId(id: Any): Any = id
+  override def mapPredicate[T](predicate: P[T]): P[T] = predicate
+  override def toId(id: Any): Any                     = id
 
   override val extraModels: Seq[Model] = Seq(binaryModel, binaryLinkModel)
 
