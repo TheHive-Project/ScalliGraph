@@ -501,7 +501,7 @@ object TraversalOps extends TraversalPrinter {
     def _id(implicit ev: G <:< Element): Traversal[EntityId, AnyRef, Converter[EntityId, AnyRef]] =
       traversal.onRawMap[EntityId, AnyRef, Converter[EntityId, AnyRef]](_.id())(EntityId.apply)
 
-    def update[V](selector: D => V, value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
+    def update[V](selector: D => V, value: V)(implicit mapping: Mapping[V, _, _], ev: G <:< Element): Traversal[D, G, C] =
       macro TraversalMacro.update[V]
 
     def addValue[V](selector: D => Seq[V], value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
