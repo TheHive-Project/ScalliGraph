@@ -75,7 +75,9 @@ object Query {
       override def apply(param: Unit, fromType: ru.Type, from: Any, authContext: AuthContext): Any = f(from.asInstanceOf[F], authContext)
     }
 
-  def withParam[P: ru.TypeTag, F: ru.TypeTag, T: ru.TypeTag](queryName: String, parser: FieldsParser[P], f: (P, F, AuthContext) => T): ParamQuery[P] =
+  def withParam[P: ru.TypeTag, F: ru.TypeTag, T: ru.TypeTag](queryName: String, f: (P, F, AuthContext) => T)(implicit
+      parser: FieldsParser[P]
+  ): ParamQuery[P] =
     new ParamQuery[P] {
       override def paramParser(tpe: ru.Type): FieldsParser[P]                                   = parser
       override val name: String                                                                 = queryName

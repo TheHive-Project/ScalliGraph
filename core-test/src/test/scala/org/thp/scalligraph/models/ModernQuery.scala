@@ -79,7 +79,6 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
     Query[Traversal.V[Person], Traversal.V[Software]]("created", (personSteps, _) => personSteps.created),
     Query.withParam[FriendLevel, Traversal.V[Person], Traversal.V[Person]](
       "friends",
-      FieldsParser[FriendLevel],
       (friendLevel, personSteps, _) => personSteps.friends(friendLevel.level)
     ),
     Query.output[Person with Entity, Traversal.V[Person]],
