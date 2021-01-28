@@ -1,30 +1,30 @@
 package org.thp.scalligraph.services
 
-import java.io.{ByteArrayInputStream, InputStream}
-import java.net.URI
-import java.nio.file._
-import java.util.Base64
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.Materializer
-import akka.stream.alpakka.s3.{S3Attributes, S3Ext, S3Settings}
 import akka.stream.alpakka.s3.scaladsl.S3
+import akka.stream.alpakka.s3.{S3Attributes, S3Ext, S3Settings}
 import akka.stream.scaladsl.{Sink, Source, StreamConverters}
 import akka.util.ByteString
-import com.amazonaws.auth.{AWSCredentials, AWSCredentialsProvider}
-import com.amazonaws.regions.AwsRegionProvider
-
-import javax.inject.{Inject, Singleton}
 import org.apache.hadoop.conf.{Configuration => HadoopConfig}
 import org.apache.hadoop.fs.{FileAlreadyExistsException => HadoopFileAlreadyExistsException, FileSystem => HDFileSystem, Path => HDPath}
 import org.apache.hadoop.io.IOUtils
 import org.thp.scalligraph.NotFoundError
 import org.thp.scalligraph.auth.UserSrv
 import org.thp.scalligraph.models._
-import org.thp.scalligraph.traversal.{Graph, Traversal}
 import org.thp.scalligraph.traversal.TraversalOps._
+import org.thp.scalligraph.traversal.{Graph, Traversal}
 import play.api.{Configuration, Logger}
+import software.amazon.awssdk.auth.credentials.{AwsCredentials, AwsCredentialsProvider}
+import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.regions.providers.AwsRegionProvider
 
+import java.io.{ByteArrayInputStream, InputStream}
+import java.net.URI
+import java.nio.file._
+import java.util.Base64
+import javax.inject.{Inject, Singleton}
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import scala.concurrent.{Await, ExecutionContext}
 import scala.util.{Success, Try}
@@ -251,21 +251,19 @@ class S3StorageSrv @Inject() (configuration: Configuration, system: ActorSystem,
   private val accessKey: String            = configuration.get[String]("storage.s3.accessKey")
   private val secretKey: String            = configuration.get[String]("storage.s3.secretKey")
 
-  private val credentialsProvider: AWSCredentialsProvider = new AWSCredentialsProvider {
-    override def getCredentials: AWSCredentials =
-      new AWSCredentials {
-        override def getAWSAccessKeyId: String = accessKey
-        override def getAWSSecretKey: String   = secretKey
+  private val credentialsProvider: AwsCredentialsProvider = new AwsCredentialsProvider {
+    override def resolveCredentials: AwsCredentials =
+      new AwsCredentials {
+        override def accessKeyId: String     = accessKey
+        override def secretAccessKey: String = secretKey
       }
-
-    override def refresh(): Unit = ()
   }
   private val settings: S3Settings = S3Ext(system)
     .settings
     .withEndpointUrl(endpoint)
     .withCredentialsProvider(credentialsProvider)
     .withS3RegionProvider(new AwsRegionProvider {
-      override def getRegion: String = region
+      override def getRegion: Region = Region.of(region)
     })
 
   override def loadBinary(folder: String, id: String): InputStream =
