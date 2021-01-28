@@ -92,7 +92,7 @@ class PropertyBuilder[E <: Product, M, D](typeFilter: TypeFilter, propertyName: 
       select: TraversalSelect,
       filter: PropertyFilter[_]
   ) {
-    def filter[A](fp: FieldsParser[A])(f: (FPath, Traversal.V[E], AuthContext, Either[Boolean, P[A]]) => Traversal.V[E]) =
+    def filter[A](f: (FPath, Traversal.V[E], AuthContext, Either[Boolean, P[A]]) => Traversal.V[E])(implicit fp: FieldsParser[A]) =
       new TraversalBasedProperty(
         typeFilter,
         propertyName,
