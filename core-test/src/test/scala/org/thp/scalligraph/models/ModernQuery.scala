@@ -1,7 +1,7 @@
 package org.thp.scalligraph.models
 
 import org.apache.tinkerpop.gremlin.process.traversal.P
-import org.thp.scalligraph.controllers.{FieldsParser, Renderer}
+import org.thp.scalligraph.controllers.Renderer
 import org.thp.scalligraph.query._
 import org.thp.scalligraph.traversal.Traversal
 import org.thp.scalligraph.traversal.TraversalOps._
@@ -73,7 +73,6 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
     Query.init[Traversal.V[Software]]("allSoftware", (graph, _) => softwareSrv.startTraversal(graph)),
     Query.initWithParam[SeniorAgeThreshold, Traversal.V[Person]](
       "seniorPeople",
-      FieldsParser[SeniorAgeThreshold],
       (seniorAgeThreshold, graph, _) => personSrv.startTraversal(graph).has(_.age, P.gte(seniorAgeThreshold.age))
     ),
     Query[Traversal.V[Person], Traversal.V[Software]]("created", (personSteps, _) => personSteps.created),
