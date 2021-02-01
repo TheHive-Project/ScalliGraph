@@ -4,7 +4,7 @@ import com.google.inject.Inject
 import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
 import org.specs2.mock.Mockito
 import org.thp.scalligraph.auth.{AuthSrv, UserSrv}
-import org.thp.scalligraph.models.{Database, Schema}
+import org.thp.scalligraph.models.{Database, Schema, UpdatableSchema}
 import org.thp.scalligraph.query.QueryExecutor
 import play.api.cache.caffeine.CaffeineCacheModule
 import play.api.i18n.{I18nModule => PlayI18nModule}
@@ -50,6 +50,7 @@ object TestModule extends ScalaModule with Mockito {
     ScalaMultibinder.newSetBinder[Schema](binder)
     ScalaMultibinder.newSetBinder[QueryExecutor](binder)
     ScalaMultibinder.newSetBinder[PlayRouter](binder)
+    ScalaMultibinder.newSetBinder[UpdatableSchema](binder)
     ()
   }
 }
