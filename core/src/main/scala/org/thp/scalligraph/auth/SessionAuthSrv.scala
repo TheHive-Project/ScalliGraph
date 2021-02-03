@@ -70,7 +70,10 @@ class SessionAuthSrv(
         ("expire"      -> (now + maxSessionInactivity.toMillis).toString) +
         ("warning"     -> (now + maxSessionInactivity.toMillis - sessionWarning.toMillis).toString)
       result.withSession(session)
-    } else result
+    } else if (result.header.headers.contains("X-Logout"))
+      result.withNewSession
+    else
+      result
   }
 
   def getAuthContext[A](request: Request[A]): Option[(AuthContext, AuthContext)] =
