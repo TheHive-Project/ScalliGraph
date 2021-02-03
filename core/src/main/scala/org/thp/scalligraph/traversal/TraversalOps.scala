@@ -1,8 +1,7 @@
 package org.thp.scalligraph.traversal
 
-import java.lang.{Long => JLong, Double => JDouble}
+import java.lang.{Double => JDouble, Long => JLong}
 import java.util.{Date, NoSuchElementException, UUID, Collection => JCollection, List => JList, Map => JMap}
-
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, GraphTraversal}
 import org.apache.tinkerpop.gremlin.process.traversal.step.map.{OrderGlobalStep, OrderLocalStep}
 import org.apache.tinkerpop.gremlin.process.traversal.{P, Scope}
@@ -499,6 +498,7 @@ object TraversalOps extends TraversalPrinter {
 
     def label(implicit ev: G <:< Element): Traversal[String, String, IdentityConverter[String]] =
       traversal.onRawMap[String, String, IdentityConverter[String]](_.label())(Converter.identity[String])
+
     def _id(implicit ev: G <:< Element): Traversal[EntityId, AnyRef, Converter[EntityId, AnyRef]] =
       traversal.onRawMap[EntityId, AnyRef, Converter[EntityId, AnyRef]](_.id())(EntityId.apply)
 
@@ -508,7 +508,13 @@ object TraversalOps extends TraversalPrinter {
     def addValue[V](selector: D => Seq[V], value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
       macro TraversalMacro.addValue[V]
 
+    def addValue[V](selector: D => Set[V], value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
+      macro TraversalMacro.addValue[V]
+
     def removeValue[V](selector: D => Seq[V], value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
+      macro TraversalMacro.removeValue[V]
+
+    def removeValue[V](selector: D => Set[V], value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
       macro TraversalMacro.removeValue[V]
 
     def iterate(): Unit = {
