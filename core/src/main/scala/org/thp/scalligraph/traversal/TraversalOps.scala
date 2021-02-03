@@ -10,6 +10,7 @@ import org.thp.scalligraph.`macro`.TraversalMacro
 import org.thp.scalligraph.controllers.Renderer
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.traversal.Converter.CMap
+import org.thp.scalligraph.utils.Retry
 import org.thp.scalligraph.{AuthorizationError, EntityId, InternalError, NotFoundError}
 import play.api.Logger
 import shapeless.ops.hlist.{Mapper, RightFolder, ToTraversable, Tupler}
@@ -40,7 +41,7 @@ object TraversalOps extends TraversalPrinter {
         private var cur: Option[A] = None
 
         private def getNextValue: Option[A] =
-          if (ite.hasNext)
+          if (Retry(3).withTry(Try(ite.hasNext)) == Success(true))
             Try(ite.next()).fold(
               error => {
                 logger.error("Traversal has generated an error", error)

@@ -1,11 +1,10 @@
 package org.thp.scalligraph.utils
 
-import java.util.concurrent.ThreadLocalRandom
-
 import akka.actor.Scheduler
 import akka.pattern.after
 import play.api.Logger
 
+import java.util.concurrent.ThreadLocalRandom
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.concurrent.{blocking, Await, ExecutionContext, Future}
 import scala.util.{Failure, Try}
