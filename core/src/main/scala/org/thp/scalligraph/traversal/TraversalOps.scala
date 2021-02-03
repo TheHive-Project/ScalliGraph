@@ -32,6 +32,10 @@ object TraversalOps extends TraversalPrinter {
     def castDomain[D]: Traversal[D, Traversal.UnkG, Converter[D, Traversal.UnkG]] = cast[D, Traversal.UnkG]
   }
 
+  implicit class TraversalWiden[D, G, C <: Converter[D, G]](traversal: Traversal[D, G, C]) {
+    def widen[GG]: Traversal[D, GG, Converter[D, GG]] = traversal.asInstanceOf[Traversal[D, GG, Converter[D, GG]]]
+  }
+
   implicit class TraversalOpsDefs[D, G, C <: Converter[D, G]](val traversal: Traversal[D, G, C]) {
     def raw: GraphTraversal[_, G] = traversal.raw
     def toDomain(g: G): D         = traversal.converter(g)
@@ -236,10 +240,15 @@ object TraversalOps extends TraversalPrinter {
       )
     }
 
-    def choose[S, DD](
-        branchSelect: BranchSelector[D, G, C] => BranchSelectorOn[D, G, C, S, DD]
+    def chooseValue[S, DD](
+        valueSelect: ValueSelector[D, G, C] => ValueSelectorOn[D, G, C, S, DD]
     ): Traversal[DD, JMap[String, Any], Converter[DD, JMap[String, Any]]] =
-      branchSelect(new BranchSelector[D, G, C](traversal)).build
+      valueSelect(new ValueSelector[D, G, C](traversal)).build
+
+    def chooseBranch[S, GG](
+        branchSelect: BranchSelector[D, G, C, GG] => BranchSelectorOn[D, G, C, S, GG]
+    ): Traversal[GG, GG, IdentityConverter[GG]] =
+      branchSelect(new BranchSelector[D, G, C, GG](traversal)).build
 
     def choose[DD](predicate: Traversal[D, G, C] => Traversal.Some, onTrue: DD, onFalse: DD): Traversal[DD, DD, Converter.Identity[DD]] =
       traversal.onRawMap[DD, DD, Converter.Identity[DD]](
