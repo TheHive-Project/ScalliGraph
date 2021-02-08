@@ -14,9 +14,18 @@ case class InitialValue[V <: Product](model: Model.Vertex[V], value: V) {
     db.createVertex[V](graph, authContext, model, value)
 }
 
+case class SchemaStatus(name: String, currentVersion: Int, expectedVersion: Int, error: Option[Throwable])
+
 trait UpdatableSchema { _: Schema =>
   val operations: Operations
-  def update(db: Database)(implicit authContext: AuthContext): Try[Unit] = operations.execute(db, this)
+  lazy val name: String                           = operations.schemaName
+  def schemaStatus: Option[SchemaStatus]          = _updateStatus
+  private var _updateStatus: Option[SchemaStatus] = None
+  def update(db: Database)(implicit authContext: AuthContext): Try[Unit] = {
+    val result = operations.execute(db, this)
+    _updateStatus = Some(SchemaStatus(name, db.version(name), operations.operations.length + 1, result.fold(Some(_), _ => None)))
+    result
+  }
 }
 
 trait Schema { schema =>
@@ -25,18 +34,20 @@ trait Schema { schema =>
   final def getModel(label: String): Option[Model]                                   = modelList.find(_.label == label)
   def init(db: Database)(implicit graph: Graph, authContext: AuthContext): Try[Unit] = Success(())
 
-  def +(other: Schema): Schema = new Schema {
-    override def modelList: Seq[Model]                                                          = schema.modelList ++ other.modelList
-    override def initialValues: Seq[InitialValue[_]]                                            = schema.initialValues ++ other.initialValues
-    override def init(db: Database)(implicit graph: Graph, authContext: AuthContext): Try[Unit] = schema.init(db).flatMap(_ => other.init(db))
-  }
+  def +(other: Schema): Schema =
+    new Schema {
+      override def modelList: Seq[Model]                                                          = schema.modelList ++ other.modelList
+      override def initialValues: Seq[InitialValue[_]]                                            = schema.initialValues ++ other.initialValues
+      override def init(db: Database)(implicit graph: Graph, authContext: AuthContext): Try[Unit] = schema.init(db).flatMap(_ => other.init(db))
+    }
 }
 
 object Schema {
 
-  def empty: Schema = new Schema {
-    override def modelList: Seq[Model] = Nil
-  }
+  def empty: Schema =
+    new Schema {
+      override def modelList: Seq[Model] = Nil
+    }
 }
 
 @Singleton
