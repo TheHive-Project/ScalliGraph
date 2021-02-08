@@ -16,7 +16,7 @@ import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
 import org.apache.tinkerpop.gremlin.structure._
 import org.janusgraph.core.attribute.{Text => JanusText}
 import org.janusgraph.core.schema.JanusGraphManagement.IndexJobFuture
-import org.janusgraph.core.schema.{Mapping => JanusMapping, _}
+import org.janusgraph.core.schema.{Mapping => JanusMapping, SchemaStatus => JanusSchemaStatus, _}
 import org.janusgraph.core.{Transaction => _, _}
 import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
@@ -463,14 +463,14 @@ class JanusDatabase(
   private def removeIndex(indexName: String) =
     managementTransaction { mgmt =>
       Option(mgmt.getGraphIndex(indexName)).fold[Try[Unit]](Failure(NotFoundError(s"Index $indexName doesn't exist"))) { index =>
-        if (!index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.DISABLED)) {
+        if (!index.getFieldKeys.map(index.getIndexStatus).contains(JanusSchemaStatus.DISABLED)) {
           logger.debug(s"Disable index $indexName")
           mgmt.updateIndex(index, SchemaAction.DISABLE_INDEX)
         } else
           logger.debug(s"Index $indexName is already disable")
         Success(())
       }
-    }.map(_ => ManagementSystem.awaitGraphIndexStatus(janusGraph, indexName).status(SchemaStatus.DISABLED).call())
+    }.map(_ => ManagementSystem.awaitGraphIndexStatus(janusGraph, indexName).status(JanusSchemaStatus.DISABLED).call())
       .flatMap { _ =>
         managementTransaction { mgmt =>
           Option(mgmt.getGraphIndex(indexName)).foreach { index =>
@@ -497,14 +497,14 @@ class JanusDatabase(
     managementTransaction { mgmt => // wait for the index to become available
       Try {
         (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).collect {
-          case index if index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.INSTALLED) => index.name()
+          case index if index.getFieldKeys.map(index.getIndexStatus).contains(JanusSchemaStatus.INSTALLED) => index.name()
         }
       }
     }.map(_.foreach(indexName => ManagementSystem.awaitGraphIndexStatus(janusGraph, indexName).call()))
       .flatMap { _ =>
         managementTransaction { mgmt => // enable index by reindexing the existing data
           (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).collect {
-            case index if index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.REGISTERED) =>
+            case index if index.getFieldKeys.map(index.getIndexStatus).contains(JanusSchemaStatus.REGISTERED) =>
               scala.concurrent.blocking {
                 showIndexProgress(mgmt.updateIndex(index, SchemaAction.REINDEX))
               }
@@ -538,7 +538,7 @@ class JanusDatabase(
     )
     if (availableIndexes.isEmpty) Some(baseIndexName)
     else {
-      val isEnable = availableIndexes.exists(index => !index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.DISABLED))
+      val isEnable = availableIndexes.exists(index => !index.getFieldKeys.map(index.getIndexStatus).contains(JanusSchemaStatus.DISABLED))
       if (isEnable) None
       else {
         val lastIndex = availableIndexes.map(_.name()).toSeq.max
