@@ -89,10 +89,9 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
                 dbOperation(db)
               case NoOperation => Success(())
               case RebuildIndexes =>
-                logger.info(s"$schemaName: Remove all indexes")
-                db.removeAllIndexes()
-                logger.info(s"$schemaName: Add schema indexes")
-                db.addSchemaIndexes(schema)
+                logger.info(s"$schemaName: Rebuild all indexes")
+                db.rebuildIndexes()
+                Success(())
             }).flatMap(_ => db.setVersion(schemaName, v + 2))
           case (acc, _) => acc
         }

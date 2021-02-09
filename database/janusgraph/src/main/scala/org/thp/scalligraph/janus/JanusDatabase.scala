@@ -9,15 +9,12 @@ import org.apache.tinkerpop.gremlin.process.traversal.{P, Text, TraversalSource}
 import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
 import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Transaction, Vertex, Graph => TinkerGraph}
 import org.janusgraph.core.attribute.{Text => JanusText}
-import org.janusgraph.core.schema.JanusGraphManagement.IndexJobFuture
-import org.janusgraph.core.schema.{Mapping => JanusMapping, _}
+import org.janusgraph.core.schema.{Mapping => _, _}
 import org.janusgraph.core.{Transaction => _, _}
 import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
 import org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration
 import org.janusgraph.graphdb.database.StandardJanusGraph
-import org.janusgraph.graphdb.database.management.ManagementSystem
-import org.janusgraph.graphdb.olap.job.IndexRepairJob
 import org.janusgraph.graphdb.relations.RelationIdentifier
 import org.janusgraph.graphdb.tinkerpop.optimize.JanusGraphStepStrategy
 import org.slf4j.MDC
@@ -27,15 +24,13 @@ import org.thp.scalligraph.models.{MappingCardinality, _}
 import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.traversal.{Converter, Graph, GraphWrapper, Traversal}
 import org.thp.scalligraph.utils.{Config, Retry}
-import org.thp.scalligraph.{EntityId, InternalError, NotFoundError, SingleInstance}
+import org.thp.scalligraph.{EntityId, InternalError, SingleInstance}
 import play.api.{Configuration, Logger}
 
 import java.lang.{Long => JLong}
 import java.nio.file.{Files, Paths}
 import java.util.function.Consumer
-import java.util.regex.Pattern
 import java.util.{Date, Properties}
-import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success, Try}
@@ -98,7 +93,7 @@ object JanusDatabase {
 }
 
 class JanusDatabase(
-    janusGraph: JanusGraph,
+    protected val janusGraph: JanusGraph,
     maxAttempts: Int,
     minBackoff: FiniteDuration,
     maxBackoff: FiniteDuration,
@@ -106,7 +101,8 @@ class JanusDatabase(
     override val chunkSize: Int,
     system: ActorSystem,
     override val fullTextIndexAvailable: Boolean
-) extends BaseDatabase {
+) extends BaseDatabase
+    with IndexOps {
   val name = "janus"
 
   val localTransaction: ThreadLocal[Option[Transaction]] = ThreadLocal.withInitial[Option[Transaction]](() => None)
@@ -340,28 +336,6 @@ class JanusDatabase(
       }
     }.map(_ => ())
 
-  override def addSchemaIndexes(models: Seq[Model]): Try[Unit] =
-    managementTransaction { mgmt =>
-      findFirstAvailableCompositeIndex(mgmt, "_label_vertex_index").left.foreach { indexName =>
-        mgmt
-          .buildIndex(indexName, classOf[Vertex])
-          .addKey(mgmt.getPropertyKey("_label"))
-          .buildCompositeIndex()
-      }
-
-      models.foreach {
-        case model: VertexModel =>
-          val vertexLabel = mgmt.getVertexLabel(model.label)
-          createIndex(mgmt, classOf[Vertex], vertexLabel, model.indexes)
-        case model: EdgeModel =>
-          val edgeLabel = mgmt.getEdgeLabel(model.label)
-          createIndex(mgmt, classOf[Edge], edgeLabel, model.indexes)
-        // TODO add index for labels when it will be possible
-        // cf. https://github.com/JanusGraph/janusgraph/issues/283
-      }
-      Success(())
-    }.flatMap(_ => enableIndexes())
-
   private def createEntityProperties(mgmt: JanusGraphManagement): Unit =
     if (Option(mgmt.getPropertyKey("_label")).isEmpty) {
       mgmt
@@ -477,217 +451,6 @@ class JanusDatabase(
         mgmt.changeName(prop, newName)
       }
     }
-
-  override def removeAllIndexes(): Unit =
-    managementTransaction { mgmt =>
-      Success((mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).map(_.name()))
-    }.foreach(_.foreach(removeIndex))
-
-  def removeIndexes(baseIndexName: String): Unit =
-    managementTransaction { mgmt =>
-      val indexNamePattern: Pattern = s"$baseIndexName(?:_\\p{Digit}+)?".r.pattern
-      Success((mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).collect {
-        case index if indexNamePattern.matcher(index.name()).matches() => index.name()
-      })
-    }.foreach(_.foreach(removeIndex))
-
-  private def removeIndex(indexName: String) =
-    managementTransaction { mgmt =>
-      Option(mgmt.getGraphIndex(indexName)).fold[Try[Unit]](Failure(NotFoundError(s"Index $indexName doesn't exist"))) { index =>
-        if (!index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.DISABLED)) {
-          logger.debug(s"Disable index $indexName")
-          mgmt.updateIndex(index, SchemaAction.DISABLE_INDEX)
-        } else
-          logger.debug(s"Index $indexName is already disable")
-        Success(())
-      }
-    }.map(_ => ManagementSystem.awaitGraphIndexStatus(janusGraph, indexName).status(SchemaStatus.DISABLED).call())
-      .flatMap { _ =>
-        managementTransaction { mgmt =>
-          Option(mgmt.getGraphIndex(indexName)).filter(_.isCompositeIndex).foreach { index =>
-            mgmt.updateIndex(index, SchemaAction.REMOVE_INDEX)
-          }
-          Success(())
-        }
-      }
-
-  @tailrec
-  private def showIndexProgress(job: IndexJobFuture): Unit =
-    if (job.isCancelled)
-      logger.warn("Reindex job has been cancelled")
-    else if (job.isDone)
-      logger.info("Reindex job is finished")
-    else {
-      val scanMetrics = job.getIntermediateResult
-      logger.info(s"Reindex job is running: ${scanMetrics.getCustom(IndexRepairJob.ADDED_RECORDS_COUNT)} record(s) indexed")
-      Thread.sleep(1000)
-      showIndexProgress(job)
-    }
-
-  override def enableIndexes(): Try[Unit] =
-    managementTransaction { mgmt => // wait for the index to become available
-      Try {
-        (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).collect {
-          case index if index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.INSTALLED) => index.name()
-        }
-      }
-    }.map(_.foreach { indexName =>
-      logger.info(s"Wait for the index $indexName to become available")
-      ManagementSystem.awaitGraphIndexStatus(janusGraph, indexName).call()
-    }).flatMap { _ =>
-      managementTransaction { mgmt => // enable index by reindexing the existing data
-        (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).collect {
-          case index if index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.REGISTERED) =>
-            logger.info(s"Reindex data for ${index.name()}")
-            scala.concurrent.blocking {
-              showIndexProgress(mgmt.updateIndex(index, SchemaAction.REINDEX))
-            }
-        }
-        Success(())
-      }
-    }
-
-  override def addIndex(model: String, indexDefinition: Seq[(IndexType.Value, Seq[String])]): Try[Unit] =
-    managementTransaction { mgmt =>
-      Option(mgmt.getVertexLabel(model))
-        .map(_ -> classOf[Vertex])
-        .orElse(Option(mgmt.getEdgeLabel(model)).map(_ -> classOf[Edge]))
-        .fold[Try[Unit]](Failure(InternalError(s"Model $model not found"))) {
-          case (elementLabel, elementClass) =>
-            createIndex(mgmt, elementClass, elementLabel, indexDefinition)
-            Success(())
-        }
-    }
-
-  /**
-    * Find the available index name for the specified index base name. If this index is already present and not disable, return None
-    * @param mgmt JanusGraph management
-    * @param baseIndexName Base index name
-    * @return the available index name or Right if index is present
-    */
-  private def findFirstAvailableCompositeIndex(mgmt: JanusGraphManagement, baseIndexName: String): Either[String, String] = {
-    val indexNamePattern: Pattern = s"$baseIndexName(?:_\\p{Digit}+)?".r.pattern
-    val availableIndexes = (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).filter(i =>
-      i.isCompositeIndex && indexNamePattern.matcher(i.name()).matches()
-    )
-    if (availableIndexes.isEmpty) Left(baseIndexName)
-    else
-      availableIndexes
-        .find(index => !index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.DISABLED))
-        .fold[Either[String, String]] {
-          val lastIndex = availableIndexes.map(_.name()).toSeq.max
-          val version   = lastIndex.drop(baseIndexName.length)
-          if (version.isEmpty) Left(s"${baseIndexName}_1")
-          else Left(s"${baseIndexName}_${version.tail.toInt + 1}")
-        }(index => Right(index.name()))
-  }
-
-  /**
-    * Find the available index name for the specified index base name. If this index is already present and not disable, return None
-    * @param mgmt JanusGraph management
-    * @param baseIndexName Base index name
-    * @return the available index name or Right if index is present
-    */
-  private def findFirstAvailableMixedIndex(mgmt: JanusGraphManagement, baseIndexName: String): Either[String, String] = {
-    val validBaseIndexName        = baseIndexName.replaceAll("[^\\p{Alnum}]", baseIndexName)
-    val indexNamePattern: Pattern = s"$validBaseIndexName(?:\\p{Digit}+)?".r.pattern
-    val availableIndexes = (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).filter(i =>
-      i.isMixedIndex && indexNamePattern.matcher(i.name()).matches()
-    )
-    if (availableIndexes.isEmpty) Left(baseIndexName)
-    else
-      availableIndexes
-        .find(index => !index.getFieldKeys.map(index.getIndexStatus).contains(SchemaStatus.DISABLED))
-        .fold[Either[String, String]] {
-          val lastIndex = availableIndexes.map(_.name()).toSeq.max
-          val version   = lastIndex.drop(baseIndexName.length)
-          if (version.isEmpty) Left(s"${baseIndexName}1")
-          else Left(s"$baseIndexName${version.tail.toInt + 1}")
-        }(index => Right(index.name()))
-  }
-
-  def createMixedIndex(
-      mgmt: JanusGraphManagement,
-      elementClass: Class[_ <: Element],
-      elementLabel: JanusGraphSchemaType,
-      indexDefinitions: Seq[(IndexType.Value, Seq[String])]
-  ): Unit = {
-    def getPropertyKey(name: String) = Option(mgmt.getPropertyKey(name)).getOrElse(throw InternalError(s"Property $name doesn't exist"))
-
-    findFirstAvailableMixedIndex(mgmt, elementLabel.name) match {
-      case Left(indexName) =>
-        logger.debug(s"Creating index on fields $indexName")
-        val index = mgmt.buildIndex(indexName, elementClass).indexOnly(elementLabel)
-        index.addKey(getPropertyKey("_label"), JanusMapping.STRING.asParameter())
-        indexDefinitions.foreach {
-          case (IndexType.standard, properties) =>
-            properties.foreach { propName =>
-              val prop = getPropertyKey(propName)
-              if (prop.dataType() == classOf[String]) index.addKey(prop, JanusMapping.STRING.asParameter())
-              else index.addKey(prop, JanusMapping.DEFAULT.asParameter())
-            }
-          case (IndexType.fulltext, properties) => properties.foreach(p => index.addKey(getPropertyKey(p), JanusMapping.TEXTSTRING.asParameter()))
-          case _                                => // Not possible
-        }
-        index.buildMixedIndex("search")
-        ()
-      case Right(indexName) =>
-        val index           = mgmt.getGraphIndex(indexName)
-        val indexProperties = index.getFieldKeys.map(_.name())
-        val newProperties = indexDefinitions.map {
-          case (tpe, properties) => tpe -> properties.filterNot(indexProperties.contains).map(getPropertyKey)
-        }
-        newProperties
-          .foreach {
-            case (IndexType.standard, properties) =>
-              properties.foreach { prop =>
-                logger.debug(
-                  s"Add index pn property ${prop.name()}:${prop.dataType().getSimpleName} (${prop.cardinality()}) to ${elementLabel.name()}"
-                )
-                if (prop.dataType() == classOf[String]) mgmt.addIndexKey(index, prop, JanusMapping.STRING.asParameter())
-                else mgmt.addIndexKey(index, prop, JanusMapping.DEFAULT.asParameter())
-              }
-            case (IndexType.fulltext, properties) =>
-              properties.foreach { prop =>
-                logger.debug(
-                  s"Add full-text index on property ${prop.name()}:${prop.dataType().getSimpleName} (${prop.cardinality()}) to ${elementLabel.name()}"
-                )
-                mgmt.addIndexKey(index, prop, JanusMapping.TEXTSTRING.asParameter())
-              }
-            case _ => // Not possible
-          }
-    }
-  }
-
-  private def createIndex(
-      mgmt: JanusGraphManagement,
-      elementClass: Class[_ <: Element],
-      elementLabel: JanusGraphSchemaType,
-      indexDefinitions: Seq[(IndexType.Value, Seq[String])]
-  ): Unit = {
-    def getPropertyKey(name: String) = Option(mgmt.getPropertyKey(name)).getOrElse(throw InternalError(s"Property $name doesnt exist"))
-
-    val labelProperty = getPropertyKey("_label")
-
-    val (mixedIndexes, compositeIndexes) = indexDefinitions.partition(i => i._1 == IndexType.fulltext || i._1 == IndexType.standard)
-    if (mixedIndexes.nonEmpty)
-      if (fullTextIndexAvailable) createMixedIndex(mgmt, elementClass, elementLabel, mixedIndexes)
-      else logger.warn(s"Mixed index is not available.")
-    compositeIndexes.foreach {
-      case (indexType, properties) =>
-        val baseIndexName = (elementLabel.name +: properties).map(_.replaceAll("[^\\p{Alnum}]", "").toLowerCase().capitalize).mkString
-        findFirstAvailableCompositeIndex(mgmt, baseIndexName).left.foreach { indexName =>
-          val index = mgmt.buildIndex(indexName, elementClass).indexOnly(elementLabel)
-          index.addKey(labelProperty)
-          properties.foreach(p => index.addKey(getPropertyKey(p)))
-          if (indexType == IndexType.unique) {
-            logger.debug(s"Creating unique index on fields $elementLabel:${properties.mkString(",")}")
-            index.unique()
-          } else logger.debug(s"Creating basic index on fields $elementLabel:${properties.mkString(",")}")
-          index.buildCompositeIndex()
-        }
-    }
-  }
 
   override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
     val createdVertex = model.create(v)(graph)

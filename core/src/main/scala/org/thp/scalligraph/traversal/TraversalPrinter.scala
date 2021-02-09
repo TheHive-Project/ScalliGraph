@@ -100,7 +100,7 @@ trait TraversalPrinter {
         case _: CountLocalStep[_]  => "count()"
         case _: CountGlobalStep[_] => "count()"
         case s: IsStep[_]          => s"is(${printPredicate(s.getPredicate)})"
-        case _: IdStep[_]          => "identity()"
+        case _: IdStep[_]          => "id()"
         case s: ProjectStep[_, _] =>
           s"project(${s.getProjectKeys.asScala.map('"' + _ + '"').mkString(", ")})${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"
         case s: SelectStep[_, _] =>

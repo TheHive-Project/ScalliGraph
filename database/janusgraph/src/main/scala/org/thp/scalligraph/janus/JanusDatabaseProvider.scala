@@ -121,7 +121,6 @@ class JanusDatabaseProvider @Inject() (
                 schema.update(db)
                 db.addSchemaIndexes(schema)
               }
-              db.enableIndexes()
               janusClusterManager ! ClusterReady
               db
             case ClusterInitialisedConfigurationIgnored(installedIndexBackend) =>

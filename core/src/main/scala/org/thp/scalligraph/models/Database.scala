@@ -56,7 +56,7 @@ trait Database {
   def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit]
   def addIndex(model: String, indexDefinition: Seq[(IndexType.Value, Seq[String])]): Try[Unit]
   def enableIndexes(): Try[Unit]
-  def removeAllIndexes(): Unit
+  def rebuildIndexes(): Unit
 //  def removeIndex(model: String, properties: Seq[String]): Try[Unit]
   val fullTextIndexAvailable: Boolean
 
@@ -100,9 +100,17 @@ abstract class BaseDatabase extends Database {
 
   override val binaryMapping: SingleMapping[Array[Byte], String] = UMapping.binary
 
-  override def version(module: String): Int = roTransaction(graph => graph.variables.get[Int](s"${module}_version").orElse(0))
+  override def version(module: String): Int =
+    roTransaction { graph =>
+      logger.debug(s"Get version of $module")
+      graph.variables.get[Int](s"${module}_version").orElse(0)
+    }
 
-  override def setVersion(module: String, v: Int): Try[Unit] = tryTransaction(graph => Try(graph.variables.set(s"${module}_version", v)))
+  override def setVersion(module: String, v: Int): Try[Unit] =
+    tryTransaction { graph =>
+      logger.debug(s"Set version of $module to $v")
+      Try(graph.variables.set(s"${module}_version", v))
+    }
 
   override def transaction[A](body: Graph => A): A = tryTransaction(graph => Try(body(graph))).get
 
