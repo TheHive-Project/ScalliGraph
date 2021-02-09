@@ -14,10 +14,19 @@ case class InitialValue[V <: Product](model: Model.Vertex[V], value: V) {
     graph.db.createVertex[V](graph, authContext, model, value)
 }
 
+case class SchemaStatus(name: String, currentVersion: Int, expectedVersion: Int, error: Option[Throwable])
+
 trait UpdatableSchema extends Schema {
   val authContext: AuthContext
   val operations: Operations
-  def update(db: Database): Try[Unit] = operations.execute(db, this)(authContext)
+  lazy val name: String                           = operations.schemaName
+  def schemaStatus: Option[SchemaStatus]          = _updateStatus
+  private var _updateStatus: Option[SchemaStatus] = None
+  def update(db: Database): Try[Unit] = {
+    val result = operations.execute(db, this)(authContext)
+    _updateStatus = Some(SchemaStatus(name, db.version(name), operations.operations.length + 1, result.fold(Some(_), _ => None)))
+    result
+  }
 }
 
 trait Schema { schema =>

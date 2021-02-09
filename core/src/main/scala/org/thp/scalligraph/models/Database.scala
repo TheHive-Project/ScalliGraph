@@ -13,7 +13,7 @@ import play.api.Logger
 
 import java.util.Date
 import java.util.function.Consumer
-import scala.util.Try
+import scala.util.{Success, Try}
 
 class DatabaseException(message: String = "Violation of database schema", cause: Exception) extends Exception(message, cause)
 
@@ -135,7 +135,12 @@ abstract class BaseDatabase extends Database {
   override def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Try[Unit] =
     for {
       _ <- createSchema(schemaObject.modelList ++ extraModels)
-      _ <- tryTransaction(graph => Try(schemaObject.initialValues.foreach(_.create()(graph, authContext)))) // FIXME should not fail if already exists
+      _ = schemaObject.initialValues.foreach { iv =>
+        tryTransaction { graph =>
+          Try(iv.create()(graph, authContext))
+          Success(())
+        }
+      }
       _ <- tryTransaction(graph => schemaObject.init(this)(graph, authContext))
     } yield ()
 
