@@ -55,7 +55,7 @@ trait Database {
   def addProperty(model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit]
   def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit]
   def addIndex(model: String, indexDefinition: Seq[(IndexType.Value, Seq[String])]): Try[Unit]
-  def enableIndexes(): Try[Unit]
+  def reindexData(model: String): Try[Unit]
   def rebuildIndexes(): Unit
 //  def removeIndex(model: String, properties: Seq[String]): Try[Unit]
   val fullTextIndexAvailable: Boolean

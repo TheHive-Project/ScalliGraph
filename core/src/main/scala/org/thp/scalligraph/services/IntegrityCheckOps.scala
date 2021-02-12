@@ -12,10 +12,11 @@ import play.api.Logger
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.reflect.runtime.{universe => ru}
-import scala.util.Try
+import scala.util.{Success, Try}
 
 sealed trait GenIntegrityCheckOps {
-  def check(): Unit
+  def name: String
+  def duplicationCheck(): Map[String, Long]
   def initialCheck()(implicit graph: Graph, authContext: AuthContext): Unit
 }
 
@@ -39,7 +40,6 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
         service
           .startTraversal
           .setConverter[Vertex, IdentityConverter[Vertex]](Converter.identity)
-          .toIterator
           .foreach { v =>
             map.getOrElseUpdate(getValues(v), mutable.Buffer.empty[EntityId]) += EntityId(v.id)
           }
@@ -220,19 +220,40 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
     case (IndexType.unique, properties) => properties
   }
 
-  def duplicateEntities: Seq[Seq[E with Entity]] = uniqueProperties.fold[Seq[Seq[E with Entity]]](Nil)(getDuplicates)
+  def initialCheck()(implicit graph: Graph, authContext: AuthContext): Unit =
+    service.model.initialValues.filterNot(service.exists).foreach(service.createEntity)
 
-  def check(): Unit =
-    duplicateEntities
+  def findDuplicates(): Seq[Seq[E with Entity]] = uniqueProperties.fold[Seq[Seq[E with Entity]]](Nil)(getDuplicates)
+
+  def duplicationCheck(): Map[String, Long] = {
+    val duplicates = findDuplicates()
+    duplicates
       .foreach { entities =>
         db.tryTransaction { implicit graph =>
           logger.info(s"Found duplicate entities:${entities.map(e => s"\n - $e").mkString}")
           resolve(entities)
         }
       }
-
-  def initialCheck()(implicit graph: Graph, authContext: AuthContext): Unit =
-    service.model.initialValues.filterNot(service.exists).foreach(service.createEntity)
+    Map("duplicate" -> duplicates.length.toLong)
+  }
 
   def resolve(entities: Seq[E with Entity])(implicit graph: Graph): Try[Unit]
+
+  def findOrphans(): Seq[E with Entity] = Nil
+
+  def orphanCheck(): Long = {
+    val orphans = findOrphans()
+    if (orphans.nonEmpty) {
+      val orphanIds = orphans.map(_._id)
+      logger.warn(s"Found ${orphans.length} $name orphan(s) (${orphanIds.mkString(",")})")
+      db.tryTransaction { implicit graph =>
+        service.getByIds(orphanIds: _*).remove()
+        Success(())
+      }
+    }
+    orphans.length.toLong
+  }
+
+  def globalCheck(): Map[String, Long] =
+    Map("orphans" -> orphanCheck())
 }

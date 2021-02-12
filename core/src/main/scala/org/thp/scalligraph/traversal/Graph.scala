@@ -6,6 +6,7 @@ import org.thp.scalligraph.EntityId
 import org.thp.scalligraph.models.{Database, Model}
 
 trait Graph {
+  def underlying: TinkerGraph
   def addVertex(label: String): Vertex
   def tx(): Transaction
   def traversal(): GraphTraversalSource
@@ -21,18 +22,19 @@ trait Graph {
   var printProfile: Boolean                                                                   = false
 }
 
-class GraphWrapper(override val db: Database, graph: TinkerGraph) extends Graph {
+class GraphWrapper(override val db: Database, val underlying: TinkerGraph) extends Graph {
   printByteCode = db.printByteCode
   printStrategies = db.printStrategies
   printExplain = db.printExplain
   printProfile = db.printProfile
-  override def addVertex(label: String): Vertex  = graph.addVertex(label)
-  override def tx(): Transaction                 = graph.tx()
-  override def traversal(): GraphTraversalSource = graph.traversal()
-  override val variables: TinkerGraph.Variables  = graph.variables()
+  override def addVertex(label: String): Vertex  = underlying.addVertex(label)
+  override def tx(): Transaction                 = underlying.tx()
+  override def traversal(): GraphTraversalSource = underlying.traversal()
+  override val variables: TinkerGraph.Variables  = underlying.variables()
 }
 
 object AnonymousGraph extends Graph {
+  override def underlying: TinkerGraph           = ???
   override def addVertex(label: String): Vertex  = ???
   override def tx(): Transaction                 = ???
   override def traversal(): GraphTraversalSource = ???
