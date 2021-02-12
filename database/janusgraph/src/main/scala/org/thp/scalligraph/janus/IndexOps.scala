@@ -6,7 +6,7 @@ import org.janusgraph.core.schema.{JanusGraphManagement, JanusGraphSchemaType, S
 import org.janusgraph.graphdb.database.management.ManagementSystem
 import org.janusgraph.graphdb.olap.job.IndexRepairJob
 import org.thp.scalligraph.models.{EdgeModel, IndexType, Model, VertexModel}
-import org.thp.scalligraph.InternalError
+import org.thp.scalligraph.{InternalError, RichSeq}
 
 import java.util.regex.Pattern
 import scala.annotation.tailrec
@@ -66,13 +66,21 @@ trait IndexOps { _: JanusDatabase =>
       }
     }
 
+  override def reindexData(model: String): Try[Unit] = {
+    logger.info(s"Reindex data of model $model")
+    for {
+      indexList <- listIndexesWithStatus(SchemaStatus.ENABLED)
+      _         <- indexList.filter(_.startsWith(model)).toTry(reindex)
+    } yield ()
+  }
+
   override def rebuildIndexes(): Unit = {
     listIndexesWithStatus(SchemaStatus.ENABLED)
       .foreach(_.foreach(reindex))
     ()
   }
 
-  override def enableIndexes(): Try[Unit] =
+  private def enableIndexes(): Try[Unit] =
     for {
       installedIndexes <- listIndexesWithStatus(SchemaStatus.INSTALLED)
       _ = installedIndexes.foreach(waitRegistration)
