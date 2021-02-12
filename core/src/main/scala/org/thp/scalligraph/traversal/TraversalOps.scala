@@ -78,7 +78,11 @@ object TraversalOps extends TraversalPrinter {
       _toIterator
     }
 
-    def foreach[U](body: D => U): Unit = toIterator.foreach(body)
+    def foreach[U](body: D => U): Unit =
+      traversal.converter match {
+        case _: IdentityConverter[_] => raw.asScala.asInstanceOf[Iterator[D]].foreach(body)
+        case _                       => raw.asScala.map(traversal.converter).foreach(body)
+      }
 
     def _toIterator: Iterator[D] =
       traversal.converter match {
