@@ -6,13 +6,13 @@ import org.thp.scalligraph.EntityId
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.{Database, Entity, IndexType, UMapping}
 import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, Graph, IdentityConverter, StepLabel, Traversal}
+import org.thp.scalligraph.traversal._
 import play.api.Logger
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.reflect.runtime.{universe => ru}
-import scala.util.{Success, Try}
+import scala.util.Try
 
 sealed trait GenIntegrityCheckOps {
   def name: String
@@ -239,21 +239,5 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
 
   def resolve(entities: Seq[E with Entity])(implicit graph: Graph): Try[Unit]
 
-  def findOrphans(): Seq[E with Entity] = Nil
-
-  def orphanCheck(): Long = {
-    val orphans = findOrphans()
-    if (orphans.nonEmpty) {
-      val orphanIds = orphans.map(_._id)
-      logger.warn(s"Found ${orphans.length} $name orphan(s) (${orphanIds.mkString(",")})")
-      db.tryTransaction { implicit graph =>
-        service.getByIds(orphanIds: _*).remove()
-        Success(())
-      }
-    }
-    orphans.length.toLong
-  }
-
-  def globalCheck(): Map[String, Long] =
-    Map("orphans" -> orphanCheck())
+  def globalCheck(): Map[String, Long]
 }

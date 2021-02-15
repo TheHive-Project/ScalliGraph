@@ -40,6 +40,8 @@ class IntegrityCheckTest extends PlaySpecification {
           override val service: SoftwareSrv = app[SoftwareSrv]
 
           override def resolve(entities: Seq[Software with Entity])(implicit graph: Graph): Try[Unit] = Success(())
+
+          override def globalCheck(): Map[String, Long] = Map.empty
         }
         val duplicates = integrityCheckOps.getDuplicates(Seq("name"))
         duplicates must have size 1
