@@ -172,6 +172,7 @@ trait TraversalPrinter {
         case s: String          => '"' + s + '"'
         case d: Date            => s"new Date(${d.getTime})"
         case v if v == NO_VALUE => """"<NO_VALUE>"""""
+        case null               => "null"
         case other              => other.toString
       }
   }
