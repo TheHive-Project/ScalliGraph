@@ -3,6 +3,7 @@ package org.thp.scalligraph.models
 import akka.NotUsed
 import akka.stream.scaladsl.Source
 import org.apache.tinkerpop.gremlin.process.traversal.P
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource
 import org.apache.tinkerpop.gremlin.structure.Transaction.Status
 import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex}
 import org.thp.scalligraph.auth.AuthContext
@@ -81,6 +82,7 @@ trait Database {
   def V(label: String, ids: EntityId*)(implicit graph: Graph): Traversal[Vertex, Vertex, Converter.Identity[Vertex]]
   def E[D <: Product](ids: EntityId*)(implicit model: Model.Edge[D], graph: Graph): Traversal.E[D]
   def E(label: String, ids: EntityId*)(implicit graph: Graph): Traversal[Edge, Edge, Converter.Identity[Edge]]
+  def traversal()(implicit graph: Graph): GraphTraversalSource
 
   val extraModels: Seq[Model]
   val binaryLinkModel: Model.Edge[BinaryLink]
@@ -175,8 +177,8 @@ abstract class BaseDatabase extends Database {
       to: TO with Entity
   ): E with Entity = {
     val edgeMaybe = for {
-      f <- Traversal.V(from._id)(graph).headOption
-      t <- Traversal.V(to._id)(graph).headOption
+      f <- graph.V(from._label, from._id).headOption
+      t <- graph.V(to._label, to._id).headOption
     } yield {
       val createdEdge = model.create(e, f, t)(graph)
       val entity      = DummyEntity(model.label, createdEdge.id(), authContext.userId)
@@ -186,8 +188,8 @@ abstract class BaseDatabase extends Database {
       model.addEntity(e, entity)
     }
     edgeMaybe.getOrElse {
-      val error = Traversal.V(from._id)(graph).headOption.map(_ => "").getOrElse(s"${from._label}:${from._id} not found ") +
-        Traversal.V(to._id)(graph).headOption.map(_ => "").getOrElse(s"${to._label}:${to._id} not found")
+      val error = graph.V(from._label, from._id).headOption.map(_ => "").getOrElse(s"${from._label}:${from._id} not found ") +
+        graph.V(to._label, to._id).headOption.map(_ => "").getOrElse(s"${to._label}:${to._id} not found")
       throw InternalError(s"Fail to create edge between ${from._label}:${from._id} and ${to._label}:${to._id}, $error")
     }
   }

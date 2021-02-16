@@ -13,6 +13,7 @@ import org.janusgraph.graphdb.tinkerpop.optimize.JanusGraphTraversalUtil;
 
 import java.util.List;
 
+// from https://raw.githubusercontent.com/JanusGraph/janusgraph/v0.5.3/janusgraph-core/src/main/java/org/janusgraph/graphdb/tinkerpop/optimize/JanusGraphStepStrategy.java
 public class JanusGraphAcceptNullStrategy extends AbstractTraversalStrategy<ProviderOptimizationStrategy> implements ProviderOptimizationStrategy {
     private static final JanusGraphAcceptNullStrategy INSTANCE = new JanusGraphAcceptNullStrategy();
 
@@ -53,29 +54,3 @@ public class JanusGraphAcceptNullStrategy extends AbstractTraversalStrategy<Prov
         return INSTANCE;
     }
 }
-//
-//
-//
-//    private static final JanusGraphAcceptNullStrategy INSTANCE = new JanusGraphAcceptNullStrategy();
-//
-//    private JanusGraphAcceptNullStrategy() {
-//    }
-
-//    @Override
-//    public void apply(Traversal.Admin<?, ?> traversal) {
-//        TraversalHelper
-//                .getStepsOfClass(JanusGraphStep.class, traversal)
-//                .forEach(s ->
-//                        TraversalHelper.replaceStep(s, new JanusGraphStepAcceptNull<>(s), traversal)
-//                );
-//    }
-
-//    @Override
-//    public Set<Class<? extends ProviderOptimizationStrategy>> applyPrior() {
-//        return Collections.singleton(JanusGraphStepStrategy.class);
-//    }
-//
-//    public static JanusGraphAcceptNullStrategy instance() {
-//        return INSTANCE;
-//    }
-//}

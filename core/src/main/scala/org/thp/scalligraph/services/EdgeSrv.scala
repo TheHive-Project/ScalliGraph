@@ -17,7 +17,7 @@ class EdgeSrv[E <: Product, FROM <: Product, TO <: Product](implicit val model: 
 //    filterTraversal(Traversal.strategedE(strategy))
 
   override def getByIds(ids: EntityId*)(implicit graph: Graph): Traversal.E[E] =
-    if (ids.isEmpty) Traversal.empty
+    if (ids.isEmpty) graph.empty
     else graph.E[E](ids: _*)(model)
 
   def getOrFail(idOrName: EntityIdOrName)(implicit graph: Graph): Try[E with Entity] =

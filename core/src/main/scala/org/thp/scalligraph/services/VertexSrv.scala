@@ -20,7 +20,7 @@ abstract class VertexSrv[V <: Product](implicit val model: Model.Vertex[V]) exte
 //    filterTraversal(Traversal.strategedV(strategy))
 
   override def getByIds(ids: EntityId*)(implicit graph: Graph): Traversal.V[V] =
-    if (ids.isEmpty) Traversal.empty
+    if (ids.isEmpty) graph.empty
     else graph.V[V](ids: _*)(model)
 
   def get(vertex: Vertex)(implicit graph: Graph): Traversal.V[V] =

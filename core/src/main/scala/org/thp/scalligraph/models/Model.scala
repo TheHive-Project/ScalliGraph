@@ -1,12 +1,12 @@
 package org.thp.scalligraph.models
 
-import java.util.Date
 import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex}
-import org.thp.scalligraph.{EntityId, NotFoundError}
 import org.thp.scalligraph.`macro`.ModelMacro
 import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, Graph, Traversal}
+import org.thp.scalligraph.traversal.{Converter, Graph}
+import org.thp.scalligraph.{EntityId, NotFoundError}
 
+import java.util.Date
 import scala.annotation.StaticAnnotation
 import scala.collection.JavaConverters._
 import scala.language.experimental.macros
@@ -85,7 +85,7 @@ abstract class VertexModel extends Model {
   def create(e: E)(implicit graph: Graph): Vertex
 
   override def get(id: EntityId)(implicit graph: Graph): Vertex =
-    Traversal.V(id).headOption.getOrElse(throw NotFoundError(s"Vertex $id not found"))
+    graph.V(label, id).headOption.getOrElse(throw NotFoundError(s"Vertex $id not found"))
 }
 
 abstract class EdgeModel extends Model {
@@ -94,5 +94,5 @@ abstract class EdgeModel extends Model {
   def create(e: E, from: Vertex, to: Vertex)(implicit graph: Graph): Edge
 
   override def get(id: EntityId)(implicit graph: Graph): Edge =
-    Traversal.E(id).headOption.getOrElse(throw NotFoundError(s"Edge $id not found"))
+    graph.E(label, id).headOption.getOrElse(throw NotFoundError(s"Edge $id not found"))
 }

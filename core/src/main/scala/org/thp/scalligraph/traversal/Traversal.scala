@@ -1,9 +1,8 @@
 package org.thp.scalligraph.traversal
 
-import org.apache.tinkerpop.gremlin.process.traversal.{TraversalSource, Traverser}
-import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, DefaultGraphTraversal, GraphTraversal, GraphTraversalSource}
+import org.apache.tinkerpop.gremlin.process.traversal.Traverser
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, DefaultGraphTraversal, GraphTraversal}
 import org.apache.tinkerpop.gremlin.structure.{Edge, Vertex}
-import org.thp.scalligraph.EntityId
 import org.thp.scalligraph.models.Entity
 
 import scala.language.existentials
@@ -20,36 +19,6 @@ object Traversal {
   type Some          = Traversal[D, G, C] forSome { type D; type G; type C <: Converter[D, G] }
   type SomeDomain[D] = Traversal[D, G, C] forSome { type G; type C <: Converter[D, G] }
   type Domain[D]     = Traversal[D, UnkG, Converter[D, UnkG]]
-
-  def V(vertexIds: EntityId*)(implicit graph: Graph) =
-    new Traversal[Vertex, Vertex, IdentityConverter[Vertex]](
-      graph,
-      graph
-        .traversal()
-        .asInstanceOf[TraversalSource]
-        .withStrategies(OptimizeIndexStrategy, RewriteOrderGlobalStepStrategy)
-        .asInstanceOf[GraphTraversalSource]
-        .V(
-          vertexIds.map(
-            _.value
-          ): _*
-        ),
-      Converter.identity
-    )
-  def strategedV(strategy: GraphStrategy, vertexIds: EntityId*)(implicit graph: Graph) =
-    new Traversal[Vertex, Vertex, IdentityConverter[Vertex]](graph, strategy(graph.traversal()).V(vertexIds.map(_.value): _*), Converter.identity)
-  def E(edgeIds: EntityId*)(implicit graph: Graph) =
-    new Traversal[Edge, Edge, IdentityConverter[Edge]](graph, graph.traversal().E(edgeIds.map(_.value): _*), Converter.identity)
-  def strategedE(strategy: GraphStrategy, edgeIds: EntityId*)(implicit graph: Graph) =
-    new Traversal[Edge, Edge, IdentityConverter[Edge]](graph, strategy(graph.traversal()).E(edgeIds.map(_.value): _*), Converter.identity)
-  def empty[D, G](implicit graph: Graph) =
-    new Traversal[D, G, Converter[D, G]](graph, graph.traversal().inject[G](), (_: G).asInstanceOf[D])
-  def union[D, G, C <: Converter[D, G]](t: (Traversal[Vertex, Vertex, IdentityConverter[Vertex]] => Traversal[D, G, C])*)(implicit
-      graph: Graph
-  ): Traversal[D, G, C] = {
-    val traversals: Seq[Traversal[D, G, C]] = t.map(_.apply(Traversal.V()))
-    new Traversal[D, G, C](graph, graph.traversal().inject(1).union(traversals.map(_.raw): _*), traversals.head.converter)
-  }
 }
 
 class Traversal[+D, G, +C <: Converter[D, G]](val graph: Graph, val raw: GraphTraversal[_, G], val converter: C) {

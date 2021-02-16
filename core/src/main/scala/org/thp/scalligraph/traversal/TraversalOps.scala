@@ -149,7 +149,7 @@ object TraversalOps extends TraversalPrinter {
 
     def limit(max: Long): Traversal[D, G, C] = traversal.onRaw(_.limit(max))
 
-    def empty: Traversal[D, G, Converter[D, G]] = Traversal.empty[D, G](traversal.graph)
+    def empty: Traversal[D, G, Converter[D, G]] = traversal.graph.empty[D, G]
 
     def range(low: Long, high: Long): Traversal[D, G, C] = traversal.onRaw(_.range(low, high))
 

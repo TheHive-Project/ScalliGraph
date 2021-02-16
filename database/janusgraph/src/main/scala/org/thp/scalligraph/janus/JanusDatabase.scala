@@ -471,8 +471,8 @@ class JanusDatabase(
       to: TO with Entity
   ): E with Entity = {
     val edgeMaybe = for {
-      f <- Traversal.V(from._id)(graph).headOption
-      t <- Traversal.V(to._id)(graph).headOption
+      f <- graph.V(from._label, from._id).headOption
+      t <- graph.V(to._label, to._id).headOption
     } yield {
       val createdEdge = model.create(e, f, t)(graph)
       val entity      = DummyEntity(model.label, createdEdge.id(), authContext.userId)
@@ -483,8 +483,8 @@ class JanusDatabase(
       model.addEntity(e, entity)
     }
     edgeMaybe.getOrElse {
-      val error = Traversal.V(from._id)(graph).headOption.map(_ => "").getOrElse(s"${from._label}:${from._id} not found ") +
-        Traversal.V(to._id)(graph).headOption.map(_ => "").getOrElse(s"${to._label}:${to._id} not found")
+      val error = graph.V(from._label, from._id).headOption.map(_ => "").getOrElse(s"${from._label}:${from._id} not found ") +
+        graph.V(to._label, to._id).headOption.map(_ => "").getOrElse(s"${to._label}:${to._id} not found")
       sys.error(s"Fail to create edge between ${from._label}:${from._id} and ${to._label}:${to._id}, $error")
     }
   }
@@ -503,49 +503,54 @@ class JanusDatabase(
       case _                    => predicate
     }
 
-  def V[D <: Product](ids: EntityId*)(implicit model: Model.Vertex[D], graph: Graph): Traversal.V[D] =
+  override def V[D <: Product](ids: EntityId*)(implicit model: Model.Vertex[D], graph: Graph): Traversal.V[D] =
     new Traversal[D with Entity, Vertex, Converter[D with Entity, Vertex]](
       graph,
-      graph
-        .traversal()
-        .asInstanceOf[TraversalSource]
-        .withoutStrategies(classOf[JanusGraphStepStrategy])
-        .withStrategies(IndexOptimizerStrategy.instance(), JanusGraphAcceptNullStrategy.instance())
-        .asInstanceOf[GraphTraversalSource]
+      traversal()
         .V(ids.map(_.value): _*)
         .hasLabel(model.label)
         .has("_label", model.label),
       model.converter
     )
 
-  def E[D <: Product](ids: EntityId*)(implicit model: Model.Edge[D], graph: Graph): Traversal.E[D] =
+  override def E[D <: Product](ids: EntityId*)(implicit model: Model.Edge[D], graph: Graph): Traversal.E[D] =
     new Traversal[D with Entity, Edge, Converter[D with Entity, Edge]](
       graph,
-      graph.traversal().E(ids.map(_.value): _*).hasLabel(model.label).has("_label", model.label),
+      traversal()
+        .E(ids.map(_.value): _*)
+        .hasLabel(model.label)
+        .has("_label", model.label),
       model.converter
     )
 
-  def V(label: String, ids: EntityId*)(implicit graph: Graph): Traversal[Vertex, Vertex, Converter.Identity[Vertex]] =
+  override def V(label: String, ids: EntityId*)(implicit graph: Graph): Traversal[Vertex, Vertex, Converter.Identity[Vertex]] =
     new Traversal[Vertex, Vertex, Converter.Identity[Vertex]](
       graph,
-      graph
-        .traversal()
-        .asInstanceOf[TraversalSource]
-        .withoutStrategies(classOf[JanusGraphStepStrategy])
-        .withStrategies(IndexOptimizerStrategy.instance(), JanusGraphAcceptNullStrategy.instance())
-        .asInstanceOf[GraphTraversalSource]
+      traversal()
         .V(ids.map(_.value): _*)
         .hasLabel(label)
         .has("_label", label),
       Converter.identity[Vertex]
     )
 
-  def E(label: String, ids: EntityId*)(implicit graph: Graph): Traversal[Edge, Edge, Converter.Identity[Edge]] =
+  override def E(label: String, ids: EntityId*)(implicit graph: Graph): Traversal[Edge, Edge, Converter.Identity[Edge]] =
     new Traversal[Edge, Edge, Converter.Identity[Edge]](
       graph,
-      graph.traversal().E(ids.map(_.value): _*).hasLabel(label).has("_label", label),
+      traversal()
+        .E(ids.map(_.value): _*)
+        .hasLabel(label)
+        .has("_label", label),
       Converter.identity[Edge]
     )
+
+  override def traversal()(implicit graph: Graph): GraphTraversalSource =
+    graph
+      .underlying
+      .traversal()
+      .asInstanceOf[TraversalSource]
+      .withoutStrategies(classOf[JanusGraphStepStrategy])
+      .withStrategies(IndexOptimizerStrategy.instance(), JanusGraphAcceptNullStrategy.instance(), OrderAcceptNullStrategy.instance())
+      .asInstanceOf[GraphTraversalSource]
 
   override def toId(id: Any): JLong = id.toString.toLong
 
