@@ -76,13 +76,12 @@ object JanusDatabase {
         case "elasticsearch" =>
           logger.info(s"Full-text index is available (elasticsearch:${mgmt.get("index.search.hostname")}) $singleInstance")
           true
-        case "lucene" if singleInstance.value && location.startsWith("/") && !location.startsWith("/tmp") =>
+        case "lucene" if singleInstance.value && !location.startsWith("/tmp") =>
           logger.info(s"Full-text index is available (lucene:$location) $singleInstance")
           true
         case "lucene" =>
           val reason =
             if (!singleInstance.value) "lucene index can't be used in cluster mode"
-            else if (!location.startsWith("/")) "index path must be absolute"
             else if (location.startsWith("/tmp")) "index path must not in /tmp"
             else "no reason ?!"
           logger.warn(s"Full-text index is NOT available (lucene:$location) $singleInstance: $reason")
