@@ -10,7 +10,7 @@ import org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration
 import org.janusgraph.graphdb.database.StandardJanusGraph
 import org.thp.scalligraph.SingleInstance
 import org.thp.scalligraph.janus.JanusClusterManagerActor._
-import org.thp.scalligraph.models.UpdatableSchema
+import org.thp.scalligraph.models.{Database, UpdatableSchema}
 import org.thp.scalligraph.traversal.TraversalOps.logger
 import play.api.Configuration
 
@@ -28,7 +28,7 @@ class JanusDatabaseProvider @Inject() (
     singleInstance: SingleInstance,
     implicit val scheduler: Scheduler,
     implicit val ec: ExecutionContext
-) extends Provider[JanusDatabase] {
+) extends Provider[Database] {
 
   lazy val janusClusterManager: ActorRef[Command] = JanusClusterManagerActor.getOrCreateClusterManagerActor(system)
 
