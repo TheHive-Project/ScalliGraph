@@ -20,7 +20,7 @@ object PredicateOps {
             case l: JList[_] =>
               val x: JList[B] = l.stream().map[B](v => f(v.asInstanceOf[A])).collect(Collectors.toList())
               new P(biPredicate, x.asInstanceOf[B])
-            case v: A =>
+            case v =>
               try new P(biPredicate, f(v))
               catch { case _: ClassCastException => predicate.asInstanceOf[P[B]] }
           }
