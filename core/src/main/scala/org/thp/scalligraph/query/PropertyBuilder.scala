@@ -99,7 +99,7 @@ class PropertyBuilder[E <: Product, M, D](typeFilter: TypeFilter, propertyName: 
         mapping,
         select,
         new PropertyFilter[A] {
-          val fieldsParser: FieldsParser[A] = fp
+          override val fieldsParser: FieldsParser[A] = fp
           override def apply(path: FPath, traversal: Traversal.Unk, authContext: AuthContext, predicate: P[_]): Traversal.Unk =
             f(
               path,
