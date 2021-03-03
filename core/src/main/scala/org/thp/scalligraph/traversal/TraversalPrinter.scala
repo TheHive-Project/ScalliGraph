@@ -152,6 +152,7 @@ trait TraversalPrinter {
           case s: OptionalStep[_]            => s"optional(${printLocalChildren(s)})"
           case s: PropertyMapStep[_, _]      => s"valueMap(${s.getPropertyKeys().mkString(",")})"
           case s: TraversalSideEffectStep[_] => s"sideEffect(${printLocalChildren(s)})"
+          case s: DropStep[_]                => "remove()"
           case other                         => s"{UNKNOWN:$other}"
         }
         val labels = step.getLabels.asScala
