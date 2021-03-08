@@ -59,7 +59,6 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
       case 0 =>
         logger.info(s"$schemaName: Create database schema")
         db.createSchemaFrom(schema)
-          .flatMap(_ => db.addSchemaIndexes(schema))
           .flatMap(_ => db.setVersion(schemaName, operations.length + 1))
       case version =>
         operations.zipWithIndex.foldLeft[Try[Unit]](Success(())) {
