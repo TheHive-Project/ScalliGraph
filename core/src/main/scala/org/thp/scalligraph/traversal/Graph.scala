@@ -15,11 +15,11 @@ trait Graph {
   def V[D <: Product](ids: EntityId*)(implicit model: Model.Vertex[D]): Traversal.V[D]        = db.V[D](ids: _*)(model, this)
   def V(label: String, ids: EntityId*): Traversal[Vertex, Vertex, Converter.Identity[Vertex]] = db.V(label, ids: _*)(this)
   def VV(ids: EntityId*): Traversal[Vertex, Vertex, Converter.Identity[Vertex]] =
-    new Traversal[Vertex, Vertex, Converter.Identity[Vertex]](this, traversal().V(ids.map(_.value)), Converter.identity[Vertex])
+    new Traversal[Vertex, Vertex, Converter.Identity[Vertex]](this, traversal().V(ids.map(_.value): _*), Converter.identity[Vertex])
   def E[D <: Product](ids: EntityId*)(implicit model: Model.Edge[D]): Traversal.E[D]    = db.E[D](ids: _*)(model, this)
   def E(label: String, ids: EntityId*): Traversal[Edge, Edge, Converter.Identity[Edge]] = db.E(label, ids: _*)(this)
   def EE(ids: EntityId*): Traversal[Edge, Edge, Converter.Identity[Edge]] =
-    new Traversal[Edge, Edge, Converter.Identity[Edge]](this, traversal().E(ids.map(_.value)), Converter.identity[Edge])
+    new Traversal[Edge, Edge, Converter.Identity[Edge]](this, traversal().E(ids.map(_.value): _*), Converter.identity[Edge])
   def empty[D, G] = new Traversal[D, G, Converter[D, G]](this, traversal().inject[G](), (_: G).asInstanceOf[D])
   def union[D, G, C <: Converter[D, G]](
       travFun: (Traversal[Vertex, Vertex, IdentityConverter[Vertex]] => Traversal[D, G, C])*
