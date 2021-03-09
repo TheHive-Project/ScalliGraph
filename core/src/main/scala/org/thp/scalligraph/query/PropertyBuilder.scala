@@ -66,7 +66,7 @@ class PropertyBuilder[E <: Product, M, D](typeFilter: TypeFilter, propertyName: 
         new FieldSelect(fieldName),
         Some(PropertyUpdater(updateFieldsParser, propertyName) { (_: FPath, value: M, vertex: Vertex, _: Graph, _: AuthContext) =>
           mapping.setProperty(vertex, fieldName, value)
-          Success(Json.obj(fieldName -> value.toString))
+          Success(Json.obj(fieldName -> mapping.getRenderer.toJson(value)))
         }),
         filter,
         new FieldPropertyOrder(fieldName)
