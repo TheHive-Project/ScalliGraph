@@ -27,7 +27,7 @@ trait IndexOps { _: JanusDatabase =>
       showIndexProgress(job)
     }
 
-  private def listIndexesWithStatus(status: SchemaStatus): Try[Iterable[String]] =
+  def listIndexesWithStatus(status: SchemaStatus): Try[Iterable[String]] =
     managementTransaction { mgmt => // wait for the index to become available
       Try {
         (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).collect {
