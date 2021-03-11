@@ -23,22 +23,20 @@ class GlobalConfigContext @Inject() (db: Database) extends ConfigContext[Unit] {
 
   override def getValue(context: Unit, path: String): Option[JsValue] =
     db.roTransaction { implicit graph =>
-        graph
-          .variables()
-          .get[String](s"config.$path")
-      }
-      .asScala
+      graph
+        .variables
+        .get[String](s"config.$path")
+    }.asScala
       .map(Json.parse)
 
   override def setValue(context: Unit, path: String, value: JsValue): Try[String] =
     db.tryTransaction { implicit graph =>
-        Try(
-          graph
-            .variables()
-            .set(s"config.$path", value.toString)
-        )
-      }
-      .map(_ => path)
+      Try(
+        graph
+          .variables
+          .set(s"config.$path", value.toString)
+      )
+    }.map(_ => path)
 }
 
 trait ContextConfigItem[T, C] {
@@ -83,7 +81,7 @@ class ContextConfigItemImpl[T, C](
   @volatile private var flag = false
 
   override def get(ctx: C): T = {
-    if (!flag) {
+    if (!flag)
       synchronized {
         if (!flag)
           value = context
@@ -92,15 +90,15 @@ class ContextConfigItemImpl[T, C](
             .getOrElse(defaultValue)
         flag = true
       }
-    }
     value
   }
 
-  override def set(ctx: C, v: T)(implicit authContext: AuthContext): Try[Unit] = validation(v).flatMap { value =>
-    val valueJson = jsonFormat.writes(value)
-    context
-      .setValue(ctx, path, valueJson)
-      .map(p => eventSrv.publish(ConfigTopic.topicName)(Invalidate(p)))
-  }
+  override def set(ctx: C, v: T)(implicit authContext: AuthContext): Try[Unit] =
+    validation(v).flatMap { value =>
+      val valueJson = jsonFormat.writes(value)
+      context
+        .setValue(ctx, path, valueJson)
+        .map(p => eventSrv.publish(ConfigTopic.topicName)(Invalidate(p)))
+    }
   override def validation(v: T): Try[T] = validationFunction(v)
 }

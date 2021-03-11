@@ -1,175 +1,152 @@
 package org.thp.scalligraph.query
 
-import org.apache.tinkerpop.gremlin.structure.{Graph, Vertex}
+import org.apache.tinkerpop.gremlin.process.traversal.P
+import org.apache.tinkerpop.gremlin.structure.Vertex
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FieldsParser}
-import org.thp.scalligraph.models.{Database, Mapping}
-import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, Traversal}
+import org.thp.scalligraph.models.Mapping
+import org.thp.scalligraph.traversal.{Graph, Traversal}
 import play.api.libs.json.{JsObject, Json}
 
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Success, Try}
 
-class PropertyBuilder[E <: Product, P, U](isApplicableFn: ru.Type => Boolean, propertyName: String, mapping: Mapping[P, U, Traversal.UnkG]) {
+class PropertyBuilder[E <: Product, M, D](typeFilter: TypeFilter, propertyName: String, mapping: Mapping[M, D, Traversal.UnkG]) {
 
-  def field =
-    new SimpleUpdatePropertyBuilder[E, P, U](
-      isApplicableFn,
-      propertyName,
-      propertyName,
-      mapping,
-      (_, t, _) => t.asInstanceOf[Traversal.V[E]].property(propertyName, mapping)
-    )
+  def field(implicit fieldsParser: FieldsParser[D]) =
+    new FieldBasedProperty(typeFilter, propertyName, mapping, propertyName, new FieldPropertyFilter[E, D](propertyName, mapping))
 
-  def rename(newName: String) =
-    new SimpleUpdatePropertyBuilder[E, P, U](
-      isApplicableFn,
-      propertyName,
-      newName,
-      mapping,
-      (_, t, _) => t.asInstanceOf[Traversal.V[E]].property(newName, mapping)
-    )
+  def rename(newName: String)(implicit fieldsParser: FieldsParser[D]) =
+    new FieldBasedProperty(typeFilter, propertyName, mapping, newName, new FieldPropertyFilter[E, D](newName, mapping))
 
-  def select(definition: Traversal.V[E] => Traversal[U, _, _]) =
-    new UpdatePropertyBuilder[E, P, U](
-      isApplicableFn,
+  def select(definition: Traversal.V[E] => Traversal[D, _, _])(implicit fieldsParser: FieldsParser[D]): TraversalBasedProperty = {
+    val select: TraversalSelect = (_: FPath, t: Traversal.Unk, _: AuthContext) =>
+      definition(t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Unk]
+    new TraversalBasedProperty(
+      typeFilter,
       propertyName,
       mapping,
-      (_, t, _) => definition(t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Domain[U]],
-      (_, t, _) => definition(t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Domain[U]],
-      _ => mapping.reverse.asInstanceOf[Converter[Traversal.UnkG, Traversal.UnkD]]
-    )
-
-  def authSelect(definition: (Traversal.V[E], AuthContext) => Traversal[U, _, _]) =
-    new UpdatePropertyBuilder[E, P, U](
-      isApplicableFn,
-      propertyName,
-      mapping,
-      (_, t, a) => definition(t.asInstanceOf[Traversal.V[E]], a).asInstanceOf[Traversal.Domain[U]],
-      (_, t, a) => definition(t.asInstanceOf[Traversal.V[E]], a).asInstanceOf[Traversal.Domain[U]],
-      _ => mapping.reverse.asInstanceOf[Converter[Traversal.UnkG, Traversal.UnkD]]
-    )
-
-  def subSelect[D](definition: (FPath, Traversal.V[E]) => Traversal[U, _, _]) =
-    new UpdatePropertyBuilder[E, P, U](
-      isApplicableFn,
-      propertyName,
-      mapping,
-      (p, t, _) => definition(p, t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Domain[U]],
-      (p, t, _) => definition(p, t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Unk],
-      _ => mapping.reverse.asInstanceOf[Converter[Traversal.UnkG, Traversal.UnkD]]
-    )
-}
-
-class SimpleUpdatePropertyBuilder[E <: Product, P, U](
-    isApplicableFn: ru.Type => Boolean,
-    propertyName: String,
-    fieldName: String,
-    mapping: Mapping[P, U, _],
-    definition: (FPath, Traversal.Unk, AuthContext) => Traversal.Domain[U]
-) extends UpdatePropertyBuilder[E, P, U](
-      isApplicableFn,
-      propertyName,
-      mapping,
-      definition,
-      definition,
-      _ => mapping.reverse.asInstanceOf[Converter[Traversal.UnkG, Traversal.UnkD]]
-    ) {
-
-  def updatable(implicit fieldsParser: FieldsParser[U], updateFieldsParser: FieldsParser[P]): PublicProperty[P, U] =
-    new PublicProperty[P, U](
-      isApplicableFn,
-      propertyName,
-      mapping,
-      definition,
-      fieldsParser,
-      Some(PropertyUpdater(updateFieldsParser, propertyName) { (_: FPath, value: P, vertex: Vertex, _: Database, _: Graph, _: AuthContext) =>
-        mapping.setProperty(vertex, fieldName, value)
-        Success(Json.obj(fieldName -> value.toString))
-      }),
-      filterSelect,
-      filterConverter
-    )
-}
-
-class PropertyFilter[E <: Product, P, U](
-    updatePropertyBuilder: UpdatePropertyBuilder[E, P, U],
-    select: (FPath, Traversal.Unk, AuthContext) => Traversal.Unk
-) {
-  def converter(c: FPath => Converter[Any, U]) =
-    new UpdatePropertyBuilder[E, P, U](
-      updatePropertyBuilder.isApplicableFn,
-      updatePropertyBuilder.propertyName,
-      updatePropertyBuilder.mapping,
-      updatePropertyBuilder.definition,
       select,
-      c.asInstanceOf[FPath => Converter[Traversal.UnkG, Traversal.UnkD]]
+      new TraversalPropertyFilter[D](select, mapping)
     )
-}
+  }
 
-class UpdatePropertyBuilder[E <: Product, P, U](
-    private[query] val isApplicableFn: ru.Type => Boolean,
-    private[query] val propertyName: String,
-    private[query] val mapping: Mapping[P, U, _],
-    private[query] val definition: (FPath, Traversal.Unk, AuthContext) => Traversal.Domain[U],
-    private[query] val filterSelect: (FPath, Traversal.Unk, AuthContext) => Traversal.Unk,
-    private[query] val filterConverter: FPath => Converter[Traversal.UnkG, Traversal.UnkD]
-) {
-  def filter(select: (FPath, Traversal.V[E]) => Traversal[_, _, _]) =
-    new PropertyFilter[E, P, U](
-      this,
-      (path: FPath, t: Traversal.Unk, _: AuthContext) => select(path, t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Unk]
-    )
-
-  def authFilter(select: (FPath, Traversal.V[E], AuthContext) => Traversal[_, _, _]) =
-    new PropertyFilter[E, P, U](this, select.asInstanceOf[(FPath, Traversal.Unk, AuthContext) => Traversal.Unk])
-
-  def readonly(implicit fieldsParser: FieldsParser[U]): PublicProperty[P, U] =
-    new PublicProperty[P, U](
-      isApplicableFn,
+  def authSelect(definition: (Traversal.V[E], AuthContext) => Traversal[D, _, _])(implicit fieldsParser: FieldsParser[D]): TraversalBasedProperty = {
+    val select: TraversalSelect = (_: FPath, t: Traversal.Unk, a: AuthContext) =>
+      definition(t.asInstanceOf[Traversal.V[E]], a).asInstanceOf[Traversal.Unk]
+    new TraversalBasedProperty(
+      typeFilter,
       propertyName,
       mapping,
-      definition,
-      fieldsParser,
-      None,
-      filterSelect,
-      filterConverter
+      select,
+      new TraversalPropertyFilter[D](select, mapping)
     )
+  }
 
-  def custom(
-      f: (FPath, P, Vertex, Database, Graph, AuthContext) => Try[JsObject]
-  )(implicit fieldsParser: FieldsParser[U], updateFieldsParser: FieldsParser[P]): PublicProperty[P, U] =
-    new PublicProperty[P, U](
-      isApplicableFn,
+  def subSelect(definition: (FPath, Traversal.V[E]) => Traversal[D, _, _])(implicit fieldsParser: FieldsParser[D]): TraversalBasedProperty = {
+    val select: TraversalSelect = (p: FPath, t: Traversal.Unk, _: AuthContext) =>
+      definition(p, t.asInstanceOf[Traversal.V[E]]).asInstanceOf[Traversal.Unk]
+    new TraversalBasedProperty(
+      typeFilter,
       propertyName,
       mapping,
-      definition,
-      fieldsParser,
-      Some(PropertyUpdater(updateFieldsParser, propertyName)(f)),
-      filterSelect,
-      filterConverter
+      select,
+      new TraversalPropertyFilter[D](select, mapping)
     )
+  }
+
+  class FieldBasedProperty(typeFilter: TypeFilter, propertyName: String, mapping: Mapping[M, D, _], fieldName: String, filter: PropertyFilter[D]) {
+    def readonly: PublicProperty =
+      PublicProperty(typeFilter, propertyName, mapping, new FieldSelect(fieldName), None, filter, new FieldPropertyOrder(fieldName))
+    def updatable(implicit updateFieldsParser: FieldsParser[M]): PublicProperty =
+      PublicProperty(
+        typeFilter,
+        propertyName,
+        mapping,
+        new FieldSelect(fieldName),
+        Some(PropertyUpdater(updateFieldsParser, propertyName) { (_: FPath, value: M, vertex: Vertex, _: Graph, _: AuthContext) =>
+          mapping.setProperty(vertex, fieldName, value)
+          Success(Json.obj(fieldName -> mapping.getRenderer.toJson(value)))
+        }),
+        filter,
+        new FieldPropertyOrder(fieldName)
+      )
+    def custom(
+        f: (FPath, M, Vertex, Graph, AuthContext) => Try[JsObject]
+    )(implicit updateFieldsParser: FieldsParser[M]): PublicProperty =
+      PublicProperty(
+        typeFilter,
+        propertyName,
+        mapping,
+        new FieldSelect(fieldName),
+        Some(PropertyUpdater(updateFieldsParser, propertyName)(f)),
+        filter,
+        new FieldPropertyOrder(fieldName)
+      )
+  }
+
+  class TraversalBasedProperty(
+      typeFilter: TypeFilter,
+      propertyName: String,
+      mapping: Mapping[M, D, _],
+      select: TraversalSelect,
+      filter: PropertyFilter[_]
+  ) {
+    def filter[A](f: (FPath, Traversal.V[E], AuthContext, Either[Boolean, P[A]]) => Traversal.V[E])(implicit fp: FieldsParser[A]) =
+      new TraversalBasedProperty(
+        typeFilter,
+        propertyName,
+        mapping,
+        select,
+        new PropertyFilter[A] {
+          override val fieldsParser: FieldsParser[A] = fp
+          override def apply(path: FPath, traversal: Traversal.Unk, authContext: AuthContext, predicate: P[_]): Traversal.Unk =
+            f(
+              path,
+              traversal.asInstanceOf[Traversal.V[E]],
+              authContext,
+              Right(predicate.asInstanceOf[P[A]])
+            ).asInstanceOf[Traversal.Unk]
+
+          override def existenceTest(path: FPath, traversal: Traversal.Unk, authContext: AuthContext, exist: Boolean): Traversal.Unk =
+            f(path, traversal.asInstanceOf[Traversal.V[E]], authContext, Left(exist)).asInstanceOf[Traversal.Unk]
+
+        }
+      )
+
+    def readonly: PublicProperty =
+      PublicProperty(typeFilter, propertyName, mapping, select, None, filter, new TraversalPropertyOrder(select))
+    def custom(
+        f: (FPath, M, Vertex, Graph, AuthContext) => Try[JsObject]
+    )(implicit updateFieldsParser: FieldsParser[M]): PublicProperty =
+      PublicProperty(
+        typeFilter,
+        propertyName,
+        mapping,
+        select,
+        Some(PropertyUpdater(updateFieldsParser, propertyName)(f)),
+        filter,
+        new TraversalPropertyOrder(select)
+      )
+  }
 }
 
-class PublicPropertyListBuilder[E <: Product](isApplicableFn: ru.Type => Boolean, properties: PublicProperties) {
+class PublicPropertyListBuilder[E <: Product](typeFilter: TypeFilter, properties: PublicProperties) {
   def build: PublicProperties = properties
 
-  def property[P, U](
+  def property[M, D](
       name: String,
-      mapping: Mapping[P, U, _]
-  )(prop: PropertyBuilder[E, P, U] => PublicProperty[P, U]): PublicPropertyListBuilder[E] =
+      mapping: Mapping[M, D, _]
+  )(prop: PropertyBuilder[E, M, D] => PublicProperty): PublicPropertyListBuilder[E] =
     new PublicPropertyListBuilder[E](
-      isApplicableFn,
-      properties :+ prop(new PropertyBuilder[E, P, U](isApplicableFn, name, mapping.asInstanceOf[Mapping[P, U, Traversal.UnkG]]))
+      typeFilter,
+      properties :+ prop(new PropertyBuilder[E, M, D](typeFilter, name, mapping.asInstanceOf[Mapping[M, D, Traversal.UnkG]]))
     )
 }
 
 object PublicPropertyListBuilder {
-  class IsApplicable(tpe: ru.Type) extends (ru.Type => Boolean) {
-    override def apply(t: ru.Type): Boolean = t <:< tpe
-  }
-  def apply[E <: Product: ru.TypeTag]: PublicPropertyListBuilder[E] = forType(new IsApplicable(ru.typeOf[Traversal.V[E]]))
-  def forType[E <: Product](isApplicable: ru.Type => Boolean): PublicPropertyListBuilder[E] =
-    new PublicPropertyListBuilder[E](isApplicable, PublicProperties.empty)
+  def apply[E <: Product: ru.TypeTag]: PublicPropertyListBuilder[E] =
+    forType[E](new TraversalTypeFilter[E])
+  def forType[E <: Product](typeFilter: TypeFilter): PublicPropertyListBuilder[E] =
+    new PublicPropertyListBuilder[E](typeFilter, PublicProperties.empty)
 }

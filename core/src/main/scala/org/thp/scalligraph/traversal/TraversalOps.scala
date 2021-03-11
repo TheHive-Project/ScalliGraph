@@ -1,8 +1,7 @@
 package org.thp.scalligraph.traversal
 
-import java.lang.{Long => JLong, Double => JDouble}
+import java.lang.{Double => JDouble, Long => JLong}
 import java.util.{Date, NoSuchElementException, UUID, Collection => JCollection, List => JList, Map => JMap}
-
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, GraphTraversal}
 import org.apache.tinkerpop.gremlin.process.traversal.step.map.{OrderGlobalStep, OrderLocalStep}
 import org.apache.tinkerpop.gremlin.process.traversal.{P, Scope}
@@ -11,6 +10,7 @@ import org.thp.scalligraph.`macro`.TraversalMacro
 import org.thp.scalligraph.controllers.Renderer
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.traversal.Converter.CMap
+import org.thp.scalligraph.utils.Retry
 import org.thp.scalligraph.{AuthorizationError, EntityId, InternalError, NotFoundError}
 import play.api.Logger
 import shapeless.ops.hlist.{Mapper, RightFolder, ToTraversable, Tupler}
@@ -24,12 +24,16 @@ import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
 
 object NO_VALUE
-object TraversalOps {
+object TraversalOps extends TraversalPrinter {
   lazy val logger: Logger = Logger(getClass)
 
   implicit class TraversalCaster(traversal: Traversal[_, _, _]) {
     def cast[D, G]: Traversal[D, G, Converter[D, G]]                              = traversal.asInstanceOf[Traversal[D, G, Converter[D, G]]]
     def castDomain[D]: Traversal[D, Traversal.UnkG, Converter[D, Traversal.UnkG]] = cast[D, Traversal.UnkG]
+  }
+
+  implicit class TraversalWiden[D, G, C <: Converter[D, G]](traversal: Traversal[D, G, C]) {
+    def widen[GG]: Traversal[D, GG, Converter[D, GG]] = traversal.asInstanceOf[Traversal[D, GG, Converter[D, GG]]]
   }
 
   implicit class TraversalOpsDefs[D, G, C <: Converter[D, G]](val traversal: Traversal[D, G, C]) {
@@ -41,7 +45,7 @@ object TraversalOps {
         private var cur: Option[A] = None
 
         private def getNextValue: Option[A] =
-          if (ite.hasNext)
+          if (Retry(3).withTry(Try(ite.hasNext)) == Success(true))
             Try(ite.next()).fold(
               error => {
                 logger.error("Traversal has generated an error", error)
@@ -70,9 +74,15 @@ object TraversalOps {
       }
 
     def toIterator: Iterator[D] = {
-      logger.debug(s"Execution of $raw (toIterator)")
+      logger.debug(s"Execution of: (toIterator)\n${traversal.print} ")
       _toIterator
     }
+
+    def foreach[U](body: D => U): Unit =
+      traversal.converter match {
+        case _: IdentityConverter[_] => raw.asScala.asInstanceOf[Iterator[D]].foreach(body)
+        case _                       => raw.asScala.map(traversal.converter).foreach(body)
+      }
 
     def _toIterator: Iterator[D] =
       traversal.converter match {
@@ -81,34 +91,34 @@ object TraversalOps {
       }
 
     def toSeq: Seq[D] = {
-      logger.debug(s"Execution of $raw (toSeq)")
+      logger.debug(s"Execution of: (toSeq)\n${traversal.print}")
       _toIterator.toVector
     }
 
     def getCount: Long = {
-      logger.debug(s"Execution of $raw (count)")
-      count.head
+      logger.debug(s"Execution of: (count)\n${traversal.print}")
+      count._toIterator.next
     }
 
     def head: D = {
-      logger.debug(s"Execution of $raw (head)")
+      logger.debug(s"Execution of: (head)\n${traversal.print}")
       _toIterator.next
     }
 
     def headOption: Option[D] = {
-      logger.debug(s"Execution of $raw (headOption)")
+      logger.debug(s"Execution of: (headOption)\n${traversal.print}")
       val ite = _toIterator
       if (ite.hasNext) Some(ite.next())
       else None
     }
 
     def toList: List[D] = {
-      logger.debug(s"Execution of $raw (toList)")
+      logger.debug(s"Execution of: (toList)\n${traversal.print}")
       _toIterator.toList
     }
 
     def toSet: Set[D] = {
-      logger.debug(s"Execution of $raw (toSet)")
+      logger.debug(s"Execution of: (toSet)\n${traversal.print}")
       toIterator.toSet
     }
 
@@ -117,14 +127,14 @@ object TraversalOps {
     def orFail(ex: Exception): Try[D] = headOption.fold[Try[D]](Failure(ex))(Success.apply)
 
     def exists: Boolean = {
-      logger.debug(s"Execution of $raw (exists)")
+      logger.debug(s"Execution of: (exists)\n${traversal.print}")
       traversal.raw.hasNext
     }
 
     def existsOrFail: Try[Unit] = if (exists) Success(()) else Failure(AuthorizationError("Unauthorized action"))
 
     def remove(): Unit = {
-      logger.debug(s"Execution of $raw (drop)")
+      logger.debug(s"Execution of: (drop)\n${traversal.print}")
       traversal.raw.drop().iterate()
       ()
     }
@@ -132,13 +142,14 @@ object TraversalOps {
     def richPage[DD: Renderer, GG, CC <: Converter[DD, GG]](from: Long, to: Long, withTotal: Boolean)(
         f: Traversal[D, G, C] => Traversal[DD, GG, CC]
     ): IteratorOutput = {
-      logger.debug(s"Execution of $raw (richPage)")
       val size   = if (withTotal) Some(() => traversal.count.head) else None
       val values = f(traversal.clone().range(from, to))
       IteratorOutput(values, size)
     }
 
     def limit(max: Long): Traversal[D, G, C] = traversal.onRaw(_.limit(max))
+
+    def empty: Traversal[D, G, Converter[D, G]] = traversal.limit(0)
 
     def range(low: Long, high: Long): Traversal[D, G, C] = traversal.onRaw(_.range(low, high))
 
@@ -149,7 +160,7 @@ object TraversalOps {
 
     def count: Traversal[Long, JLong, Converter[Long, JLong]] = {
       val adminTraversal = traversal.raw.asAdmin()
-      adminTraversal.getSteps.asScala.last match {
+      adminTraversal.getSteps.asScala.last match { // TODO remove order step in a strategy
         case orderStep: OrderGlobalStep[_, _] => adminTraversal.removeStep(orderStep)
         case orderStep: OrderLocalStep[_, _]  => adminTraversal.removeStep(orderStep)
         case _                                =>
@@ -233,10 +244,15 @@ object TraversalOps {
       )
     }
 
-    def choose[S, DD](
-        branchSelect: BranchSelector[D, G, C] => BranchSelectorOn[D, G, C, S, DD]
+    def chooseValue[S, DD](
+        valueSelect: ValueSelector[D, G, C] => ValueSelectorOn[D, G, C, S, DD]
     ): Traversal[DD, JMap[String, Any], Converter[DD, JMap[String, Any]]] =
-      branchSelect(new BranchSelector[D, G, C](traversal)).build
+      valueSelect(new ValueSelector[D, G, C](traversal)).build
+
+    def chooseBranch[S, GG](
+        branchSelect: BranchSelector[D, G, C, GG] => BranchSelectorOn[D, G, C, S, GG]
+    ): Traversal[GG, GG, IdentityConverter[GG]] =
+      branchSelect(new BranchSelector[D, G, C, GG](traversal)).build
 
     def choose[DD](predicate: Traversal[D, G, C] => Traversal.Some, onTrue: DD, onFalse: DD): Traversal[DD, DD, Converter.Identity[DD]] =
       traversal.onRawMap[DD, DD, Converter.Identity[DD]](
@@ -292,6 +308,11 @@ object TraversalOps {
       }
     }
 
+    def option: Traversal[Option[D], JList[G], Converter[Option[D], JList[G]]] =
+      traversal.onRawMap[Option[D], JList[G], Converter[Option[D], JList[G]]](_.limit(1).fold()) { list: JList[G] =>
+        if (list.isEmpty) None else Some(traversal.converter(list.get(0)))
+      }
+
     def fold: Traversal[Seq[D], JList[G], Converter.CList[D, G, C]] =
       traversal.onRawMap[Seq[D], JList[G], Converter.CList[D, G, C]](_.fold())(Converter.clist[D, G, C](traversal.converter))
 
@@ -323,7 +344,7 @@ object TraversalOps {
         case (t, i) => t.raw.project[Any]("coalesceIndex", "coalesceValue").by(__.constant(i)).by()
       }
       val cs = ts.map(_.converter)
-      if (ts.isEmpty) traversal.limit(0).asInstanceOf[Traversal[DD, JMap[String, Any], Converter[DD, JMap[String, Any]]]]
+      if (ts.isEmpty) traversal.empty.asInstanceOf[Traversal[DD, JMap[String, Any], Converter[DD, JMap[String, Any]]]]
       else
         traversal.onRawMap[DD, JMap[String, Any], Converter[DD, JMap[String, Any]]](_.coalesce(gt: _*)) { m =>
           cs(m.get("coalesceIndex").asInstanceOf[Int]).apply(m.get("coalesceValue").asInstanceOf[GG])
@@ -332,13 +353,13 @@ object TraversalOps {
 
     def coalesceConv[DD, GG, CC <: Converter[DD, GG]](f: (Traversal[D, G, C] => Traversal[_, GG, _])*)(conv: CC): Traversal[DD, GG, CC] = {
       val ts = f.map(_(traversal.start).raw)
-      if (ts.isEmpty) traversal.limit(0).asInstanceOf[Traversal[DD, GG, CC]]
+      if (ts.isEmpty) traversal.empty.asInstanceOf[Traversal[DD, GG, CC]]
       else
         traversal.onRawMap[DD, GG, CC](_.coalesce(ts: _*))(conv)
     }
 
     def coalesceIdent[GG](f: (Traversal[D, G, C] => Traversal[_, GG, _])*): Traversal[GG, GG, Converter.Identity[GG]] =
-      if (f.isEmpty) traversal.limit(0).asInstanceOf[Traversal[GG, GG, Converter.Identity[GG]]]
+      if (f.isEmpty) traversal.empty.asInstanceOf[Traversal[GG, GG, Converter.Identity[GG]]]
       else
         traversal.onRawMap[GG, GG, Converter.Identity[GG]](_.coalesce(f.map(_(traversal.start).raw): _*))(Converter.identity[GG])
 
@@ -352,6 +373,9 @@ object TraversalOps {
         case value    => t.converter(value)
       }
     }
+
+    def optional(f: Traversal[D, G, C] => Traversal[D, G, C]): Traversal[D, G, C] =
+      traversal.onRaw(_.optional(f(traversal.start).raw))
 
     def project[A <: Product](
         builder: ProjectionBuilder[Nil.type, D, G, C] => ProjectionBuilder[A, D, G, C]
@@ -460,7 +484,8 @@ object TraversalOps {
 
     def hasLabel(name: String): Traversal[D, G, C] = traversal.onRaw(_.hasLabel(name))
 
-    def has(accessor: T, predicate: P[_])(implicit ev: G <:< Element): Traversal[D, G, C] = traversal.onRaw(_.has(accessor, predicate))
+    def has(accessor: T, predicate: P[_])(implicit ev: G <:< Element): Traversal[D, G, C] =
+      traversal.onRaw(_.has(accessor, traversal.graph.db.mapPredicate(predicate)))
     def has[A, B](selector: D => A, value: B)(implicit mapping: Mapping[A, B, _], ev: G <:< Element): Traversal[D, G, C] =
       macro TraversalMacro.hasV[A, B]
     def has[A, B](selector: D => A, predicate: P[B])(implicit mapping: Mapping[A, B, _], ev: G <:< Element): Traversal[D, G, C] =
@@ -478,7 +503,7 @@ object TraversalOps {
     def hasId(ids: EntityId*)(implicit ev: G <:< Element): Traversal[D, G, C] =
       ids.map(_.value) match {
         case Seq(head, tail @ _*) => traversal.onRaw(_.hasId(head, tail: _*))
-        case _                    => limit(0)
+        case _                    => empty.asInstanceOf[Traversal[D, G, C]]
       }
 
     def where(predicate: P[String]): Traversal[D, G, C] = traversal.onRaw(_.where(predicate))
@@ -487,11 +512,24 @@ object TraversalOps {
 
     def label(implicit ev: G <:< Element): Traversal[String, String, IdentityConverter[String]] =
       traversal.onRawMap[String, String, IdentityConverter[String]](_.label())(Converter.identity[String])
+
     def _id(implicit ev: G <:< Element): Traversal[EntityId, AnyRef, Converter[EntityId, AnyRef]] =
       traversal.onRawMap[EntityId, AnyRef, Converter[EntityId, AnyRef]](_.id())(EntityId.apply)
 
-    def update[V](selector: D => V, value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
+    def update[V](selector: D => V, value: V)(implicit mapping: Mapping[V, _, _], ev: G <:< Element): Traversal[D, G, C] =
       macro TraversalMacro.update[V]
+
+    def addValue[V](selector: D => Seq[V], value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
+      macro TraversalMacro.addValue[V]
+
+    def addValue[V](selector: D => Set[V], value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
+      macro TraversalMacro.addValue[V]
+
+    def removeValue[V](selector: D => Seq[V], value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
+      macro TraversalMacro.removeValue[V]
+
+    def removeValue[V](selector: D => Set[V], value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
+      macro TraversalMacro.removeValue[V]
 
     def iterate(): Unit = {
       raw.iterate()
@@ -508,6 +546,11 @@ object TraversalOps {
         ev1: G <:< Element,
         ev2: D <:< Product with Entity
     ): Traversal[mapping.SingleType, mapping.GraphType, Converter[mapping.SingleType, mapping.GraphType]] = macro TraversalMacro.getValue[DD]
+
+    def valueMap(propertyKeys: String*): Traversal[Map[String, Any], JMap[AnyRef, Any], Converter[Map[String, Any], JMap[AnyRef, Any]]] =
+      traversal.onRawMap[Map[String, Any], JMap[AnyRef, Any], Converter[Map[String, Any], JMap[AnyRef, Any]]](_.valueMap[Any](propertyKeys: _*))(
+        _.asScala.map(kv => kv._1.asInstanceOf[String] -> kv._2.asInstanceOf[JList[Any]].get(0)).toMap
+      )
 
     def removeProperty(name: String)(implicit ev: G <:< Element): Traversal[D, G, C] =
       traversal.sideEffect(
@@ -532,7 +575,8 @@ object TraversalOps {
 
     def filter(f: Traversal[D, G, C] => Traversal[_, _, _]): Traversal[D, G, C] = traversal.onRaw(_.filter(f(traversal.start).raw))
     def filterNot(f: Traversal[D, G, C] => Traversal[_, _, _]): Traversal[D, G, C] =
-      traversal.onRaw(_.filter(f(traversal.start).raw.count().is(P.eq(0))))
+      traversal.onRaw(_.not(f(traversal.start).raw))
+//      traversal.onRaw(_.filter(f(traversal.start).raw.limit(1).count().is(P.eq(0))))
 
     def dedup: Traversal[D, G, C]                              = traversal.onRaw(_.dedup())
     def dedup(labels: StepLabel[_, _, _]*): Traversal[D, G, C] = traversal.onRaw(_.dedup(labels.map(_.name): _*))
@@ -547,7 +591,7 @@ object TraversalOps {
 
     def unionFlat[DD, GG, CC <: Converter[DD, GG]](traversals: (Traversal[D, G, C] => Traversal[DD, GG, CC])*): Traversal[DD, GG, CC] = {
       val traversalResults = traversals.map(_.apply(traversal.start))
-      traversalResults.headOption.fold(traversal.limit(0).asInstanceOf[Traversal[DD, GG, CC]]) { firstTraversal =>
+      traversalResults.headOption.fold(traversal.empty.asInstanceOf[Traversal[DD, GG, CC]]) { firstTraversal =>
         traversal.onRawMap[DD, GG, CC](_.union(traversalResults.map(_.raw): _*))(firstTraversal.converter)
       }
     }

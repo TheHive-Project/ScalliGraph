@@ -5,42 +5,26 @@ import org.scalactic.Accumulation._
 import org.scalactic.{Bad, Good, One}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FSeq, FString, FieldsParser}
-import org.thp.scalligraph.models.{Database, MappingCardinality}
-import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, SortBySelector, Traversal}
+import org.thp.scalligraph.traversal.Traversal
 import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError}
 
 import scala.reflect.runtime.{universe => ru}
 
 case class InputSort(fieldOrder: (String, Order)*) extends InputQuery[Traversal.Unk, Traversal.Unk] {
   override def apply(
-      db: Database,
       publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
-  ): Traversal.Unk = {
-    val orderBys = fieldOrder.map {
-      case (fieldName, order) =>
+  ): Traversal.Unk =
+    fieldOrder.foldLeft(traversal.onRaw(_.order)) {
+      case (t, (fieldName, order)) =>
         val fieldPath = FPath(fieldName)
         val property = publicProperties
           .get[Traversal.UnkD, Traversal.UnkDU](fieldPath, traversalType)
           .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
-        if (property.mapping.cardinality == MappingCardinality.single)
-          (_: SortBySelector[Traversal.UnkD, Traversal.UnkG, Converter[Traversal.UnkD, Traversal.UnkG]])
-            .by(property.select(fieldPath, _, authContext), order)
-        else
-          (_: SortBySelector[Traversal.UnkD, Traversal.UnkG, Converter[Traversal.UnkD, Traversal.UnkG]])
-            .by(
-              _.coalesceIdent(
-                property.select(FPath(fieldName), _, authContext),
-                _.constant(property.mapping.noValue.asInstanceOf[Traversal.UnkDU])
-              ),
-              order
-            )
+        property.sort(fieldPath, t, authContext, order)
     }
-    traversal.sort(orderBys: _*)
-  }
 }
 
 object InputSort {

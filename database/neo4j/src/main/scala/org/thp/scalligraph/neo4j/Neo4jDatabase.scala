@@ -7,7 +7,7 @@ import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
 import javax.inject.Singleton
-import org.apache.tinkerpop.gremlin.structure.Graph
+
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.utils.{Config, Retry}
 import play.api.Configuration

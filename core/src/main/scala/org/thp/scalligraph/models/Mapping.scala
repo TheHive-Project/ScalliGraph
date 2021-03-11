@@ -4,7 +4,7 @@ import java.lang.{Boolean => JBoolean, Byte => JByte, Double => JDouble, Float =
 import java.util.{Base64, Date}
 
 import org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality
-import org.apache.tinkerpop.gremlin.structure.{Element, Vertex}
+import org.apache.tinkerpop.gremlin.structure.{Element, Vertex, VertexProperty}
 import org.thp.scalligraph.auth.Permission
 import org.thp.scalligraph.controllers.Renderer
 import org.thp.scalligraph.traversal.TraversalOps._
@@ -17,13 +17,26 @@ import scala.collection.JavaConverters._
 import scala.reflect.runtime.{universe => ru}
 import scala.reflect.{classTag, ClassTag}
 
-object MappingCardinality extends Enumeration {
-  val option, single, list, set = Value
+sealed trait MappingCardinality {
+  val gremlinCardinality: VertexProperty.Cardinality
+  override lazy val toString: String = getClass.getCanonicalName
+}
+object MappingCardinality {
+  type Value = MappingCardinality
+  object single extends MappingCardinality {
+    override val gremlinCardinality: Cardinality = VertexProperty.Cardinality.single
+  }
+  object option extends MappingCardinality {
+    override val gremlinCardinality: Cardinality = VertexProperty.Cardinality.single
+  }
+  object list extends MappingCardinality {
+    override val gremlinCardinality: Cardinality = VertexProperty.Cardinality.list
+  }
+  object set extends MappingCardinality {
+    override val gremlinCardinality: Cardinality = VertexProperty.Cardinality.set
+  }
 
-  def isCompatible(c1: Value, c2: Value): Boolean =
-    c1 == c2 ||
-      (c1 == single && c2 == option) ||
-      (c1 == option && c2 == single)
+  def isCompatible(c1: Value, c2: Value): Boolean = c1.gremlinCardinality == c2.gremlinCardinality
 }
 
 trait UMapping[D] {
@@ -46,7 +59,7 @@ object UMapping extends MappingLowerPrio {
   implicit val permissionWrites: Writes[Permission]        = Writes.stringableWrites(Predef.identity)
   implicit object jsObject extends SingleMapping[JsObject, String](toGraph = j => j.toString, toDomain = s => Json.parse(s).as[JsObject])
   def identity[T: ClassTag: Renderer: NoValue]: IdentityMapping[T] = IdentityMapping[T]()
-  implicit object entityId   extends SingleMapping[EntityId, String](_.toString, EntityId.read)
+  implicit object entityId   extends SingleMapping[EntityId, String](_.value, EntityId.read)
   implicit object string     extends IdentityMapping[String]
   implicit object long       extends SingleMapping[Long, JLong](toGraph = Long.box, toDomain = Long.unbox)
   implicit object int        extends SingleMapping[Int, JInt](toGraph = Int.box, toDomain = Int.unbox)
@@ -131,6 +144,29 @@ abstract class Mapping[M, D: ClassTag, G: ClassTag: NoValue](
   def wrap(us: Seq[D]): M
 }
 
+trait MultiValueMapping[D, G] { _: Mapping[_, D, G] =>
+  def addValue(element: Element, key: String, value: D): Unit =
+    element match {
+      case vertex: Vertex => vertex.property(cardinality.gremlinCardinality, key, this.reverse(value)); ()
+      case _              => throw InternalError("Edge doesn't support multi-valued properties")
+    }
+  def removeValue(element: Element, key: String, value: D): Unit = {
+    val gValue = reverse(value)
+    element match {
+      case vertex: Vertex => vertex.properties[G](key).forEachRemaining(p => if (p.value() == gValue) p.remove())
+      case _              => throw InternalError("Edge doesn't support multi-valued properties")
+    }
+  }
+
+  def addValue[E <: Product](traversal: Traversal.V[E], key: String, value: D): Traversal.V[E] =
+    traversal.onRaw(_.property(cardinality.gremlinCardinality, key, reverse(value)))
+
+  def removeValue[E <: Product](traversal: Traversal.V[E], key: String, value: D): Traversal.V[E] = {
+    val gValue = reverse(value)
+    traversal.sideEffect(_.onRaw(t => t.properties[Any](key).hasValue(gValue).drop().asInstanceOf[t.type]))
+  }
+}
+
 case class IdentityMapping[T: ClassTag: NoValue: Renderer]() extends SingleMapping[T, T](identity[T], identity[T]) with IdentityConverter[T]
 
 class SingleMapping[D: ClassTag, G: ClassTag: NoValue](toGraph: D => G, toDomain: G => D)(implicit renderer: Renderer[D])
@@ -207,7 +243,8 @@ case class ListMapping[D, G](singleMapping: SingleMapping[D, G])
       NoValue(singleMapping.noValue),
       singleMapping.getRenderer.list,
       singleMapping.getRenderer
-    ) {
+    )
+    with MultiValueMapping[D, G] {
   override val cardinality: MappingCardinality.Value = MappingCardinality.list
 
   override def getProperty(element: Element, key: String): Seq[D] =
@@ -242,7 +279,8 @@ case class SetMapping[D, G](singleMapping: SingleMapping[D, G])
       NoValue(singleMapping.noValue),
       singleMapping.getRenderer.set,
       singleMapping.getRenderer
-    ) {
+    )
+    with MultiValueMapping[D, G] {
   override val cardinality: MappingCardinality.Value = MappingCardinality.set
 
   override def getProperty(element: Element, key: String): Set[D] =

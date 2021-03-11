@@ -1,12 +1,12 @@
 package org.thp.scalligraph.services
 
 import org.apache.tinkerpop.gremlin.process.traversal.P
-import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Graph, Vertex}
+import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex}
 import org.thp.scalligraph.EntityId
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.{Database, Entity, IndexType, UMapping}
 import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, IdentityConverter, StepLabel, Traversal}
+import org.thp.scalligraph.traversal._
 import play.api.Logger
 
 import scala.collection.JavaConverters._
@@ -15,7 +15,8 @@ import scala.reflect.runtime.{universe => ru}
 import scala.util.Try
 
 sealed trait GenIntegrityCheckOps {
-  def check(): Unit
+  def name: String
+  def duplicationCheck(): Map[String, Long]
   def initialCheck()(implicit graph: Graph, authContext: AuthContext): Unit
 }
 
@@ -39,7 +40,6 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
         service
           .startTraversal
           .setConverter[Vertex, IdentityConverter[Vertex]](Converter.identity)
-          .toIterator
           .foreach { v =>
             map.getOrElseUpdate(getValues(v), mutable.Buffer.empty[EntityId]) += EntityId(v.id)
           }
@@ -53,13 +53,13 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
     }
 
   def copyEdge(from: E with Entity, to: E with Entity, predicate: Edge => Boolean = _ => true)(implicit graph: Graph): Unit = {
-    val toVertex: Vertex = Traversal.V(to._id).head
+    val toVertex: Vertex = graph.V(to._label, to._id).head
     service.get(from).outE().toSeq.filter(predicate).foreach { edge =>
       val props = edge.properties[Any]().asScala.map(p => p.key() -> p.value())
       val label = edge.label()
-      logger.debug(s"create edge from $toVertex to ${Traversal.E(EntityId(edge.id())).inV.head} with properties: $props")
-      val rawTraversal = Traversal
-        .E(EntityId(edge.id()))
+      logger.debug(s"create edge from $toVertex to ${graph.E(edge.label(), EntityId(edge.id())).inV.head} with properties: $props")
+      val rawTraversal = graph
+        .E(edge.label(), EntityId(edge.id()))
         .inV
         .raw
       props
@@ -71,9 +71,9 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
     service.get(from).inE().toSeq.filter(predicate).foreach { edge =>
       val props = edge.properties[Any]().asScala.map(p => p.key() -> p.value()).toSeq
       val label = edge.label()
-      logger.debug(s"create edge from ${Traversal.E(EntityId(edge.id())).outV.head} to $toVertex with properties: $props")
-      val rawTraversal = Traversal
-        .E(EntityId(edge.id()))
+      logger.debug(s"create edge from ${graph.E(edge.label(), EntityId(edge.id())).outV.head} to $toVertex with properties: $props")
+      val rawTraversal = graph
+        .E(edge.label(), EntityId(edge.id()))
         .outV
         .raw
       props
@@ -86,13 +86,13 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
 
   def removeVertices(vertices: Seq[Vertex])(implicit graph: Graph): Unit =
     if (vertices.nonEmpty) {
-      Traversal.V(vertices.map(v => EntityId(v.id())).distinct: _*).remove()
+      graph.V(vertices.head.label(), vertices.map(v => EntityId(v.id())).distinct: _*).remove()
       ()
     }
 
   def removeEdges(edges: Seq[Edge])(implicit graph: Graph): Unit =
     if (edges.nonEmpty) {
-      Traversal.E(edges.map(e => EntityId(e.id())).distinct: _*).remove()
+      graph.E(edges.head.label(), edges.map(e => EntityId(e.id())).distinct: _*).remove()
       ()
     }
 
@@ -220,19 +220,24 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
     case (IndexType.unique, properties) => properties
   }
 
-  def duplicateEntities: Seq[Seq[E with Entity]] = uniqueProperties.fold[Seq[Seq[E with Entity]]](Nil)(getDuplicates)
+  def initialCheck()(implicit graph: Graph, authContext: AuthContext): Unit =
+    service.model.initialValues.filterNot(service.exists).foreach(service.createEntity)
 
-  def check(): Unit =
-    duplicateEntities
+  def findDuplicates(): Seq[Seq[E with Entity]] = uniqueProperties.fold[Seq[Seq[E with Entity]]](Nil)(getDuplicates)
+
+  def duplicationCheck(): Map[String, Long] = {
+    val duplicates = findDuplicates()
+    duplicates
       .foreach { entities =>
         db.tryTransaction { implicit graph =>
           logger.info(s"Found duplicate entities:${entities.map(e => s"\n - $e").mkString}")
           resolve(entities)
         }
       }
-
-  def initialCheck()(implicit graph: Graph, authContext: AuthContext): Unit =
-    service.model.initialValues.filterNot(service.exists).foreach(service.createEntity)
+    Map("duplicate" -> duplicates.length.toLong)
+  }
 
   def resolve(entities: Seq[E with Entity])(implicit graph: Graph): Try[Unit]
+
+  def globalCheck(): Map[String, Long]
 }

@@ -1,10 +1,10 @@
 package org.thp.scalligraph.controllers
 
 import javax.inject.{Inject, Singleton}
-import org.apache.tinkerpop.gremlin.structure.Graph
 import org.thp.scalligraph.auth.{AuthSrv, Permission}
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.record.Record
+import org.thp.scalligraph.traversal.Graph
 import org.thp.scalligraph.{AttributeCheckingError, AuthenticationError, AuthorizationError, DiagnosticContext}
 import play.api.Logger
 import play.api.http.HttpErrorHandler

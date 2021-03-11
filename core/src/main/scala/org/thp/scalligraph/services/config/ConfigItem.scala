@@ -80,11 +80,10 @@ class ConfigItemImpl[B, F](
 
   protected def getValue: Option[B] =
     db.roTransaction { implicit graph =>
-        graph
-          .variables()
-          .get[String](s"config.$path")
-      }
-      .asScala
+      graph
+        .variables
+        .get[String](s"config.$path")
+    }.asScala
       .flatMap(s => Try(Json.parse(s)).toOption)
       .flatMap(jsonFormat.reads(_).asOpt)
 
@@ -107,21 +106,22 @@ class ConfigItemImpl[B, F](
     jsonFormat.writes(bValue)
   }
 
-  override def set(v: B)(implicit authContext: AuthContext): Try[Unit] = validation(v).flatMap { value =>
-    val valueJson = jsonFormat.writes(value)
-    db.tryTransaction { implicit graph =>
+  override def set(v: B)(implicit authContext: AuthContext): Try[Unit] =
+    validation(v).flatMap { value =>
+      val valueJson = jsonFormat.writes(value)
+      db.tryTransaction { implicit graph =>
         Try(
           graph
-            .variables()
+            .variables
             .set(s"config.$path", valueJson.toString)
         )
-      }
-      .map(_ => eventSrv.publish(ConfigTopic.topicName)(Invalidate(path)))
-  }
+      }.map(_ => eventSrv.publish(ConfigTopic.topicName)(Invalidate(path)))
+    }
 
   override def validation(v: B): Try[B] = validationFunction(v)
 
-  override def onUpdate(f: (B, B) => Unit): Unit = synchronized {
-    updateCallbacks = f :: updateCallbacks
-  }
+  override def onUpdate(f: (B, B) => Unit): Unit =
+    synchronized {
+      updateCallbacks = f :: updateCallbacks
+    }
 }

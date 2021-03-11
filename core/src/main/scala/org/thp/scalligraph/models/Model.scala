@@ -1,13 +1,12 @@
 package org.thp.scalligraph.models
 
-import java.util.Date
-
-import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Graph, Vertex}
-import org.thp.scalligraph.{EntityId, NotFoundError}
+import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex}
 import org.thp.scalligraph.`macro`.ModelMacro
 import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, Traversal}
+import org.thp.scalligraph.traversal.{Converter, Graph}
+import org.thp.scalligraph.{EntityId, NotFoundError}
 
+import java.util.Date
 import scala.annotation.StaticAnnotation
 import scala.collection.JavaConverters._
 import scala.language.experimental.macros
@@ -71,7 +70,7 @@ abstract class Model {
 
   val indexes: Seq[(IndexType.Value, Seq[String])]
 
-  def get(id: EntityId)(implicit db: Database, graph: Graph): ElementType
+  def get(id: EntityId)(implicit graph: Graph): ElementType
   val fields: Map[String, Mapping[_, _, _]]
   def addEntity(e: E, entity: Entity): EEntity
   val converter: Converter[EEntity, ElementType]
@@ -83,17 +82,17 @@ abstract class VertexModel extends Model {
   val initialValues: Seq[E]                  = Nil
   def getInitialValues: Seq[InitialValue[E]] = initialValues.map(iv => InitialValue(this.asInstanceOf[Model.Vertex[E]], iv))
 
-  def create(e: E)(implicit db: Database, graph: Graph): Vertex
+  def create(e: E)(implicit graph: Graph): Vertex
 
-  override def get(id: EntityId)(implicit db: Database, graph: Graph): Vertex =
-    Traversal.V(id).headOption.getOrElse(throw NotFoundError(s"Vertex $id not found"))
+  override def get(id: EntityId)(implicit graph: Graph): Vertex =
+    graph.V(label, id).headOption.getOrElse(throw NotFoundError(s"Vertex $id not found"))
 }
 
 abstract class EdgeModel extends Model {
   override type ElementType = Edge
 
-  def create(e: E, from: Vertex, to: Vertex)(implicit db: Database, graph: Graph): Edge
+  def create(e: E, from: Vertex, to: Vertex)(implicit graph: Graph): Edge
 
-  override def get(id: EntityId)(implicit db: Database, graph: Graph): Edge =
-    Traversal.E(id).headOption.getOrElse(throw NotFoundError(s"Edge $id not found"))
+  override def get(id: EntityId)(implicit graph: Graph): Edge =
+    graph.E(label, id).headOption.getOrElse(throw NotFoundError(s"Edge $id not found"))
 }

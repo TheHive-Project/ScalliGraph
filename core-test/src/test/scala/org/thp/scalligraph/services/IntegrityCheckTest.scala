@@ -1,10 +1,10 @@
 package org.thp.scalligraph.services
 
-import org.apache.tinkerpop.gremlin.structure.Graph
 import org.specs2.specification.core.Fragments
 import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
 import org.thp.scalligraph.models.ModernOps._
 import org.thp.scalligraph.models._
+import org.thp.scalligraph.traversal.Graph
 import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.{AppBuilder, EntityName}
 import play.api.libs.logback.LogbackLoggerConfigurator
@@ -40,6 +40,8 @@ class IntegrityCheckTest extends PlaySpecification {
           override val service: SoftwareSrv = app[SoftwareSrv]
 
           override def resolve(entities: Seq[Software with Entity])(implicit graph: Graph): Try[Unit] = Success(())
+
+          override def globalCheck(): Map[String, Long] = Map.empty
         }
         val duplicates = integrityCheckOps.getDuplicates(Seq("name"))
         duplicates must have size 1

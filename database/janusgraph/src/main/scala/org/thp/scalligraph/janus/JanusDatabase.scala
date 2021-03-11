@@ -1,44 +1,42 @@
 package org.thp.scalligraph.janus
 
-import java.lang.{Long => JLong}
-import java.nio.file.{Files, Paths}
-import java.util.function.Consumer
-import java.util.regex.Pattern
-import java.util.{Date, Properties}
-
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Flow, Source}
 import com.typesafe.config.ConfigObject
-import javax.inject.{Inject, Singleton}
-import org.apache.tinkerpop.gremlin.process.traversal.{P, Text}
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource
+import org.apache.tinkerpop.gremlin.process.traversal.{P, Text, TraversalSource}
 import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
-import org.apache.tinkerpop.gremlin.structure._
+import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Transaction, Vertex, Graph => TinkerGraph}
 import org.janusgraph.core.attribute.{Text => JanusText}
-import org.janusgraph.core.schema.JanusGraphManagement.IndexJobFuture
-import org.janusgraph.core.schema.{Mapping => JanusMapping, SchemaStatus => JanusSchemaStatus, _}
+import org.janusgraph.core.schema.{Mapping => _, _}
 import org.janusgraph.core.{Transaction => _, _}
 import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
+import org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration
 import org.janusgraph.graphdb.database.StandardJanusGraph
-import org.janusgraph.graphdb.database.management.ManagementSystem
-import org.janusgraph.graphdb.olap.job.IndexRepairJob
 import org.janusgraph.graphdb.relations.RelationIdentifier
+import org.janusgraph.graphdb.tinkerpop.optimize.JanusGraphStepStrategy
 import org.slf4j.MDC
 import org.thp.scalligraph.auth.AuthContext
+import org.thp.scalligraph.janus.strategies._
 import org.thp.scalligraph.models.{MappingCardinality, _}
 import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, Traversal}
+import org.thp.scalligraph.traversal.{Converter, Graph, GraphWrapper, Traversal}
 import org.thp.scalligraph.utils.{Config, Retry}
-import org.thp.scalligraph.{EntityId, InternalError, NotFoundError}
-import play.api.{Configuration, Environment}
+import org.thp.scalligraph.{EntityId, InternalError, SingleInstance}
+import play.api.{Configuration, Logger}
 
-import scala.annotation.tailrec
+import java.lang.{Long => JLong}
+import java.nio.file.{Files, Paths}
+import java.util.function.Consumer
+import java.util.{Date, Properties}
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success, Try}
 
 object JanusDatabase {
+  lazy val logger: Logger = Logger(getClass)
 
   def openDatabase(configuration: Configuration, system: ActorSystem): JanusGraph = {
     val backend = configuration.get[String]("db.janusgraph.storage.backend")
@@ -60,80 +58,105 @@ object JanusDatabase {
 
     Retry(maxAttempts)
       .on[IllegalArgumentException]
-      .withBackoff(minBackoff, maxBackoff, randomFactor)(system)
+      .withBackoff(minBackoff, maxBackoff, randomFactor)(system.scheduler, system.dispatcher)
       .sync {
         JanusGraphFactory.open(new Config(configuration.get[Configuration]("db.janusgraph")))
       }
   }
+
+  def fullTextAvailable(db: JanusGraph, singleInstance: SingleInstance): Boolean = {
+    val mgmt = db.openManagement()
+    try {
+      lazy val location = db
+        .asInstanceOf[StandardJanusGraph]
+        .getConfiguration
+        .getConfiguration
+        .get(GraphDatabaseConfiguration.INDEX_DIRECTORY, "search") //mgmt.get("index.search.directory")
+      mgmt.get("index.search.backend") match {
+        case "elasticsearch" =>
+          logger.info(s"Full-text index is available (elasticsearch:${mgmt.get("index.search.hostname")}) $singleInstance")
+          true
+        case "lucene" if singleInstance.value && !location.startsWith("/tmp") =>
+          logger.info(s"Full-text index is available (lucene:$location) $singleInstance")
+          true
+        case "lucene" =>
+          val reason =
+            if (!singleInstance.value) "lucene index can't be used in cluster mode"
+            else if (location.startsWith("/tmp")) "index path must not in /tmp"
+            else "no reason ?!"
+          logger.warn(s"Full-text index is NOT available (lucene:$location) $singleInstance: $reason")
+          false
+      }
+    } finally mgmt.commit()
+  }
 }
 
-@Singleton
 class JanusDatabase(
-    janusGraph: JanusGraph,
+    protected val janusGraph: JanusGraph,
     maxAttempts: Int,
     minBackoff: FiniteDuration,
     maxBackoff: FiniteDuration,
     randomFactor: Double,
     override val chunkSize: Int,
-    system: ActorSystem
-) extends BaseDatabase {
+    system: ActorSystem,
+    override val fullTextIndexAvailable: Boolean
+) extends BaseDatabase
+    with IndexOps {
   val name = "janus"
 
   val localTransaction: ThreadLocal[Option[Transaction]] = ThreadLocal.withInitial[Option[Transaction]](() => None)
   janusGraph.tx.onReadWrite(READ_WRITE_BEHAVIOR.MANUAL)
 
-  @Inject() def this(configuration: Configuration, system: ActorSystem) = {
+  def this(
+      janusGraph: JanusGraph,
+      configuration: Configuration,
+      system: ActorSystem,
+      fullTextAvailable: Boolean
+  ) =
     this(
-      JanusDatabase.openDatabase(configuration, system),
+      janusGraph,
       configuration.get[Int]("db.onConflict.maxAttempts"),
       configuration.get[FiniteDuration]("db.onConflict.minBackoff"),
       configuration.get[FiniteDuration]("db.onConflict.maxBackoff"),
       configuration.get[Double]("db.onConflict.randomFactor"),
       configuration.underlying.getBytes("db.chunkSize").toInt,
-      system
+      system,
+      fullTextAvailable
     )
-    logger.info(s"Instantiate JanusDatabase using ${configuration.get[String]("db.janusgraph.storage.backend")} backend")
-  }
 
-  def this(system: ActorSystem) = this(Configuration.load(Environment.simple()), system)
+  def this(
+      janusGraph: JanusGraph,
+      configuration: Configuration,
+      system: ActorSystem,
+      singleInstance: SingleInstance
+  ) =
+    this(
+      janusGraph,
+      configuration,
+      system,
+      JanusDatabase.fullTextAvailable(janusGraph, singleInstance)
+    )
+
+  def this(configuration: Configuration, system: ActorSystem, singleInstance: SingleInstance) =
+    this(JanusDatabase.openDatabase(configuration, system), configuration, system, singleInstance)
+
+  def this(configuration: Configuration, system: ActorSystem, fullTextIndexAvailable: Boolean) =
+    this(JanusDatabase.openDatabase(configuration, system), configuration, system, fullTextIndexAvailable)
 
   def batchMode: JanusDatabase = {
     val config = janusGraph.configuration()
     config.setProperty("storage.batch-loading", true)
-    new JanusDatabase(JanusGraphFactory.open(config), maxAttempts, minBackoff, maxBackoff, randomFactor, chunkSize, system)
+    new JanusDatabase(
+      JanusGraphFactory.open(config),
+      maxAttempts,
+      minBackoff,
+      maxBackoff,
+      randomFactor,
+      chunkSize,
+      system,
+      fullTextIndexAvailable
+    )
   }
-
-  def instanceId: String =
-    janusGraph match {
-      case g: StandardJanusGraph => g.getConfiguration.getUniqueGraphId
-      case _ =>
-        logger.error(s"JanusGraph database instance is not a StandardJanusGraph (${janusGraph.getClass}). Instance ID cannot be retrieved.")
-        ""
-    }
-  def openInstances: Set[String] =
-    managementTransaction { mgmt =>
-      Success {
-        mgmt
-          .getOpenInstances
-          .asScala
-          .map {
-            case instance if instance.endsWith("(current)") => instance.dropRight(9)
-            case instance                                   => instance
-          }
-          .toSet
-      }
-    }.get
-
-  def dropConnections(instanceIds: Seq[String]): Unit =
-    managementTransaction { mgmt =>
-      Success(instanceIds.foreach(mgmt.forceCloseInstance))
-    }.get
-
-  def dropOtherConnections: Try[Unit] =
-    managementTransaction { mgmt =>
-      mgmt.getOpenInstances.asScala.filterNot(_.endsWith("(current)")).foreach(mgmt.forceCloseInstance)
-      Success(())
-    }
 
   override def close(): Unit = janusGraph.close()
 
@@ -153,17 +176,24 @@ class JanusDatabase(
   }
 
   override def roTransaction[R](body: Graph => R): R = {
-    val graph             = janusGraph.buildTransaction().readOnly().start()
+    val graph             = new GraphWrapper(this, janusGraph.buildTransaction().readOnly().start())
     val tx                = graph.tx()
     val (oldTx, oldTxMDC) = (localTransaction.get(), Option(MDC.get("tx")))
     try {
       localTransaction.set(Some(tx))
       MDC.put("tx", f"${System.identityHashCode(tx)}%08x")
-      logger.debug("Begin of readonly transaction")
-      val r = body(graph)
-      logger.debug("End of readonly transaction")
-      tx.commit()
-      r
+      if (logger.isDebugEnabled) {
+        logger.debug("Begin of readonly transaction")
+        val start = System.currentTimeMillis()
+        val r     = body(graph)
+        logger.debug(s"End of readonly transaction (${System.currentTimeMillis() - start}ms)")
+        tx.commit()
+        r
+      } else {
+        val r = body(graph)
+        tx.commit()
+        r
+      }
     } finally {
       if (tx.isOpen) tx.rollback()
       oldTxMDC.fold(MDC.remove("tx"))(MDC.put("tx", _))
@@ -176,11 +206,11 @@ class JanusDatabase(
       () => janusGraph.buildTransaction().readOnly().start(),
       _.commit(),
       _.rollback(),
-      Flow[Graph].flatMapConcat(g => Source.fromIterator(() => query(g)))
+      Flow[TinkerGraph].flatMapConcat(g => Source.fromIterator(() => query(new GraphWrapper(this, g))))
     )
 
   override def source[A, B](body: Graph => (Iterator[A], B)): (Source[A, NotUsed], B) = {
-    val tx       = janusGraph.buildTransaction().readOnly().start()
+    val tx       = new GraphWrapper(this, janusGraph.buildTransaction().readOnly().start())
     val (ite, v) = body(tx)
     val src = TransactionHandler[Graph, A, NotUsed](
       () => tx,
@@ -219,9 +249,9 @@ class JanusDatabase(
         .on[SchemaViolationException]
         .on[PermanentBackendException]
         .on[PermanentLockingException]
-        .withBackoff(minBackoff, maxBackoff, randomFactor)(system)
+        .withBackoff(minBackoff, maxBackoff, randomFactor)(system.scheduler, system.dispatcher)
         .withTry {
-          val graph = janusGraph.buildTransaction().start()
+          val graph = new GraphWrapper(this, janusGraph.buildTransaction().start())
           val tx    = graph.tx()
           localTransaction.set(Some(tx))
           MDC.put("tx", f"${System.identityHashCode(tx)}%08x")
@@ -304,32 +334,6 @@ class JanusDatabase(
         case (property, mapping) => addProperty(mgmt, property, mapping)
       }
     }.map(_ => ())
-
-  override def addSchemaIndexes(models: Seq[Model]): Try[Unit] =
-    managementTransaction { mgmt =>
-      findFirstAvailableIndex(mgmt, "_label_vertex_index").foreach { indexName =>
-        mgmt
-          .buildIndex(indexName, classOf[Vertex])
-          .addKey(mgmt.getPropertyKey("_label"))
-          .buildCompositeIndex()
-      }
-
-      models.foreach {
-        case model: VertexModel =>
-          val vertexLabel = mgmt.getVertexLabel(model.label)
-          model.indexes.foreach {
-            case (indexType, properties) => createIndex(mgmt, classOf[Vertex], vertexLabel, indexType, properties)
-          }
-        case model: EdgeModel =>
-          val edgeLabel = mgmt.getEdgeLabel(model.label)
-          model.indexes.foreach {
-            case (indexType, properties) => createIndex(mgmt, classOf[Edge], edgeLabel, indexType, properties)
-          }
-        // TODO add index for labels when it will be possible
-        // cf. https://github.com/JanusGraph/janusgraph/issues/283
-      }
-      Success(())
-    }.flatMap(_ => enableIndexes())
 
   private def createEntityProperties(mgmt: JanusGraphManagement): Unit =
     if (Option(mgmt.getPropertyKey("_label")).isEmpty) {
@@ -447,157 +451,8 @@ class JanusDatabase(
       }
     }
 
-  override def removeAllIndexes(): Unit =
-    managementTransaction { mgmt =>
-      Success((mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).map(_.name()))
-    }.foreach(_.foreach(removeIndex))
-
-  def removeIndexes(baseIndexName: String): Unit =
-    managementTransaction { mgmt =>
-      val indexNamePattern: Pattern = s"$baseIndexName(?:_\\p{Digit}+)?".r.pattern
-      Success((mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).collect {
-        case index if indexNamePattern.matcher(index.name()).matches() => index.name()
-      })
-    }.foreach(_.foreach(removeIndex))
-
-  private def removeIndex(indexName: String) =
-    managementTransaction { mgmt =>
-      Option(mgmt.getGraphIndex(indexName)).fold[Try[Unit]](Failure(NotFoundError(s"Index $indexName doesn't exist"))) { index =>
-        if (!index.getFieldKeys.map(index.getIndexStatus).contains(JanusSchemaStatus.DISABLED)) {
-          logger.debug(s"Disable index $indexName")
-          mgmt.updateIndex(index, SchemaAction.DISABLE_INDEX)
-        } else
-          logger.debug(s"Index $indexName is already disable")
-        Success(())
-      }
-    }.map(_ => ManagementSystem.awaitGraphIndexStatus(janusGraph, indexName).status(JanusSchemaStatus.DISABLED).call())
-      .flatMap { _ =>
-        managementTransaction { mgmt =>
-          Option(mgmt.getGraphIndex(indexName)).foreach { index =>
-            mgmt.updateIndex(index, SchemaAction.REMOVE_INDEX)
-          }
-          Success(())
-        }
-      }
-
-  @tailrec
-  private def showIndexProgress(job: IndexJobFuture): Unit =
-    if (job.isCancelled)
-      logger.warn("Reindex job has been cancelled")
-    else if (job.isDone)
-      logger.info("Reindex job is finished")
-    else {
-      val scanMetrics = job.getIntermediateResult
-      logger.info(s"Reindex job is running: ${scanMetrics.getCustom(IndexRepairJob.ADDED_RECORDS_COUNT)} record scanned")
-      Thread.sleep(1000)
-      showIndexProgress(job)
-    }
-
-  override def enableIndexes(): Try[Unit] =
-    managementTransaction { mgmt => // wait for the index to become available
-      Try {
-        (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).collect {
-          case index if index.getFieldKeys.map(index.getIndexStatus).contains(JanusSchemaStatus.INSTALLED) => index.name()
-        }
-      }
-    }.map(_.foreach(indexName => ManagementSystem.awaitGraphIndexStatus(janusGraph, indexName).call()))
-      .flatMap { _ =>
-        managementTransaction { mgmt => // enable index by reindexing the existing data
-          (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).collect {
-            case index if index.getFieldKeys.map(index.getIndexStatus).contains(JanusSchemaStatus.REGISTERED) =>
-              scala.concurrent.blocking {
-                showIndexProgress(mgmt.updateIndex(index, SchemaAction.REINDEX))
-              }
-          }
-          Success(())
-        }
-      }
-
-  override def addIndex(model: String, indexType: IndexType.Value, properties: Seq[String]): Try[Unit] =
-    managementTransaction { mgmt =>
-      Option(mgmt.getVertexLabel(model))
-        .map(_ -> classOf[Vertex])
-        .orElse(Option(mgmt.getEdgeLabel(model)).map(_ -> classOf[Edge]))
-        .fold[Try[Unit]](Failure(InternalError(s"Model $model not found"))) {
-          case (elementLabel, elementClass) =>
-            createIndex(mgmt, elementClass, elementLabel, indexType, properties)
-            Success(())
-        }
-    }
-
-  /**
-    * Find the available index name for the specified index base name. If this index is already present and not disable, return None
-    * @param mgmt JanusGraph management
-    * @param baseIndexName Base index name
-    * @return the available index name or None if index is present
-    */
-  private def findFirstAvailableIndex(mgmt: JanusGraphManagement, baseIndexName: String): Option[String] = {
-    val indexNamePattern: Pattern = s"$baseIndexName(?:_\\p{Digit}+)?".r.pattern
-    val availableIndexes = (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).filter(i =>
-      indexNamePattern.matcher(i.name()).matches()
-    )
-    if (availableIndexes.isEmpty) Some(baseIndexName)
-    else {
-      val isEnable = availableIndexes.exists(index => !index.getFieldKeys.map(index.getIndexStatus).contains(JanusSchemaStatus.DISABLED))
-      if (isEnable) None
-      else {
-        val lastIndex = availableIndexes.map(_.name()).toSeq.max
-        val version   = lastIndex.drop(baseIndexName.length)
-        if (version.isEmpty) Some(s"${baseIndexName}_1")
-        else Some(s"${baseIndexName}_${version.tail.toInt + 1}")
-      }
-    }
-  }
-
-  private def createIndex(
-      mgmt: JanusGraphManagement,
-      elementClass: Class[_ <: Element],
-      elementLabel: JanusGraphSchemaType,
-      indexType: IndexType.Value,
-      properties: Seq[String]
-  ): Unit = {
-    val baseIndexName = (elementLabel.name +: properties).map(_.replaceAll("[^\\p{Alnum}]", "").toLowerCase().capitalize).mkString
-    findFirstAvailableIndex(mgmt, baseIndexName).foreach { indexName =>
-      val index = mgmt.buildIndex(indexName, elementClass).indexOnly(elementLabel)
-      val propertyKeys = (properties :+ "_label").map { p =>
-        val propertyKey = mgmt.getPropertyKey(p)
-        if (propertyKey == null) throw InternalError(s"Property $p in ${elementLabel.name} not found")
-        propertyKey
-      }
-      indexType match {
-//        case IndexType.unique =>
-//          logger.debug(s"Creating unique index on fields $elementLabel:${propertyKeys.mkString(",")}")
-//          propertyKeys.foreach(index.addKey)
-//          index.unique()
-//          val i = index.buildCompositeIndex()
-//          mgmt.setConsistency(i, ConsistencyModifier.LOCK)
-//          propertyKeys.foreach { k =>
-//            mgmt.setConsistency(k, ConsistencyModifier.LOCK)
-//          }
-        case IndexType.unique =>
-          logger.debug(s"Creating unique index on fields $elementLabel:${propertyKeys.mkString(",")}")
-          propertyKeys.foreach(index.addKey)
-          index.unique()
-          index.buildCompositeIndex()
-        case IndexType.basic =>
-          logger.debug(s"Creating basic index on fields $elementLabel:${propertyKeys.mkString(",")}")
-          propertyKeys.foreach(index.addKey)
-          index.buildCompositeIndex()
-        case IndexType.standard =>
-          logger.debug(s"Creating index on fields $elementLabel:${propertyKeys.mkString(",")}")
-          propertyKeys.foreach(index.addKey)
-          index.buildMixedIndex("search")
-        case IndexType.fulltext =>
-          logger.debug(s"Creating fulltext index on fields $elementLabel:${propertyKeys.mkString(",")}")
-          propertyKeys.foreach(k => index.addKey(k, JanusMapping.TEXT.asParameter()))
-          index.buildMixedIndex("search")
-      }
-      ()
-    }
-  }
-
   override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
-    val createdVertex = model.create(v)(this, graph)
+    val createdVertex = model.create(v)(graph)
     val entity        = DummyEntity(model.label, createdVertex.id(), authContext.userId)
     createdAtMapping.setProperty(createdVertex, "_createdAt", entity._createdAt)
     createdByMapping.setProperty(createdVertex, "_createdBy", entity._createdBy)
@@ -615,10 +470,10 @@ class JanusDatabase(
       to: TO with Entity
   ): E with Entity = {
     val edgeMaybe = for {
-      f <- Traversal.V(from._id)(graph).headOption
-      t <- Traversal.V(to._id)(graph).headOption
+      f <- graph.V(from._label, from._id).headOption
+      t <- graph.V(to._label, to._id).headOption
     } yield {
-      val createdEdge = model.create(e, f, t)(this, graph)
+      val createdEdge = model.create(e, f, t)(graph)
       val entity      = DummyEntity(model.label, createdEdge.id(), authContext.userId)
       createdAtMapping.setProperty(createdEdge, "_createdAt", entity._createdAt)
       createdByMapping.setProperty(createdEdge, "_createdBy", entity._createdBy)
@@ -627,25 +482,74 @@ class JanusDatabase(
       model.addEntity(e, entity)
     }
     edgeMaybe.getOrElse {
-      val error = Traversal.V(from._id)(graph).headOption.map(_ => "").getOrElse(s"${from._label}:${from._id} not found ") +
-        Traversal.V(to._id)(graph).headOption.map(_ => "").getOrElse(s"${to._label}:${to._id} not found")
+      val error = graph.V(from._label, from._id).headOption.map(_ => "").getOrElse(s"${from._label}:${from._id} not found ") +
+        graph.V(to._label, to._id).headOption.map(_ => "").getOrElse(s"${to._label}:${to._id} not found")
       sys.error(s"Fail to create edge between ${from._label}:${from._id} and ${to._label}:${to._id}, $error")
     }
   }
 
-  override def labelFilter[D, G <: Element, C <: Converter[D, G]](label: String): Traversal[D, G, C] => Traversal[D, G, C] =
-    _.onRaw(_.has("_label", label).hasLabel(label))
+  override def labelFilter[D, G, C <: Converter[D, G]](label: String, traversal: Traversal[D, G, C]): Traversal[D, G, C] =
+    traversal.onRaw(_.hasLabel(label).has("_label", label))
 
-  override def mapPredicate[V](predicate: P[V]): P[V] =
+  override def mapPredicate[T](predicate: P[T]): P[T] =
     predicate.getBiPredicate match {
-      //      case Text.containing    => JanusText.textContains(predicate.getValue) // warning, JanusText.textContains tokenizes the values
-      //      case Text.notContaining => JanusText.textContains(predicate.getValue).negate()
+      case Text.containing    => JanusText.textContainsRegex(s".*${predicate.getValue}.*").asInstanceOf[P[T]]
+      case Text.notContaining => JanusText.textContainsRegex(s".*${predicate.getValue}.*").negate().asInstanceOf[P[T]]
       //      case Text.endingWith      => JanusText.textRegex(s"${predicate.getValue}.*")
       //      case Text.notEndingWith   => JanusText.textRegex(s"${predicate.getValue}.*").negate()
       case Text.startingWith    => JanusText.textPrefix(predicate.getValue)
       case Text.notStartingWith => JanusText.textPrefix(predicate.getValue).negate()
       case _                    => predicate
     }
+
+  override def V[D <: Product](ids: EntityId*)(implicit model: Model.Vertex[D], graph: Graph): Traversal.V[D] =
+    new Traversal[D with Entity, Vertex, Converter[D with Entity, Vertex]](
+      graph,
+      traversal()
+        .V(ids.map(_.value): _*)
+        .hasLabel(model.label)
+        .has("_label", model.label),
+      model.converter
+    )
+
+  override def E[D <: Product](ids: EntityId*)(implicit model: Model.Edge[D], graph: Graph): Traversal.E[D] =
+    new Traversal[D with Entity, Edge, Converter[D with Entity, Edge]](
+      graph,
+      traversal()
+        .E(ids.map(_.value): _*)
+        .hasLabel(model.label)
+        .has("_label", model.label),
+      model.converter
+    )
+
+  override def V(label: String, ids: EntityId*)(implicit graph: Graph): Traversal[Vertex, Vertex, Converter.Identity[Vertex]] =
+    new Traversal[Vertex, Vertex, Converter.Identity[Vertex]](
+      graph,
+      traversal()
+        .V(ids.map(_.value): _*)
+        .hasLabel(label)
+        .has("_label", label),
+      Converter.identity[Vertex]
+    )
+
+  override def E(label: String, ids: EntityId*)(implicit graph: Graph): Traversal[Edge, Edge, Converter.Identity[Edge]] =
+    new Traversal[Edge, Edge, Converter.Identity[Edge]](
+      graph,
+      traversal()
+        .E(ids.map(_.value): _*)
+        .hasLabel(label)
+        .has("_label", label),
+      Converter.identity[Edge]
+    )
+
+  override def traversal()(implicit graph: Graph): GraphTraversalSource =
+    graph
+      .underlying
+      .traversal()
+      .asInstanceOf[TraversalSource]
+      .withoutStrategies(classOf[JanusGraphStepStrategy])
+      .withStrategies(IndexOptimizerStrategy.instance(), JanusGraphAcceptNullStrategy.instance(), OrderAcceptNullStrategy.instance())
+      .asInstanceOf[GraphTraversalSource]
 
   override def toId(id: Any): JLong = id.toString.toLong
 

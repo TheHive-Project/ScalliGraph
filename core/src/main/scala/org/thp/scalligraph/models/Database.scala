@@ -1,20 +1,19 @@
 package org.thp.scalligraph.models
 
-import java.util.Date
-import java.util.function.Consumer
 import akka.NotUsed
 import akka.stream.scaladsl.Source
 import org.apache.tinkerpop.gremlin.process.traversal.P
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource
 import org.apache.tinkerpop.gremlin.structure.Transaction.Status
-import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Graph, Vertex}
-import org.thp.scalligraph.{EntityId, InternalError}
+import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, Traversal}
+import org.thp.scalligraph.traversal.{Converter, Graph, Traversal}
+import org.thp.scalligraph.{EntityId, InternalError}
 import play.api.Logger
 
-import scala.collection.JavaConverters._
-import scala.collection.{immutable, mutable}
+import java.util.Date
+import java.util.function.Consumer
 import scala.util.{Success, Try}
 
 class DatabaseException(message: String = "Violation of database schema", cause: Exception) extends Exception(message, cause)
@@ -56,10 +55,11 @@ trait Database {
   def addSchemaIndexes(models: Seq[Model]): Try[Unit]
   def addProperty(model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit]
   def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit]
-  def addIndex(model: String, indexType: IndexType.Value, properties: Seq[String]): Try[Unit]
-  def enableIndexes(): Try[Unit]
-  def removeAllIndexes(): Unit
+  def addIndex(model: String, indexDefinition: Seq[(IndexType.Value, Seq[String])]): Try[Unit]
+  def reindexData(model: String): Try[Unit]
+  def rebuildIndexes(): Unit
 //  def removeIndex(model: String, properties: Seq[String]): Try[Unit]
+  val fullTextIndexAvailable: Boolean
 
   def drop(): Unit
 
@@ -74,53 +74,24 @@ trait Database {
       to: TO with Entity
   ): E with Entity
 
-  def getAllProperties(element: Element): Map[String, Seq[Any]] = {
-    val m = mutable.Map.empty[String, mutable.Builder[Any, Seq[Any]]]
-    for (property <- element.properties[Any]().asScala) {
-      val bldr = m.getOrElseUpdate(property.key(), Seq.newBuilder)
-      bldr += property.value()
-    }
-    val b = immutable.Map.newBuilder[String, Seq[Any]]
-    for ((k, v) <- m)
-      b += ((k, v.result))
-    b.result
-  }
-//  def getSingleProperty[D, G](element: Element, key: String, mapping: SingleMapping[D, G]): D
-//  def getOptionProperty[D, G](element: Element, key: String, mapping: OptionMapping[D, G]): Option[D]
-//  def getListProperty[D, G](element: Element, key: String, mapping: ListMapping[D, G]): Seq[D]
-//  def getSetProperty[D, G](element: Element, key: String, mapping: SetMapping[D, G]): Set[D]
-//
-//  def getProperty[D](element: Element, key: String, mapping: Mapping[D, _, _]): D =
-//    mapping match {
-//      case m: SingleMapping[_, _] => getSingleProperty(element, key, m).asInstanceOf[D]
-//      case m: OptionMapping[_, _] => getOptionProperty(element, key, m).asInstanceOf[D]
-//      case m: ListMapping[_, _]   => getListProperty(element, key, m).asInstanceOf[D]
-//      case m: SetMapping[_, _]    => getSetProperty(element, key, m).asInstanceOf[D]
-//    }
-//
-//  def setSingleProperty[D, G](element: Element, key: String, value: D, mapping: SingleMapping[D, _]): Unit
-//  def setOptionProperty[D, G](element: Element, key: String, value: Option[D], mapping: OptionMapping[D, _]): Unit
-//  def setListProperty[D, G](element: Element, key: String, values: Seq[D], mapping: ListMapping[D, _]): Unit
-//  def setSetProperty[D, G](element: Element, key: String, values: Set[D], mapping: SetMapping[D, _]): Unit
-//
-//  def setProperty[D](element: Element, key: String, value: D, mapping: Mapping[D, _, _]): Unit = {
-//    logger.trace(s"set ${element.id()}, $key = $value")
-//    mapping match {
-//      case m: SingleMapping[d, _] => setSingleProperty(element, key, value, m)
-//      case m: OptionMapping[d, _] => setOptionProperty(element, key, value.asInstanceOf[Option[d]], m)
-//      case m: ListMapping[d, _]   => setListProperty(element, key, value.asInstanceOf[Seq[d]], m)
-//      case m: SetMapping[d, _]    => setSetProperty(element, key, value.asInstanceOf[Set[d]], m)
-//    }
-//  }
-
-  def mapPredicate[T](predicate: P[T]): P[T]
   def toId(id: Any): Any
-  def labelFilter[D, G <: Element, C <: Converter[D, G]](model: Model): Traversal[D, G, C] => Traversal[D, G, C] = labelFilter(model.label)
-  def labelFilter[D, G <: Element, C <: Converter[D, G]](label: String): Traversal[D, G, C] => Traversal[D, G, C]
+
+  def labelFilter[D, G, C <: Converter[D, G]](label: String, traversal: Traversal[D, G, C]): Traversal[D, G, C]
+  def mapPredicate[T](predicate: P[T]): P[T]
+  def V[D <: Product](ids: EntityId*)(implicit model: Model.Vertex[D], graph: Graph): Traversal.V[D]
+  def V(label: String, ids: EntityId*)(implicit graph: Graph): Traversal[Vertex, Vertex, Converter.Identity[Vertex]]
+  def E[D <: Product](ids: EntityId*)(implicit model: Model.Edge[D], graph: Graph): Traversal.E[D]
+  def E(label: String, ids: EntityId*)(implicit graph: Graph): Traversal[Edge, Edge, Converter.Identity[Edge]]
+  def traversal()(implicit graph: Graph): GraphTraversalSource
 
   val extraModels: Seq[Model]
   val binaryLinkModel: Model.Edge[BinaryLink]
   val binaryModel: Model.Vertex[Binary]
+
+  var printByteCode: Boolean   = true
+  var printStrategies: Boolean = false
+  var printExplain: Boolean    = false
+  var printProfile: Boolean    = false
 }
 
 abstract class BaseDatabase extends Database {
@@ -131,9 +102,17 @@ abstract class BaseDatabase extends Database {
 
   override val binaryMapping: SingleMapping[Array[Byte], String] = UMapping.binary
 
-  override def version(module: String): Int = roTransaction(graph => graph.variables.get[Int](s"${module}_version").orElse(0))
+  override def version(module: String): Int =
+    roTransaction { graph =>
+      logger.debug(s"Get version of $module")
+      graph.variables.get[Int](s"${module}_version").orElse(0)
+    }
 
-  override def setVersion(module: String, v: Int): Try[Unit] = tryTransaction(graph => Try(graph.variables.set(s"${module}_version", v)))
+  override def setVersion(module: String, v: Int): Try[Unit] =
+    tryTransaction { graph =>
+      logger.debug(s"Set version of $module to $v")
+      Try(graph.variables.set(s"${module}_version", v))
+    }
 
   override def transaction[A](body: Graph => A): A = tryTransaction(graph => Try(body(graph))).get
 
@@ -160,7 +139,7 @@ abstract class BaseDatabase extends Database {
       _ <- createSchema(schemaObject.modelList ++ extraModels)
       _ = schemaObject.initialValues.foreach { iv =>
         tryTransaction { graph =>
-          Try(iv.create()(this, graph, authContext))
+          Try(iv.create()(graph, authContext))
           Success(())
         }
       }
@@ -181,7 +160,7 @@ abstract class BaseDatabase extends Database {
   }
 
   override def createVertex[V <: Product](graph: Graph, authContext: AuthContext, model: Model.Vertex[V], v: V): V with Entity = {
-    val createdVertex = model.create(v)(this, graph)
+    val createdVertex = model.create(v)(graph)
     val entity        = DummyEntity(model.label, createdVertex.id(), authContext.userId)
     createdAtMapping.setProperty(createdVertex, "_createdAt", entity._createdAt)
     createdByMapping.setProperty(createdVertex, "_createdBy", entity._createdBy)
@@ -198,10 +177,10 @@ abstract class BaseDatabase extends Database {
       to: TO with Entity
   ): E with Entity = {
     val edgeMaybe = for {
-      f <- Traversal.V(from._id)(graph).headOption
-      t <- Traversal.V(to._id)(graph).headOption
+      f <- graph.V(from._label, from._id).headOption
+      t <- graph.V(to._label, to._id).headOption
     } yield {
-      val createdEdge = model.create(e, f, t)(this, graph)
+      val createdEdge = model.create(e, f, t)(graph)
       val entity      = DummyEntity(model.label, createdEdge.id(), authContext.userId)
       createdAtMapping.setProperty(createdEdge, "_createdAt", entity._createdAt)
       createdByMapping.setProperty(createdEdge, "_createdBy", entity._createdBy)
@@ -209,8 +188,8 @@ abstract class BaseDatabase extends Database {
       model.addEntity(e, entity)
     }
     edgeMaybe.getOrElse {
-      val error = Traversal.V(from._id)(graph).headOption.map(_ => "").getOrElse(s"${from._label}:${from._id} not found ") +
-        Traversal.V(to._id)(graph).headOption.map(_ => "").getOrElse(s"${to._label}:${to._id} not found")
+      val error = graph.V(from._label, from._id).headOption.map(_ => "").getOrElse(s"${from._label}:${from._id} not found ") +
+        graph.V(to._label, to._id).headOption.map(_ => "").getOrElse(s"${to._label}:${to._id} not found")
       throw InternalError(s"Fail to create edge between ${from._label}:${from._id} and ${to._label}:${to._id}, $error")
     }
   }
@@ -236,7 +215,7 @@ object Binary {
     override val fields: Map[String, Mapping[_, _, _]] =
       Map("data" -> UMapping.binary, "folder" -> UMapping.string.optional, "attachmentId" -> UMapping.string.optional)
 
-    override def create(binary: Binary)(implicit db: Database, graph: Graph): Vertex = {
+    override def create(binary: Binary)(implicit graph: Graph): Vertex = {
       val v = graph.addVertex(label)
       UMapping.binary.setProperty(v, "data", binary.data)
       UMapping.string.optional.setProperty(v, "folder", binary.folder)
@@ -273,7 +252,7 @@ object Binary {
 case class BinaryLink()
 object BinaryLink {
   lazy val model: Model.Edge[BinaryLink] = new EdgeModel {
-    override def create(e: BinaryLink, from: Vertex, to: Vertex)(implicit db: Database, graph: Graph): Edge = from.addEdge(label, to)
+    override def create(e: BinaryLink, from: Vertex, to: Vertex)(implicit graph: Graph): Edge = from.addEdge(label, to)
     override type E = BinaryLink
     override val label: String                                = "NextChunk"
     override val indexes: Seq[(IndexType.Value, Seq[String])] = Nil

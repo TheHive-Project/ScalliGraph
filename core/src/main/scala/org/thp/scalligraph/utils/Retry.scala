@@ -1,11 +1,10 @@
 package org.thp.scalligraph.utils
 
-import java.util.concurrent.ThreadLocalRandom
-
-import akka.actor.{ActorSystem, Scheduler}
+import akka.actor.Scheduler
 import akka.pattern.after
 import play.api.Logger
 
+import java.util.concurrent.ThreadLocalRandom
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.concurrent.{blocking, Await, ExecutionContext, Future}
 import scala.util.{Failure, Try}
@@ -27,10 +26,13 @@ class Retry(maxTries: Int, exceptions: Seq[Class[_]]) {
   def withTry[T](fn: => Try[T]): Try[T]                  = runTry(1, fn)
   def on[E <: Throwable](implicit manifest: Manifest[E]) = new Retry(maxTries, exceptions :+ manifest.runtimeClass)
 
-  def delayed(delay: Int => FiniteDuration)(implicit system: ActorSystem) =
-    new DelayRetry(maxTries, exceptions, system.scheduler, delay, system.dispatcher)
+  def delayed(delay: Int => FiniteDuration)(implicit scheduler: Scheduler, ec: ExecutionContext) =
+    new DelayRetry(maxTries, exceptions, scheduler, delay, ec)
 
-  def withBackoff(minBackoff: FiniteDuration, maxBackoff: FiniteDuration, randomFactor: Double)(implicit system: ActorSystem): DelayRetry =
+  def withBackoff(minBackoff: FiniteDuration, maxBackoff: FiniteDuration, randomFactor: Double)(implicit
+      scheduler: Scheduler,
+      ec: ExecutionContext
+  ): DelayRetry =
     delayed { n => // from akka.pattern.BackoffSupervisor.calculateDelay
       val rnd                = 1.0 + ThreadLocalRandom.current().nextDouble() * randomFactor
       val calculatedDuration = Try(maxBackoff.min(minBackoff * math.pow(2, n.toDouble)) * rnd).getOrElse(maxBackoff)

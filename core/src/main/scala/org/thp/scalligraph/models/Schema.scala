@@ -1,8 +1,8 @@
 package org.thp.scalligraph.models
 
 import javax.inject.{Inject, Provider, Singleton}
-import org.apache.tinkerpop.gremlin.structure.Graph
 import org.thp.scalligraph.auth.AuthContext
+import org.thp.scalligraph.traversal.Graph
 import play.api.Logger
 
 import scala.collection.immutable
@@ -10,19 +10,20 @@ import scala.util.{Success, Try}
 
 case class InitialValue[V <: Product](model: Model.Vertex[V], value: V) {
 
-  def create()(implicit db: Database, graph: Graph, authContext: AuthContext): V with Entity =
-    db.createVertex[V](graph, authContext, model, value)
+  def create()(implicit graph: Graph, authContext: AuthContext): V with Entity =
+    graph.db.createVertex[V](graph, authContext, model, value)
 }
 
 case class SchemaStatus(name: String, currentVersion: Int, expectedVersion: Int, error: Option[Throwable])
 
-trait UpdatableSchema { _: Schema =>
+trait UpdatableSchema extends Schema {
+  val authContext: AuthContext
   val operations: Operations
   lazy val name: String                           = operations.schemaName
   def schemaStatus: Option[SchemaStatus]          = _updateStatus
   private var _updateStatus: Option[SchemaStatus] = None
-  def update(db: Database)(implicit authContext: AuthContext): Try[Unit] = {
-    val result = operations.execute(db, this)
+  def update(db: Database): Try[Unit] = {
+    val result = operations.execute(db, this)(authContext)
     _updateStatus = Some(SchemaStatus(name, db.version(name), operations.operations.length + 1, result.fold(Some(_), _ => None)))
     result
   }
@@ -51,11 +52,11 @@ object Schema {
 }
 
 @Singleton
-class GlobalSchema @Inject() (schemas: immutable.Set[Schema]) extends Provider[Schema] {
+class GlobalSchema @Inject() (schemas: immutable.Set[UpdatableSchema]) extends Provider[Schema] {
   lazy val logger: Logger = Logger(getClass)
   lazy val schema: Schema = {
     logger.debug(s"Build global schema from ${schemas.map(_.getClass.getSimpleName).mkString("+")}")
-    schemas.reduceOption(_ + _).getOrElse(Schema.empty)
+    schemas.reduceOption[Schema](_ + _).getOrElse(Schema.empty)
   }
   override def get(): Schema = schema
 }

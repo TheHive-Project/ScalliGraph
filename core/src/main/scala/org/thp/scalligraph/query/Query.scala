@@ -1,12 +1,10 @@
 package org.thp.scalligraph.query
 
-import org.apache.tinkerpop.gremlin.structure.Graph
 import org.scalactic.Good
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
-import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, IteratorOutput, Traversal}
+import org.thp.scalligraph.traversal.{Converter, Graph, IteratorOutput, Traversal}
 
 import scala.language.existentials
 import scala.reflect.runtime.{universe => ru}
@@ -60,7 +58,9 @@ object Query {
       override def apply(param: Unit, fromType: ru.Type, from: Any, authContext: AuthContext): Any = f(from.asInstanceOf[Graph], authContext)
     }
 
-  def initWithParam[P: ru.TypeTag, T: ru.TypeTag](queryName: String, parser: FieldsParser[P], f: (P, Graph, AuthContext) => T): ParamQuery[P] =
+  def initWithParam[P: ru.TypeTag, T: ru.TypeTag](queryName: String, f: (P, Graph, AuthContext) => T)(implicit
+      parser: FieldsParser[P]
+  ): ParamQuery[P] =
     new ParamQuery[P] {
       override def paramParser(tpe: ru.Type): FieldsParser[P]                                   = parser
       override val name: String                                                                 = queryName
@@ -77,7 +77,9 @@ object Query {
       override def apply(param: Unit, fromType: ru.Type, from: Any, authContext: AuthContext): Any = f(from.asInstanceOf[F], authContext)
     }
 
-  def withParam[P: ru.TypeTag, F: ru.TypeTag, T: ru.TypeTag](queryName: String, parser: FieldsParser[P], f: (P, F, AuthContext) => T): ParamQuery[P] =
+  def withParam[P: ru.TypeTag, F: ru.TypeTag, T: ru.TypeTag](queryName: String, f: (P, F, AuthContext) => T)(implicit
+      parser: FieldsParser[P]
+  ): ParamQuery[P] =
     new ParamQuery[P] {
       override def paramParser(tpe: ru.Type): FieldsParser[P]                                   = parser
       override val name: String                                                                 = queryName
@@ -119,14 +121,13 @@ object Query {
     }
 }
 
-class SortQuery(db: Database, publicProperties: PublicProperties) extends ParamQuery[InputSort] {
+class SortQuery(publicProperties: PublicProperties) extends ParamQuery[InputSort] {
   override def paramParser(tpe: ru.Type): FieldsParser[InputSort] = InputSort.fieldsParser
   override val name: String                                       = "sort"
   override def checkFrom(t: ru.Type): Boolean                     = SubType(t, ru.typeOf[Traversal[_, _, _]])
   override def toType(t: ru.Type): ru.Type                        = t
   override def apply(inputSort: InputSort, fromType: ru.Type, from: Any, authContext: AuthContext): Any =
     inputSort(
-      db,
       publicProperties,
       fromType,
       from.asInstanceOf[Traversal.Unk],
@@ -135,19 +136,18 @@ class SortQuery(db: Database, publicProperties: PublicProperties) extends ParamQ
 }
 
 object FilterQuery {
-  def apply(db: Database, publicProperties: PublicProperties)(
+  def apply(publicProperties: PublicProperties)(
       fieldsParser: (
           ru.Type,
           ru.Type => FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]]
       ) => FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]]
-  ): FilterQuery = new FilterQuery(db, publicProperties, fieldsParser :: Nil)
-  def default(db: Database, publicProperties: PublicProperties): FilterQuery =
-    apply(db, publicProperties)(InputFilter.fieldsParser(_, publicProperties, _))
-  def empty(db: Database, publicProperties: PublicProperties) = new FilterQuery(db, publicProperties)
+  ): FilterQuery = new FilterQuery(publicProperties, fieldsParser :: Nil)
+  def default(publicProperties: PublicProperties): FilterQuery =
+    apply(publicProperties)(InputFilter.fieldsParser(_, publicProperties, _))
+  def empty(publicProperties: PublicProperties) = new FilterQuery(publicProperties)
 }
 
 final class FilterQuery(
-    db: Database,
     publicProperties: PublicProperties,
     protected val fieldsParsers: List[
       (ru.Type, ru.Type => FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]]) => FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]]
@@ -160,24 +160,22 @@ final class FilterQuery(
   override def toType(t: ru.Type): ru.Type    = t
   override def apply(inputFilter: InputQuery[Traversal.Unk, Traversal.Unk], fromType: ru.Type, from: Any, authContext: AuthContext): Any =
     inputFilter(
-      db,
       publicProperties,
       fromType,
       from.asInstanceOf[Traversal.Unk], //.asInstanceOf[X forSome { type X <: Traversal.V[BaseVertex][_, X] }],
       authContext
     )
 //  def addParser(parser: (ru.Type, () => FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]])): FilterQuery = new FilterQuery(db, publicProperties, parser :: fieldsParsers)
-  def ++(other: FilterQuery): FilterQuery = new FilterQuery(db, publicProperties, filterQuery.fieldsParsers ::: other.fieldsParsers)
+  def ++(other: FilterQuery): FilterQuery = new FilterQuery(publicProperties, filterQuery.fieldsParsers ::: other.fieldsParsers)
 }
 
-class AggregationQuery(db: Database, publicProperties: PublicProperties, filterQuery: FilterQuery) extends ParamQuery[Aggregation] {
+class AggregationQuery(publicProperties: PublicProperties, filterQuery: FilterQuery) extends ParamQuery[Aggregation] {
   override def paramParser(tpe: ru.Type): FieldsParser[Aggregation] = Aggregation.fieldsParser(filterQuery.paramParser(tpe))
   override val name: String                                         = "aggregation"
   override def checkFrom(t: ru.Type): Boolean                       = SubType(t, ru.typeOf[Traversal[_, _, _]])
   override def toType(t: ru.Type): ru.Type                          = ru.typeOf[Output[_]]
   override def apply(aggregation: Aggregation, fromType: ru.Type, from: Any, authContext: AuthContext): Any =
     aggregation(
-      db,
       publicProperties,
       fromType,
       from.asInstanceOf[Traversal.Unk],
@@ -195,7 +193,6 @@ object CountQuery extends Query {
 
 trait InputQuery[FROM, TO] {
   def apply(
-      db: Database,
       publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: FROM,

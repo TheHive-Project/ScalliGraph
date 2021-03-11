@@ -13,7 +13,7 @@ trait BiConverter[D, G] extends Converter[D, G] {
 }
 
 trait Converter[+D, G] extends (G => D) {
-  def startTraversal: Traversal[D, G, this.type] = new Traversal[D, G, this.type](__.start[G](), this)
+  def startTraversal: Traversal[D, G, this.type] = new Traversal[D, G, this.type](AnonymousGraph, __.start[G](), this)
   def apply(predicate: P[G]): P[_] =
     Option(predicate.getValue).fold(predicate.asInstanceOf[P[D]]) {
       case c: JCollection[_] =>

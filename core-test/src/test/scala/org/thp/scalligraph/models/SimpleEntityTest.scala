@@ -1,10 +1,10 @@
 package org.thp.scalligraph.models
 
-import org.apache.tinkerpop.gremlin.structure.Graph
 import org.specs2.specification.core.Fragments
 import org.thp.scalligraph.BuildVertexEntity
 import org.thp.scalligraph.auth.{AuthContext, UserSrv}
 import org.thp.scalligraph.services.VertexSrv
+import org.thp.scalligraph.traversal.Graph
 import org.thp.scalligraph.traversal.TraversalOps._
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
@@ -19,7 +19,7 @@ object MyEntity {
   val initialValues: Seq[MyEntity] = Seq(MyEntity("ini1", 1), MyEntity("ini1", 2))
 }
 
-class MyEntitySrv(implicit db: Database) extends VertexSrv[MyEntity] {
+class MyEntitySrv extends VertexSrv[MyEntity] {
   def create(e: MyEntity)(implicit graph: Graph, authContext: AuthContext): Try[MyEntity with Entity] = createEntity(e)
 }
 
@@ -30,7 +30,7 @@ class SimpleEntityTest extends PlaySpecification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    implicit val db: Database = dbProvider.get()
+    val db: Database = dbProvider.get()
     db.createSchema(Model.vertex[MyEntity])
     db.addSchemaIndexes(Model.vertex[MyEntity])
     val myEntitySrv: MyEntitySrv = new MyEntitySrv
