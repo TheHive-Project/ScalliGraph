@@ -536,6 +536,8 @@ object TraversalOps extends TraversalPrinter {
       ()
     }
 
+    def barrier(): Traversal[D, G, C] = traversal.onRaw(_.barrier())
+
     def sideEffect[DD, GG, CC <: Converter[DD, GG]](effect: Traversal[D, G, C] => Traversal[DD, GG, CC]): Traversal[D, G, C] =
       traversal.onRaw(_.sideEffect(effect(traversal.start).raw))
 
