@@ -72,6 +72,6 @@ abstract class VertexSrv[V <: Product](implicit val model: Model.Vertex[V]) exte
       }
   }
 
-  def delete(e: V with Entity)(implicit graph: Graph): Try[Unit] =
+  def delete(e: V with Entity)(implicit graph: Graph, authContext: AuthContext): Try[Unit] =
     Try(get(e).remove())
 }
