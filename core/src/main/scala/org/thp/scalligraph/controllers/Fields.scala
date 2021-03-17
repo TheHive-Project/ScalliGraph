@@ -1,8 +1,8 @@
 package org.thp.scalligraph.controllers
 
 import java.nio.file.Path
-
 import org.scalactic.Good
+import org.thp.scalligraph.InternalError
 import play.api.Logger
 import play.api.libs.json._
 import play.api.mvc._
@@ -14,27 +14,29 @@ sealed trait Field {
 
   def get(pathElement: String): Field = FUndefined
 
-  def get(path: FPath): Field = path match {
-    case FPathEmpty => this
-    case _          => FUndefined
-  }
+  def get(path: FPath): Field =
+    path match {
+      case FPathEmpty => this
+      case _          => FUndefined
+    }
 
   def set(path: FPath, field: Field): Field =
-    if (path.isEmpty) field else sys.error(s"$this.set($path, $field)")
+    if (path.isEmpty) field else throw InternalError(s"$this.set($path, $field)")
   def toJson: JsValue
 }
 
 object Field {
   private[Field] lazy val logger: Logger = Logger(getClass)
 
-  def apply(json: JsValue): Field = json match {
-    case JsString(s)  => FString(s)
-    case JsNumber(n)  => FNumber(n.toDouble)
-    case JsBoolean(b) => FBoolean(b)
-    case JsObject(o)  => FObject(o.map { case (k, v) => k -> Field(v) }.toMap)
-    case JsArray(a)   => FSeq(a.map(Field.apply).toList)
-    case JsNull       => FNull
-  }
+  def apply(json: JsValue): Field =
+    json match {
+      case JsString(s)  => FString(s)
+      case JsNumber(n)  => FNumber(n.toDouble)
+      case JsBoolean(b) => FBoolean(b)
+      case JsObject(o)  => FObject(o.map { case (k, v) => k -> Field(v) }.toMap)
+      case JsArray(a)   => FSeq(a.map(Field.apply).toList)
+      case JsNull       => FNull
+    }
 
   def apply(request: Request[AnyContent]): FObject =
     apply(request.body) ++ FObject(
@@ -122,11 +124,12 @@ object FBoolean {
 }
 
 case class FSeq(values: List[Field]) extends Field {
-  override def set(path: FPath, field: Field): Field = path match {
-    case FPathSeq(_, FPathEmpty) => FSeq(values :+ field)
-    case FPathElemInSeq(_, index, tail) =>
-      FSeq(values.patch(index, Seq(values.applyOrElse(index, (_: Int) => FUndefined).set(tail, field)), 1))
-  }
+  override def set(path: FPath, field: Field): Field =
+    path match {
+      case FPathSeq(_, FPathEmpty) => FSeq(values :+ field)
+      case FPathElemInSeq(_, index, tail) =>
+        FSeq(values.patch(index, Seq(values.applyOrElse(index, (_: Int) => FUndefined).set(tail, field)), 1))
+    }
   override def toJson: JsValue = JsArray(values.map(_.toJson))
 }
 
@@ -182,7 +185,7 @@ case class FObject(fields: immutable.Map[String, Field]) extends Field {
     path match {
       case FPathElem(p, tail) =>
         fields.get(p) match {
-          case Some(FSeq(_))        => sys.error(s"$this.set($path, $field)")
+          case Some(FSeq(_))        => throw InternalError(s"$this.set($path, $field)")
           case Some(f)              => FObject(fields.updated(p, f.set(tail, field)))
           case None if tail.isEmpty => FObject(fields.updated(p, field))
           case None                 => FObject(fields.updated(p, FObject().set(tail, field)))
@@ -191,7 +194,7 @@ case class FObject(fields: immutable.Map[String, Field]) extends Field {
         fields.get(p) match {
           case Some(FSeq(s)) => FObject(fields.updated(p, FSeq(s :+ field)))
           case None          => FObject(fields.updated(p, FSeq(List(field))))
-          case _             => sys.error(s"$this.set($path, $field)")
+          case _             => throw InternalError(s"$this.set($path, $field)")
         }
       case FPathElemInSeq(p, idx, tail) =>
         fields.get(p) match {
@@ -199,9 +202,9 @@ case class FObject(fields: immutable.Map[String, Field]) extends Field {
             FObject(fields.updated(p, FSeq(s.patch(idx, Seq(s(idx).set(tail, field)), 1))))
           case Some(FSeq(s)) if s.length == idx =>
             FObject(fields.updated(p, FSeq(s :+ field)))
-          case _ => sys.error(s"$this.set($path, $field)")
+          case _ => throw InternalError(s"$this.set($path, $field)")
         }
-      case _ => sys.error(s"$this.set($path, $field)")
+      case _ => throw InternalError(s"$this.set($path, $field)")
     }
 
   override def get(path: String): Field = fields.getOrElse(path, FUndefined)
@@ -215,14 +218,16 @@ case class FObject(fields: immutable.Map[String, Field]) extends Field {
     else FObject(selectedFields.toMap)
   }
 
-  def getString(path: String): Option[String] = fields.get(path).collect {
-    case FString(s)     => s
-    case FAny(s :: Nil) => s
-  }
+  def getString(path: String): Option[String] =
+    fields.get(path).collect {
+      case FString(s)     => s
+      case FAny(s :: Nil) => s
+    }
 
-  def getNumber(path: String): Option[Double] = fields.get(path).collect {
-    case FNumber(n) => n
-  }
+  def getNumber(path: String): Option[Double] =
+    fields.get(path).collect {
+      case FNumber(n) => n
+    }
 
   override def toJson: JsValue = JsObject(fields.map { case (k, v) => k -> v.toJson })
 }

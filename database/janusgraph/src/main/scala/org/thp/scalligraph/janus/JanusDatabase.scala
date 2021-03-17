@@ -484,7 +484,7 @@ class JanusDatabase(
     edgeMaybe.getOrElse {
       val error = graph.V(from._label, from._id).headOption.map(_ => "").getOrElse(s"${from._label}:${from._id} not found ") +
         graph.V(to._label, to._id).headOption.map(_ => "").getOrElse(s"${to._label}:${to._id} not found")
-      sys.error(s"Fail to create edge between ${from._label}:${from._id} and ${to._label}:${to._id}, $error")
+      throw InternalError(s"Fail to create edge between ${from._label}:${from._id} and ${to._label}:${to._id}, $error")
     }
   }
 

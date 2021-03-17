@@ -1,6 +1,6 @@
 package org.thp.scalligraph.controllers
 
-import org.thp.scalligraph.InvalidFormatAttributeError
+import org.thp.scalligraph.{InternalError, InvalidFormatAttributeError}
 
 trait FPath {
   val isEmpty: Boolean  = false
@@ -46,7 +46,7 @@ case class FPathSeq(head: String, tail: FPath) extends FPath {
   override def toString: String =
     if (tail.isEmpty) s"$head[]" else s"$head[].$tail"
   override def toSeq(index: Int): FPath =
-    if (tail.isEmpty) sys.error(s"ERROR: $this.toSeq($index)")
+    if (tail.isEmpty) throw InternalError(s"ERROR: $this.toSeq($index)")
     else copy(tail = tail.toSeq(index))
 //  override def startsWith(elem: String): Boolean = head == elem
   override def startsWith(elem: FPath): Option[FPath] =
@@ -64,7 +64,7 @@ case class FPathElemInSeq(head: String, index: Int, tail: FPath) extends FPath {
   override def toString: String =
     if (tail.isEmpty) s"$head[$index]" else s"$head[$index].$tail"
   override def toSeq(index: Int): FPath =
-    if (tail.isEmpty) sys.error(s"ERROR: $this.toSeq($index)")
+    if (tail.isEmpty) throw InternalError(s"ERROR: $this.toSeq($index)")
     else copy(tail = tail.toSeq(index))
 //  override def startsWith(elem: String): Boolean = head == elem
   override def startsWith(elem: FPath): Option[FPath] =
