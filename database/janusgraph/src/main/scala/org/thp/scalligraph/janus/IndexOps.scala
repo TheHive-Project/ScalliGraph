@@ -13,7 +13,8 @@ import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
 
-trait IndexOps { _: JanusDatabase =>
+trait IndexOps {
+  _: JanusDatabase =>
   @tailrec
   private def showIndexProgress(job: IndexJobFuture): Unit =
     if (job.isCancelled)
@@ -104,7 +105,8 @@ trait IndexOps { _: JanusDatabase =>
 
   /**
     * Find the available index name for the specified index base name. If this index is already present and not disable, return None
-    * @param mgmt JanusGraph management
+    *
+    * @param mgmt          JanusGraph management
     * @param baseIndexName Base index name
     * @return the available index name or Right if index is present
     */
@@ -127,7 +129,8 @@ trait IndexOps { _: JanusDatabase =>
 
   /**
     * Find the available index name for the specified index base name. If this index is already present and not disable, return None
-    * @param mgmt JanusGraph management
+    *
+    * @param mgmt          JanusGraph management
     * @param baseIndexName Base index name
     * @return the available index name or Right if index is present
     */
@@ -197,6 +200,13 @@ trait IndexOps { _: JanusDatabase =>
                 )
                 mgmt.addIndexKey(index, prop, JanusMapping.TEXTSTRING.asParameter())
               }
+            case (IndexType.fulltextOnly, properties) =>
+              properties.foreach { prop =>
+                logger.debug(
+                  s"Add full-text only index on property ${prop.name()}:${prop.dataType().getSimpleName} (${prop.cardinality()}) to ${elementLabel.name()}"
+                )
+                mgmt.addIndexKey(index, prop, JanusMapping.TEXT.asParameter())
+              }
             case _ => // Not possible
           }
     }
@@ -212,7 +222,8 @@ trait IndexOps { _: JanusDatabase =>
 
     val labelProperty = getPropertyKey("_label")
 
-    val (mixedIndexes, compositeIndexes) = indexDefinitions.partition(i => i._1 == IndexType.fulltext || i._1 == IndexType.standard)
+    val (mixedIndexes, compositeIndexes) =
+      indexDefinitions.partition(i => i._1 == IndexType.fulltext || i._1 == IndexType.standard || i._1 == IndexType.fulltextOnly)
     if (mixedIndexes.nonEmpty)
       if (fullTextIndexAvailable) createMixedIndex(mgmt, elementClass, elementLabel, mixedIndexes)
       else logger.warn(s"Mixed index is not available.")
@@ -253,4 +264,20 @@ trait IndexOps { _: JanusDatabase =>
       }
       Success(())
     }.flatMap(_ => enableIndexes())
+
+  override def removeIndex(model: String, indexType: IndexType.Value, fields: Seq[String]): Try[Unit] =
+    managementTransaction { mgmt =>
+      val eitherIndex = indexType match {
+        case IndexType.basic | IndexType.unique =>
+          val baseIndexName = (model +: fields).map(_.replaceAll("[^\\p{Alnum}]", "").toLowerCase().capitalize).mkString
+          findFirstAvailableCompositeIndex(mgmt, baseIndexName)
+        case IndexType.standard | IndexType.fulltext | IndexType.fulltextOnly =>
+          findFirstAvailableMixedIndex(mgmt, model)
+      }
+      eitherIndex
+        .toOption
+        .flatMap(indexName => Option(mgmt.getGraphIndex(indexName)))
+        .foreach(index => mgmt.updateIndex(index, SchemaAction.DISABLE_INDEX).get())
+      Success(())
+    }
 }

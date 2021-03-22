@@ -14,7 +14,7 @@ import scala.language.experimental.macros
 class Readonly extends StaticAnnotation
 
 object IndexType extends Enumeration {
-  val basic, standard, unique, fulltext = Value
+  val basic, standard, unique, fulltext, fulltextOnly = Value
 }
 class DefineIndex(indexType: IndexType.Value, fields: String*) extends StaticAnnotation
 

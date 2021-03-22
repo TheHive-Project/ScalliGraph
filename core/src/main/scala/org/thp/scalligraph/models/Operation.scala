@@ -16,10 +16,10 @@ case class AddEdgeModel(label: String, mapping: Map[String, Mapping[_, _, _]])  
 case class AddProperty(model: String, propertyName: String, mapping: Mapping[_, _, _])                                             extends Operation
 case class RemoveProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean)                                       extends Operation
 case class UpdateGraph(model: String, update: Traversal[Vertex, Vertex, Converter.Identity[Vertex]] => Try[Unit], comment: String) extends Operation
-case class AddVertices()
-case class AddIndex(model: String, indexType: IndexType.Value, properties: Seq[String]) extends Operation
-object RebuildIndexes                                                                   extends Operation
-
+case class AddIndex(model: String, indexType: IndexType.Value, properties: Seq[String])                                            extends Operation
+object RebuildIndexes                                                                                                              extends Operation
+object NoOperation                                                                                                                 extends Operation
+case class RemoveIndex(model: String, indexType: IndexType.Value, fields: Seq[String])                                             extends Operation
 case class DBOperation[DB <: Database: ClassTag](comment: String, op: DB => Try[Unit]) extends Operation {
   def apply(db: Database): Try[Unit] =
     if (classTag[DB].runtimeClass.isAssignableFrom(db.getClass))
@@ -27,7 +27,6 @@ case class DBOperation[DB <: Database: ClassTag](comment: String, op: DB => Try[
     else
       Success(())
 }
-object NoOperation extends Operation
 
 object Operations {
   def apply(schemaName: String): Operations = new Operations(schemaName, Nil)
@@ -51,8 +50,9 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
     addOperations(AddIndex(model, indexType, properties))
   def dbOperation[DB <: Database: ClassTag](comment: String)(op: DB => Try[Unit]): Operations =
     addOperations(DBOperation[DB](comment, op))
-  def noop: Operations           = addOperations(NoOperation)
-  def rebuildIndexes: Operations = addOperations(RebuildIndexes)
+  def noop: Operations                                                                    = addOperations(NoOperation)
+  def rebuildIndexes: Operations                                                          = addOperations(RebuildIndexes)
+  def removeIndex(model: String, indexType: IndexType.Value, fields: String*): Operations = addOperations(RemoveIndex(model, indexType, fields))
 
   def execute(db: Database, schema: Schema)(implicit authContext: AuthContext): Try[Unit] =
     db.version(schemaName) match {
@@ -91,6 +91,8 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
                 logger.info(s"$schemaName: Rebuild all indexes")
                 db.rebuildIndexes()
                 Success(())
+              case RemoveIndex(model, indexType, fields) =>
+                db.removeIndex(model, indexType, fields)
             }).flatMap(_ => db.setVersion(schemaName, v + 2))
           case (acc, _) => acc
         }
