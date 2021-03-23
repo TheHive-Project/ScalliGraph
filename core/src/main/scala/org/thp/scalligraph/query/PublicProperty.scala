@@ -66,7 +66,12 @@ trait PropertyFilter[M] {
 class FieldPropertyFilter[E <: Product, D](fieldName: String, mapping: Mapping[_, D, _])(implicit val fieldsParser: FieldsParser[D])
     extends PropertyFilter[D] {
   override def apply(path: FPath, traversal: Traversal.Unk, authContext: AuthContext, predicate: P[_]): Traversal.Unk =
-    traversal.onRaw(_.has(fieldName, predicate.map(v => mapping.asInstanceOf[Mapping[Any, Any, Any]].reverse(v))))
+    traversal.onRaw(
+      _.has(
+        fieldName,
+        predicate.mapPred(v => mapping.asInstanceOf[Mapping[Any, Any, Any]].reverse(v), traversal.graph.db.mapPredicate[Any])
+      )
+    )
   override def existenceTest(path: FPath, traversal: Traversal.Unk, authContext: AuthContext, exist: Boolean): Traversal.Unk =
     if (exist) traversal.onRaw(_.has(fieldName))
     else traversal.onRaw(_.hasNot(fieldName))
@@ -75,7 +80,11 @@ class FieldPropertyFilter[E <: Product, D](fieldName: String, mapping: Mapping[_
 class TraversalPropertyFilter[D](select: TraversalSelect, mapping: Mapping[_, D, _])(implicit val fieldsParser: FieldsParser[D])
     extends PropertyFilter[D] {
   override def apply(path: FPath, traversal: Traversal.Unk, authContext: AuthContext, predicate: P[_]): Traversal.Unk =
-    traversal.filter(t => select(path, t, authContext).is(predicate.map(v => mapping.asInstanceOf[Mapping[Any, Any, Any]].reverse(v))))
+    traversal.filter(t =>
+      select(path, t, authContext).is(
+        predicate.mapPred(v => mapping.asInstanceOf[Mapping[Any, Any, Any]].reverse(v), traversal.graph.db.mapPredicate)
+      )
+    )
   override def existenceTest(path: FPath, traversal: Traversal.Unk, authContext: AuthContext, exist: Boolean): Traversal.Unk =
     if (exist) traversal.filter(t => select(path, t, authContext))
     else traversal.filterNot(t => select(path, t, authContext))
