@@ -271,7 +271,7 @@ class JanusDatabase(
             Failure(e)
         }
     localTransaction.set(oldTx)
-    MDC.remove("tx")
+    Option(oldTx).fold(MDC.remove("tx"))(t => MDC.put("tx", f"${System.identityHashCode(t)}%08x"))
     result
   }
 
@@ -294,10 +294,13 @@ class JanusDatabase(
       .withTry {
         janusGraph.synchronized {
           val mgmt = janusGraph.openManagement()
-          Try(body(mgmt))
+          MDC.put("tx", f"mgmt-${System.identityHashCode(mgmt)}%08x")
+          val result = Try(body(mgmt))
             .flatten
             .map(commitTransaction(mgmt))
             .recoverWith(rollbackTransaction(mgmt))
+          MDC.remove("tx")
+          result
         }
       }
   }

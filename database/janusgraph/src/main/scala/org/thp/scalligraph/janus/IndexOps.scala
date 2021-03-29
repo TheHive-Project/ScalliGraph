@@ -4,7 +4,6 @@ import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex}
 import org.janusgraph.core.schema.JanusGraphManagement.IndexJobFuture
 import org.janusgraph.core.schema.{JanusGraphManagement, JanusGraphSchemaType, SchemaAction, SchemaStatus, Mapping => JanusMapping}
 import org.janusgraph.graphdb.database.management.ManagementSystem
-import org.janusgraph.graphdb.olap.job.IndexRepairJob
 import org.thp.scalligraph.models.{EdgeModel, IndexType, Model, VertexModel}
 import org.thp.scalligraph.{InternalError, RichSeq}
 
@@ -16,16 +15,15 @@ import scala.util.{Failure, Success, Try}
 trait IndexOps {
   _: JanusDatabase =>
   @tailrec
-  private def showIndexProgress(job: IndexJobFuture): Unit =
+  private def showIndexProgress(jobId: String, job: IndexJobFuture): Unit =
     if (job.isCancelled)
-      logger.warn("Reindex job has been cancelled")
+      logger.warn(s"Reindex job $jobId has been cancelled")
     else if (job.isDone)
-      logger.info("Reindex job is finished")
+      logger.info(s"Reindex job $jobId is finished")
     else {
-      val scanMetrics = job.getIntermediateResult
-      logger.info(s"Reindex job is running: ${scanMetrics.getCustom(IndexRepairJob.ADDED_RECORDS_COUNT)} record(s) indexed")
+      logger.info(s"Reindex job $jobId is running")
       Thread.sleep(1000)
-      showIndexProgress(job)
+      showIndexProgress(jobId, job)
     }
 
   def listIndexesWithStatus(status: SchemaStatus): Try[Iterable[String]] =
@@ -59,10 +57,12 @@ trait IndexOps {
   private def reindex(indexName: String): Try[Unit] =
     managementTransaction { mgmt => // enable index by reindexing the existing data
       Try {
-        logger.info(s"Reindex data for $indexName")
         val index = mgmt.getGraphIndex(indexName)
         scala.concurrent.blocking {
-          showIndexProgress(mgmt.updateIndex(index, SchemaAction.REINDEX))
+          val job   = mgmt.updateIndex(index, SchemaAction.REINDEX)
+          val jobId = f"${System.identityHashCode(job)}%08x"
+          logger.info(s"Reindex data for $indexName (job: $jobId)")
+          showIndexProgress(jobId, job)
         }
       }
     }
