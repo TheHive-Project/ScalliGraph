@@ -13,12 +13,13 @@ import org.thp.scalligraph.janus.JanusClusterManagerActor._
 import org.thp.scalligraph.models.{Database, UpdatableSchema}
 import org.thp.scalligraph.traversal.TraversalOps.logger
 import play.api.Configuration
+import play.api.inject.ApplicationLifecycle
 
 import javax.inject.{Inject, Provider, Singleton}
 import scala.collection.JavaConverters._
 import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
-import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.{Await, ExecutionContext, Future}
 
 @Singleton
 class JanusDatabaseProvider @Inject() (
@@ -26,6 +27,7 @@ class JanusDatabaseProvider @Inject() (
     schemas: immutable.Set[UpdatableSchema],
     system: ActorSystem,
     singleInstance: SingleInstance,
+    applicationLifecycle: ApplicationLifecycle,
     implicit val scheduler: Scheduler,
     implicit val ec: ExecutionContext
 ) extends Provider[Database] {
@@ -90,7 +92,7 @@ class JanusDatabaseProvider @Inject() (
     val dbInitialisationTimeout   = configuration.get[FiniteDuration]("db.initialisationTimeout")
     implicit val timeout: Timeout = Timeout(dbInitialisationTimeout)
 
-    configuration
+    val databaseInstance = configuration
       .getOptional[String]("db.janusgraph.index.search.backend")
       .collect {
         case "elasticsearch" => new ElasticsearchIndexBackend
@@ -137,5 +139,7 @@ class JanusDatabaseProvider @Inject() (
         logger.warn("Indexer is not configured. Some queries could be very slow")
         new JanusDatabase(configuration, system, singleInstance)
       }
+    applicationLifecycle.addStopHook(() => Future(databaseInstance.close()))
+    databaseInstance
   }
 }
