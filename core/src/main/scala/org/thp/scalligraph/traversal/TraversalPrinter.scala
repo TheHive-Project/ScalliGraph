@@ -116,7 +116,8 @@ trait TraversalPrinter {
             val pop =
               if (s.getPop == Pop.last) ""
               else s"${s.getPop}, "
-            s"select($pop${s.getScopeKeys.asScala.map('"' + _ + '"').mkString(", ")})${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"
+            val selectEntries = s.getByTraversals.asScala.toSeq
+            s"select($pop${selectEntries.map(e => '"' + e._1 + '"').mkString(", ")})${selectEntries.map(e => printBy(e._2, None)).mkString}"
           case s: SelectOneStep[_, _] =>
             val pop =
               if (s.getPop == Pop.last) ""
