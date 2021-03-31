@@ -295,6 +295,7 @@ class JanusDatabase(
         janusGraph.synchronized {
           val mgmt = janusGraph.openManagement()
           MDC.put("tx", f"mgmt-${System.identityHashCode(mgmt)}%08x")
+          logger.debug("Begin of management transaction")
           val result = Try(body(mgmt))
             .flatten
             .map(commitTransaction(mgmt))

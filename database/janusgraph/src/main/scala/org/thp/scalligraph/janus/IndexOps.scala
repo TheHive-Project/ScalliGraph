@@ -38,7 +38,7 @@ trait IndexOps {
   private def waitRegistration(indexName: String): Unit =
     scala.concurrent.blocking {
       logger.info(s"Wait for the index $indexName to become available")
-      ManagementSystem.awaitGraphIndexStatus(janusGraph, indexName).call()
+      ManagementSystem.awaitGraphIndexStatus(janusGraph, indexName).status(SchemaStatus.REGISTERED, SchemaStatus.ENABLED).call()
       ()
     }
 
@@ -172,8 +172,9 @@ trait IndexOps {
               if (prop.dataType() == classOf[String]) index.addKey(prop, JanusMapping.STRING.asParameter())
               else index.addKey(prop, JanusMapping.DEFAULT.asParameter())
             }
-          case (IndexType.fulltext, properties) => properties.foreach(p => index.addKey(getPropertyKey(p), JanusMapping.TEXTSTRING.asParameter()))
-          case _                                => // Not possible
+          case (IndexType.fulltext, properties)     => properties.foreach(p => index.addKey(getPropertyKey(p), JanusMapping.TEXTSTRING.asParameter()))
+          case (IndexType.fulltextOnly, properties) => properties.foreach(p => index.addKey(getPropertyKey(p), JanusMapping.TEXT.asParameter()))
+          case _                                    => // Not possible
         }
         index.buildMixedIndex("search")
         ()

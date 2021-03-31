@@ -50,12 +50,13 @@ class ContextPropagatingDisptacher(
       shutdownTimeout
     ) { self =>
 
-  override def prepare(): ExecutionContext = new ExecutionContext {
-    // capture the context
-    val context: CapturedDiagnosticContext = DiagnosticContext.capture()
-    def execute(r: Runnable): Unit         = self.execute(() => context.withContext(r.run()))
-    def reportFailure(t: Throwable): Unit  = self.reportFailure(t)
-  }
+  override def prepare(): ExecutionContext =
+    new ExecutionContext {
+      // capture the context
+      val context: CapturedDiagnosticContext = DiagnosticContext.capture()
+      def execute(r: Runnable): Unit         = self.execute(() => context.withContext(r.run()))
+      def reportFailure(t: Throwable): Unit  = self.reportFailure(t)
+    }
 }
 
 /**
@@ -66,15 +67,16 @@ object DiagnosticContext {
   /**
     * Capture the current diagnostic context.
     */
-  def capture(): CapturedDiagnosticContext = new CapturedDiagnosticContext {
-    val maybeMDC: Option[JMap[String, String]] = getDiagnosticContext
+  def capture(): CapturedDiagnosticContext =
+    new CapturedDiagnosticContext {
+      val maybeMDC: Option[JMap[String, String]] = getDiagnosticContext
 
-    def withContext[T](block: => T): T =
-      maybeMDC match {
-        case Some(mdc) => withDiagnosticContext(mdc)(block)
-        case None      => block
-      }
-  }
+      def withContext[T](block: => T): T =
+        maybeMDC match {
+          case Some(mdc) => withDiagnosticContext(mdc)(block)
+          case None      => block
+        }
+    }
 
   /**
     * Get the current diagnostic context.
@@ -96,19 +98,17 @@ object DiagnosticContext {
     assert(requestHeader != null, "RequestHeader must not be null")
     saveDiagnosticContext {
       MDC.put("request", f"${requestHeader.id}%08x")
+      MDC.remove("tx")
       block
     }
   }
 
   def saveDiagnosticContext[T](block: => T): T = {
     val maybeOld = getDiagnosticContext
-    try {
-      block
-    } finally {
-      maybeOld match {
-        case Some(old) => MDC.setContextMap(old)
-        case None      => MDC.clear()
-      }
+    try block
+    finally maybeOld match {
+      case Some(old) => MDC.setContextMap(old)
+      case None      => MDC.clear()
     }
   }
 }
