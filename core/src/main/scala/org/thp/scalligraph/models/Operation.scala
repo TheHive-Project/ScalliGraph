@@ -54,10 +54,12 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
   def rebuildIndexes: Operations                                                          = addOperations(RebuildIndexes)
   def removeIndex(model: String, indexType: IndexType.Value, fields: String*): Operations = addOperations(RemoveIndex(model, indexType, fields))
 
+  def info(schemaName: String, version: Int, message: String): Unit = logger.info(s"*** UPDATE SCHEMA OF $schemaName (${version + 1}): $message")
+
   def execute(db: Database, schema: Schema)(implicit authContext: AuthContext): Try[Unit] =
     db.version(schemaName) match {
       case 0 =>
-        logger.info(s"$schemaName: Create database schema")
+        info(schemaName, operations.length, "Create database schema")
         db.createSchemaFrom(schema)
           .flatMap(_ => db.setVersion(schemaName, operations.length + 1))
       case version =>
@@ -65,33 +67,36 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
           case (Success(_), (ops, v)) if v + 1 >= version =>
             (ops match {
               case AddVertexModel(label) =>
-                logger.info(s"Add vertex model $label to schema")
+                info(schemaName, v, s"Add vertex model $label to schema")
                 db.addVertexModel(label, Map.empty)
               case AddEdgeModel(label, mapping) =>
-                logger.info(s"Add edge model $label to schema")
+                info(schemaName, v, s"Add edge model $label to schema")
                 db.addEdgeModel(label, mapping)
               case AddProperty(model, propertyName, mapping) =>
-                logger.info(s"$schemaName: Add property $propertyName to $model")
+                info(schemaName, v, s"Add property $propertyName to $model")
                 db.addProperty(model, propertyName, mapping)
               case RemoveProperty(model, propertyName, usedOnlyByThisModel) =>
-                logger.info(s"$schemaName: Remove property $propertyName from $model")
+                info(schemaName, v, s"Remove property $propertyName from $model")
                 db.removeProperty(model, propertyName, usedOnlyByThisModel)
               case UpdateGraph(model, update, comment) =>
-                logger.info(s"$schemaName: Update graph: $comment")
+                info(schemaName, v, s"Update graph: $comment")
                 db.tryTransaction(graph => update(db.V(model)(graph)))
                   .recoverWith { case error => Failure(InternalError(s"Unable to execute migration operation: $comment", error)) }
               case AddIndex(model, indexType, properties) =>
-                logger.info(s"$schemaName: Add index in $model for properties: ${properties.mkString(", ")}")
+                info(schemaName, v, s"Add index in $model for properties: ${properties.mkString(", ")}")
                 db.addIndex(model, Seq(indexType -> properties))
               case dbOperation: DBOperation[_] =>
-                logger.info(s"$schemaName: Update database: ${dbOperation.comment}")
+                info(schemaName, v, s"Update database: ${dbOperation.comment}")
                 dbOperation(db)
-              case NoOperation => Success(())
+              case NoOperation =>
+                info(schemaName, v, "No operation")
+                Success(())
               case RebuildIndexes =>
-                logger.info(s"$schemaName: Rebuild all indexes")
+                info(schemaName, v, "Rebuild all indexes")
                 db.rebuildIndexes()
                 Success(())
               case RemoveIndex(model, indexType, fields) =>
+                info(schemaName, v, s"Remove index $model:${fields.mkString(",")}")
                 db.removeIndex(model, indexType, fields)
             }).flatMap(_ => db.setVersion(schemaName, v + 2))
           case (acc, _) => acc
