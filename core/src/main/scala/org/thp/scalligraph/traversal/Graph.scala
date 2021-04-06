@@ -5,10 +5,16 @@ import org.apache.tinkerpop.gremlin.structure.{Edge, Transaction, Vertex, Graph 
 import org.thp.scalligraph.EntityId
 import org.thp.scalligraph.models.{Database, Model}
 
+import java.util.function.Consumer
+
 trait Graph {
   def underlying: TinkerGraph
   def addVertex(label: String): Vertex
-  def tx(): Transaction
+  def addTransactionListener(listener: Consumer[Transaction.Status]): Unit
+  def commit(): Unit
+  def rollback(): Unit
+  def isOpen: Boolean
+  def txId: String
   def traversal(): GraphTraversalSource = db.traversal()(this)
   def variables: TinkerGraph.Variables
   def db: Database
@@ -41,15 +47,23 @@ class GraphWrapper(override val db: Database, val underlying: TinkerGraph) exten
   printStrategies = db.printStrategies
   printExplain = db.printExplain
   printProfile = db.printProfile
-  override def addVertex(label: String): Vertex = underlying.addVertex(label)
-  override def tx(): Transaction                = underlying.tx()
-  override val variables: TinkerGraph.Variables = underlying.variables()
+  override def addVertex(label: String): Vertex                                     = underlying.addVertex(label)
+  override val variables: TinkerGraph.Variables                                     = underlying.variables()
+  override def addTransactionListener(listener: Consumer[Transaction.Status]): Unit = underlying.tx().addTransactionListener(listener)
+  override def commit(): Unit                                                       = underlying.tx().commit()
+  override def rollback(): Unit                                                     = underlying.tx().rollback()
+  override def isOpen: Boolean                                                      = underlying.tx().isOpen
+  override val txId: String                                                         = f"${System.identityHashCode(this)}%08x"
 }
 
 object AnonymousGraph extends Graph {
-  override def underlying: TinkerGraph          = ???
-  override def addVertex(label: String): Vertex = ???
-  override def tx(): Transaction                = ???
-  override def variables: TinkerGraph.Variables = ???
-  override def db: Database                     = ???
+  override def underlying: TinkerGraph                                              = ???
+  override def addVertex(label: String): Vertex                                     = ???
+  override def variables: TinkerGraph.Variables                                     = ???
+  override def db: Database                                                         = ???
+  override def addTransactionListener(listener: Consumer[Transaction.Status]): Unit = ???
+  override def commit(): Unit                                                       = ???
+  override def rollback(): Unit                                                     = ???
+  override def isOpen: Boolean                                                      = ???
+  override val txId: String                                                         = "anonymous"
 }

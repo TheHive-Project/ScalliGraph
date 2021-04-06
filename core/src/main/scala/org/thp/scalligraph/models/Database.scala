@@ -133,7 +133,7 @@ abstract class BaseDatabase extends Database {
     }.map(_._2)
   }
 
-  override def addTransactionListener(listener: Consumer[Status])(implicit graph: Graph): Unit = graph.tx().addTransactionListener(listener)
+  override def addTransactionListener(listener: Consumer[Status])(implicit graph: Graph): Unit = graph.addTransactionListener(listener)
 
   override def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Try[Unit] =
     for {

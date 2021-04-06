@@ -8,11 +8,11 @@ import org.janusgraph.core.JanusGraph
 import org.janusgraph.diskstorage.configuration.{Configuration => JanusConfiguration}
 import org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration
 import org.janusgraph.graphdb.database.StandardJanusGraph
-import org.thp.scalligraph.SingleInstance
+import org.thp.scalligraph.{InternalError, SingleInstance}
 import org.thp.scalligraph.janus.JanusClusterManagerActor._
 import org.thp.scalligraph.models.{Database, UpdatableSchema}
 import org.thp.scalligraph.traversal.TraversalOps.logger
-import play.api.Configuration
+import play.api.{Application, Configuration}
 import play.api.inject.ApplicationLifecycle
 
 import javax.inject.{Inject, Provider, Singleton}
@@ -23,6 +23,7 @@ import scala.concurrent.{Await, ExecutionContext, Future}
 
 @Singleton
 class JanusDatabaseProvider @Inject() (
+    application: Application,
     configuration: Configuration,
     schemas: immutable.Set[UpdatableSchema],
     system: ActorSystem,
@@ -32,7 +33,7 @@ class JanusDatabaseProvider @Inject() (
     implicit val ec: ExecutionContext
 ) extends Provider[Database] {
 
-  lazy val janusClusterManager: ActorRef[Command] = JanusClusterManagerActor.getOrCreateClusterManagerActor(system)
+  lazy val janusClusterManager: ActorRef[Command] = JanusClusterManagerActor.getClusterManagerActor(system)
 
   def dropOtherConnections(db: JanusGraph): Unit = {
     val mgmt = db.openManagement()
@@ -103,7 +104,7 @@ class JanusDatabaseProvider @Inject() (
         val futureDb = janusClusterManager
           .ask[Result](replyTo => JoinCluster(replyTo, indexBackend.name, indexLocation))
           .map {
-            case ClusterInitStart =>
+            case ClusterRequestInit =>
               val initialDb = JanusDatabase.openDatabase(configuration, system)
               dropOtherConnections(initialDb)
               val effectiveDB = if (indexBackend.hasChanged(initialDb, indexLocation)) {
@@ -119,19 +120,36 @@ class JanusDatabaseProvider @Inject() (
                 system,
                 singleInstance
               )
-              schemas.foreach { schema =>
-                schema.update(db)
-                db.addSchemaIndexes(schema)
-              }
-              janusClusterManager ! ClusterReady
-              db
-            case ClusterInitialisedConfigurationIgnored(installedIndexBackend) =>
+              schemas
+                .toTry(_.update(db))
+                .flatMap(_ => schemas.toTry(db.addSchemaIndexes))
+                .fold(
+                  { error =>
+                    janusClusterManager ! ClusterInitFailure
+                    logger.error("***********************************************************************")
+                    logger.error("* Database initialisation has failed. Restart application to retry it *")
+                    logger.error("***********************************************************************")
+                    application.stop()
+                    throw InternalError("Database initialisation failure", error)
+                  },
+                  { _ =>
+                    janusClusterManager ! ClusterInitSuccess
+                    db
+                  }
+                )
+            case ClusterSuccessConfigurationIgnored(installedIndexBackend) =>
               logger.error("The cluster has inconsistent index configuration. Make sure application.conf are equivalent on all nodes in the cluster")
               logger.error(s"Cluster configuration: db.janusgraph.index.search.backend=$installedIndexBackend")
               logger.error(s"Local configuration (ignored): db.janusgraph.index.search.backend=$indexBackend")
               new JanusDatabase(configuration, system, singleInstance)
-            case ClusterInitialised =>
+            case ClusterSuccess =>
               new JanusDatabase(configuration, system, singleInstance)
+            case ClusterFailure =>
+              logger.error("***********************************************************************")
+              logger.error("* Database initialisation has failed. Restart application to retry it *")
+              logger.error("***********************************************************************")
+              application.stop()
+              throw InternalError("Database initialisation failure")
           }
         Await.result(futureDb, dbInitialisationTimeout)
       }

@@ -21,23 +21,35 @@ class JanusClusterSerializer(system: ExtendedActorSystem) extends Serializer {
 
   override def toBinary(o: AnyRef): Array[Byte] =
     o match {
-      case joinCluster: JoinCluster                             => 0.toByte +: Json.toJson(joinCluster).toString.getBytes
-      case ClusterInitStart                                     => Array(1)
-      case ClusterReady                                         => Array(2)
-      case ClusterInitialisedConfigurationIgnored(indexBackend) => 3.toByte +: indexBackend.getBytes
-      case ClusterInitialised                                   => Array(4)
-      case _                                                    => throw new NotSerializableException
+      case joinCluster: JoinCluster                         => 0.toByte +: Json.toJson(joinCluster).toString.getBytes
+      case ClusterRequestInit                               => Array(1)
+      case ClusterInitSuccess                               => Array(2)
+      case ClusterInitFailure                               => Array(3)
+      case ClusterSuccessConfigurationIgnored(indexBackend) => 4.toByte +: indexBackend.getBytes
+      case ClusterSuccess                                   => Array(5)
+      case ClusterFailure                                   => Array(6)
+      case GetStatus(replyTo)                               => 7.toByte +: actorRefResolver.toSerializationFormat(replyTo).getBytes
+      case StatusInit                                       => Array(8)
+      case StatusSuccess                                    => Array(9)
+      case StatusFailure                                    => Array(10)
+      case _                                                => throw new NotSerializableException
     }
 
   override def includeManifest: Boolean = false
 
   override def fromBinary(bytes: Array[Byte], manifest: Option[Class[_]]): AnyRef =
     bytes(0) match {
-      case 0 => Json.parse(bytes.tail).as[JoinCluster]
-      case 1 => ClusterInitStart
-      case 2 => ClusterReady
-      case 3 => ClusterInitialisedConfigurationIgnored(Json.parse(bytes.tail).as[String])
-      case 4 => ClusterInitialised
-      case _ => throw new NotSerializableException
+      case 0  => Json.parse(bytes.tail).as[JoinCluster]
+      case 1  => ClusterRequestInit
+      case 2  => ClusterInitSuccess
+      case 3  => ClusterInitFailure
+      case 4  => ClusterSuccessConfigurationIgnored(new String(bytes.tail))
+      case 5  => ClusterSuccess
+      case 6  => ClusterFailure
+      case 7  => GetStatus(actorRefResolver.resolveActorRef(new String(bytes.tail)))
+      case 8  => StatusInit
+      case 9  => StatusSuccess
+      case 10 => StatusFailure
+      case _  => throw new NotSerializableException
     }
 }

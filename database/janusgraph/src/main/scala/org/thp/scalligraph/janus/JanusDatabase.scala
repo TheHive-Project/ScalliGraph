@@ -7,7 +7,7 @@ import com.typesafe.config.ConfigObject
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource
 import org.apache.tinkerpop.gremlin.process.traversal.{P, Text, TraversalSource}
 import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
-import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Transaction, Vertex, Graph => TinkerGraph}
+import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex, Graph => TinkerGraph}
 import org.janusgraph.core.attribute.{Text => JanusText}
 import org.janusgraph.core.schema.{Mapping => _, _}
 import org.janusgraph.core.{Transaction => _, _}
@@ -29,7 +29,6 @@ import play.api.{Configuration, Logger}
 
 import java.lang.{Long => JLong}
 import java.nio.file.{Files, Paths}
-import java.util.function.Consumer
 import java.util.{Date, Properties}
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
@@ -104,7 +103,7 @@ class JanusDatabase(
     with IndexOps {
   val name = "janus"
 
-  val localTransaction: ThreadLocal[Option[Transaction]] = ThreadLocal.withInitial[Option[Transaction]](() => None)
+  val localTransaction: ThreadLocal[Option[Graph]] = ThreadLocal.withInitial[Option[Graph]](() => None)
   janusGraph.tx.onReadWrite(READ_WRITE_BEHAVIOR.MANUAL)
 
   def this(
@@ -176,28 +175,28 @@ class JanusDatabase(
   }
 
   override def roTransaction[R](body: Graph => R): R = {
-    val graph             = new GraphWrapper(this, janusGraph.buildTransaction().readOnly().start())
-    val tx                = graph.tx()
-    val (oldTx, oldTxMDC) = (localTransaction.get(), Option(MDC.get("tx")))
+    val graph    = new GraphWrapper(this, janusGraph.buildTransaction().readOnly().start())
+    val oldGraph = localTransaction.get()
+    val oldTxId  = Option(MDC.get("tx"))
     try {
-      localTransaction.set(Some(tx))
-      MDC.put("tx", f"${System.identityHashCode(tx)}%08x")
+      localTransaction.set(Some(graph))
+      MDC.put("tx", graph.txId)
       if (logger.isDebugEnabled) {
         logger.debug("Begin of readonly transaction")
         val start = System.currentTimeMillis()
         val r     = body(graph)
         logger.debug(s"End of readonly transaction (${System.currentTimeMillis() - start}ms)")
-        tx.commit()
+        graph.commit()
         r
       } else {
         val r = body(graph)
-        tx.commit()
+        graph.commit()
         r
       }
     } finally {
-      if (tx.isOpen) tx.rollback()
-      oldTxMDC.fold(MDC.remove("tx"))(MDC.put("tx", _))
-      localTransaction.set(oldTx)
+      if (graph.isOpen) graph.rollback()
+      oldTxId.fold(MDC.remove("tx"))(MDC.put("tx", _))
+      localTransaction.set(oldGraph)
     }
   }
 
@@ -210,12 +209,12 @@ class JanusDatabase(
     )
 
   override def source[A, B](body: Graph => (Iterator[A], B)): (Source[A, NotUsed], B) = {
-    val tx       = new GraphWrapper(this, janusGraph.buildTransaction().readOnly().start())
-    val (ite, v) = body(tx)
+    val graph    = new GraphWrapper(this, janusGraph.buildTransaction().readOnly().start())
+    val (ite, v) = body(graph)
     val src = TransactionHandler[Graph, A, NotUsed](
-      () => tx,
-      _.tx().commit(),
-      _.tx().rollback(),
+      () => graph,
+      _.commit(),
+      _.rollback(),
       Flow[Graph].flatMapConcat(_ => Source.fromIterator(() => ite))
     )
     src -> v
@@ -229,20 +228,21 @@ class JanusDatabase(
         .map(_ => r)
     }
 
-    def commitTransaction(tx: Transaction): R => R = { r =>
+    def commitTransaction(graph: Graph): R => R = { r =>
       logger.debug("Committing transaction")
-      tx.commit()
+      graph.commit()
       logger.debug("End of transaction")
       r
     }
 
-    def rollbackTransaction(tx: Transaction): PartialFunction[Throwable, Failure[R]] = {
+    def rollbackTransaction(graph: Graph): PartialFunction[Throwable, Failure[R]] = {
       case t =>
-        Try(tx.rollback())
+        Try(graph.rollback())
         Failure(t)
     }
 
-    val oldTx = localTransaction.get()
+    val oldGraph = localTransaction.get()
+    val oldTxId  = Option(MDC.get("tx"))
     val result =
       Retry(maxAttempts)
         .on[DatabaseException]
@@ -252,15 +252,14 @@ class JanusDatabase(
         .withBackoff(minBackoff, maxBackoff, randomFactor)(system.scheduler, system.dispatcher)
         .withTry {
           val graph = new GraphWrapper(this, janusGraph.buildTransaction().start())
-          val tx    = graph.tx()
-          localTransaction.set(Some(tx))
-          MDC.put("tx", f"${System.identityHashCode(tx)}%08x")
+          localTransaction.set(Some(graph))
+          MDC.put("tx", graph.txId)
           logger.debug("Begin of transaction")
           Try(body(graph))
             .flatten
             .flatMap(executeCallbacks(graph))
-            .map(commitTransaction(tx))
-            .recoverWith(rollbackTransaction(tx))
+            .map(commitTransaction(graph))
+            .recoverWith(rollbackTransaction(graph))
         }
         .recoverWith {
           case t: PermanentLockingException => Failure(new DatabaseException(cause = t))
@@ -270,8 +269,8 @@ class JanusDatabase(
             logger.error(s"Exception raised, rollback (${e.getMessage})")
             Failure(e)
         }
-    localTransaction.set(oldTx)
-    Option(oldTx).fold(MDC.remove("tx"))(t => MDC.put("tx", f"${System.identityHashCode(t)}%08x"))
+    localTransaction.set(oldGraph)
+    oldTxId.fold(MDC.remove("tx"))(MDC.put("tx", _))
     result
   }
 
@@ -307,12 +306,6 @@ class JanusDatabase(
   }
 
   def currentTransactionId(graph: Graph): AnyRef = graph
-
-  override def addTransactionListener(listener: Consumer[Transaction.Status])(implicit graph: Graph): Unit =
-    localTransaction.get() match {
-      case Some(tx) => tx.addTransactionListener(listener)
-      case None     => logger.warn("Trying to add a transaction listener without open transaction")
-    }
 
   override def createSchema(models: Seq[Model]): Try[Unit] =
     managementTransaction { mgmt =>
