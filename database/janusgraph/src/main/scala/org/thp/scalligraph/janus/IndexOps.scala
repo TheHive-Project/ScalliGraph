@@ -2,9 +2,9 @@ package org.thp.scalligraph.janus
 
 import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex}
 import org.janusgraph.core.schema.JanusGraphManagement.IndexJobFuture
-import org.janusgraph.core.schema.{JanusGraphManagement, JanusGraphSchemaType, SchemaAction, SchemaStatus, Mapping => JanusMapping}
+import org.janusgraph.core.schema.{JanusGraphManagement, SchemaAction, SchemaStatus, Mapping => JanusMapping}
 import org.janusgraph.graphdb.database.management.ManagementSystem
-import org.thp.scalligraph.models.{EdgeModel, IndexType, Model, VertexModel}
+import org.thp.scalligraph.models.{IndexType, Model, VertexModel}
 import org.thp.scalligraph.{InternalError, RichSeq}
 
 import java.util.regex.Pattern
@@ -94,12 +94,11 @@ trait IndexOps {
   override def addIndex(model: String, indexDefinition: Seq[(IndexType.Value, Seq[String])]): Try[Unit] =
     managementTransaction { mgmt =>
       Option(mgmt.getVertexLabel(model))
-        .map(_ -> classOf[Vertex])
-        .orElse(Option(mgmt.getEdgeLabel(model)).map(_ -> classOf[Edge]))
-        .fold[Try[Unit]](Failure(InternalError(s"Model $model not found"))) {
-          case (elementLabel, elementClass) =>
-            createIndex(mgmt, elementClass, elementLabel, indexDefinition)
-            Success(())
+        .map(_ => classOf[Vertex])
+        .orElse(Option(mgmt.getEdgeLabel(model)).map(_ => classOf[Edge]))
+        .fold[Try[Unit]](Failure(InternalError(s"Model $model not found"))) { elementClass =>
+          createIndex(mgmt, elementClass, indexDefinition.map(i => (model, i._1, i._2)))
+          Success(())
         }
     }
 
@@ -155,60 +154,62 @@ trait IndexOps {
   private def createMixedIndex(
       mgmt: JanusGraphManagement,
       elementClass: Class[_ <: Element],
-      elementLabel: JanusGraphSchemaType,
-      indexDefinitions: Seq[(IndexType.Value, Seq[String])]
+      indexDefinitions: Seq[(String, IndexType.Value, Seq[String])]
   ): Unit = {
     def getPropertyKey(name: String) = Option(mgmt.getPropertyKey(name)).getOrElse(throw InternalError(s"Property $name doesn't exist"))
 
-    findFirstAvailableMixedIndex(mgmt, elementLabel.name) match {
+    // check if a property hasn't different index types
+    val groupedIndex = indexDefinitions
+      .flatMap(i => i._3.map(_ -> i._2))
+      .groupBy(_._2)
+      .mapValues(_.map(_._1).toSet)
+    findFirstAvailableMixedIndex(mgmt, "global") match {
       case Left(indexName) =>
         logger.debug(s"Creating index on fields $indexName")
-        val index = mgmt.buildIndex(indexName, elementClass).indexOnly(elementLabel)
+        val index = mgmt.buildIndex(indexName, elementClass) //.indexOnly(elementLabel)
         index.addKey(getPropertyKey("_label"), JanusMapping.STRING.asParameter())
-        indexDefinitions.foreach {
-          case (IndexType.standard, properties) =>
+        groupedIndex.foreach {
+          case (IndexType.fulltext, properties)     => properties.foreach(p => index.addKey(getPropertyKey(p), JanusMapping.TEXTSTRING.asParameter()))
+          case (IndexType.fulltextOnly, properties) => properties.foreach(p => index.addKey(getPropertyKey(p), JanusMapping.TEXT.asParameter()))
+          case (_, properties) =>
             properties.foreach { propName =>
               val prop = getPropertyKey(propName)
               if (prop.dataType() == classOf[String]) index.addKey(prop, JanusMapping.STRING.asParameter())
               else index.addKey(prop, JanusMapping.DEFAULT.asParameter())
             }
-          case (IndexType.fulltext, properties)     => properties.foreach(p => index.addKey(getPropertyKey(p), JanusMapping.TEXTSTRING.asParameter()))
-          case (IndexType.fulltextOnly, properties) => properties.foreach(p => index.addKey(getPropertyKey(p), JanusMapping.TEXT.asParameter()))
-          case _                                    => // Not possible
         }
         index.buildMixedIndex("search")
         ()
       case Right(indexName) =>
         val index           = mgmt.getGraphIndex(indexName)
         val indexProperties = index.getFieldKeys.map(_.name())
-        val newProperties = indexDefinitions.map {
+        val newProperties = groupedIndex.map {
           case (tpe, properties) => tpe -> properties.filterNot(indexProperties.contains).map(getPropertyKey)
         }
         newProperties
           .foreach {
-            case (IndexType.standard, properties) =>
-              properties.foreach { prop =>
-                logger.debug(
-                  s"Add index on property ${prop.name()}:${prop.dataType().getSimpleName} (${prop.cardinality()}) to ${elementLabel.name()}"
-                )
-                if (prop.dataType() == classOf[String]) mgmt.addIndexKey(index, prop, JanusMapping.STRING.asParameter())
-                else mgmt.addIndexKey(index, prop, JanusMapping.DEFAULT.asParameter())
-              }
             case (IndexType.fulltext, properties) =>
               properties.foreach { prop =>
                 logger.debug(
-                  s"Add full-text index on property ${prop.name()}:${prop.dataType().getSimpleName} (${prop.cardinality()}) to ${elementLabel.name()}"
+                  s"Add full-text index on property ${prop.name()}:${prop.dataType().getSimpleName} (${prop.cardinality()})"
                 )
                 mgmt.addIndexKey(index, prop, JanusMapping.TEXTSTRING.asParameter())
               }
             case (IndexType.fulltextOnly, properties) =>
               properties.foreach { prop =>
                 logger.debug(
-                  s"Add full-text only index on property ${prop.name()}:${prop.dataType().getSimpleName} (${prop.cardinality()}) to ${elementLabel.name()}"
+                  s"Add full-text only index on property ${prop.name()}:${prop.dataType().getSimpleName} (${prop.cardinality()})"
                 )
                 mgmt.addIndexKey(index, prop, JanusMapping.TEXT.asParameter())
               }
-            case _ => // Not possible
+            case (_, properties) =>
+              properties.foreach { prop =>
+                logger.debug(
+                  s"Add index on property ${prop.name()}:${prop.dataType().getSimpleName} (${prop.cardinality()})"
+                )
+                if (prop.dataType() == classOf[String]) mgmt.addIndexKey(index, prop, JanusMapping.STRING.asParameter())
+                else mgmt.addIndexKey(index, prop, JanusMapping.DEFAULT.asParameter())
+              }
           }
     }
   }
@@ -216,21 +217,22 @@ trait IndexOps {
   private def createIndex(
       mgmt: JanusGraphManagement,
       elementClass: Class[_ <: Element],
-      elementLabel: JanusGraphSchemaType,
-      indexDefinitions: Seq[(IndexType.Value, Seq[String])]
+      indexDefinitions: Seq[(String, IndexType.Value, Seq[String])]
   ): Unit = {
+
     def getPropertyKey(name: String) = Option(mgmt.getPropertyKey(name)).getOrElse(throw InternalError(s"Property $name doesnt exist"))
 
     val labelProperty = getPropertyKey("_label")
 
     val (mixedIndexes, compositeIndexes) =
-      indexDefinitions.partition(i => i._1 == IndexType.fulltext || i._1 == IndexType.standard || i._1 == IndexType.fulltextOnly)
+      indexDefinitions.partition(i => i._2 != IndexType.unique)
     if (mixedIndexes.nonEmpty)
-      if (fullTextIndexAvailable) createMixedIndex(mgmt, elementClass, elementLabel, mixedIndexes)
+      if (fullTextIndexAvailable) createMixedIndex(mgmt, elementClass, indexDefinitions)
       else logger.warn(s"Mixed index is not available.")
     compositeIndexes.foreach {
-      case (indexType, properties) =>
-        val baseIndexName = (elementLabel.name +: properties).map(_.replaceAll("[^\\p{Alnum}]", "").toLowerCase().capitalize).mkString
+      case (label, indexType, properties) =>
+        val elementLabel  = mgmt.getVertexLabel(label)
+        val baseIndexName = (label +: properties).map(_.replaceAll("[^\\p{Alnum}]", "").toLowerCase().capitalize).mkString
         findFirstAvailableCompositeIndex(mgmt, baseIndexName).left.foreach { indexName =>
           val index = mgmt.buildIndex(indexName, elementClass).indexOnly(elementLabel)
           index.addKey(labelProperty)
@@ -246,23 +248,17 @@ trait IndexOps {
 
   override def addSchemaIndexes(models: Seq[Model]): Try[Unit] =
     managementTransaction { mgmt =>
-      findFirstAvailableCompositeIndex(mgmt, "_label_vertex_index").left.foreach { indexName =>
-        mgmt
-          .buildIndex(indexName, classOf[Vertex])
-          .addKey(mgmt.getPropertyKey("_label"))
-          .buildCompositeIndex()
-      }
+//      findFirstAvailableCompositeIndex(mgmt, "_label_vertex_index").left.foreach { indexName =>
+//      findFirstAvailableMixedIndex(mgmt, "label").left.foreach { indexName =>
+//        mgmt
+//          .buildIndex(indexName, classOf[Vertex])
+//          .addKey(mgmt.getPropertyKey("_label"))
+//          .buildMixedIndex("search")
+//      }
 
-      models.foreach {
-        case model: VertexModel =>
-          val vertexLabel = mgmt.getVertexLabel(model.label)
-          createIndex(mgmt, classOf[Vertex], vertexLabel, model.indexes)
-        case model: EdgeModel =>
-          val edgeLabel = mgmt.getEdgeLabel(model.label)
-          createIndex(mgmt, classOf[Edge], edgeLabel, model.indexes)
-        // TODO add index for labels when it will be possible
-        // cf. https://github.com/JanusGraph/janusgraph/issues/283
-      }
+      val (vertexModels, edgeModels) = models.partition(_.isInstanceOf[VertexModel])
+      createIndex(mgmt, classOf[Vertex], vertexModels.flatMap(m => m.indexes.map(i => (m.label, i._1, i._2))))
+      createIndex(mgmt, classOf[Edge], edgeModels.flatMap(m => m.indexes.map(i => (m.label, i._1, i._2))))
       Success(())
     }.flatMap(_ => enableIndexes())
 
@@ -270,7 +266,9 @@ trait IndexOps {
     managementTransaction { mgmt =>
       val eitherIndex = indexType match {
         case IndexType.basic | IndexType.unique =>
-          val baseIndexName = (model +: fields).map(_.replaceAll("[^\\p{Alnum}]", "").toLowerCase().capitalize).mkString
+          val baseIndexName =
+            if (model == "_label_vertex_index") "_label_vertex_index"
+            else (model +: fields).map(_.replaceAll("[^\\p{Alnum}]", "").toLowerCase().capitalize).mkString
           findFirstAvailableCompositeIndex(mgmt, baseIndexName)
         case IndexType.standard | IndexType.fulltext | IndexType.fulltextOnly =>
           findFirstAvailableMixedIndex(mgmt, model)
