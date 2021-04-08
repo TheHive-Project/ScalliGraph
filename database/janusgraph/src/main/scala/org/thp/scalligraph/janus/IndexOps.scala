@@ -274,10 +274,23 @@ trait IndexOps {
         case IndexType.standard | IndexType.fulltext | IndexType.fulltextOnly =>
           findFirstAvailableMixedIndex(mgmt, model)
       }
-      eitherIndex
-        .toOption
-        .flatMap(indexName => Option(mgmt.getGraphIndex(indexName)))
-        .foreach(index => mgmt.updateIndex(index, SchemaAction.DISABLE_INDEX).get())
-      Success(())
+      Success {
+        eitherIndex
+          .toOption
+          .flatMap(indexName => Option(mgmt.getGraphIndex(indexName)))
+          .map { index =>
+            mgmt.updateIndex(index, SchemaAction.DISABLE_INDEX).get()
+            index.name
+          }
+      }
     }
+      .map {
+        case Some(indexName) =>
+          scala.concurrent.blocking {
+            logger.info(s"Wait for the index $indexName to become disabled")
+            ManagementSystem.awaitGraphIndexStatus(janusGraph, indexName).status(SchemaStatus.DISABLED).call()
+          }
+          ()
+        case None =>
+      }
 }
