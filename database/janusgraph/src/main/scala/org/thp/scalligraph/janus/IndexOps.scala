@@ -159,57 +159,58 @@ trait IndexOps {
     def getPropertyKey(name: String) = Option(mgmt.getPropertyKey(name)).getOrElse(throw InternalError(s"Property $name doesn't exist"))
 
     // check if a property hasn't different index types
-    val groupedIndex = indexDefinitions
-      .flatMap(i => i._3.map(_ -> i._2))
-      .groupBy(_._2)
-      .mapValues(_.map(_._1).toSet)
+    val groupedIndex: Map[String, Seq[IndexType.Value]] = indexDefinitions
+      .flatMap {
+        case (_, IndexType.basic, props) => props.map(_ -> IndexType.standard)
+        case (_, IndexType.unique, _)    => Nil
+        case (_, indexType, props)       => props.map(_ -> indexType)
+      }
+      .groupBy(_._1)
+      .filterKeys(!_.startsWith("_"))
+      .mapValues(_.map(_._2).distinct) ++ Seq(
+      "_label"     -> Seq(IndexType.standard),
+      "_createdAt" -> Seq(IndexType.standard),
+      "_createdBy" -> Seq(IndexType.standard),
+      "_updatedAt" -> Seq(IndexType.standard),
+      "_updatedBy" -> Seq(IndexType.standard)
+    )
+
     findFirstAvailableMixedIndex(mgmt, "global") match {
       case Left(indexName) =>
         logger.debug(s"Creating index on fields $indexName")
+
         val index = mgmt.buildIndex(indexName, elementClass) //.indexOnly(elementLabel)
-        index.addKey(getPropertyKey("_label"), JanusMapping.STRING.asParameter())
         groupedIndex.foreach {
-          case (IndexType.fulltext, properties)     => properties.foreach(p => index.addKey(getPropertyKey(p), JanusMapping.TEXTSTRING.asParameter()))
-          case (IndexType.fulltextOnly, properties) => properties.foreach(p => index.addKey(getPropertyKey(p), JanusMapping.TEXT.asParameter()))
-          case (_, properties) =>
-            properties.foreach { propName =>
-              val prop = getPropertyKey(propName)
-              if (prop.dataType() == classOf[String]) index.addKey(prop, JanusMapping.STRING.asParameter())
-              else index.addKey(prop, JanusMapping.DEFAULT.asParameter())
-            }
+          case (p, Seq(IndexType.fulltextOnly)) => index.addKey(getPropertyKey(p), JanusMapping.TEXT.asParameter())
+          case (p, Seq(IndexType.standard)) =>
+            val prop = getPropertyKey(p)
+            if (prop.dataType() == classOf[String]) index.addKey(prop, JanusMapping.STRING.asParameter())
+            else index.addKey(prop, JanusMapping.DEFAULT.asParameter())
+          // otherwise: IndexType.fulltext of multiple index types
+          case (p, _) => index.addKey(getPropertyKey(p), JanusMapping.TEXTSTRING.asParameter())
         }
         index.buildMixedIndex("search")
         ()
       case Right(indexName) =>
         val index           = mgmt.getGraphIndex(indexName)
         val indexProperties = index.getFieldKeys.map(_.name())
-        val newProperties = groupedIndex.map {
-          case (tpe, properties) => tpe -> properties.filterNot(indexProperties.contains).map(getPropertyKey)
-        }
-        newProperties
+
+        groupedIndex
+          .flatMap {
+            case (prop, indexType) if !indexProperties.contains(prop) => Option(getPropertyKey(prop)).map(_ -> indexType)
+          }
           .foreach {
-            case (IndexType.fulltext, properties) =>
-              properties.foreach { prop =>
-                logger.debug(
-                  s"Add full-text index on property ${prop.name()}:${prop.dataType().getSimpleName} (${prop.cardinality()})"
-                )
-                mgmt.addIndexKey(index, prop, JanusMapping.TEXTSTRING.asParameter())
-              }
-            case (IndexType.fulltextOnly, properties) =>
-              properties.foreach { prop =>
-                logger.debug(
-                  s"Add full-text only index on property ${prop.name()}:${prop.dataType().getSimpleName} (${prop.cardinality()})"
-                )
-                mgmt.addIndexKey(index, prop, JanusMapping.TEXT.asParameter())
-              }
-            case (_, properties) =>
-              properties.foreach { prop =>
-                logger.debug(
-                  s"Add index on property ${prop.name()}:${prop.dataType().getSimpleName} (${prop.cardinality()})"
-                )
-                if (prop.dataType() == classOf[String]) mgmt.addIndexKey(index, prop, JanusMapping.STRING.asParameter())
-                else mgmt.addIndexKey(index, prop, JanusMapping.DEFAULT.asParameter())
-              }
+            case (p, Seq(IndexType.fulltextOnly)) =>
+              logger.debug(s"Add full-text only index on property ${p.name()}:${p.dataType().getSimpleName} (${p.cardinality()})")
+              mgmt.addIndexKey(index, p, JanusMapping.TEXT.asParameter())
+            case (p, Seq(IndexType.standard)) =>
+              logger.debug(s"Add index on property ${p.name()}:${p.dataType().getSimpleName} (${p.cardinality()})")
+              if (p.dataType() == classOf[String]) mgmt.addIndexKey(index, p, JanusMapping.STRING.asParameter())
+              else mgmt.addIndexKey(index, p, JanusMapping.DEFAULT.asParameter())
+            // otherwise: IndexType.fulltext of multiple index types
+            case (p, _) =>
+              logger.debug(s"Add full-tex index on property ${p.name()}:${p.dataType().getSimpleName} (${p.cardinality()})")
+              mgmt.addIndexKey(index, p, JanusMapping.TEXTSTRING.asParameter())
           }
     }
   }
