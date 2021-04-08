@@ -25,17 +25,16 @@ import scala.util.Try
 trait TraversalPrinter {
 
   implicit class TraversalPrinterDefs(traversal: Traversal[_, _, _]) {
-    def print: String = {
-      val sb       = new StringBuilder
-      val rawAdmin = traversal.raw.asAdmin()
-      sb.append(printTraversal(rawAdmin)).append('\n')
-      if (traversal.graph.printByteCode) sb.append(rawAdmin.toString).append('\n')
-      if (traversal.graph.printStrategies)
-        sb.append(rawAdmin.getStrategies.toList.asScala.map(_.getClass.getSimpleName).mkString("Strategies: [", ", ", "]")).append('\n')
-      if (traversal.graph.printProfile) sb.append(traversal.clone().raw.profile().next().toString).append('\n')
-      if (traversal.graph.printExplain) sb.append(traversal.raw.explain().toString).append('\n')
-      sb.toString
-    }
+    def printGremlin: String = printTraversal(traversal.raw.asAdmin())
+
+    def printByteCode: String = traversal.raw.toString
+
+    def printStrategies: String =
+      traversal.raw.asAdmin().getStrategies.toList.asScala.map(_.getClass.getSimpleName).mkString("Strategies: [", ", ", "]")
+
+    def printProfile: String = traversal.clone().raw.profile().next().toString
+
+    def printExplain: String = traversal.raw.explain().toString
 
     def printTraversal[A, B](traversal: TinkerTraversal.Admin[A, B]): String =
       traversal match {

@@ -36,17 +36,9 @@ trait Graph {
     }
     new Traversal[D, G, C](this, traversal().inject(1).union(traversals.map(_.raw): _*), traversals.head.converter)
   }
-  var printByteCode: Boolean   = false
-  var printStrategies: Boolean = false
-  var printExplain: Boolean    = false
-  var printProfile: Boolean    = false
 }
 
 class GraphWrapper(override val db: Database, val underlying: TinkerGraph) extends Graph {
-  printByteCode = db.printByteCode
-  printStrategies = db.printStrategies
-  printExplain = db.printExplain
-  printProfile = db.printProfile
   override def addVertex(label: String): Vertex                                     = underlying.addVertex(label)
   override val variables: TinkerGraph.Variables                                     = underlying.variables()
   override def addTransactionListener(listener: Consumer[Transaction.Status]): Unit = underlying.tx().addTransactionListener(listener)

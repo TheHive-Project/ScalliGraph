@@ -56,7 +56,7 @@ abstract class VertexSrv[V <: Product](implicit val model: Model.Vertex[V]) exte
       authContext: AuthContext
   ): Try[(Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]], JsObject)] = {
     val myClone = traversal.clone()
-    logger.debug(s"Execution of: (update)\n${traversal.print}")
+    traversal.debug("update")
     traversal
       .setConverter[Vertex, IdentityConverter[Vertex]](Converter.identity)
       .headOption
