@@ -17,10 +17,13 @@ object EntityIdOrName {
 case class EntityId(override val value: String) extends EntityIdOrName(value) {
   override def fold[A](ifIsId: EntityId => A, ifIsName: String => A): A = ifIsId(this)
   override def toString: String                                         = s"${EntityIdOrName.prefixChar}$value"
+  def isDefined: Boolean                                                = value.nonEmpty
+  def isEmpty: Boolean                                                  = value.isEmpty
 }
 object EntityId {
   def apply(id: AnyRef): EntityId                   = read(id.toString)
   def read(id: String): EntityId                    = EntityIdOrName.fold(id)(new EntityId(_), new EntityId(_))
+  def empty                                         = EntityId("")
   implicit val format: Format[EntityId]             = Format(Reads.StringReads.map(EntityId.read), Writes.StringWrites.contramap(_.toString))
   implicit val fieldsParser: FieldsParser[EntityId] = FieldsParser.string.map("EntityId")(EntityId.read)
 }

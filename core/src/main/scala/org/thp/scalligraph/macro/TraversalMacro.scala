@@ -109,6 +109,19 @@ class TraversalMacro(val c: blackbox.Context) extends MacroUtil {
     q"$traversal.onRaw(_.hasNot(${name.toString}))"
   }
 
+  def isEmptyId(selector: Tree)(ev: Tree): Tree = {
+    val traversalOps: Tree = c.prefix.tree
+    val traversal          = q"$traversalOps.traversal"
+    val name: Name         = getSelectorName(q"$selector").getOrElse(fatal(s"$selector is an invalid selector"))
+    q"""$traversal.onRaw(_.has(${name.toString}, org.apache.tinkerpop.gremlin.process.traversal.P.eq("")))"""
+  }
+  def nonEmptyId(selector: Tree)(ev: Tree): Tree = {
+    val traversalOps: Tree = c.prefix.tree
+    val traversal          = q"$traversalOps.traversal"
+    val name: Name         = getSelectorName(q"$selector").getOrElse(fatal(s"$selector is an invalid selector"))
+    q"""$traversal.onRaw(_.has(${name.toString}, org.apache.tinkerpop.gremlin.process.traversal.P.neq("")))"""
+  }
+
   def update[V: WeakTypeTag](selector: Tree, value: Tree)(mapping: Tree, ev: Tree): Tree = {
     val traversalOps: Tree = c.prefix.tree
     val traversal          = q"$traversalOps.traversal"
