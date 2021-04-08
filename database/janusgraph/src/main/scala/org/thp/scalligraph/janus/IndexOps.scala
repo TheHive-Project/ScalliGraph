@@ -198,6 +198,7 @@ trait IndexOps {
         groupedIndex
           .flatMap {
             case (prop, indexType) if !indexProperties.contains(prop) => Option(getPropertyKey(prop)).map(_ -> indexType)
+            case _                                                    => None
           }
           .foreach {
             case (p, Seq(IndexType.fulltextOnly)) =>
