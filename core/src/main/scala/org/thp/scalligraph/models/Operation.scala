@@ -3,6 +3,7 @@ package org.thp.scalligraph.models
 import org.apache.tinkerpop.gremlin.structure.Vertex
 import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.auth.AuthContext
+import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.traversal.{Converter, Traversal}
 import play.api.Logger
 
@@ -11,15 +12,15 @@ import scala.util.{Failure, Success, Try}
 
 sealed trait Operation
 
-case class AddVertexModel(label: String)                                                                                           extends Operation
-case class AddEdgeModel(label: String, mapping: Map[String, Mapping[_, _, _]])                                                     extends Operation
-case class AddProperty(model: String, propertyName: String, mapping: Mapping[_, _, _])                                             extends Operation
-case class RemoveProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean)                                       extends Operation
-case class UpdateGraph(model: String, update: Traversal[Vertex, Vertex, Converter.Identity[Vertex]] => Try[Unit], comment: String) extends Operation
-case class AddIndex(model: String, indexType: IndexType.Value, properties: Seq[String])                                            extends Operation
-object RebuildIndexes                                                                                                              extends Operation
-object NoOperation                                                                                                                 extends Operation
-case class RemoveIndex(model: String, indexType: IndexType.Value, fields: Seq[String])                                             extends Operation
+case class AddVertexModel(label: String)                                                                                     extends Operation
+case class AddEdgeModel(label: String, mapping: Map[String, Mapping[_, _, _]])                                               extends Operation
+case class AddProperty(model: String, propertyName: String, mapping: Mapping[_, _, _])                                       extends Operation
+case class RemoveProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean)                                 extends Operation
+case class UpdateGraph(model: String, update: Traversal.Identity[Vertex] => Try[Unit], comment: String, pageSize: Int = 100) extends Operation
+case class AddIndex(model: String, indexType: IndexType.Value, properties: Seq[String])                                      extends Operation
+object RebuildIndexes                                                                                                        extends Operation
+object NoOperation                                                                                                           extends Operation
+case class RemoveIndex(model: String, indexType: IndexType.Value, fields: Seq[String])                                       extends Operation
 case class DBOperation[DB <: Database: ClassTag](comment: String, op: DB => Try[Unit]) extends Operation {
   def apply(db: Database): Try[Unit] =
     if (classTag[DB].runtimeClass.isAssignableFrom(db.getClass))
@@ -78,9 +79,26 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
               case RemoveProperty(model, propertyName, usedOnlyByThisModel) =>
                 info(schemaName, v, s"Remove property $propertyName from $model")
                 db.removeProperty(model, propertyName, usedOnlyByThisModel)
-              case UpdateGraph(model, update, comment) =>
+              case UpdateGraph(model, update, comment, pageSize) =>
                 info(schemaName, v, s"Update graph: $comment")
-                db.tryTransaction(graph => update(db.V(model)(graph)))
+                db
+                  .roTransaction { roGraph =>
+                    db
+                      .V(model)(roGraph)
+                      ._id
+                      .toSeq
+                  }
+                  .toIterator
+                  .grouped(pageSize)
+                  .foldLeft[Try[Int]](Success(0)) {
+                    case (Success(count), page) =>
+                      info(schemaName, v, s"Update graph in progress ($count): $comment")
+                      db.tryTransaction { rwGraph =>
+                        update(db.V(model, page: _*)(rwGraph))
+                      }.map(_ => count + pageSize)
+                    case (failure, _) => failure
+                  }
+                  .map(_ => ())
                   .recoverWith { case error => Failure(InternalError(s"Unable to execute migration operation: $comment", error)) }
               case AddIndex(model, indexType, properties) =>
                 info(schemaName, v, s"Add index in $model for properties: ${properties.mkString(", ")}")
