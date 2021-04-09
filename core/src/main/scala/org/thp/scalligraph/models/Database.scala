@@ -34,7 +34,6 @@ trait Database {
   @deprecated("Use tryTransaction", "0.2")
   def transaction[A](body: Graph => A): A
   def tryTransaction[A](body: Graph => Try[A]): Try[A]
-  def currentTransactionId(graph: Graph): AnyRef
   def addCallback(callback: () => Try[Unit])(implicit graph: Graph): Unit
 
   /** Must not be used outside the database */
@@ -116,17 +115,15 @@ abstract class BaseDatabase extends Database {
 
   def addCallback(callback: () => Try[Unit])(implicit graph: Graph): Unit =
     synchronized {
-      callbacks = (currentTransactionId(graph) -> callback) :: callbacks
+      callbacks = (graph -> callback) :: callbacks
     }
 
-  def takeCallbacks(graph: Graph): List[() => Try[Unit]] = {
-    val tx = currentTransactionId(graph)
+  def takeCallbacks(graph: Graph): List[() => Try[Unit]] =
     synchronized {
-      val (cb, updatedCallbacks) = callbacks.partition(_._1 == tx)
+      val (cb, updatedCallbacks) = callbacks.partition(_._1 == graph)
       callbacks = updatedCallbacks
       cb
     }.map(_._2)
-  }
 
   override def addTransactionListener(listener: Consumer[Status])(implicit graph: Graph): Unit = graph.addTransactionListener(listener)
 

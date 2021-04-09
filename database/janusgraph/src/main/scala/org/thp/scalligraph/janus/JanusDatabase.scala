@@ -177,25 +177,13 @@ class JanusDatabase(
   override def roTransaction[R](body: Graph => R): R = {
     val graph    = new GraphWrapper(this, janusGraph.buildTransaction().readOnly().start())
     val oldGraph = localTransaction.get()
-    val oldTxId  = Option(MDC.get("tx"))
     try {
       localTransaction.set(Some(graph))
-      MDC.put("tx", graph.txId)
-      if (logger.isDebugEnabled) {
-        logger.debug("Begin of readonly transaction")
-        val start = System.currentTimeMillis()
-        val r     = body(graph)
-        logger.debug(s"End of readonly transaction (${System.currentTimeMillis() - start}ms)")
-        graph.commit()
-        r
-      } else {
-        val r = body(graph)
-        graph.commit()
-        r
-      }
+      val r = body(graph)
+      graph.commit()
+      r
     } finally {
       if (graph.isOpen) graph.rollback()
-      oldTxId.fold(MDC.remove("tx"))(MDC.put("tx", _))
       localTransaction.set(oldGraph)
     }
   }
@@ -229,9 +217,7 @@ class JanusDatabase(
     }
 
     def commitTransaction(graph: Graph): R => R = { r =>
-      logger.debug("Committing transaction")
       graph.commit()
-      logger.debug("End of transaction")
       r
     }
 
@@ -242,7 +228,6 @@ class JanusDatabase(
     }
 
     val oldGraph = localTransaction.get()
-    val oldTxId  = Option(MDC.get("tx"))
     val result =
       Retry(maxAttempts)
         .on[DatabaseException]
@@ -253,8 +238,6 @@ class JanusDatabase(
         .withTry {
           val graph = new GraphWrapper(this, janusGraph.buildTransaction().start())
           localTransaction.set(Some(graph))
-          MDC.put("tx", graph.txId)
-          logger.debug("Begin of transaction")
           Try(body(graph))
             .flatten
             .flatMap(executeCallbacks(graph))
@@ -270,7 +253,6 @@ class JanusDatabase(
             Failure(e)
         }
     localTransaction.set(oldGraph)
-    oldTxId.fold(MDC.remove("tx"))(MDC.put("tx", _))
     result
   }
 
