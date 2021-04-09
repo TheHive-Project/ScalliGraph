@@ -113,6 +113,11 @@ object TraversalOps extends TraversalPrinter {
       count._toIterator.next
     }
 
+    def getLimitedCount(threshold: Long): Long = {
+      debug(s"limitedCount($threshold)")
+      limitedCount(threshold)._toIterator.next
+    }
+
     def head: D = {
       debug("head")
       _toIterator.next
@@ -180,6 +185,10 @@ object TraversalOps extends TraversalPrinter {
       }
       traversal.onRawMap[Long, JLong, Converter[Long, JLong]](_.count())(Converter.long)
     }
+
+    def limitedCount(threshold: Long): Traversal[Long, JLong, Converter[Long, JLong]] =
+      if (threshold < 0) count
+      else limit(threshold).count.domainMap(c => if (c == threshold) -threshold else c)
 
     def localCount: Traversal[Long, JLong, Converter[Long, JLong]] =
       traversal.onRawMap[Long, JLong, Converter[Long, JLong]](_.count(Scope.local))(Converter.long)

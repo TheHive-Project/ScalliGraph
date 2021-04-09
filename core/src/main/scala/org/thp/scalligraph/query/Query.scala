@@ -191,14 +191,12 @@ object CountQuery extends Query {
     from.asInstanceOf[Traversal[Any, Any, Converter[Any, Any]]].getCount
 }
 
-class LimitedCountQuery(limit: Long) extends Query {
+class LimitedCountQuery(threshold: Long) extends Query {
   override val name: String                   = "limitedCount"
   override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[Traversal[_, _, _]])
   override def toType(t: ru.Type): ru.Type    = ru.typeOf[Long]
-  override def apply(param: Unit, fromType: ru.Type, from: Any, authContext: AuthContext): Long = {
-    val count = from.asInstanceOf[Traversal[Any, Any, Converter[Any, Any]]].limit(limit).getCount
-    if (count == limit) -limit else count
-  }
+  override def apply(param: Unit, fromType: ru.Type, from: Any, authContext: AuthContext): Long =
+    from.asInstanceOf[Traversal[Any, Any, Converter[Any, Any]]].getLimitedCount(threshold)
 }
 
 trait InputQuery[FROM, TO] {
