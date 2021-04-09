@@ -35,8 +35,9 @@ class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
   import ModernOps._
   import ModernOutputs._
 
-  val personSrv   = new PersonSrv
-  val softwareSrv = new SoftwareSrv
+  override val limitedCountThreshold: Long = 1000
+  val personSrv                            = new PersonSrv
+  val softwareSrv                          = new SoftwareSrv
 
   override val version: (Int, Int) = 1 -> 1
 
