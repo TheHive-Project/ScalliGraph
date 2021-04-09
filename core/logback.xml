@@ -26,12 +26,13 @@
         <appender-ref ref="STDOUT"/>
     </appender>
 
-    <logger name="org.thp.scalligraph.models" level="TRACE"/>
-    <!--<logger name="org.thp" level="DEBUG" />-->
-    <logger name="org.thp.scalligraph.controllers" level="TRACE"/>
-    <logger name="org.thp.scalligraph.services.auth" level="TRACE"/>
-    <logger name="org.thp.scalligraph.models" level="TRACE"/>
-    <logger name="org.thp.scalligraph.janus" level="TRACE"/>
+    <!-- do not set the following logger to TRACE -->
+    <logger name="org.thp.scalligraph.traversal" level="INFO"/>
+
+    <logger name="org.thp.scalligraph.auth" level="INFO"/>
+    <logger name="org.thp.scalligraph.models" level="INFO"/>
+    <logger name="org.thp.scalligraph.query" level="INFO"/>
+    <logger name="org.thp.scalligraph.service" level="INFO"/>
 
     <root level="INFO">
         <appender-ref ref="ASYNCFILE"/>

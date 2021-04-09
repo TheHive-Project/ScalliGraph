@@ -49,9 +49,9 @@ object TraversalOps extends TraversalPrinter {
     def debug(message: String): Unit = {
       loggerForGremlin.debug(s"Execute($message): ${traversal.printGremlin}")
       loggerForByteCode.debug(s"Execute($message): ${traversal.printByteCode}")
-      loggerForStrategies.debug(s"Execute($message): ${traversal.printStrategies}")
-      loggerForProfile.debug(s"Execute($message): ${traversal.printProfile}")
-      loggerForExplain.debug(s"Execute($message): ${traversal.printExplain}")
+      loggerForStrategies.trace(s"Execute($message): ${traversal.printStrategies}")
+      loggerForProfile.trace(s"Execute($message): ${traversal.printProfile}")
+      loggerForExplain.trace(s"Execute($message): ${traversal.printExplain}")
     }
     private def safeIterator[A](ite: Iterator[A]): Iterator[A] =
       new AbstractIterator[A] {
