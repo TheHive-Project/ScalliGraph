@@ -16,12 +16,13 @@ import scala.util.{Failure, Success, Try}
 
 abstract class QueryExecutor { executor =>
   val version: (Int, Int)
+  val limitedCountThreshold: Long
   lazy val publicProperties: PublicProperties = PublicProperties.empty
   lazy val queries: Seq[ParamQuery[_]]        = Nil
   lazy val logger: Logger                     = Logger(getClass)
   val db: Database
 
-  final lazy val allQueries                         = queries :+ sortQuery :+ filterQuery :+ aggregationQuery :+ CountQuery
+  final lazy val allQueries                         = queries :+ sortQuery :+ filterQuery :+ aggregationQuery :+ CountQuery :+ new LimitedCountQuery(limitedCountThreshold)
   final lazy val sortQuery: SortQuery               = new SortQuery(publicProperties)
   final lazy val aggregationQuery: AggregationQuery = new AggregationQuery(publicProperties, filterQuery)
   final lazy val filterQuery: FilterQuery           = FilterQuery.default(publicProperties) ++ customFilterQuery
@@ -157,6 +158,7 @@ abstract class QueryExecutor { executor =>
 
   def ++(other: QueryExecutor): QueryExecutor =
     new QueryExecutor {
+      override val limitedCountThreshold: Long             = other.limitedCountThreshold
       override val db: Database                            = other.db
       override val version: (Int, Int)                     = math.max(executor.version._1, other.version._1) -> math.min(executor.version._2, other.version._2)
       override lazy val publicProperties: PublicProperties = executor.publicProperties ++ other.publicProperties

@@ -2,6 +2,7 @@ package org.thp.scalligraph.traversal
 
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource
 import org.apache.tinkerpop.gremlin.structure.{Edge, Transaction, Vertex, Graph => TinkerGraph}
+import org.slf4j.MDC
 import org.thp.scalligraph.EntityId
 import org.thp.scalligraph.models.{Database, Model}
 
@@ -36,24 +37,26 @@ trait Graph {
     }
     new Traversal[D, G, C](this, traversal().inject(1).union(traversals.map(_.raw): _*), traversals.head.converter)
   }
-  var printByteCode: Boolean   = false
-  var printStrategies: Boolean = false
-  var printExplain: Boolean    = false
-  var printProfile: Boolean    = false
 }
 
 class GraphWrapper(override val db: Database, val underlying: TinkerGraph) extends Graph {
-  printByteCode = db.printByteCode
-  printStrategies = db.printStrategies
-  printExplain = db.printExplain
-  printProfile = db.printProfile
+  private val tx: Transaction                                                       = underlying.tx()
   override def addVertex(label: String): Vertex                                     = underlying.addVertex(label)
   override val variables: TinkerGraph.Variables                                     = underlying.variables()
-  override def addTransactionListener(listener: Consumer[Transaction.Status]): Unit = underlying.tx().addTransactionListener(listener)
-  override def commit(): Unit                                                       = underlying.tx().commit()
-  override def rollback(): Unit                                                     = underlying.tx().rollback()
-  override def isOpen: Boolean                                                      = underlying.tx().isOpen
-  override val txId: String                                                         = f"${System.identityHashCode(this)}%08x"
+  override def addTransactionListener(listener: Consumer[Transaction.Status]): Unit = tx.addTransactionListener(listener)
+  override def commit(): Unit = {
+    db.logger.debug("Committing transaction")
+    tx.commit()
+    db.logger.debug("End of transaction")
+    oldTxId.fold(MDC.remove("tx"))(MDC.put("tx", _))
+  }
+  override def rollback(): Unit = tx.rollback()
+  override def isOpen: Boolean  = tx.isOpen
+  override val txId: String     = f"${System.identityHashCode(this)}%08x"
+
+  val oldTxId: Option[String] = Option(MDC.get("tx"))
+  MDC.put("tx", txId)
+  db.logger.debug("Begin of transaction")
 }
 
 object AnonymousGraph extends Graph {

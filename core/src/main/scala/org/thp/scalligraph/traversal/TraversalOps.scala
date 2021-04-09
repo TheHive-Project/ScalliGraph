@@ -25,7 +25,13 @@ import scala.util.{Failure, Success, Try}
 
 object NO_VALUE
 object TraversalOps extends TraversalPrinter {
-  lazy val logger: Logger = Logger(getClass)
+  val loggerBaseName: String           = getClass.getName.stripSuffix("$")
+  lazy val logger: Logger              = Logger(loggerBaseName)
+  lazy val loggerForGremlin: Logger    = Logger(loggerBaseName + ".Gremlin")
+  lazy val loggerForByteCode: Logger   = Logger(loggerBaseName + ".ByteCode")
+  lazy val loggerForStrategies: Logger = Logger(loggerBaseName + ".Strategies")
+  lazy val loggerForProfile: Logger    = Logger(loggerBaseName + ".Profile")
+  lazy val loggerForExplain: Logger    = Logger(loggerBaseName + ".Explain")
 
   implicit class TraversalCaster(traversal: Traversal[_, _, _]) {
     def cast[D, G]: Traversal[D, G, Converter[D, G]]                              = traversal.asInstanceOf[Traversal[D, G, Converter[D, G]]]
@@ -40,6 +46,13 @@ object TraversalOps extends TraversalPrinter {
     def raw: GraphTraversal[_, G] = traversal.raw
     def toDomain(g: G): D         = traversal.converter(g)
 
+    def debug(message: String): Unit = {
+      loggerForGremlin.debug(s"Execute($message): ${traversal.printGremlin}")
+      loggerForByteCode.debug(s"Execute($message): ${traversal.printByteCode}")
+      loggerForStrategies.trace(s"Execute($message): ${traversal.printStrategies}")
+      loggerForProfile.trace(s"Execute($message): ${traversal.printProfile}")
+      loggerForExplain.trace(s"Execute($message): ${traversal.printExplain}")
+    }
     private def safeIterator[A](ite: Iterator[A]): Iterator[A] =
       new AbstractIterator[A] {
         private var cur: Option[A] = None
@@ -74,7 +87,7 @@ object TraversalOps extends TraversalPrinter {
       }
 
     def toIterator: Iterator[D] = {
-      logger.debug(s"Execution of: (toIterator)\n${traversal.print} ")
+      debug("toIterator")
       _toIterator
     }
 
@@ -91,34 +104,34 @@ object TraversalOps extends TraversalPrinter {
       }
 
     def toSeq: Seq[D] = {
-      logger.debug(s"Execution of: (toSeq)\n${traversal.print}")
+      debug("toSeq")
       _toIterator.toVector
     }
 
     def getCount: Long = {
-      logger.debug(s"Execution of: (count)\n${traversal.print}")
+      debug("count")
       count._toIterator.next
     }
 
     def head: D = {
-      logger.debug(s"Execution of: (head)\n${traversal.print}")
+      debug("head")
       _toIterator.next
     }
 
     def headOption: Option[D] = {
-      logger.debug(s"Execution of: (headOption)\n${traversal.print}")
+      debug("headOption")
       val ite = _toIterator
       if (ite.hasNext) Some(ite.next())
       else None
     }
 
     def toList: List[D] = {
-      logger.debug(s"Execution of: (toList)\n${traversal.print}")
+      debug("toList")
       _toIterator.toList
     }
 
     def toSet: Set[D] = {
-      logger.debug(s"Execution of: (toSet)\n${traversal.print}")
+      debug("toSet")
       toIterator.toSet
     }
 
@@ -127,14 +140,14 @@ object TraversalOps extends TraversalPrinter {
     def orFail(ex: Exception): Try[D] = headOption.fold[Try[D]](Failure(ex))(Success.apply)
 
     def exists: Boolean = {
-      logger.debug(s"Execution of: (exists)\n${traversal.print}")
+      debug("exists")
       traversal.raw.hasNext
     }
 
     def existsOrFail: Try[Unit] = if (exists) Success(()) else Failure(AuthorizationError("Unauthorized action"))
 
     def remove(): Unit = {
-      logger.debug(s"Execution of: (drop)\n${traversal.print}")
+      debug("drop")
       traversal.raw.drop().iterate()
       ()
     }
@@ -496,9 +509,13 @@ object TraversalOps extends TraversalPrinter {
     def hasNot[A, B](selector: D => A, value: B)(implicit mapping: Mapping[A, B, _], ev: G <:< Element): Traversal[D, G, C] =
       macro TraversalMacro.hasNotV[A, B]
     def hasNot[A](selector: D => A): Traversal[D, G, C] = macro TraversalMacro.hasNot[A]
+    def isEmptyId(selector: D => EntityId)(implicit ev: G <:< Element): Traversal[D, G, C] = macro TraversalMacro.isEmptyId
+    def nonEmptyId(selector: D => EntityId)(implicit ev: G <:< Element): Traversal[D, G, C] = macro TraversalMacro.nonEmptyId
 
     def unsafeHas[A](key: String, predicate: P[A])(implicit ev: G <:< Element): Traversal[D, G, C] = traversal.onRaw(_.has(key, predicate))
     def unsafeHas[A](key: String, value: A)(implicit ev: G <:< Element): Traversal[D, G, C]        = unsafeHas(key, P.eq[A](value))
+    def unsafeHas[A](key: String)(implicit ev: G <:< Element): Traversal[D, G, C]                  = traversal.onRaw(_.has(key))
+    def unsafeHasNot[A](key: String)(implicit ev: G <:< Element): Traversal[D, G, C]               = traversal.onRaw(_.hasNot(key))
 
     def hasId(ids: EntityId*)(implicit ev: G <:< Element): Traversal[D, G, C] =
       ids.map(_.value) match {
