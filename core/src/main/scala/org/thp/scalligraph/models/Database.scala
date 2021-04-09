@@ -40,6 +40,8 @@ trait Database {
   def takeCallbacks(graph: Graph): List[() => Try[Unit]]
   def addTransactionListener(listener: Consumer[Status])(implicit graph: Graph): Unit
 
+  def indexCountQuery(graph: Graph, query: String): Long
+
   def version(module: String): Int
   def setVersion(module: String, v: Int): Try[Unit]
   val idMapping: Mapping[EntityId, EntityId, AnyRef]

@@ -18,6 +18,7 @@ trait Graph {
   def txId: String
   def traversal(): GraphTraversalSource = db.traversal()(this)
   def variables: TinkerGraph.Variables
+  def indexCountQuery(query: String): Long
   def db: Database
   def V[D <: Product](ids: EntityId*)(implicit model: Model.Vertex[D]): Traversal.V[D]        = db.V[D](ids: _*)(model, this)
   def V(label: String, ids: EntityId*): Traversal[Vertex, Vertex, Converter.Identity[Vertex]] = db.V(label, ids: _*)(this)
@@ -52,7 +53,9 @@ class GraphWrapper(override val db: Database, val underlying: TinkerGraph) exten
   }
   override def rollback(): Unit = tx.rollback()
   override def isOpen: Boolean  = tx.isOpen
-  override val txId: String     = f"${System.identityHashCode(this)}%08x"
+
+  override def indexCountQuery(query: String): Long = db.indexCountQuery(this, query)
+  override val txId: String                         = f"${System.identityHashCode(this)}%08x"
 
   val oldTxId: Option[String] = Option(MDC.get("tx"))
   MDC.put("tx", txId)
@@ -69,4 +72,5 @@ object AnonymousGraph extends Graph {
   override def rollback(): Unit                                                     = ???
   override def isOpen: Boolean                                                      = ???
   override val txId: String                                                         = "anonymous"
+  override def indexCountQuery(query: String): Long                                 = ???
 }

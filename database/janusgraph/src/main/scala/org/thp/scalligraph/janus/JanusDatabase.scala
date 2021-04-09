@@ -10,7 +10,7 @@ import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
 import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex, Graph => TinkerGraph}
 import org.janusgraph.core.attribute.{Text => JanusText}
 import org.janusgraph.core.schema.{Mapping => _, _}
-import org.janusgraph.core.{Transaction => _, _}
+import org.janusgraph.core._
 import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
 import org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration
@@ -255,6 +255,12 @@ class JanusDatabase(
     localTransaction.set(oldGraph)
     result
   }
+
+  override def indexCountQuery(graph: Graph, query: String): Long =
+    graph.underlying match {
+      case t: Transaction => t.indexQuery("global", query).vertexTotals()
+      case _              => ???
+    }
 
   def managementTransaction[R](body: JanusGraphManagement => Try[R]): Try[R] = {
     def commitTransaction(mgmt: JanusGraphManagement): R => R = { r =>
