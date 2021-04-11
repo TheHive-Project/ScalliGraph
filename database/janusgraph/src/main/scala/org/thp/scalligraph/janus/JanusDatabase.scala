@@ -258,8 +258,10 @@ class JanusDatabase(
 
   override def indexCountQuery(graph: Graph, query: String): Long =
     graph.underlying match {
-      case t: Transaction => t.indexQuery("global", query).vertexTotals()
-      case _              => ???
+      case t: Transaction =>
+        logger.debug(s"Execute(indexCountQuery): $query")
+        t.indexQuery("global", query).vertexTotals()
+      case _ => ???
     }
 
   def managementTransaction[R](body: JanusGraphManagement => Try[R]): Try[R] = {
