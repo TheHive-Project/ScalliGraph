@@ -5,8 +5,8 @@ import akka.pattern.after
 import play.api.Logger
 
 import java.util.concurrent.ThreadLocalRandom
-import scala.concurrent.duration.{Duration, FiniteDuration}
-import scala.concurrent.{blocking, Await, ExecutionContext, Future}
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Try}
 
 object Retry {
@@ -80,11 +80,12 @@ class DelayRetry(maxTries: Int, exceptions: Seq[Class[_]], scheduler: Scheduler,
       case e: Throwable if 1 < maxTries && exceptionCheck(exceptions)(e) =>
         if (logger.isDebugEnabled) logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying (1)", e)
         else logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying (1)")
-        blocking {
-          Await.result(run(2, Future(fn)), Duration.Inf)
-        }
+        runSync(2, fn)
       case e: Throwable if 1 < maxTries =>
         logger.error("uncaught error, not retrying", e)
+        throw e
+      case e =>
+        logger.error("An error occurs", e)
         throw e
     }
 
@@ -93,15 +94,33 @@ class DelayRetry(maxTries: Int, exceptions: Seq[Class[_]], scheduler: Scheduler,
       case e: Throwable if 1 < maxTries && exceptionCheck(exceptions)(e) =>
         if (logger.isDebugEnabled) logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying (1)", e)
         else logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying (1)")
-        blocking {
-          Try(Await.result(run(2, Future(fn.get)), Duration.Inf))
-        }
+        Try(runSync(2, fn.get))
       case e: Throwable if 1 < maxTries =>
         logger.error("uncaught error, not retrying", e)
         Failure(e)
+      case e =>
+        logger.error("An error occurs", e)
+        Failure(e)
+
     }
 
   def on[E <: Throwable](implicit manifest: Manifest[E]) = new DelayRetry(maxTries, exceptions :+ manifest.runtimeClass, scheduler, delay, ec)
+
+  private def runSync[T](currentTry: Int, fn: => T): T =
+    try fn
+    catch {
+      case e if currentTry < maxTries && exceptionCheck(exceptions)(e) =>
+        if (logger.isDebugEnabled) logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying ($currentTry)", e)
+        else logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying ($currentTry)")
+        Thread.sleep(delay(currentTry).toMillis)
+        runSync(currentTry + 1, fn)
+      case e: Throwable if currentTry < maxTries =>
+        logger.error("uncaught error, not retrying", e)
+        throw e
+      case e =>
+        logger.error("An error occurs", e)
+        throw e
+    }
 
   private def run[T](currentTry: Int, fn: => Future[T]): Future[T] =
     fn recoverWith {
@@ -112,5 +131,9 @@ class DelayRetry(maxTries: Int, exceptions: Seq[Class[_]], scheduler: Scheduler,
       case e: Throwable if currentTry < maxTries =>
         logger.error("uncaught error, not retrying", e)
         Future.failed(e)
+      case e =>
+        logger.error("An error occurs", e)
+        Future.failed(e)
+
     }
 }
