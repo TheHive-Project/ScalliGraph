@@ -17,7 +17,7 @@ import scala.concurrent.duration.{Duration, FiniteDuration}
 class ContextPropagatingDispatcherConfigurator(config: Config, prerequisites: DispatcherPrerequisites)
     extends MessageDispatcherConfigurator(config, prerequisites) {
 
-  private val instance = new ContextPropagatingDisptacher(
+  private val instance = new ContextPropagatingDispatcher(
     this,
     config.getString("id"),
     config.getInt("throughput"),
@@ -34,7 +34,7 @@ class ContextPropagatingDispatcherConfigurator(config: Config, prerequisites: Di
   *
   * This dispatcher propagates the current diagnostic context if it's set when it's executed.
   */
-class ContextPropagatingDisptacher(
+class ContextPropagatingDispatcher(
     _configurator: MessageDispatcherConfigurator,
     id: String,
     throughput: Int,
