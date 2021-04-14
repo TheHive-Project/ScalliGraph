@@ -2,8 +2,9 @@ package org.thp.scalligraph.janus
 
 import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex}
 import org.janusgraph.core.schema.JanusGraphManagement.IndexJobFuture
-import org.janusgraph.core.schema.{JanusGraphManagement, SchemaAction, SchemaStatus, Mapping => JanusMapping}
+import org.janusgraph.core.schema.{JanusGraphManagement, Parameter, SchemaAction, SchemaStatus, Mapping => JanusMapping}
 import org.janusgraph.graphdb.database.management.ManagementSystem
+import org.janusgraph.graphdb.types.ParameterType
 import org.thp.scalligraph.models.{IndexType, Model, VertexModel}
 import org.thp.scalligraph.{InternalError, RichSeq}
 
@@ -133,7 +134,7 @@ trait IndexOps {
     * @param baseIndexName Base index name
     * @return the available index name or Right if index is present
     */
-  private def findFirstAvailableMixedIndex(mgmt: JanusGraphManagement, baseIndexName: String): Either[String, String] = {
+  protected def findFirstAvailableMixedIndex(mgmt: JanusGraphManagement, baseIndexName: String): Either[String, String] = {
     val validBaseIndexName        = baseIndexName.replaceAll("[^\\p{Alnum}]", baseIndexName)
     val indexNamePattern: Pattern = s"$validBaseIndexName(?:\\p{Digit}+)?".r.pattern
     val availableIndexes = (mgmt.getGraphIndexes(classOf[Vertex]).asScala ++ mgmt.getGraphIndexes(classOf[Edge]).asScala).filter(i =>
@@ -147,7 +148,7 @@ trait IndexOps {
           val lastIndex = availableIndexes.map(_.name()).toSeq.max
           val version   = lastIndex.drop(baseIndexName.length)
           if (version.isEmpty) Left(s"${baseIndexName}1")
-          else Left(s"$baseIndexName${version.tail.toInt + 1}")
+          else Left(s"$baseIndexName${version.toInt + 1}")
         }(index => Right(index.name()))
   }
 
@@ -181,13 +182,15 @@ trait IndexOps {
 
         val index = mgmt.buildIndex(indexName, elementClass) //.indexOnly(elementLabel)
         groupedIndex.foreach {
-          case (p, Seq(IndexType.fulltextOnly)) => index.addKey(getPropertyKey(p), JanusMapping.TEXT.asParameter())
+          case (p, Seq(IndexType.fulltextOnly)) =>
+            index.addKey(getPropertyKey(p), JanusMapping.TEXT.asParameter(), Parameter.of(ParameterType.customParameterName("fielddata"), true))
           case (p, Seq(IndexType.standard)) =>
             val prop = getPropertyKey(p)
             if (prop.dataType() == classOf[String]) index.addKey(prop, JanusMapping.STRING.asParameter())
             else index.addKey(prop, JanusMapping.DEFAULT.asParameter())
           // otherwise: IndexType.fulltext of multiple index types
-          case (p, _) => index.addKey(getPropertyKey(p), JanusMapping.TEXTSTRING.asParameter())
+          case (p, _) =>
+            index.addKey(getPropertyKey(p), JanusMapping.TEXTSTRING.asParameter(), Parameter.of(ParameterType.customParameterName("fielddata"), true))
         }
         index.buildMixedIndex("search")
         ()
