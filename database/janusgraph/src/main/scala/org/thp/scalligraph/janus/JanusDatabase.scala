@@ -256,12 +256,16 @@ class JanusDatabase(
     result
   }
 
+  lazy val globalIndexName: String = managementTransaction(mgmt => Try(findFirstAvailableMixedIndex(mgmt, "global")))
+    .toOption
+    .flatMap(_.toOption)
+    .getOrElse("global")
   override def indexCountQuery(graph: Graph, query: String): Long =
     graph.underlying match {
       case t: Transaction =>
         logger.debug(s"Execute(indexCountQuery): $query")
-        t.indexQuery("global", query).vertexTotals()
-      case _ => ???
+        t.indexQuery(globalIndexName, query).vertexTotals()
+      case _ => throw InternalError("Index query is now available")
     }
 
   def managementTransaction[R](body: JanusGraphManagement => Try[R]): Try[R] = {
