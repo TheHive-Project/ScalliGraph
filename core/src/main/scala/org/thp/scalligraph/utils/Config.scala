@@ -1,12 +1,11 @@
 package org.thp.scalligraph.utils
 
-import java.lang.{Boolean => JBoolean, Byte => JByte, Double => JDouble, Float => JFloat, Long => JLong, Short => JShort}
-import java.math.{BigInteger, BigDecimal => JBigDecimal}
-import java.util.{Properties, Iterator => JIterator, List => JList}
-
 import org.apache.commons.configuration.{Configuration => ApacheConfig}
 import play.api.{Configuration => PlayConfig}
 
+import java.lang.{Boolean => JBoolean, Byte => JByte, Double => JDouble, Float => JFloat, Long => JLong, Short => JShort}
+import java.math.{BigInteger, BigDecimal => JBigDecimal}
+import java.util.{Properties, Iterator => JIterator, List => JList}
 import scala.collection.JavaConverters._
 
 class Config(config: PlayConfig) extends ApacheConfig {

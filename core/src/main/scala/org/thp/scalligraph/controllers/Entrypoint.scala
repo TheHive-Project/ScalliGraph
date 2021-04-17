@@ -1,6 +1,5 @@
 package org.thp.scalligraph.controllers
 
-import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.auth.{AuthSrv, Permission}
 import org.thp.scalligraph.models.Database
 import org.thp.scalligraph.record.Record
@@ -22,12 +21,12 @@ import scala.util.{Failure, Try}
   * @param actionBuilder ActionBuilder
   * @param ec            ExecutionContext
   */
-@Singleton
-class Entrypoint @Inject() (
+
+class Entrypoint(
     authSrv: AuthSrv,
     actionBuilder: DefaultActionBuilder,
     errorHandler: HttpErrorHandler,
-    implicit val ec: ExecutionContext
+    ec: ExecutionContext
 ) {
 
   lazy val logger: Logger = Logger(getClass)

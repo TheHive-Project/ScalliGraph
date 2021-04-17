@@ -1,6 +1,5 @@
 package org.thp.scalligraph.auth
 
-import javax.inject.Inject
 import org.thp.scalligraph.controllers.AuthenticatedRequest
 import play.api.Configuration
 import play.api.mvc.{ActionFunction, Cookie, Request, Result}
@@ -41,7 +40,7 @@ class HeaderAuthSrv(
     }
 }
 
-class HeaderAuthProvider @Inject() (configuration: Configuration, requestOrganisation: RequestOrganisation, userSrv: UserSrv, ec: ExecutionContext)
+class HeaderAuthProvider(configuration: Configuration, requestOrganisation: RequestOrganisation, userSrv: UserSrv, ec: ExecutionContext)
     extends AuthSrvProvider {
   override val name: String = "header"
   override def apply(config: Configuration): Try[AuthSrv] =

@@ -1,9 +1,5 @@
 package org.thp.scalligraph.auth
 
-import java.util.UUID
-
-import com.google.inject.Provider
-import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.controllers.AuthenticatedRequest
 import org.thp.scalligraph.{AuthenticationError, BadConfigurationError, BadRequestError, CreateError, EntityName, NotFoundError}
 import play.api.libs.json.JsObject
@@ -11,6 +7,7 @@ import play.api.libs.ws.WSClient
 import play.api.mvc._
 import play.api.{Configuration, Logger}
 
+import java.util.UUID
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
@@ -39,14 +36,13 @@ class OAuth2Srv(
     OAuth2Config: OAuth2Config,
     userSrv: UserSrv,
     WSClient: WSClient,
-    sessionAuthProvider: Provider[AuthSrv]
+    sessionAuthSrv: AuthSrv
 )(implicit
     ec: ExecutionContext
 ) extends AuthSrv {
-  lazy val logger: Logger          = Logger(getClass)
-  lazy val sessionAuthSrv: AuthSrv = sessionAuthProvider.get()
-  val name: String                 = "oauth2"
-  val endpoint: String             = "/ssoLogin"
+  lazy val logger: Logger = Logger(getClass)
+  val name: String        = "oauth2"
+  val endpoint: String    = "/ssoLogin"
 
   override def capabilities: Set[AuthCapability.Value] = super.capabilities ++ Set(AuthCapability.sso)
 
@@ -219,14 +215,14 @@ class OAuth2Srv(
     } yield new AuthenticatedRequest[A](authContext, request)
 }
 
-@Singleton
-class OAuth2Provider @Inject() (
+class OAuth2Provider(
     userSrv: UserSrv,
     WSClient: WSClient,
     implicit val executionContext: ExecutionContext,
-    provider: Provider[AuthSrv],
+    _authSrv: => AuthSrv,
     globalConfig: Configuration
 ) extends AuthSrvProvider {
+  lazy val authSrv: AuthSrv = _authSrv
   override val name: String = "oauth2"
   override def apply(configuration: Configuration): Try[AuthSrv] =
     for {
@@ -260,6 +256,6 @@ class OAuth2Provider @Inject() (
       ),
       userSrv,
       WSClient,
-      provider
+      authSrv
     )
 }

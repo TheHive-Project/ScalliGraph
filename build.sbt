@@ -5,15 +5,15 @@ val scala212               = "2.12.13"
 val scala213               = "2.13.1"
 val supportedScalaVersions = List(scala212, scala213)
 
-organization in ThisBuild := "org.thp"
-scalaVersion in ThisBuild := scala212
-crossScalaVersions in ThisBuild := supportedScalaVersions
-resolvers in ThisBuild ++= Seq(
+ThisBuild / organization := "org.thp"
+ThisBuild / scalaVersion := scala212
+ThisBuild / crossScalaVersions := supportedScalaVersions
+ThisBuild / resolvers ++= Seq(
   Resolver.mavenLocal,
   "Oracle Released Java Packages" at "https://download.oracle.com/maven",
   "TheHive project repository" at "https://dl.bintray.com/thehive-project/maven/"
 )
-scalacOptions in ThisBuild ++= Seq(
+ThisBuild / scalacOptions ++= Seq(
   "-encoding",
   "UTF-8",
   "-deprecation", // Emit warning and location for usages of deprecated APIs.
@@ -36,23 +36,23 @@ scalacOptions in ThisBuild ++= Seq(
   "-Xlog-free-terms",
   "-Xprint-types"
 )
-fork in Test in ThisBuild := true
+ThisBuild / Test / fork := true
 //        javaOptions += "-Xmx1G",
-scalafmtConfig in ThisBuild := file(".scalafmt.conf")
-scalacOptions in ThisBuild ++= {
+ThisBuild / scalafmtConfig := file(".scalafmt.conf")
+ThisBuild / scalacOptions ++= {
   CrossVersion.partialVersion((Compile / scalaVersion).value) match {
     case Some((2, n)) if n >= 13 => "-Ymacro-annotations" :: Nil
     case _                       => Nil
   }
 }
-libraryDependencies in ThisBuild ++= {
+ThisBuild / libraryDependencies ++= {
   CrossVersion.partialVersion(scalaVersion.value) match {
     case Some((2, n)) if n >= 13 => Nil
     case _                       => compilerPlugin(macroParadise) :: Nil
   }
 }
 
-dependencyOverrides in ThisBuild += "io.netty" % "netty-all" % "4.0.56.Final"
+ThisBuild / dependencyOverrides += "io.netty" % "netty-all" % "4.0.56.Final"
 
 lazy val scalligraph = (project in file("."))
   .dependsOn(core, /*graphql, */ janus /* , orientdb , neo4j, coreTest*/ )
@@ -70,8 +70,6 @@ lazy val core = (project in file("core"))
     libraryDependencies ++= Seq(
       tinkerpop,
       scalactic,
-      playGuice,
-      scalaGuice,
       hadoopClient,
       alpakkaS3,
       akkaHttp,
@@ -88,7 +86,11 @@ lazy val core = (project in file("core"))
       playLogback % Test,
       scalaCompiler(scalaVersion.value),
       scalaReflect(scalaVersion.value),
-      ws
+      ws,
+      macWireMacros,
+      macWireMacrosakka,
+      macWireUtil,
+      macWireProxy
     )
   )
 

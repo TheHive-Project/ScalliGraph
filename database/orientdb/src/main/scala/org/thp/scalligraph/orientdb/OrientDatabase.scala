@@ -5,7 +5,7 @@ import java.util.{List => JList, Set => JSet}
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
-import javax.inject.{Inject, Singleton}
+
 
 import org.slf4j.MDC
 import org.thp.scalligraph.InternalError
@@ -17,7 +17,7 @@ import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success, Try}
 
-@Singleton
+
 class OrientDatabase(
     graphFactory: OrientGraphFactory,
     maxAttempts: Int,
@@ -43,7 +43,7 @@ class OrientDatabase(
   ) =
     this(new OrientGraphFactory(url, user, password), maxAttempts, minBackoff, maxBackoff, randomFactor, chunkSize, system)
 
-  @Inject()
+
   def this(configuration: Configuration, system: ActorSystem) =
     this(
       configuration.get[String]("db.orientdb.url"),

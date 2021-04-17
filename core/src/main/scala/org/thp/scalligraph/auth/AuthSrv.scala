@@ -1,6 +1,5 @@
 package org.thp.scalligraph.auth
 
-import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.controllers.AuthenticatedRequest
 import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError, EntityIdOrName}
 import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
@@ -14,16 +13,13 @@ object AuthCapability extends Enumeration {
   val changePassword, setPassword, authByKey, sso, mfa = Value
 }
 
-@Singleton
-class RequestOrganisation(header: Option[String], parameter: Option[String], pathSegment: Option[Regex], cookie: Option[String])
-    extends (Request[_] => Option[EntityIdOrName]) {
-  @Inject() def this(configuration: Configuration) =
-    this(
-      configuration.getOptional[String]("auth.organisationHeader"),
-      configuration.getOptional[String]("auth.organisationParameter"),
-      configuration.getOptional[String]("auth.organisationPathExtractor").map(_.r),
-      configuration.getOptional[String]("auth.organisationCookieName")
-    )
+class RequestOrganisation(configuration: Configuration) extends (Request[_] => Option[EntityIdOrName]) {
+
+  val header: Option[String]     = configuration.getOptional[String]("auth.organisationHeader")
+  val parameter: Option[String]  = configuration.getOptional[String]("auth.organisationParameter")
+  val pathSegment: Option[Regex] = configuration.getOptional[String]("auth.organisationPathExtractor").map(_.r)
+  val cookie: Option[String]     = configuration.getOptional[String]("auth.organisationCookieName")
+
   override def apply(request: Request[_]): Option[EntityIdOrName] =
     (header.flatMap(request.headers.get(_)) orElse
       parameter.flatMap(request.queryString.getOrElse(_, Nil).headOption) orElse

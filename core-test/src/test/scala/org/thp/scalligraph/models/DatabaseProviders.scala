@@ -2,13 +2,14 @@ package org.thp.scalligraph.models
 
 import akka.actor.ActorSystem
 import com.typesafe.config.ConfigFactory
-import javax.inject.{Inject, Provider}
 import org.thp.scalligraph.janus.JanusDatabase
 import play.api.{Configuration, Environment, Logger}
+
+import javax.inject.Provider
 //import org.thp.scalligraph.neo4j.Neo4jDatabase
 //import org.thp.scalligraph.orientdb.OrientDatabase
 
-class DatabaseProviders @Inject() (config: Configuration, system: ActorSystem) {
+class DatabaseProviders(config: Configuration, system: ActorSystem) {
 
   def this(system: ActorSystem) =
     this(

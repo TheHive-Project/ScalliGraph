@@ -1,10 +1,9 @@
 package org.thp.scalligraph.`macro`
 
-import java.util.{Collection => JCollection}
-
 import org.thp.scalligraph.models.Mapping
 import org.thp.scalligraph.traversal.{Converter, Traversal}
 
+import java.util.{Collection => JCollection}
 import scala.reflect.macros.blackbox
 
 class TraversalMacro(val c: blackbox.Context) extends MacroUtil {

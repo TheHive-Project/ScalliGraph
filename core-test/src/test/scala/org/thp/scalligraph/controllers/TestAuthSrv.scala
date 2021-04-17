@@ -1,9 +1,9 @@
 package org.thp.scalligraph.controllers
 
-import javax.inject.Inject
 import org.thp.scalligraph.auth.{HeaderAuthSrv, RequestOrganisation, UserSrv}
+import play.api.Configuration
 
 import scala.concurrent.ExecutionContext
 
-class TestAuthSrv @Inject() (userSrv: UserSrv, ec: ExecutionContext)
-    extends HeaderAuthSrv("user", new RequestOrganisation(Some("X-Organisation"), None, None, None), None, userSrv, ec)
+class TestAuthSrv(userSrv: UserSrv, ec: ExecutionContext)
+    extends HeaderAuthSrv("user", new RequestOrganisation(Configuration.apply("auth.organisationHeader" -> "X-Organisation")), None, userSrv, ec)

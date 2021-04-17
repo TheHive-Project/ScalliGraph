@@ -10,7 +10,7 @@ import akka.util.ByteString
 import org.apache.hadoop.conf.{Configuration => HadoopConfig}
 import org.apache.hadoop.fs.{FileAlreadyExistsException => HadoopFileAlreadyExistsException, FileSystem => HDFileSystem, Path => HDPath}
 import org.apache.hadoop.io.IOUtils
-import org.thp.scalligraph.NotFoundError
+import org.thp.scalligraph.{NotFoundError, ScalligraphApplication}
 import org.thp.scalligraph.auth.UserSrv
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.traversal.TraversalOps._
@@ -24,7 +24,7 @@ import java.io.{ByteArrayInputStream, InputStream}
 import java.net.URI
 import java.nio.file._
 import java.util.Base64
-import javax.inject.{Inject, Singleton}
+
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import scala.concurrent.{Await, ExecutionContext}
 import scala.util.{Success, Try}
@@ -46,12 +46,33 @@ trait StorageSrv {
   def getSize(folder: String, id: String)(implicit graph: Graph): Try[Long]
 }
 
-@Singleton
+object StorageFactory {
+  def apply(scalligraphApplication: ScalligraphApplication): StorageSrv =
+    scalligraphApplication.configuration.get[String]("storage.provider") match {
+      case "localfs" => new LocalFileSystemStorageSrv(scalligraphApplication.configuration)
+      // case "database" => new DatabaseStorageSrv(scalligraphApplication.configuration)
+      case "hdfs" => new HadoopStorageSrv(scalligraphApplication.configuration)
+      case "s3" =>
+        new S3StorageSrv(
+          scalligraphApplication.configuration,
+          scalligraphApplication.actorSystem,
+          scalligraphApplication.executionContext,
+          scalligraphApplication.materializer
+        )
+      case providerName =>
+        getClass
+          .getClassLoader
+          .loadClass(providerName)
+          .getConstructor(classOf[ScalligraphApplication])
+          .newInstance(scalligraphApplication)
+          .asInstanceOf[StorageSrv]
+    }
+}
+
 class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
   if (!Files.exists(directory))
     Files.createDirectory(directory)
 
-  @Inject()
   def this(configuration: Configuration) = this(Paths.get(configuration.get[String]("storage.localfs.location")))
 
   override def loadBinary(folder: String, id: String): InputStream =
@@ -92,10 +113,8 @@ object HadoopStorageSrv {
   }
 }
 
-@Singleton
 class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
 
-  @Inject()
   def this(configuration: Configuration) =
     this(
       HDFileSystem.get(
@@ -129,14 +148,12 @@ class HadoopStorageSrv(fs: HDFileSystem, location: HDPath) extends StorageSrv {
     Try(fs.getFileStatus(new HDPath(new HDPath(location, folder), id)).getLen)
 }
 
-@Singleton
 class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Database) extends VertexSrv[Binary]()(Binary.model) with StorageSrv {
 
   val b64decoder: Base64.Decoder                       = Base64.getDecoder
   implicit val binaryLinkModel: Model.Edge[BinaryLink] = BinaryLink.model
   val binaryLinkSrv                                    = new EdgeSrv[BinaryLink, Binary, Binary]
 
-  @Inject
   def this(configuration: Configuration, userSrv: UserSrv, db: Database) =
     this(configuration.underlying.getBytes("storage.database.chunkSize").toInt, userSrv, db)
 
@@ -239,8 +256,7 @@ class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Data
   override def getSize(folder: String, id: String)(implicit graph: Graph): Try[Long] = ???
 }
 
-@Singleton
-class S3StorageSrv @Inject() (configuration: Configuration, system: ActorSystem, implicit val ec: ExecutionContext, implicit val mat: Materializer)
+class S3StorageSrv(configuration: Configuration, system: ActorSystem, implicit val ec: ExecutionContext, implicit val mat: Materializer)
     extends StorageSrv {
   private val bucketName: String           = configuration.get[String]("storage.s3.bucket")
   private val readTimeout: FiniteDuration  = configuration.get[FiniteDuration]("storage.s3.readTimeout")

@@ -6,7 +6,7 @@ import java.util.Date
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Source
-import javax.inject.Singleton
+
 
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.utils.{Config, Retry}
@@ -33,7 +33,7 @@ object Neo4jDatabase {
   )
 }
 
-@Singleton
+
 class Neo4jDatabase(
     graph: Neo4jGraph,
     maxAttempts: Int,

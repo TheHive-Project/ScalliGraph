@@ -1,6 +1,5 @@
 package org.thp.scalligraph.models
 
-import javax.inject.{Inject, Singleton}
 import org.apache.tinkerpop.gremlin.process.traversal.P
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
@@ -51,21 +50,18 @@ object ModernOps {
 
 import org.thp.scalligraph.models.ModernOps._
 
-@Singleton
-class PersonSrv @Inject() extends VertexSrv[Person] {
+class PersonSrv extends VertexSrv[Person] {
   def create(e: Person)(implicit graph: Graph, authContext: AuthContext): Try[Person with Entity] = createEntity(e)
 
   override def getByName(name: String)(implicit graph: Graph): Traversal.V[Person] =
     startTraversal.getByName(name)
 }
 
-@Singleton
-class SoftwareSrv @Inject() extends VertexSrv[Software] {
+class SoftwareSrv extends VertexSrv[Software] {
   def create(e: Software)(implicit graph: Graph, authContext: AuthContext): Try[Software with Entity] = createEntity(e)
 }
 
-@Singleton
-class ModernSchema @Inject() extends Schema {
+class ModernSchema extends Schema {
   val personSrv                                    = new PersonSrv
   val softwareSrv                                  = new SoftwareSrv
   val knowsSrv                                     = new EdgeSrv[Knows, Person, Person]

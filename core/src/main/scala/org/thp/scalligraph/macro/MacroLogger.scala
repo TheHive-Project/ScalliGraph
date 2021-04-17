@@ -1,7 +1,6 @@
 package org.thp.scalligraph.`macro`
 
 import java.io.{PrintWriter, StringWriter}
-
 import scala.annotation.StaticAnnotation
 import scala.reflect.macros.blackbox
 

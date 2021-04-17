@@ -1,8 +1,9 @@
 package org.thp.scalligraph.services.config
 
 import akka.actor.ActorRef
+import com.softwaremill.tagging.@@
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
-import javax.inject.{Inject, Named, Singleton}
+
 import org.thp.scalligraph.NotFoundError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.Database
@@ -15,12 +16,11 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.{Failure, Success, Try}
 
-@Singleton
-class ApplicationConfig @Inject() (
+class ApplicationConfig(
     configuration: Configuration,
     db: Database,
     eventSrv: EventSrv,
-    @Named("config-actor") configActor: ActorRef,
+    configActor: ActorRef @@ ConfigTag,
     implicit val ec: ExecutionContext
 ) {
   lazy val logger: Logger                  = Logger(getClass)
@@ -30,8 +30,19 @@ class ApplicationConfig @Inject() (
   private val itemsLock                                = new Object
   private var items: Map[String, ConfigItemImpl[_, _]] = Map.empty
 
+  implicit def configLoader[B: Reads]: ConfigLoader[B] =
+    (config: Config, path: String) => Json.parse(config.getValue(path).render(ConfigRenderOptions.concise())).as[B]
+  def optionConfigLoader[B: Reads]: ConfigLoader[Option[B]] =
+    (config: Config, path: String) => Try(Json.parse(config.getValue(path).render(ConfigRenderOptions.concise())).as[B]).toOption
+
   def item[T: Format](path: String, description: String): ConfigItem[T, T] =
     validatedMapItem[T, T](path, description, Success.apply, identity)
+
+  def optionItem[T: Format](path: String, description: String): ConfigItem[Option[T], Option[T]] = {
+    implicit val ocl: ConfigLoader[Option[T]] = optionConfigLoader[T]
+    implicit val of: Format[Option[T]]        = Format(Reads.optionNoError[T], Writes.optionWithNull[T])
+    validatedMapItem[Option[T], Option[T]](path, description, Success.apply, identity)
+  }
 
   def mapItem[B: Format, F](path: String, description: String, mapFunction: B => F): ConfigItem[B, F] =
     validatedMapItem[B, F](path, description, Success.apply, mapFunction)
@@ -39,10 +50,12 @@ class ApplicationConfig @Inject() (
   def validatedItem[T: Format](path: String, description: String, validation: T => Try[T]): ConfigItem[T, T] =
     validatedMapItem[T, T](path, description, validation, identity)
 
-  def validatedMapItem[B: Format, F](path: String, description: String, validation: B => Try[B], mapFunction: B => F): ConfigItem[B, F] = {
-    implicit val configLoader: ConfigLoader[B] = (config: Config, path: String) =>
-      Json.parse(config.getValue(path).render(ConfigRenderOptions.concise())).as[B]
-
+  def validatedMapItem[B: ConfigLoader: Format, F](
+      path: String,
+      description: String,
+      validation: B => Try[B],
+      mapFunction: B => F
+  ): ConfigItem[B, F] =
     itemsLock.synchronized {
       items
         .getOrElse(
@@ -66,7 +79,6 @@ class ApplicationConfig @Inject() (
         )
         .asInstanceOf[ConfigItem[B, F]]
     }
-  }
 
   def context[C](context: ConfigContext[C]): ContextApplicationConfig[C] =
     new ContextApplicationConfig[C](context, configuration, eventSrv, ec)

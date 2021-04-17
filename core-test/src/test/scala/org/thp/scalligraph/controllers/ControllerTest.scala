@@ -23,7 +23,7 @@ class ControllerTest(implicit executionEnv: ExecutionEnv) extends PlaySpecificat
     "extract simple class from HTTP request" in {
 
       val actionBuilder = DefaultActionBuilder(Helpers.stubBodyParser())
-      val entrypoint    = new Entrypoint(mock[AuthSrv], actionBuilder, new ErrorHandler, executionEnv.ec)
+      val entrypoint    = new Entrypoint(mock[AuthSrv], actionBuilder, ErrorHandler, executionEnv.ec)
 
       val action = entrypoint("model extraction")
         .extract("simpleClass", FieldsParser[SimpleClassForFieldsParserMacroTest]) { req =>

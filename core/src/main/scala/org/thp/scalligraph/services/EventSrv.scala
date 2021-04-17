@@ -5,13 +5,12 @@ import akka.cluster.pubsub.DistributedPubSub
 import akka.cluster.pubsub.DistributedPubSubMediator.{Publish, Subscribe, Unsubscribe}
 import akka.pattern.{ask => akkaAsk}
 import akka.util.Timeout
-import javax.inject.{Inject, Singleton}
+
 import play.api.Logger
 
 import scala.concurrent.Future
 
-@Singleton
-class EventSrv @Inject() (system: ActorSystem) {
+class EventSrv(system: ActorSystem) {
   lazy val logger: Logger = Logger(getClass)
   private val mediator    = DistributedPubSub(system).mediator
 

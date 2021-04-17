@@ -1,7 +1,6 @@
 package org.thp.scalligraph.`macro`
 
 import java.util.Date
-
 import scala.reflect.macros.blackbox
 
 trait MacroUtil extends MacroLogger {

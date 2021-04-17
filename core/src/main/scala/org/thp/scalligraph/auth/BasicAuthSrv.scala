@@ -1,14 +1,12 @@
 package org.thp.scalligraph.auth
 
-import java.util.Base64
-
-import javax.inject.{Inject, Provider, Singleton}
 import org.thp.scalligraph.AuthenticationError
 import org.thp.scalligraph.controllers.AuthenticatedRequest
 import play.api.Configuration
 import play.api.http.{HeaderNames, Status}
 import play.api.mvc.{ActionFunction, Request, Result, Results}
 
+import java.util.Base64
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
@@ -59,10 +57,8 @@ class BasicAuthSrv(realm: Option[String], authSrv: AuthSrv, requestOrganisation:
     }
 }
 
-@Singleton
-class BasicAuthProvider @Inject() (authSrvProvider: Provider[AuthSrv], requestOrganisation: RequestOrganisation, ec: ExecutionContext)
-    extends AuthSrvProvider {
-  lazy val authSrv: AuthSrv = authSrvProvider.get
+class BasicAuthProvider(_authSrv: => AuthSrv, requestOrganisation: RequestOrganisation, ec: ExecutionContext) extends AuthSrvProvider {
+  lazy val authSrv: AuthSrv = _authSrv
   override val name: String = "basic"
   override def apply(config: Configuration): Try[AuthSrv] = {
     val realm = config.getOptional[String]("realm")

@@ -1,6 +1,6 @@
 package org.thp.scalligraph.arangodb
 import com.typesafe.config.ConfigFactory
-import javax.inject.{Inject, Singleton}
+
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.utils.Config
 import play.api.Configuration
@@ -54,8 +54,8 @@ object ArangoDatabase {
   }
 }
 
-@Singleton
-class ArangoDatabase @Inject()(configuration: Configuration) extends BaseDatabase {
+
+class ArangoDatabase (configuration: Configuration) extends BaseDatabase {
   private var graph = new ArangoDBGraph(new Config(ArangoDatabase.defaultConfiguration ++ configuration))
 
   override def createSchema(models: Seq[Model]): Unit = {

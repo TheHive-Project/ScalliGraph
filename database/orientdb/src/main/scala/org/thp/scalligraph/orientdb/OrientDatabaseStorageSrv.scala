@@ -2,14 +2,14 @@ package org.thp.scalligraph.orientdb
 import java.io.InputStream
 import java.util.{Base64, List => JList}
 
-import javax.inject.{Inject, Singleton}
+
 import org.thp.scalligraph.services.StorageSrv
 import play.api.Configuration
 
 import scala.collection.JavaConverters._
 import scala.util.{Success, Try}
 
-@Singleton
+
 class OrientDatabaseStorageSrv(db: OrientDatabase, chunkSize: Int) extends StorageSrv {
 
   case class State(recordIds: List[OIdentifiable], buffer: Array[Byte]) {

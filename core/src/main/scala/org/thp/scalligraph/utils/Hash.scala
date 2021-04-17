@@ -1,15 +1,14 @@
 package org.thp.scalligraph.utils
 
-import java.io.InputStream
-import java.nio.charset.Charset
-import java.nio.file.{Files, Path, Paths}
-import java.security.MessageDigest
-
 import akka.stream.Materializer
 import akka.stream.scaladsl.{FileIO, Source}
 import akka.util.ByteString
 import play.api.libs.json.{Format, JsString, Reads, Writes}
 
+import java.io.InputStream
+import java.nio.charset.Charset
+import java.nio.file.{Files, Path, Paths}
+import java.security.MessageDigest
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, ExecutionContext, Future}
 
@@ -76,21 +75,23 @@ class MultiHash(algorithms: String)(implicit mat: Materializer, ec: ExecutionCon
 case class Hash(data: Array[Byte]) {
   override def toString: String = data.map(b => f"$b%02x").mkString
 
-  override def equals(obj: scala.Any): Boolean = obj match {
-    case Hash(d) => d.sameElements(data)
-    case _       => false
-  }
+  override def equals(obj: scala.Any): Boolean =
+    obj match {
+      case Hash(d) => d.sameElements(data)
+      case _       => false
+    }
 }
 
 object Hash {
 
-  def apply(s: String): Hash = Hash {
-    s.grouped(2)
-      .map { cc =>
-        (Character.digit(cc(0), 16) << 4 | Character.digit(cc(1), 16)).toByte
-      }
-      .toArray
-  }
+  def apply(s: String): Hash =
+    Hash {
+      s.grouped(2)
+        .map { cc =>
+          (Character.digit(cc(0), 16) << 4 | Character.digit(cc(1), 16)).toByte
+        }
+        .toArray
+    }
 
   val hashReads: Reads[Hash]            = Reads(json => json.validate[String].map(h => Hash(h)))
   val hashWrites: Writes[Hash]          = Writes[Hash](h => JsString(h.toString()))

@@ -7,8 +7,6 @@ import play.api.Logger
 import play.api.libs.json._
 import play.api.mvc._
 
-import scala.collection.immutable
-
 sealed trait Field {
   def isDefined: Boolean = true
 
@@ -170,7 +168,7 @@ object FObject {
     case (_, field: FObject) => Good(field)
   }
 }
-case class FObject(fields: immutable.Map[String, Field]) extends Field {
+case class FObject(fields: Map[String, Field]) extends Field {
   lazy val pathFields: Seq[(FPath, Field)] = fields.toSeq.map { case (k, v) => FPath(k) -> v }
 
   def iterator: Iterator[(String, Field)] = fields.iterator

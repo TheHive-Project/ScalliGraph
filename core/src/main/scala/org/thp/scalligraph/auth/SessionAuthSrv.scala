@@ -6,7 +6,6 @@ import play.api.libs.json.Json
 import play.api.mvc._
 import play.api.{Configuration, Logger}
 
-import javax.inject.{Inject, Singleton}
 import scala.concurrent.duration.{DurationLong, FiniteDuration}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
@@ -104,8 +103,7 @@ class SessionAuthSrv(
     }
 }
 
-@Singleton
-class SessionAuthProvider @Inject() (userSrv: UserSrv, requestOrganisation: RequestOrganisation, ec: ExecutionContext) extends AuthSrvProvider {
+class SessionAuthProvider(userSrv: UserSrv, requestOrganisation: RequestOrganisation, ec: ExecutionContext) extends AuthSrvProvider {
   override val name: String = "session"
   override def apply(config: Configuration): Try[AuthSrv] =
     for {

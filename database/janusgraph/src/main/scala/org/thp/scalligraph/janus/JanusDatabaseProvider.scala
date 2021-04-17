@@ -1,39 +1,37 @@
 package org.thp.scalligraph.janus
 
-import akka.actor.ActorSystem
+import akka.Done
+import akka.actor.{ActorSystem, CoordinatedShutdown}
 import akka.actor.typed.scaladsl.AskPattern._
+import akka.actor.typed.scaladsl.adapter._
 import akka.actor.typed.{ActorRef, Scheduler}
 import akka.util.Timeout
 import org.janusgraph.core.JanusGraph
 import org.janusgraph.diskstorage.configuration.{Configuration => JanusConfiguration}
 import org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration
 import org.janusgraph.graphdb.database.StandardJanusGraph
-import org.thp.scalligraph.{InternalError, SingleInstance}
 import org.thp.scalligraph.janus.JanusClusterManagerActor._
 import org.thp.scalligraph.models.{Database, UpdatableSchema}
 import org.thp.scalligraph.traversal.TraversalOps.logger
-import play.api.{Application, Configuration}
-import play.api.inject.ApplicationLifecycle
+import org.thp.scalligraph.{InternalError, ScalligraphApplication, SingleInstance}
+import play.api.Configuration
 
-import javax.inject.{Inject, Provider, Singleton}
+import javax.inject.Provider
 import scala.collection.JavaConverters._
-import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
 
-@Singleton
-class JanusDatabaseProvider @Inject() (
-    application: Application,
-    configuration: Configuration,
-    schemas: immutable.Set[UpdatableSchema],
-    system: ActorSystem,
-    singleInstance: SingleInstance,
-    applicationLifecycle: ApplicationLifecycle,
-    implicit val scheduler: Scheduler,
-    implicit val ec: ExecutionContext
-) extends Provider[Database] {
+class JanusDatabaseProvider(scalligraphApplication: ScalligraphApplication) extends Provider[Database] {
+  val configuration: Configuration             = scalligraphApplication.configuration
+  val schemas: Set[UpdatableSchema]            = scalligraphApplication.schemas
+  val actorSystem: ActorSystem                 = scalligraphApplication.actorSystem
+  val singleInstance: SingleInstance           = scalligraphApplication.singleInstance
+  val coordinatedShutdown: CoordinatedShutdown = CoordinatedShutdown(actorSystem)
 
-  lazy val janusClusterManager: ActorRef[Command] = JanusClusterManagerActor.getClusterManagerActor(system)
+  implicit val scheduler: Scheduler = actorSystem.toTyped.scheduler
+  implicit val ec: ExecutionContext = actorSystem.dispatcher
+
+  lazy val janusClusterManager: ActorRef[Command] = JanusClusterManagerActor.getClusterManagerActor(actorSystem)
 
   def dropOtherConnections(db: JanusGraph): Unit = {
     val mgmt = db.openManagement()
@@ -105,19 +103,19 @@ class JanusDatabaseProvider @Inject() (
           .ask[Result](replyTo => JoinCluster(replyTo, indexBackend.name, indexLocation))
           .map {
             case ClusterRequestInit =>
-              val initialDb = JanusDatabase.openDatabase(configuration, system)
+              val initialDb = JanusDatabase.openDatabase(configuration, actorSystem)
               dropOtherConnections(initialDb)
               val effectiveDB = if (indexBackend.hasChanged(initialDb, indexLocation)) {
                 logger.info(s"The index backend has changed. Updating the graph configuration.")
                 indexBackend.updateDbConfig(initialDb, indexLocation)
                 initialDb.close()
-                JanusDatabase.openDatabase(configuration, system)
+                JanusDatabase.openDatabase(configuration, actorSystem)
               } else
                 initialDb
               val db = new JanusDatabase(
                 effectiveDB,
                 configuration,
-                system,
+                actorSystem,
                 singleInstance
               )
               schemas
@@ -129,7 +127,6 @@ class JanusDatabaseProvider @Inject() (
                     logger.error("***********************************************************************")
                     logger.error("* Database initialisation has failed. Restart application to retry it *")
                     logger.error("***********************************************************************")
-                    application.stop()
                     throw InternalError("Database initialisation failure", error)
                   },
                   { _ =>
@@ -141,23 +138,22 @@ class JanusDatabaseProvider @Inject() (
               logger.error("The cluster has inconsistent index configuration. Make sure application.conf are equivalent on all nodes in the cluster")
               logger.error(s"Cluster configuration: db.janusgraph.index.search.backend=$installedIndexBackend")
               logger.error(s"Local configuration (ignored): db.janusgraph.index.search.backend=$indexBackend")
-              new JanusDatabase(configuration, system, singleInstance)
+              new JanusDatabase(configuration, actorSystem, singleInstance)
             case ClusterSuccess =>
-              new JanusDatabase(configuration, system, singleInstance)
+              new JanusDatabase(configuration, actorSystem, singleInstance)
             case ClusterFailure =>
               logger.error("***********************************************************************")
               logger.error("* Database initialisation has failed. Restart application to retry it *")
               logger.error("***********************************************************************")
-              application.stop()
               throw InternalError("Database initialisation failure")
           }
         Await.result(futureDb, dbInitialisationTimeout)
       }
       .getOrElse {
         logger.warn("Indexer is not configured. Some queries could be very slow")
-        new JanusDatabase(configuration, system, singleInstance)
+        new JanusDatabase(configuration, actorSystem, singleInstance)
       }
-    applicationLifecycle.addStopHook(() => Future(databaseInstance.close()))
+    coordinatedShutdown.addTask("service-stop", "Close database")(() => Future(databaseInstance.close()).map(_ => Done))
     databaseInstance
   }
 }

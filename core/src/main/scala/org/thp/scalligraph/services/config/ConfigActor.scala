@@ -1,10 +1,11 @@
 package org.thp.scalligraph.services.config
 
 import akka.actor.{Actor, ActorRef}
-import javax.inject.Inject
+
 import org.thp.scalligraph.services.EventSrv
 
-class ConfigActor @Inject() (eventSrv: EventSrv) extends Actor {
+sealed trait ConfigTag
+class ConfigActor(eventSrv: EventSrv) extends Actor {
 
   override def preStart(): Unit = {
     eventSrv.subscribe(ConfigTopic.topicName, self)

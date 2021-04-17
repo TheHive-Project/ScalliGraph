@@ -1,15 +1,13 @@
 package org.thp.scalligraph.auth
 
-import java.net.ConnectException
-import java.util
-
-import javax.inject.{Inject, Singleton}
-import javax.naming.Context
-import javax.naming.directory._
 import org.thp.scalligraph.{AuthenticationError, AuthorizationError, EntityIdOrName}
 import play.api.mvc.RequestHeader
 import play.api.{Configuration, Logger}
 
+import java.net.ConnectException
+import java.util
+import javax.naming.Context
+import javax.naming.directory._
 import scala.util.{Failure, Success, Try}
 
 case class ADConfig(dnsDomain: String, winDomain: String, hosts: Seq[String], useSSL: Boolean)
@@ -86,8 +84,7 @@ class ADAuthSrv(adConfig: ADConfig, userSrv: UserSrv) extends AuthSrv {
     }
 }
 
-@Singleton
-class ADAuthProvider @Inject() (userSrv: UserSrv) extends AuthSrvProvider {
+class ADAuthProvider(userSrv: UserSrv) extends AuthSrvProvider {
   override val name: String = "ad"
   override def apply(config: Configuration): Try[AuthSrv] =
     for {

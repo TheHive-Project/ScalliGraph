@@ -1,11 +1,8 @@
 package org.thp.scalligraph.models
 
-import javax.inject.{Inject, Provider, Singleton}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.traversal.Graph
-import play.api.Logger
 
-import scala.collection.immutable
 import scala.util.{Success, Try}
 
 case class InitialValue[V <: Product](model: Model.Vertex[V], value: V) {
@@ -49,14 +46,4 @@ object Schema {
     new Schema {
       override def modelList: Seq[Model] = Nil
     }
-}
-
-@Singleton
-class GlobalSchema @Inject() (schemas: immutable.Set[UpdatableSchema]) extends Provider[Schema] {
-  lazy val logger: Logger = Logger(getClass)
-  lazy val schema: Schema = {
-    logger.debug(s"Build global schema from ${schemas.map(_.getClass.getSimpleName).mkString("+")}")
-    schemas.reduceOption[Schema](_ + _).getOrElse(Schema.empty)
-  }
-  override def get(): Schema = schema
 }

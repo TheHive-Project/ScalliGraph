@@ -1,15 +1,13 @@
 package org.thp.scalligraph.auth
 
-import java.net.ConnectException
-import java.util
-
-import javax.inject.{Inject, Singleton}
-import javax.naming.Context
-import javax.naming.directory._
 import org.thp.scalligraph.{AuthenticationError, AuthorizationError, EntityIdOrName}
 import play.api.mvc.RequestHeader
 import play.api.{Configuration, Logger}
 
+import java.net.ConnectException
+import java.util
+import javax.naming.Context
+import javax.naming.directory._
 import scala.util.{Failure, Success, Try}
 
 case class LdapConfig(hosts: Seq[String], useSSL: Boolean, bindDN: String, bindPW: String, baseDN: String, filter: String)
@@ -82,8 +80,7 @@ class LdapAuthSrv(ldapConfig: LdapConfig, userSrv: UserSrv) extends AuthSrv {
     }
 }
 
-@Singleton
-class LdapAuthProvider @Inject() (userSrv: UserSrv) extends AuthSrvProvider {
+class LdapAuthProvider(userSrv: UserSrv) extends AuthSrvProvider {
   override val name: String = "ldap"
   override def apply(config: Configuration): Try[AuthSrv] =
     for {

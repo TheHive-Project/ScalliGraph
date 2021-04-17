@@ -1,6 +1,5 @@
 package org.thp.scalligraph.services.config
 
-import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.BadConfigurationError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.Database
@@ -17,8 +16,7 @@ trait ConfigContext[C] {
   def setValue(context: C, path: String, value: JsValue): Try[String]
 }
 
-@Singleton
-class GlobalConfigContext @Inject() (db: Database) extends ConfigContext[Unit] {
+class GlobalConfigContext(db: Database) extends ConfigContext[Unit] {
   override def defaultPath(path: String): String = path
 
   override def getValue(context: Unit, path: String): Option[JsValue] =

@@ -1,15 +1,13 @@
 package org.thp.scalligraph.auth
 
-import java.io.ByteArrayInputStream
-import java.security.cert.X509Certificate
-import java.util.{List => JList}
-
-import javax.inject.{Inject, Singleton}
-import javax.naming.ldap.LdapName
 import org.bouncycastle.asn1._
 import play.api.Configuration
 import play.api.mvc.Request
 
+import java.io.ByteArrayInputStream
+import java.security.cert.X509Certificate
+import java.util.{List => JList}
+import javax.naming.ldap.LdapName
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
 import scala.util.Try
@@ -19,12 +17,13 @@ class PkiAuthSrv(certificateField: String, requestOrganisation: RequestOrganisat
   override val name: String = "pki"
 
   @scala.annotation.tailrec
-  final def asn1String(obj: ASN1Primitive): String = obj match {
-    case ds: DERUTF8String    => DERUTF8String.getInstance(ds).getString
-    case to: ASN1TaggedObject => asn1String(ASN1TaggedObject.getInstance(to).getObject)
-    case os: ASN1OctetString  => new String(os.getOctets)
-    case as: ASN1String       => as.getString
-  }
+  final def asn1String(obj: ASN1Primitive): String =
+    obj match {
+      case ds: DERUTF8String    => DERUTF8String.getInstance(ds).getString
+      case to: ASN1TaggedObject => asn1String(ASN1TaggedObject.getInstance(to).getObject)
+      case os: ASN1OctetString  => new String(os.getOctets)
+      case as: ASN1String       => as.getString
+    }
 
   object CertificateSAN {
 
@@ -89,8 +88,7 @@ class PkiAuthSrv(certificateField: String, requestOrganisation: RequestOrganisat
       }
 }
 
-@Singleton
-class PkiAuthProvider @Inject() (requestOrganisation: RequestOrganisation, userSrv: UserSrv, ec: ExecutionContext) extends AuthSrvProvider {
+class PkiAuthProvider(requestOrganisation: RequestOrganisation, userSrv: UserSrv, ec: ExecutionContext) extends AuthSrvProvider {
   override val name: String = "pki"
   override def apply(config: Configuration): Try[AuthSrv] =
     for {

@@ -11,7 +11,7 @@ import scala.concurrent.Future
 /**
   * This class handles errors. It traverses all causes of exception to find known error and shows the appropriate message
   */
-class ErrorHandler extends HttpErrorHandler {
+object ErrorHandler extends HttpErrorHandler {
   lazy val logger: Logger = Logger(getClass)
 
   def onClientError(request: RequestHeader, statusCode: Int, message: String): Future[Result] = {

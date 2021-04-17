@@ -1,108 +1,199 @@
 package org.thp.scalligraph
 
-import java.util.{Set => JSet}
+import _root_.controllers.AssetsComponents
+import akka.actor.{ActorRef, ActorSystem, PoisonPill, Props}
+import akka.cluster.Cluster
+import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
+import akka.stream.Materializer
+import com.softwaremill.tagging._
+import org.thp.scalligraph.auth.AuthSrvProvider
+import org.thp.scalligraph.models.{Database, DatabaseFactory, UpdatableSchema}
+import org.thp.scalligraph.query.QueryExecutor
+import org.thp.scalligraph.services.{StorageFactory, StorageSrv}
+import play.api.ApplicationLoader.Context
+import play.api._
+import play.api.cache.caffeine.CaffeineCacheComponents
+import play.api.cache.{DefaultSyncCacheApi, SyncCacheApi}
+import play.api.http.{FileMimeTypes, HttpConfiguration, HttpErrorHandler}
+import play.api.libs.Files.{TemporaryFileCreator, TemporaryFileReaper}
+import play.api.libs.concurrent.ActorSystemProvider.ApplicationShutdownReason
+import play.api.libs.ws.WSClient
+import play.api.libs.ws.ahc.AhcWSComponents
+import play.api.mvc.{DefaultActionBuilder, EssentialFilter}
+import play.api.routing.{Router, SimpleRouter}
 
-import com.google.inject.internal.{BindingImpl, Scoping}
-import com.google.inject.spi._
-import com.google.inject.util.{Modules => GuiceModules}
-import com.google.inject.{Binder, Module => GuiceModule, _}
-import javax.inject.Inject
-import net.codingwell.scalaguice.{ScalaModule, ScalaMultibinder}
-import org.thp.scalligraph.models.{GlobalSchema, Schema}
-import play.api.inject.guice._
-import play.api.routing.Router
-import play.api.{ApplicationLoader, Configuration, Environment, Logger}
+import scala.concurrent.ExecutionContext
+import scala.reflect.runtime.{universe => ru}
 
-import scala.collection.JavaConverters._
+trait ScalligraphModule {
+  def routers: Set[Router]
+  def queryExecutors: Set[QueryExecutor]
+  def schemas: Set[UpdatableSchema]
+  def authSrvProviders: Set[AuthSrvProvider]
 
-class ScalligraphGuiceableModule(modules: Seq[GuiceableModule]) extends GuiceableModule {
-  override def guiced(env: Environment, conf: Configuration, binderOptions: Set[BinderOption]): Seq[GuiceModule] = {
-    val guiceModules = modules.flatMap(_.guiced(env, conf, binderOptions))
-    val globalModule = guiceModules.tail.foldLeft(guiceModules.head) { (parentModule, childModule) =>
-      GuiceModules.`override`(parentModule).`with`(addMultiBindings(childModule))
+  def init(): Unit = ()
+
+  def configure(scalligraphApplication: ScalligraphApplication): ScalligraphModule = {
+    _scalligraphApplication = Some(scalligraphApplication)
+    init()
+    this
+  }
+  private var _scalligraphApplication: Option[ScalligraphApplication] = None
+
+  lazy val scalligraphApplication: ScalligraphApplication = _scalligraphApplication.getOrElse(???)
+  lazy val environment: Environment                       = scalligraphApplication.context.environment
+  lazy val globalSchemas: Set[UpdatableSchema] @@ Global  = scalligraphApplication.schemas
+
+  def wireActorSingleton(props: Props, name: String): ActorRef = {
+    val singletonManager =
+      scalligraphApplication
+        .actorSystem
+        .actorOf(
+          ClusterSingletonManager.props(
+            singletonProps = props,
+            terminationMessage = PoisonPill,
+            settings = ClusterSingletonManagerSettings(scalligraphApplication.actorSystem)
+          ),
+          name = s"$name-Manager"
+        )
+
+    scalligraphApplication
+      .actorSystem
+      .actorOf(
+        ClusterSingletonProxy.props(
+          singletonManagerPath = singletonManager.path.toStringWithoutAddress,
+          settings = ClusterSingletonProxySettings(scalligraphApplication.actorSystem)
+        ),
+        name = s"$name-Proxy"
+      )
+  }
+}
+
+trait ScalligraphApplication {
+  def httpConfiguration: HttpConfiguration
+  def context: Context
+  def configuration: Configuration
+  def application: Application
+  def database: Database
+  def actorSystem: ActorSystem
+  def executionContext: ExecutionContext
+  def syncCacheApi: SyncCacheApi
+  def storageSrv: StorageSrv
+  def materializer: Materializer
+  def wsClient: WSClient
+  def defaultActionBuilder: DefaultActionBuilder
+  def singleInstance: SingleInstance
+  def schemas: Set[UpdatableSchema] @@ Global
+  def queryExecutors: Set[QueryExecutor] @@ Global
+  def tempFileReaper: TemporaryFileReaper
+  def tempFileCreator: TemporaryFileCreator
+  def router: Router
+  def fileMimeTypes: FileMimeTypes
+  def getQueryExecutor(version: Int): QueryExecutor
+  def authSrvProviders: Set[AuthSrvProvider] @@ Global
+}
+
+class ScalligraphApplicationLoader extends ApplicationLoader {
+  override def load(context: Context): Application = {
+    LoggerConfigurator(context.environment.classLoader).foreach {
+      _.configure(context.environment, context.initialConfiguration, Map.empty)
     }
-    Seq(globalModule)
+    val scalligraphComponent = new ScalligraphComponent(context)
+    try {
+      scalligraphComponent.router
+      scalligraphComponent.application
+    } catch {
+      case e: Throwable =>
+        scalligraphComponent.coordinatedShutdown.run(ApplicationShutdownReason).map(_ => System.exit(1))(scalligraphComponent.executionContext)
+        throw e
+    }
+  }
+}
+
+sealed trait Global
+
+class ScalligraphComponent(val context: Context)
+    extends BuiltInComponentsFromContext(context)
+    with CaffeineCacheComponents
+    with AhcWSComponents
+    with ScalligraphApplication
+    with AssetsComponents /*with HttpFiltersComponents*/ { self =>
+  val logger: Logger = Logger(getClass)
+
+  lazy val modules: Seq[ScalligraphModule] = {
+    val rm: ru.Mirror = ru.runtimeMirror(getClass.getClassLoader)
+    configuration
+      .get[Seq[String]]("scalligraph.modules")
+      .flatMap { moduleName =>
+        rm.reflectModule(rm.staticModule(moduleName)).instance match {
+          case obj: ScalligraphModule =>
+            logger.info(s"Loading module ${obj.getClass.getSimpleName.stripSuffix("$")}")
+            Some(obj.configure(this))
+          case obj =>
+            logger.error(s"Fail to load module ${obj.getClass.getSimpleName}")
+            None
+        }
+      }
   }
 
-  override def disable(classes: Seq[Class[_]]): GuiceableModule =
-    new ScalligraphGuiceableModule(modules.filterNot(o => classes.exists(_.isAssignableFrom(o.getClass))))
-
-  class InternalMultiBinding[T](binding: LinkedKeyBinding[T]) extends BindingImpl[T](null, binding.getKey, Scoping.UNSCOPED) {
-    override def acceptTargetVisitor[V](visitor: BindingTargetVisitor[_ >: T, V]): V = visitor.visit(binding)
-    override def applyTo(binder: Binder): Unit = {
-      val multiBinder = ScalaMultibinder.newSetBinder[T](binder, binding.getKey.getTypeLiteral)
-      multiBinder.addBinding.to(binding.getLinkedKey)
-      ()
+  override lazy val singleInstance: SingleInstance = new SingleInstance(configuration.get[Seq[String]]("akka.cluster.seed-nodes").isEmpty) {
+    if (value) {
+      logger.info("Initialising cluster")
+      val cluster = Cluster(actorSystem)
+      cluster.join(cluster.system.provider.getDefaultAddress)
     }
   }
 
-  class MultibindVisitor[T] extends DefaultBindingTargetVisitor[T, Seq[Element]] {
-    def isMultiBind(key: Key[_]): Boolean = Option(key.getAnnotationType).map(_.getName).contains("com.google.inject.internal.Element")
+  override lazy val schemas: Set[UpdatableSchema] @@ Global = modules.flatMap(_.schemas).toSet.taggedWith[Global]
 
-    override def visit(linkedKeyBinding: LinkedKeyBinding[_ <: T]): Seq[Element] =
-      if (isMultiBind(linkedKeyBinding.getKey)) Nil
-      else Seq(new InternalMultiBinding(linkedKeyBinding))
-
-    override def visitOther(binding: Binding[_ <: T]): Seq[Element] = Nil
+  override lazy val syncCacheApi: SyncCacheApi = defaultCacheApi.sync match {
+    case sync: SyncCacheApi => sync
+    case _                  => new DefaultSyncCacheApi(defaultCacheApi)
   }
 
-  def addMultiBindings(module: GuiceModule): GuiceModule = {
-    val elements = Elements.getElements(module).asScala
-    val cc = elements ++ elements.flatMap { e =>
-      e.acceptVisitor(new DefaultElementVisitor[Seq[Element]] {
-        override def visit[T](binding: Binding[T]): Seq[Element] = binding.acceptTargetVisitor(new MultibindVisitor[T])
-        override def visitOther(element: Element): Seq[Element]  = Nil
-      })
+  override lazy val router: Router = modules
+    .flatMap(_.routers.zipWithIndex)
+    .sortBy(_._2)
+    .map(_._1)
+    .reduceOption(_ orElse _)
+    .getOrElse(Router.empty)
+    .orElse {
+      SimpleRouter {
+        case _ => ???
+      }
     }
-    Elements.getModule(cc.asJava)
-  }
-}
+//  val authRoutes: Routes = {
+//    case _ =>
+//      actionBuilder.async { request =>
+//        authSrv
+//          .actionFunction(defaultAction)
+//          .invokeBlock(
+//            request,
+//            (_: AuthenticatedRequest[AnyContent]) =>
+//              if (request.path.endsWith("/ssoLogin"))
+//                Future.successful(Results.Redirect(prefix))
+//              else
+//                Future.failed(NotFoundError(request.path))
+//          )
+//      }
+//  }
 
-object ScalligraphApplicationLoader {
+  override lazy val httpErrorHandler: HttpErrorHandler = ErrorHandler
 
-  def loadModules(origLoadModules: (Environment, Configuration) => Seq[GuiceableModule]): (Environment, Configuration) => Seq[GuiceableModule] = {
-    (env, conf) =>
-      Seq(new ScalligraphGuiceableModule(origLoadModules(env, conf) :+ GuiceableModule.guiceable(new ScalligraphModule)))
-  }
-}
+  override lazy val queryExecutors: Set[QueryExecutor] @@ Global = modules.flatMap(_.queryExecutors).toSet.taggedWith[Global]
 
-class ScalligraphApplicationLoader extends GuiceApplicationLoader {
+  override def httpFilters: Seq[EssentialFilter] = Seq(new AccessLogFilter()(executionContext))
 
-  import ScalligraphApplicationLoader._
+  override lazy val database: Database     = DatabaseFactory.apply(this)
+  override lazy val storageSrv: StorageSrv = StorageFactory.apply(this)
 
-  lazy val logger: Logger = Logger("ScalligraphApplication")
-  logger.info("Loading application ...")
+  override def getQueryExecutor(version: Int): QueryExecutor =
+    syncCacheApi.getOrElseUpdate(s"QueryExecutor.$version") {
+      queryExecutors
+        .filter(_.versionCheck(version))
+        .reduceOption(_ ++ _)
+        .getOrElse(throw BadRequestError(s"No available query executor for version $version"))
+    }
 
-  override protected def builder(context: ApplicationLoader.Context): GuiceApplicationBuilder = {
-    val builder = initialBuilder
-      .disableCircularProxies()
-      .in(context.environment)
-      .loadConfig(context.initialConfiguration)
-      .overrides(overrides(context): _*)
-    builder.load(loadModules(builder.loadModules))
-  }
-}
-
-class ScalligraphModule extends ScalaModule {
-  override def configure(): Unit = {
-    Logger(getClass).info("Loading scalligraph module")
-    bind(classOf[Router]).toProvider(classOf[ScalligraphRouter])
-    bind(classOf[Schema]).toProvider(classOf[GlobalSchema])
-    ()
-  }
-}
-
-class ParentProvider[T] @Inject() (instances: Provider[JSet[T]]) extends Provider[Option[T]] {
-
-  def get(): Option[T] = {
-    val callerClassName = new Exception().getStackTrace.tail.head.getClassName
-    instances
-      .get
-      .iterator()
-      .asScala
-      .toList
-      .dropWhile(_.getClass.getName != callerClassName)
-      .drop(1)
-      .headOption
-  }
+  override lazy val authSrvProviders: Set[AuthSrvProvider] @@ Global = modules.flatMap(_.authSrvProviders).toSet.taggedWith[Global]
 }

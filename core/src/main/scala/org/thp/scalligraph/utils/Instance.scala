@@ -1,9 +1,9 @@
 package org.thp.scalligraph.utils
 
+import play.api.mvc.RequestHeader
+
 import java.rmi.dgc.VMID
 import java.util.concurrent.atomic.AtomicInteger
-
-import play.api.mvc.RequestHeader
 
 object Instance {
   val id: String                           = (new VMID).toString
