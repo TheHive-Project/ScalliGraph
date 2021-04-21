@@ -16,7 +16,7 @@ class IndexTest extends PlaySpecification {
   val authContext: AuthContext = AuthContextImpl("me", "", EntityName(""), "", Set.empty)
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    implicit val db: Database = dbProvider.get()
+    implicit val db: Database = dbProvider.get
     val model                 = Model.vertex[EntityWithUniqueName]
     db.createSchema(model)
     db.addSchemaIndexes(model)

@@ -10,7 +10,7 @@ class CallbackTest extends PlaySpecification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    val db: Database = dbProvider.get()
+    val db: Database = dbProvider.get
 
     s"[${dbProvider.name}] entity" should {
       "execute transaction callbacks when readonly transaction is committed" in {

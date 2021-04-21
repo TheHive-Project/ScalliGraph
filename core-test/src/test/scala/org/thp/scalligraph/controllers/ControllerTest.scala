@@ -37,19 +37,5 @@ class ControllerTest(implicit executionEnv: ExecutionEnv) extends PlaySpecificat
       val bodyText = contentAsString(result)
       bodyText must be equalTo "ok"
     }
-
-//    "render stream with total number of element in header" in {
-//
-//      val actionBuilder = DefaultActionBuilder(Helpers.stubBodyParser())
-//      val entrypoint    = new EntryPoint(mock[AuthenticateSrv], actionBuilder, new ErrorHandler, ee.ec, mat)
-//
-//      val action = entrypoint("find entity")
-//        .chunked(_ => Source(0 to 3).mapMaterializedValue(_ => 10))
-//      val request = FakeRequest("GET", "/")
-//      val result  = Await.result(action(request), 1.second)
-//      result.header.headers("X-Total") must_=== "10"
-//      result.body.contentType must beSome("application/json")
-//      Await.result(result.body.consumeData.map(_.decodeString("utf-8")), 1.second) must_=== Json.arr(0, 1, 2, 3).toString
-//    }
   }
 }

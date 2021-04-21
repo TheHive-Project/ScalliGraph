@@ -11,8 +11,8 @@ import play.api.Logger
 import scala.concurrent.Future
 
 class EventSrv(system: ActorSystem) {
-  lazy val logger: Logger = Logger(getClass)
-  private val mediator    = DistributedPubSub(system).mediator
+  lazy val logger: Logger   = Logger(getClass)
+  private lazy val mediator = DistributedPubSub(system).mediator
 
   def publish(topicName: String)(message: Any): Unit = {
     logger.debug(s"publish $topicName $message")

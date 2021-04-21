@@ -1,11 +1,11 @@
 package org.thp.scalligraph
 
+import org.specs2.mutable.Specification
 import org.thp.scalligraph.utils.Retry
-import play.api.test.PlaySpecification
 
 import scala.util.Success
 
-class RetryTest extends PlaySpecification {
+class RetryTest extends Specification {
 
   "Retry" should {
     "catch direct exception" in {
@@ -25,9 +25,8 @@ class RetryTest extends PlaySpecification {
         .on[ArithmeticException]
         .withTry {
           count += 1
-          try {
-            Success(12 / (count - 1))
-          } catch { case t: Throwable => throw new RuntimeException("wrap", t) }
+          try Success(12 / (count - 1))
+          catch { case t: Throwable => throw new RuntimeException("wrap", t) }
         }
       count must_=== 2
     }

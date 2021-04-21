@@ -26,7 +26,7 @@ class CardinalityTest extends PlaySpecification {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    val db: Database = dbProvider.get()
+    val db: Database = dbProvider.get
     db.createSchema(Model.vertex[EntityWithSeq])
     db.addSchemaIndexes(Model.vertex[EntityWithSeq])
     val entityWithSeqSrv: EntityWithSeqSrv = new EntityWithSeqSrv
@@ -64,13 +64,6 @@ class CardinalityTest extends PlaySpecification {
         // This test fails with OrientDB : https://github.com/orientechnologies/orientdb-gremlin/issues/120
         }
       }
-
-//      "update an entity" in db.transaction { implicit graph =>
-//        val id = entityWithSeqSrv.create(EntityWithSeq("super", 7))._id
-//        entityWithSeqSrv.update(id, "value", 8)
-//
-//        entityWithSeqSrv.getOrFail(id).value must_=== 8
-//      }
     }
   }
 }

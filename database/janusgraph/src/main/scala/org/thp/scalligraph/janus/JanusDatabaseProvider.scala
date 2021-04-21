@@ -21,11 +21,11 @@ import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
 
-class JanusDatabaseProvider(scalligraphApplication: ScalligraphApplication) extends Provider[Database] {
-  val configuration: Configuration             = scalligraphApplication.configuration
-  val schemas: Set[UpdatableSchema]            = scalligraphApplication.schemas
-  val actorSystem: ActorSystem                 = scalligraphApplication.actorSystem
-  val singleInstance: SingleInstance           = scalligraphApplication.singleInstance
+class JanusDatabaseProvider(app: ScalligraphApplication) extends Provider[Database] {
+  val configuration: Configuration             = app.configuration
+  def schemas: Seq[UpdatableSchema]            = app.schemas()
+  val actorSystem: ActorSystem                 = app.actorSystem
+  val singleInstance: SingleInstance           = app.singleInstance
   val coordinatedShutdown: CoordinatedShutdown = CoordinatedShutdown(actorSystem)
 
   implicit val scheduler: Scheduler = actorSystem.toTyped.scheduler

@@ -1,5 +1,6 @@
 package org.thp.scalligraph.models
 
+import org.specs2.mutable.Specification
 import org.specs2.specification.core.Fragments
 import org.thp.scalligraph.BuildVertexEntity
 import org.thp.scalligraph.auth.{AuthContext, UserSrv}
@@ -7,7 +8,6 @@ import org.thp.scalligraph.services.VertexSrv
 import org.thp.scalligraph.traversal.Graph
 import org.thp.scalligraph.traversal.TraversalOps._
 import play.api.libs.logback.LogbackLoggerConfigurator
-import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
 
 import scala.util.Try
@@ -23,14 +23,14 @@ class MyEntitySrv extends VertexSrv[MyEntity] {
   def create(e: MyEntity)(implicit graph: Graph, authContext: AuthContext): Try[MyEntity with Entity] = createEntity(e)
 }
 
-class SimpleEntityTest extends PlaySpecification {
+class SimpleEntityTest extends Specification {
 
   val userSrv: UserSrv                  = DummyUserSrv()
   implicit val authContext: AuthContext = userSrv.getSystemAuthContext
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    val db: Database = dbProvider.get()
+    val db: Database = dbProvider.get
     db.createSchema(Model.vertex[MyEntity])
     db.addSchemaIndexes(Model.vertex[MyEntity])
     val myEntitySrv: MyEntitySrv = new MyEntitySrv

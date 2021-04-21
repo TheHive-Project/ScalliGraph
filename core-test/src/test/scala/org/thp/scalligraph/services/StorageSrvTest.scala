@@ -36,13 +36,13 @@ class StorageSrvTest extends Specification with Mockito {
   userSrv.getSystemAuthContext returns AuthContextImpl("test", "Test user", EntityName("test"), "test-request-id", Set.empty)
 
   val dbProvStorageSrv: Seq[(DatabaseProvider, StorageSrv)] = dbProviders.list.map { db =>
-    db -> new DatabaseStorageSrv(32 * 1024, userSrv, db.get())
+    db -> new DatabaseStorageSrv(32 * 1024, userSrv, db.get)
 //    case db if db.name == "orientdb" => db -> new OrientDatabaseStorageSrv(db.get().asInstanceOf[OrientDatabase], 32 * 1024)
   } // :+ (new DatabaseProvider("janus", new JanusDatabase(actorSystem)) -> new LocalFileSystemStorageSrv(storageDirectory))
 
   Fragments.foreach(dbProvStorageSrv) {
     case (dbProvider, storageSrv) =>
-      val db = dbProvider.get()
+      val db = dbProvider.get
       step(db.createSchema(Nil)) ^ specs(dbProvider.name, db, storageSrv) ^ step(db.drop())
   }
 
@@ -63,7 +63,7 @@ class StorageSrvTest extends Specification with Mockito {
         val is1 = storageSrv.loadBinary("test", fId)
         val is2 = Files.newInputStream(filePath)
         try {
-          streamCompare(is1, is2) must beTrue
+          streamCompare(is1, is2)        must beTrue
           storageSrv.exists("test", fId) must beTrue
         } finally {
           is1.close()

@@ -84,7 +84,7 @@ class DelayRetry(maxTries: Int, exceptions: Seq[Class[_]], scheduler: Scheduler,
       case e: Throwable if 1 < maxTries =>
         logger.error("uncaught error, not retrying", e)
         throw e
-      case e =>
+      case e: Throwable =>
         logger.error("An error occurs", e)
         throw e
     }
@@ -117,7 +117,7 @@ class DelayRetry(maxTries: Int, exceptions: Seq[Class[_]], scheduler: Scheduler,
       case e: Throwable if currentTry < maxTries =>
         logger.error("uncaught error, not retrying", e)
         throw e
-      case e =>
+      case e: Throwable =>
         logger.error("An error occurs", e)
         throw e
     }

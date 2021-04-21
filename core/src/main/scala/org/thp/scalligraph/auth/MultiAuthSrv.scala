@@ -1,17 +1,16 @@
 package org.thp.scalligraph.auth
 
-import com.softwaremill.tagging.@@
 import org.thp.scalligraph.controllers.AuthenticatedRequest
 import org.thp.scalligraph.services.config.ApplicationConfig.configurationFormat
 import org.thp.scalligraph.services.config.{ApplicationConfig, ConfigItem}
-import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError, EntityIdOrName, Global, RichSeq}
+import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError, EntityIdOrName, RichSeq}
 import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
 import play.api.{Configuration, Logger}
 
 import javax.inject.Provider
 import scala.util.{Failure, Success, Try}
 
-class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, availableAuthProviders: Set[AuthSrvProvider]) extends AuthSrv {
+class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, availableAuthProviders: Seq[AuthSrvProvider]) extends AuthSrv {
   val name: String        = "multi"
   lazy val logger: Logger = Logger(getClass)
 
@@ -115,7 +114,7 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
     forAllAuthProviders(authProviders)(_.removeKey(username))
 }
 
-class MultiAuthSrvProvider(configuration: Configuration, appConfig: ApplicationConfig, authProviders: Set[AuthSrvProvider] @@ Global)
+class MultiAuthSrvProvider(configuration: Configuration, appConfig: ApplicationConfig, authProviders: Seq[AuthSrvProvider])
     extends Provider[AuthSrv] {
   override def get(): AuthSrv = new MultiAuthSrv(configuration, appConfig, authProviders)
 }

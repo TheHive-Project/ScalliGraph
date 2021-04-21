@@ -28,7 +28,10 @@ trait UpdatableSchema extends Schema {
 
 trait Schema { schema =>
   def modelList: Seq[Model]
-  def initialValues: Seq[InitialValue[_]]                                            = Nil
+  def initialValues: Seq[InitialValue[_]] =
+    modelList.collect {
+      case vertexModel: VertexModel => vertexModel.getInitialValues
+    }.flatten
   final def getModel(label: String): Option[Model]                                   = modelList.find(_.label == label)
   def init(db: Database)(implicit graph: Graph, authContext: AuthContext): Try[Unit] = Success(())
 

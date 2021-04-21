@@ -38,17 +38,24 @@ object JanusDatabase {
   lazy val logger: Logger = Logger(getClass)
 
   def openDatabase(configuration: Configuration, system: ActorSystem): JanusGraph = {
-    val backend = configuration.get[String]("db.janusgraph.storage.backend")
-    if (backend == "berkeleyje") {
-      val jePropertyFile = Paths.get(configuration.get[String]("db.janusgraph.storage.directory"), "je.properties")
-      configuration.getOptional[ConfigObject]("db.janusgraph.berkeleyje").foreach { configObject =>
-        Files.createDirectories(jePropertyFile.getParent)
-        val props = new Properties
-        configObject.asScala.foreach { case (k, v) => props.put(s"je.$k", v.render()) }
-        val propertyOutputStream = Files.newOutputStream(jePropertyFile)
-        try props.store(propertyOutputStream, "DO NOT EDIT, FILE GENERATED FROM application.conf")
-        finally propertyOutputStream.close()
-      }
+    configuration.get[String]("db.janusgraph.storage.backend") match {
+      case "berkeleyje" =>
+        val directory = configuration.get[String]("db.janusgraph.storage.directory")
+        logger.info(s"Loading database berkeleyje in $directory")
+        val jePropertyFile = Paths.get(directory, "je.properties")
+        configuration.getOptional[ConfigObject]("db.janusgraph.berkeleyje").foreach { configObject =>
+          Files.createDirectories(jePropertyFile.getParent)
+          val props = new Properties
+          configObject.asScala.foreach { case (k, v) => props.put(s"je.$k", v.render()) }
+          val propertyOutputStream = Files.newOutputStream(jePropertyFile)
+          try props.store(propertyOutputStream, "DO NOT EDIT, FILE GENERATED FROM application.conf")
+          finally propertyOutputStream.close()
+        }
+      case "cql" =>
+        val hostname = configuration.get[Seq[String]]("db.janusgraph.storage.hostname")
+        logger.info(s"Loading database cassandra in ${hostname.mkString(",")}")
+      case other =>
+        logger.info(s"Loading database $other")
     }
     val maxAttempts  = configuration.get[Int]("db.janusgraph.connect.maxAttempts")
     val minBackoff   = configuration.get[FiniteDuration]("db.janusgraph.connect.minBackoff")
@@ -157,7 +164,10 @@ class JanusDatabase(
     )
   }
 
-  override def close(): Unit = janusGraph.close()
+  override def close(): Unit = {
+    logger.info(s"Closing database (${System.identityHashCode(this)}")
+    janusGraph.close()
+  }
 
   private def parseId(s: String): AnyRef = Try(JLong.valueOf(s)).getOrElse(RelationIdentifier.parse(s))
   override val idMapping: Mapping[EntityId, EntityId, AnyRef] = new Mapping[EntityId, EntityId, AnyRef](id => parseId(id.value), EntityId.apply) {

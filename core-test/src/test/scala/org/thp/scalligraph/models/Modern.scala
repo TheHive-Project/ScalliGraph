@@ -61,36 +61,35 @@ class SoftwareSrv extends VertexSrv[Software] {
   def create(e: Software)(implicit graph: Graph, authContext: AuthContext): Try[Software with Entity] = createEntity(e)
 }
 
-class ModernSchema extends Schema {
-  val personSrv                                    = new PersonSrv
-  val softwareSrv                                  = new SoftwareSrv
-  val knowsSrv                                     = new EdgeSrv[Knows, Person, Person]
-  val createdSrv                                   = new EdgeSrv[Created, Person, Software]
-  val vertexServices: Seq[VertexSrv[_]]            = Seq(personSrv, softwareSrv)
-  override def modelList: Seq[Model]               = (vertexServices :+ knowsSrv :+ createdSrv).map(_.model)
-  override def initialValues: Seq[InitialValue[_]] = vertexServices.map(_.model.getInitialValues).flatten
+object ModernSchema extends Schema {
+  override def modelList: Seq[Model] = Seq(Model.vertex[Person], Model.vertex[Software], Model.edge[Knows], Model.edge[Created])
 }
 
 object ModernDatabaseBuilder {
 
-  def build(schema: ModernSchema)(implicit db: Database, authContext: AuthContext): Try[Unit] =
-    db.createSchemaFrom(schema)
-      .flatMap(_ => db.addSchemaIndexes(schema))
+  val personSrv   = new PersonSrv
+  val softwareSrv = new SoftwareSrv
+  val knowsSrv    = new EdgeSrv[Knows, Person, Person]
+  val createdSrv  = new EdgeSrv[Created, Person, Software]
+
+  def build(db: Database)(implicit authContext: AuthContext): Try[Unit] =
+    db.createSchemaFrom(ModernSchema)
+      .flatMap(_ => db.addSchemaIndexes(ModernSchema))
       .flatMap { _ =>
         db.tryTransaction { implicit graph =>
           for {
-            vadas  <- schema.personSrv.create(Person("vadas", 27))
-            marko  <- schema.personSrv.create(Person("marko", 29))
-            josh   <- schema.personSrv.create(Person("josh", 32))
-            peter  <- schema.personSrv.create(Person("peter", 35))
-            lop    <- schema.softwareSrv.create(Software("lop", "java"))
-            ripple <- schema.softwareSrv.create(Software("ripple", "java"))
-            _      <- schema.knowsSrv.create(Knows(0.5), marko, vadas)
-            _      <- schema.knowsSrv.create(Knows(1), marko, josh)
-            _      <- schema.createdSrv.create(Created(0.4), marko, lop)
-            _      <- schema.createdSrv.create(Created(1), josh, ripple)
-            _      <- schema.createdSrv.create(Created(0.4), josh, lop)
-            _      <- schema.createdSrv.create(Created(0.2), peter, lop)
+            vadas  <- personSrv.create(Person("vadas", 27))
+            marko  <- personSrv.create(Person("marko", 29))
+            josh   <- personSrv.create(Person("josh", 32))
+            peter  <- personSrv.create(Person("peter", 35))
+            lop    <- softwareSrv.create(Software("lop", "java"))
+            ripple <- softwareSrv.create(Software("ripple", "java"))
+            _      <- knowsSrv.create(Knows(0.5), marko, vadas)
+            _      <- knowsSrv.create(Knows(1), marko, josh)
+            _      <- createdSrv.create(Created(0.4), marko, lop)
+            _      <- createdSrv.create(Created(1), josh, ripple)
+            _      <- createdSrv.create(Created(0.4), josh, lop)
+            _      <- createdSrv.create(Created(0.2), peter, lop)
           } yield ()
         }
       }

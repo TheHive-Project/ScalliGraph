@@ -1,11 +1,11 @@
 package org.thp.scalligraph
 
-import _root_.controllers.AssetsComponents
+import _root_.controllers.{Assets, AssetsComponents}
 import akka.actor.{ActorRef, ActorSystem, PoisonPill, Props}
 import akka.cluster.Cluster
 import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
 import akka.stream.Materializer
-import com.softwaremill.tagging._
+import com.softwaremill.macwire.Module
 import org.thp.scalligraph.auth.AuthSrvProvider
 import org.thp.scalligraph.models.{Database, DatabaseFactory, UpdatableSchema}
 import org.thp.scalligraph.query.QueryExecutor
@@ -20,77 +20,67 @@ import play.api.libs.concurrent.ActorSystemProvider.ApplicationShutdownReason
 import play.api.libs.ws.WSClient
 import play.api.libs.ws.ahc.AhcWSComponents
 import play.api.mvc.{DefaultActionBuilder, EssentialFilter}
-import play.api.routing.{Router, SimpleRouter}
+import play.api.routing.Router
 
+import java.io.File
 import scala.concurrent.ExecutionContext
-import scala.reflect.runtime.{universe => ru}
-
+import scala.reflect.{classTag, ClassTag}
+import scala.util.control.NonFatal
 trait ScalligraphModule {
-  def routers: Set[Router]
-  def queryExecutors: Set[QueryExecutor]
-  def schemas: Set[UpdatableSchema]
-  def authSrvProviders: Set[AuthSrvProvider]
-
   def init(): Unit = ()
+}
 
-  def configure(scalligraphApplication: ScalligraphApplication): ScalligraphModule = {
-    _scalligraphApplication = Some(scalligraphApplication)
-    init()
-    this
-  }
-  private var _scalligraphApplication: Option[ScalligraphApplication] = None
-
-  lazy val scalligraphApplication: ScalligraphApplication = _scalligraphApplication.getOrElse(???)
-  lazy val environment: Environment                       = scalligraphApplication.context.environment
-  lazy val globalSchemas: Set[UpdatableSchema] @@ Global  = scalligraphApplication.schemas
-
-  def wireActorSingleton(props: Props, name: String): ActorRef = {
+trait ActorSingletonUtils {
+  def wireActorSingleton(actorSystem: ActorSystem, props: Props, name: String): ActorRef = {
     val singletonManager =
-      scalligraphApplication
-        .actorSystem
+      actorSystem
         .actorOf(
           ClusterSingletonManager.props(
             singletonProps = props,
             terminationMessage = PoisonPill,
-            settings = ClusterSingletonManagerSettings(scalligraphApplication.actorSystem)
+            settings = ClusterSingletonManagerSettings(actorSystem)
           ),
           name = s"$name-Manager"
         )
 
-    scalligraphApplication
-      .actorSystem
+    actorSystem
       .actorOf(
         ClusterSingletonProxy.props(
           singletonManagerPath = singletonManager.path.toStringWithoutAddress,
-          settings = ClusterSingletonProxySettings(scalligraphApplication.actorSystem)
+          settings = ClusterSingletonProxySettings(actorSystem)
         ),
         name = s"$name-Proxy"
       )
   }
 }
 
+@Module
 trait ScalligraphApplication {
+  def loadedModules: Seq[ScalligraphModule]
+  def getModule[M: ClassTag]: M
+  def injectModule(module: ScalligraphModule): Unit
   def httpConfiguration: HttpConfiguration
-  def context: Context
+  val context: Context
   def configuration: Configuration
   def application: Application
   def database: Database
   def actorSystem: ActorSystem
-  def executionContext: ExecutionContext
+  implicit def executionContext: ExecutionContext
   def syncCacheApi: SyncCacheApi
   def storageSrv: StorageSrv
   def materializer: Materializer
   def wsClient: WSClient
   def defaultActionBuilder: DefaultActionBuilder
   def singleInstance: SingleInstance
-  def schemas: Set[UpdatableSchema] @@ Global
-  def queryExecutors: Set[QueryExecutor] @@ Global
+  def schemas: SemiMutableSeq[UpdatableSchema]
+  def queryExecutors: SemiMutableSeq[QueryExecutor]
   def tempFileReaper: TemporaryFileReaper
   def tempFileCreator: TemporaryFileCreator
-  def router: Router
+  def routers: SemiMutableSeq[Router]
   def fileMimeTypes: FileMimeTypes
   def getQueryExecutor(version: Int): QueryExecutor
-  def authSrvProviders: Set[AuthSrvProvider] @@ Global
+  def authSrvProviders: SemiMutableSeq[AuthSrvProvider]
+  def assets: Assets
 }
 
 class ScalligraphApplicationLoader extends ApplicationLoader {
@@ -98,45 +88,46 @@ class ScalligraphApplicationLoader extends ApplicationLoader {
     LoggerConfigurator(context.environment.classLoader).foreach {
       _.configure(context.environment, context.initialConfiguration, Map.empty)
     }
-    val scalligraphComponent = new ScalligraphComponent(context)
+    val app = new ScalligraphApplicationImpl(context)
     try {
-      scalligraphComponent.router
-      scalligraphComponent.application
+      app.init()
+      app.router
+      app.application
     } catch {
       case e: Throwable =>
-        scalligraphComponent.coordinatedShutdown.run(ApplicationShutdownReason).map(_ => System.exit(1))(scalligraphComponent.executionContext)
+        app.coordinatedShutdown.run(ApplicationShutdownReason).map(_ => System.exit(1))(app.executionContext)
         throw e
     }
   }
 }
 
-sealed trait Global
-
-class ScalligraphComponent(val context: Context)
+@Module
+class ScalligraphApplicationImpl(val context: Context)
     extends BuiltInComponentsFromContext(context)
     with CaffeineCacheComponents
     with AhcWSComponents
-    with ScalligraphApplication
-    with AssetsComponents /*with HttpFiltersComponents*/ { self =>
+    with AssetsComponents
+    with ScalligraphApplication /*with HttpFiltersComponents*/ {
+
+  def this(rootDir: File, classLoader: ClassLoader, mode: Mode, initialSettings: Map[String, AnyRef] = Map.empty[String, AnyRef]) =
+    this(
+      ApplicationLoader.Context.create(Environment(rootDir, classLoader, mode), initialSettings)
+    )
+
   val logger: Logger = Logger(getClass)
 
-  lazy val modules: Seq[ScalligraphModule] = {
-    val rm: ru.Mirror = ru.runtimeMirror(getClass.getClassLoader)
-    configuration
-      .get[Seq[String]]("scalligraph.modules")
-      .flatMap { moduleName =>
-        rm.reflectModule(rm.staticModule(moduleName)).instance match {
-          case obj: ScalligraphModule =>
-            logger.info(s"Loading module ${obj.getClass.getSimpleName.stripSuffix("$")}")
-            Some(obj.configure(this))
-          case obj =>
-            logger.error(s"Fail to load module ${obj.getClass.getSimpleName}")
-            None
-        }
-      }
+  private var _loadedModules: Seq[ScalligraphModule] = Seq.empty
+
+  override def getModule[M: ClassTag]: M = {
+    val moduleClass = classTag[M].runtimeClass
+    loadedModules.find(m => moduleClass.isAssignableFrom(m.getClass)).getOrElse(???).asInstanceOf[M]
   }
 
-  override lazy val singleInstance: SingleInstance = new SingleInstance(configuration.get[Seq[String]]("akka.cluster.seed-nodes").isEmpty) {
+  override def injectModule(module: ScalligraphModule): Unit = _loadedModules = _loadedModules :+ module
+
+  override def loadedModules: Seq[ScalligraphModule] = _loadedModules
+
+  lazy val singleInstance: SingleInstance = new SingleInstance(configuration.get[Seq[String]]("akka.cluster.seed-nodes").isEmpty) {
     if (value) {
       logger.info("Initialising cluster")
       val cluster = Cluster(actorSystem)
@@ -144,56 +135,104 @@ class ScalligraphComponent(val context: Context)
     }
   }
 
-  override lazy val schemas: Set[UpdatableSchema] @@ Global = modules.flatMap(_.schemas).toSet.taggedWith[Global]
+  lazy val schemas: SemiMutableSeq[UpdatableSchema] = SemiMutableSeq[UpdatableSchema]
 
-  override lazy val syncCacheApi: SyncCacheApi = defaultCacheApi.sync match {
+  lazy val syncCacheApi: SyncCacheApi = defaultCacheApi.sync match {
     case sync: SyncCacheApi => sync
     case _                  => new DefaultSyncCacheApi(defaultCacheApi)
   }
 
-  override lazy val router: Router = modules
-    .flatMap(_.routers.zipWithIndex)
-    .sortBy(_._2)
-    .map(_._1)
+  val routers: SemiMutableSeq[Router] = SemiMutableSeq[Router]
+  override lazy val router: Router = routers()
     .reduceOption(_ orElse _)
     .getOrElse(Router.empty)
-    .orElse {
-      SimpleRouter {
-        case _ => ???
-      }
-    }
-//  val authRoutes: Routes = {
-//    case _ =>
-//      actionBuilder.async { request =>
-//        authSrv
-//          .actionFunction(defaultAction)
-//          .invokeBlock(
-//            request,
-//            (_: AuthenticatedRequest[AnyContent]) =>
-//              if (request.path.endsWith("/ssoLogin"))
-//                Future.successful(Results.Redirect(prefix))
-//              else
-//                Future.failed(NotFoundError(request.path))
-//          )
-//      }
-//  }
+  //  val authRoutes: Routes = {
+  //    case _ =>
+  //      actionBuilder.async { request =>
+  //        authSrv
+  //          .actionFunction(defaultAction)
+  //          .invokeBlock(
+  //            request,
+  //            (_: AuthenticatedRequest[AnyContent]) =>
+  //              if (request.path.endsWith("/ssoLogin"))
+  //                Future.successful(Results.Redirect(prefix))
+  //              else
+  //                Future.failed(NotFoundError(request.path))
+  //          )
+  //      }
+  //  }
 
   override lazy val httpErrorHandler: HttpErrorHandler = ErrorHandler
 
-  override lazy val queryExecutors: Set[QueryExecutor] @@ Global = modules.flatMap(_.queryExecutors).toSet.taggedWith[Global]
+  lazy val queryExecutors: SemiMutableSeq[QueryExecutor] = SemiMutableSeq[QueryExecutor]
 
   override def httpFilters: Seq[EssentialFilter] = Seq(new AccessLogFilter()(executionContext))
 
-  override lazy val database: Database     = DatabaseFactory.apply(this)
-  override lazy val storageSrv: StorageSrv = StorageFactory.apply(this)
+  lazy val database: Database     = DatabaseFactory.apply(this)
+  lazy val storageSrv: StorageSrv = StorageFactory.apply(this)
 
-  override def getQueryExecutor(version: Int): QueryExecutor =
+  def getQueryExecutor(version: Int): QueryExecutor =
     syncCacheApi.getOrElseUpdate(s"QueryExecutor.$version") {
-      queryExecutors
+      queryExecutors()
         .filter(_.versionCheck(version))
         .reduceOption(_ ++ _)
         .getOrElse(throw BadRequestError(s"No available query executor for version $version"))
     }
 
-  override lazy val authSrvProviders: Set[AuthSrvProvider] @@ Global = modules.flatMap(_.authSrvProviders).toSet.taggedWith[Global]
+  lazy val authSrvProviders: SemiMutableSeq[AuthSrvProvider] = SemiMutableSeq[AuthSrvProvider]
+
+  def init(): Unit = {
+    LoggerConfigurator(environment.classLoader).foreach {
+      _.configure(environment, context.initialConfiguration, Map.empty)
+    }
+
+    configuration
+      .get[Seq[String]]("scalligraph.modules")
+      .foreach { moduleName =>
+        logger.info(s"Loading module $moduleName")
+        try {
+          val module = context
+            .environment
+            .classLoader
+            .loadClass(moduleName)
+            .getConstructor(classOf[ScalligraphApplication])
+            .newInstance(this)
+            .asInstanceOf[ScalligraphModule]
+          injectModule(module)
+          module.init()
+        } catch {
+          case NonFatal(e) => logger.error(s"Fail to load module $moduleName", e)
+        }
+      }
+  }
+}
+
+class SemiMutableSeq[T] private (private var _values: Seq[() => T] = Seq.empty) extends Seq[T] {
+  private var initPhase: Boolean = true
+
+  def +=(v: => T): Unit =
+    if (initPhase) _values = _values :+ (() => v)
+    else throw new IllegalStateException("SemiMutableSeq initialisation is over", firstInit)
+
+  def apply(): Seq[T] = values
+
+  private var firstInit: Throwable = _
+
+  lazy val values: Seq[T] = {
+    initPhase = false
+    try ???
+    catch {
+      case t: Throwable => firstInit = t
+    }
+    _values.map(_.apply())
+  }
+
+  override def length: Int           = apply().length
+  override def apply(idx: Int): T    = apply().apply(idx)
+  override def iterator: Iterator[T] = apply().iterator
+}
+
+object SemiMutableSeq {
+  def apply[T]                                    = new SemiMutableSeq[T]
+  def apply[T](vv: (() => T)*): SemiMutableSeq[T] = new SemiMutableSeq[T](vv)
 }
