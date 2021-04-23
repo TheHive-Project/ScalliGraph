@@ -3,6 +3,8 @@ package org.thp.scalligraph
 import org.thp.scalligraph.controllers.FieldsParser
 import play.api.libs.json.{Format, Reads, Writes}
 
+import scala.language.implicitConversions
+
 sealed abstract class EntityIdOrName(val value: String) {
   def fold[A](ifIsId: EntityId => A, ifIsName: String => A): A
 }
@@ -12,6 +14,10 @@ object EntityIdOrName {
   def fold[A](value: String)(ifIsId: String => A, ifIsName: String => A): A = if (isId(value)) ifIsId(value.substring(1)) else ifIsName(value)
   def apply(value: String): EntityIdOrName                                  = fold(value)(new EntityId(_), new EntityName(_))
   implicit val fieldsParser: FieldsParser[EntityIdOrName]                   = FieldsParser.string.on("idOrName").map("EntityIdOrName")(EntityIdOrName.apply)
+
+  object Implicit {
+    implicit def convertToEntityIdOrName(s: String): EntityIdOrName = EntityIdOrName(s)
+  }
 }
 
 case class EntityId(override val value: String) extends EntityIdOrName(value) {
