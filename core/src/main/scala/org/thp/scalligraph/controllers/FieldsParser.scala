@@ -1,7 +1,8 @@
 package org.thp.scalligraph.controllers
 
-import java.util.Date
+import eu.timepit.refined.api.{RefType, Validate}
 
+import java.util.Date
 import org.scalactic.Accumulation._
 import org.scalactic._
 import org.thp.scalligraph._
@@ -14,6 +15,7 @@ import play.api.Logger
 import play.api.libs.json.{JsObject, JsValue}
 
 import scala.language.experimental.macros
+import scala.language.higherKinds
 import scala.util.Try
 import scala.xml.{Elem, XML}
 
@@ -251,4 +253,20 @@ object FieldsParser extends FieldsParserLowerPrio {
   implicit def option[A](implicit fp: FieldsParser[A]): FieldsParser[Option[A]] = fp.optional
   implicit val permission: FieldsParser[Permission]                             = FieldsParser.string.asInstanceOf[FieldsParser[Permission]]
   implicit val hash: FieldsParser[Hash]                                         = string.map("Hash")(Hash.apply)
+
+  implicit def refinedFieldParser[T, P, F[_, _]](implicit
+      parserT: FieldsParser[T],
+      reftype: RefType[F],
+      validate: Validate[T, P]
+  ): FieldsParser[F[T, P]] =
+    FieldsParser(s"Refined${parserT.formatName}")(
+      parserT
+        .parse
+        .andThen(_.flatMap { valueT =>
+          reftype.refine[P](valueT) match {
+            case Right(valueP) => Good(valueP)
+            case Left(error)   => Bad(One(InvalidFormatAttributeError("", s"Refined${parserT.formatName} ($error)", Set.empty, FString(""))))
+          }
+        })
+    )
 }

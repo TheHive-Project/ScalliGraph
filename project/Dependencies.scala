@@ -24,7 +24,7 @@ object Dependencies {
   lazy val janusGraphElasticSearch = "org.janusgraph"            % "janusgraph-es"                      % janusVersion
   lazy val janusGraphCassandra     = "org.janusgraph"            % "janusgraph-cql"                     % janusVersion
   lazy val janusGraphInMemory      = "org.janusgraph"            % "janusgraph-inmemory"                % janusVersion
-  lazy val tinkerpop               = "org.apache.tinkerpop"      % "gremlin-core"                       % "3.4.6" // align with janusgraph
+  lazy val tinkerpop               = "org.apache.tinkerpop"      % "gremlin-core"                       % "3.4.6"         // align with janusgraph
   lazy val scalactic               = "org.scalactic"            %% "scalactic"                          % "3.2.3"
   lazy val scalaGuice              = "net.codingwell"           %% "scala-guice"                        % "4.2.11"
   lazy val shapeless               = "com.chuusai"              %% "shapeless"                          % "2.3.3"
@@ -51,6 +51,10 @@ object Dependencies {
   lazy val macWireMacrosakka       = "com.softwaremill.macwire" %% "macrosakka"                         % macWireVersion % "provided"
   lazy val macWireUtil             = "com.softwaremill.macwire" %% "util"                               % macWireVersion
   lazy val macWireProxy            = "com.softwaremill.macwire" %% "proxy"                              % macWireVersion
+  lazy val ammonite                = "com.lihaoyi"               % "ammonite"                           % "2.3.8-58-aa8b2ab1" cross CrossVersion.full
+  lazy val refined                 = "eu.timepit"               %% "refined"                            % "0.9.24"
+  lazy val playJsonRefined         = "de.cbley"                 %% "play-json-refined"                  % "0.8.0"
+  lazy val playRefined             = "be.venneborg"             %% "play27-refined"                     % "0.6.0"
 
   def scalaReflect(scalaVersion: String)  = "org.scala-lang" % "scala-reflect"  % scalaVersion
   def scalaCompiler(scalaVersion: String) = "org.scala-lang" % "scala-compiler" % scalaVersion

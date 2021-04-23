@@ -90,7 +90,8 @@ lazy val core = (project in file("core"))
       macWireMacros,
       macWireMacrosakka,
       macWireUtil,
-      macWireProxy
+      macWireProxy,
+      refined
     )
   )
 

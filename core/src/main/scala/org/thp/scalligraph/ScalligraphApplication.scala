@@ -204,6 +204,8 @@ class ScalligraphApplicationImpl(val context: Context)
           case NonFatal(e) => logger.error(s"Fail to load module $moduleName", e)
         }
       }
+    router
+    ()
   }
 }
 
