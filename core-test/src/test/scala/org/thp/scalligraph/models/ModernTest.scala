@@ -3,12 +3,12 @@ package org.thp.scalligraph.models
 import org.specs2.specification.core.{Fragment, Fragments}
 import org.thp.scalligraph.EntityName
 import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
-import org.thp.scalligraph.traversal.TraversalOps._
+import org.thp.scalligraph.traversal.TraversalOps
 import play.api.test.PlaySpecification
 
 import scala.util.Try
 
-class ModernTest extends PlaySpecification {
+class ModernTest extends PlaySpecification with TraversalOps {
 
   implicit val authContext: AuthContext = AuthContextImpl("me", "", EntityName(""), "", Set.empty)
 

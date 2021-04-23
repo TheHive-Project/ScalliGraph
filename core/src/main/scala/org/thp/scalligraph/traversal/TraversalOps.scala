@@ -24,14 +24,14 @@ import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
 
 object NO_VALUE
-object TraversalOps extends TraversalPrinter {
-  val loggerBaseName: String           = getClass.getName.stripSuffix("$")
-  lazy val logger: Logger              = Logger(loggerBaseName)
-  lazy val loggerForGremlin: Logger    = Logger(loggerBaseName + ".Gremlin")
-  lazy val loggerForByteCode: Logger   = Logger(loggerBaseName + ".ByteCode")
-  lazy val loggerForStrategies: Logger = Logger(loggerBaseName + ".Strategies")
-  lazy val loggerForProfile: Logger    = Logger(loggerBaseName + ".Profile")
-  lazy val loggerForExplain: Logger    = Logger(loggerBaseName + ".Explain")
+trait TraversalOps extends TraversalPrinter {
+  val loggerBaseName: String                   = getClass.getName.stripSuffix("$")
+  private lazy val logger: Logger              = Logger(loggerBaseName)
+  private lazy val loggerForGremlin: Logger    = Logger(loggerBaseName + ".Gremlin")
+  private lazy val loggerForByteCode: Logger   = Logger(loggerBaseName + ".ByteCode")
+  private lazy val loggerForStrategies: Logger = Logger(loggerBaseName + ".Strategies")
+  private lazy val loggerForProfile: Logger    = Logger(loggerBaseName + ".Profile")
+  private lazy val loggerForExplain: Logger    = Logger(loggerBaseName + ".Explain")
 
   implicit class TraversalCaster(traversal: Traversal[_, _, _]) {
     def cast[D, G]: Traversal[D, G, Converter[D, G]]                              = traversal.asInstanceOf[Traversal[D, G, Converter[D, G]]]

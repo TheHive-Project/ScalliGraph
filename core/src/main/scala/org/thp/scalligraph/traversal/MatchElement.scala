@@ -29,9 +29,8 @@ class MatchElementTraversalAs[FD, FG, FC <: Converter[FD, FG], TD, TG, TC <: Con
     val fromLabel: StepLabel[FD, FG, FC],
     val f: Traversal[FD, FG, FC] => Traversal[TD, TG, TC],
     val toLabel: StepLabel[TD, TG, TC]
-) extends MatchElement {
-
-  import TraversalOps._
+) extends MatchElement
+    with TraversalOps {
 
   private[traversal] def traversal: GraphTraversal[_, _] = f(fromLabel.converter.startTraversal.as(fromLabel)).as(toLabel).raw
 }

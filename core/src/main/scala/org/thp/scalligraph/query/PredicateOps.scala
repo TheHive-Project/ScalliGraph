@@ -7,7 +7,7 @@ import java.util.function.BiPredicate
 import java.util.stream.Collectors
 import java.util.{List => JList}
 
-object PredicateOps {
+trait PredicateOps {
 
   implicit class PredicateOpsDefs[A](predicate: P[A]) {
     def mapValue[B](f: A => B): P[B] =

@@ -7,7 +7,7 @@ import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSo
 import org.apache.tinkerpop.gremlin.structure.Transaction.Status
 import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex}
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.traversal.TraversalOps._
+import org.thp.scalligraph.traversal.TraversalOps
 import org.thp.scalligraph.traversal.{Converter, Graph, Traversal}
 import org.thp.scalligraph.{EntityId, InternalError}
 import play.api.Logger
@@ -91,7 +91,7 @@ trait Database {
   val binaryModel: Model.Vertex[Binary]
 }
 
-abstract class BaseDatabase extends Database {
+abstract class BaseDatabase extends Database with TraversalOps {
   override val createdAtMapping: SingleMapping[Date, Date]     = UMapping.date
   override val createdByMapping: SingleMapping[String, String] = UMapping.string
   override val updatedAtMapping: OptionMapping[Date, Date]     = UMapping.date.optional

@@ -10,11 +10,10 @@ import akka.util.ByteString
 import org.apache.hadoop.conf.{Configuration => HadoopConfig}
 import org.apache.hadoop.fs.{FileAlreadyExistsException => HadoopFileAlreadyExistsException, FileSystem => HDFileSystem, Path => HDPath}
 import org.apache.hadoop.io.IOUtils
-import org.thp.scalligraph.{NotFoundError, ScalligraphApplication}
 import org.thp.scalligraph.auth.UserSrv
 import org.thp.scalligraph.models._
-import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.traversal.{Graph, Traversal}
+import org.thp.scalligraph.{NotFoundError, ScalligraphApplication}
 import play.api.{Configuration, Logger}
 import software.amazon.awssdk.auth.credentials.{AwsCredentials, AwsCredentialsProvider}
 import software.amazon.awssdk.regions.Region
@@ -24,7 +23,6 @@ import java.io.{ByteArrayInputStream, InputStream}
 import java.net.URI
 import java.nio.file._
 import java.util.Base64
-
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import scala.concurrent.{Await, ExecutionContext}
 import scala.util.{Success, Try}

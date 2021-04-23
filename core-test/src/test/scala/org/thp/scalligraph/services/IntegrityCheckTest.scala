@@ -1,19 +1,17 @@
 package org.thp.scalligraph.services
 
 import org.specs2.specification.core.Fragments
-import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
-import org.thp.scalligraph.models.ModernOps._
-import org.thp.scalligraph.models._
-import org.thp.scalligraph.traversal.Graph
-import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.EntityName
+import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
+import org.thp.scalligraph.models.{ModernOps, _}
+import org.thp.scalligraph.traversal.Graph
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
 
 import scala.util.{Success, Try}
 
-class IntegrityCheckTest extends PlaySpecification {
+class IntegrityCheckTest extends PlaySpecification with ModernOps {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
   implicit val authContext: AuthContext = AuthContextImpl("me", "", EntityName(""), "", Set.empty)
 

@@ -2,8 +2,7 @@ package org.thp.scalligraph.models
 
 import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex}
 import org.thp.scalligraph.`macro`.ModelMacro
-import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, Graph}
+import org.thp.scalligraph.traversal.{Converter, Graph, TraversalOps}
 import org.thp.scalligraph.{EntityId, NotFoundError}
 
 import java.util.Date
@@ -76,7 +75,7 @@ abstract class Model {
   val converter: Converter[EEntity, ElementType]
 }
 
-abstract class VertexModel extends Model {
+abstract class VertexModel extends Model with TraversalOps {
   override type ElementType = Vertex
 
   val initialValues: Seq[E]                  = Nil
@@ -88,7 +87,7 @@ abstract class VertexModel extends Model {
     graph.V(label, id).headOption.getOrElse(throw NotFoundError(s"Vertex $id not found"))
 }
 
-abstract class EdgeModel extends Model {
+abstract class EdgeModel extends Model with TraversalOps {
   override type ElementType = Edge
 
   def create(e: E, from: Vertex, to: Vertex)(implicit graph: Graph): Edge

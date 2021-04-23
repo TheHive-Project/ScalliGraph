@@ -6,8 +6,7 @@ import org.scalactic.Accumulation._
 import org.scalactic.{Bad, Good, One}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
-import org.thp.scalligraph.traversal.Traversal
-import org.thp.scalligraph.traversal.TraversalOps._
+import org.thp.scalligraph.traversal.{Traversal, TraversalOps}
 import org.thp.scalligraph.{BadRequestError, EntityId, EntityIdOrName, InvalidFormatAttributeError}
 import play.api.Logger
 
@@ -29,7 +28,7 @@ case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputQuer
   }
 }
 
-case class IsDefinedFilter(fieldName: String) extends InputQuery[Traversal.Unk, Traversal.Unk] {
+case class IsDefinedFilter(fieldName: String) extends InputQuery[Traversal.Unk, Traversal.Unk] with TraversalOps {
   override def apply(
       publicProperties: PublicProperties,
       traversalType: ru.Type,
@@ -45,7 +44,7 @@ case class IsDefinedFilter(fieldName: String) extends InputQuery[Traversal.Unk, 
   }
 }
 
-case class OrFilter(inputFilters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]]) extends InputQuery[Traversal.Unk, Traversal.Unk] {
+case class OrFilter(inputFilters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]]) extends InputQuery[Traversal.Unk, Traversal.Unk] with TraversalOps {
   override def apply(
       publicProperties: PublicProperties,
       traversalType: ru.Type,
@@ -71,7 +70,7 @@ case class AndFilter(inputFilters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]]
       .foldLeft(traversal)((t, f) => f(t))
 }
 
-case class NotFilter(inputFilter: InputQuery[Traversal.Unk, Traversal.Unk]) extends InputQuery[Traversal.Unk, Traversal.Unk] {
+case class NotFilter(inputFilter: InputQuery[Traversal.Unk, Traversal.Unk]) extends InputQuery[Traversal.Unk, Traversal.Unk] with TraversalOps {
   override def apply(
       publicProperties: PublicProperties,
       traversalType: ru.Type,
@@ -90,7 +89,7 @@ object YesFilter extends InputQuery[Traversal.Unk, Traversal.Unk] {
   ): Traversal.Unk = traversal
 }
 
-class IdFilter(id: EntityId) extends InputQuery[Traversal.Unk, Traversal.Unk] {
+class IdFilter(id: EntityId) extends InputQuery[Traversal.Unk, Traversal.Unk] with TraversalOps {
   override def apply(
       publicProperties: PublicProperties,
       traversalType: ru.Type,

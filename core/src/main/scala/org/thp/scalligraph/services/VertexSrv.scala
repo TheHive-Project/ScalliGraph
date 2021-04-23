@@ -4,7 +4,6 @@ import org.apache.tinkerpop.gremlin.structure.Vertex
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.query.PropertyUpdater
-import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.traversal.{Converter, Graph, IdentityConverter, Traversal}
 import org.thp.scalligraph.{EntityId, EntityIdOrName, NotFoundError}
 import play.api.libs.json.JsObject

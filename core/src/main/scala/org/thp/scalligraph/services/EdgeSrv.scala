@@ -3,7 +3,6 @@ package org.thp.scalligraph.services
 import org.apache.tinkerpop.gremlin.structure.Edge
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
-import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.traversal.{Converter, Graph, Traversal}
 import org.thp.scalligraph.{EntityId, EntityIdOrName, NotFoundError}
 

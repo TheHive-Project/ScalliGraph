@@ -3,8 +3,7 @@ package org.thp.scalligraph.query
 import org.scalactic.Good
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
-import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, Graph, IteratorOutput, Traversal}
+import org.thp.scalligraph.traversal._
 
 import scala.language.existentials
 import scala.reflect.runtime.{universe => ru}
@@ -183,7 +182,7 @@ class AggregationQuery(publicProperties: PublicProperties, filterQuery: FilterQu
     )
 }
 
-object CountQuery extends Query {
+object CountQuery extends Query with TraversalOps {
   override val name: String                   = "count"
   override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[Traversal[_, _, _]])
   override def toType(t: ru.Type): ru.Type    = ru.typeOf[Long]
@@ -191,7 +190,7 @@ object CountQuery extends Query {
     from.asInstanceOf[Traversal[Any, Any, Converter[Any, Any]]].getCount
 }
 
-class LimitedCountQuery(threshold: Long) extends Query {
+class LimitedCountQuery(threshold: Long) extends Query with TraversalOps {
   override val name: String                   = "limitedCount"
   override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[Traversal[_, _, _]])
   override def toType(t: ru.Type): ru.Type    = ru.typeOf[Long]

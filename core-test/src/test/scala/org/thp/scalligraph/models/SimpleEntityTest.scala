@@ -6,7 +6,7 @@ import org.thp.scalligraph.BuildVertexEntity
 import org.thp.scalligraph.auth.{AuthContext, UserSrv}
 import org.thp.scalligraph.services.VertexSrv
 import org.thp.scalligraph.traversal.Graph
-import org.thp.scalligraph.traversal.TraversalOps._
+import org.thp.scalligraph.traversal.TraversalOps
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.{Configuration, Environment}
 
@@ -23,7 +23,7 @@ class MyEntitySrv extends VertexSrv[MyEntity] {
   def create(e: MyEntity)(implicit graph: Graph, authContext: AuthContext): Try[MyEntity with Entity] = createEntity(e)
 }
 
-class SimpleEntityTest extends Specification {
+class SimpleEntityTest extends Specification with TraversalOps {
 
   val userSrv: UserSrv                  = DummyUserSrv()
   implicit val authContext: AuthContext = userSrv.getSystemAuthContext

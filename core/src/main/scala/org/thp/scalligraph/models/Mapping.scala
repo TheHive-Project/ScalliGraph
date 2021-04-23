@@ -2,15 +2,15 @@ package org.thp.scalligraph.models
 
 import java.lang.{Boolean => JBoolean, Byte => JByte, Double => JDouble, Float => JFloat, Integer => JInt, Long => JLong, Short => JShort}
 import java.util.{Base64, Date}
-
 import org.apache.tinkerpop.gremlin.structure.VertexProperty.Cardinality
 import org.apache.tinkerpop.gremlin.structure.{Element, Vertex, VertexProperty}
 import org.thp.scalligraph.auth.Permission
 import org.thp.scalligraph.controllers.Renderer
-import org.thp.scalligraph.traversal.TraversalOps._
+import org.thp.scalligraph.traversal.TraversalOps
 import org.thp.scalligraph.traversal.{BiConverter, Converter, IdentityConverter, Traversal}
 import org.thp.scalligraph.utils.Hash
 import org.thp.scalligraph.{EntityId, InternalError}
+import play.api.Logger
 import play.api.libs.json._
 
 import scala.collection.JavaConverters._
@@ -144,7 +144,7 @@ abstract class Mapping[M, D: ClassTag, G: ClassTag: NoValue](
   def wrap(us: Seq[D]): M
 }
 
-trait MultiValueMapping[D, G] { _: Mapping[_, D, G] =>
+trait MultiValueMapping[D, G] extends TraversalOps { _: Mapping[_, D, G] =>
   def addValue(element: Element, key: String, value: D): Unit =
     element match {
       case vertex: Vertex => vertex.property(cardinality.gremlinCardinality, key, this.reverse(value)); ()
@@ -171,6 +171,8 @@ case class IdentityMapping[T: ClassTag: NoValue: Renderer]() extends SingleMappi
 
 class SingleMapping[D: ClassTag, G: ClassTag: NoValue](toGraph: D => G, toDomain: G => D)(implicit renderer: Renderer[D])
     extends Mapping[D, D, G](toGraph, toDomain) {
+  lazy val logger: Logger = Logger(getClass)
+
   override val cardinality: MappingCardinality.Value = MappingCardinality.single
   def optional: OptionMapping[D, G]                  = OptionMapping[D, G](this)
   def sequence: ListMapping[D, G]                    = ListMapping[D, G](this)
@@ -211,7 +213,8 @@ case class OptionMapping[D, G](singleMapping: SingleMapping[D, G])
       NoValue(singleMapping.noValue),
       singleMapping.getRenderer.opt,
       singleMapping.getRenderer
-    ) {
+    )
+    with TraversalOps {
   override val cardinality: MappingCardinality.Value = MappingCardinality.option
   override def getProperty(element: Element, key: String): Option[D] = {
     val values = element.properties[G](key)

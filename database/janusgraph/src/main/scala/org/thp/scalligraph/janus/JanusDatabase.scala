@@ -8,9 +8,9 @@ import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSo
 import org.apache.tinkerpop.gremlin.process.traversal.{P, Text, TraversalSource}
 import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
 import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex, Graph => TinkerGraph}
+import org.janusgraph.core._
 import org.janusgraph.core.attribute.{Text => JanusText}
 import org.janusgraph.core.schema.{Mapping => _, _}
-import org.janusgraph.core._
 import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
 import org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration
@@ -21,7 +21,6 @@ import org.slf4j.MDC
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.janus.strategies._
 import org.thp.scalligraph.models.{MappingCardinality, _}
-import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.traversal.{Converter, Graph, GraphWrapper, Traversal}
 import org.thp.scalligraph.utils.{Config, Retry}
 import org.thp.scalligraph.{EntityId, InternalError, SingleInstance}

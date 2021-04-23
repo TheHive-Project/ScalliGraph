@@ -4,7 +4,6 @@ import org.apache.tinkerpop.gremlin.process.traversal.P
 import org.thp.scalligraph.controllers.Renderer
 import org.thp.scalligraph.query._
 import org.thp.scalligraph.traversal.Traversal
-import org.thp.scalligraph.traversal.TraversalOps._
 import play.api.libs.json.{Json, OWrites}
 
 case class OutputPerson(createdBy: String, label: String, name: String, age: Int)
@@ -31,8 +30,7 @@ object ModernOutputs {
 case class SeniorAgeThreshold(age: Int)
 case class FriendLevel(level: Double)
 
-class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor {
-  import ModernOps._
+class ModernQueryExecutor(implicit val db: Database) extends QueryExecutor with ModernOps {
   import ModernOutputs._
 
   override val limitedCountThreshold: Long = 1000

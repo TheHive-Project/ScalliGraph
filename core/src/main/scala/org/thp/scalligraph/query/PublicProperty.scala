@@ -5,9 +5,7 @@ import org.apache.tinkerpop.gremlin.structure.Vertex
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FieldsParser, Renderer}
 import org.thp.scalligraph.models.Mapping
-import org.thp.scalligraph.query.PredicateOps.PredicateOpsDefs
-import org.thp.scalligraph.traversal.TraversalOps.TraversalOpsDefs
-import org.thp.scalligraph.traversal.{Converter, Graph, IdentityConverter, Traversal}
+import org.thp.scalligraph.traversal._
 import play.api.libs.json.{JsObject, JsValue}
 
 import scala.reflect.runtime.{universe => ru}
@@ -64,7 +62,8 @@ trait PropertyFilter[M] {
 }
 
 class FieldPropertyFilter[E <: Product, D](fieldName: String, mapping: Mapping[_, D, _])(implicit val fieldsParser: FieldsParser[D])
-    extends PropertyFilter[D] {
+    extends PropertyFilter[D]
+    with PredicateOps {
   override def apply(path: FPath, traversal: Traversal.Unk, authContext: AuthContext, predicate: P[_]): Traversal.Unk =
     traversal.onRaw(
       _.has(
@@ -78,7 +77,9 @@ class FieldPropertyFilter[E <: Product, D](fieldName: String, mapping: Mapping[_
 }
 
 class TraversalPropertyFilter[D](select: TraversalSelect, mapping: Mapping[_, D, _])(implicit val fieldsParser: FieldsParser[D])
-    extends PropertyFilter[D] {
+    extends PropertyFilter[D]
+    with PredicateOps
+    with TraversalOps {
   override def apply(path: FPath, traversal: Traversal.Unk, authContext: AuthContext, predicate: P[_]): Traversal.Unk =
     traversal.filter(t =>
       select(path, t, authContext).is(

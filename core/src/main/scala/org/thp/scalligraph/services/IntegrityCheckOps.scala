@@ -5,7 +5,7 @@ import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex}
 import org.thp.scalligraph.EntityId
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models.{Database, Entity, IndexType, UMapping}
-import org.thp.scalligraph.traversal.TraversalOps._
+import org.thp.scalligraph.traversal.TraversalOps
 import org.thp.scalligraph.traversal._
 import play.api.Logger
 
@@ -20,7 +20,7 @@ sealed trait GenIntegrityCheckOps {
   def initialCheck()(implicit graph: Graph, authContext: AuthContext): Unit
 }
 
-trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
+trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps with TraversalOps {
   val db: Database
   val service: VertexSrv[E]
 

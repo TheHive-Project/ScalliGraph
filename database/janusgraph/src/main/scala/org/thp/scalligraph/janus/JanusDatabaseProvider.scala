@@ -12,9 +12,8 @@ import org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration
 import org.janusgraph.graphdb.database.StandardJanusGraph
 import org.thp.scalligraph.janus.JanusClusterManagerActor._
 import org.thp.scalligraph.models.{Database, UpdatableSchema}
-import org.thp.scalligraph.traversal.TraversalOps.logger
 import org.thp.scalligraph.{InternalError, ScalligraphApplication, SingleInstance}
-import play.api.Configuration
+import play.api.{Configuration, Logger}
 
 import javax.inject.Provider
 import scala.collection.JavaConverters._
@@ -22,6 +21,7 @@ import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
 
 class JanusDatabaseProvider(app: ScalligraphApplication) extends Provider[Database] {
+  lazy val logger: Logger                      = Logger("org.thp.scalligraph.models.Database")
   val configuration: Configuration             = app.configuration
   def schemas: Seq[UpdatableSchema]            = app.schemas()
   val actorSystem: ActorSystem                 = app.actorSystem

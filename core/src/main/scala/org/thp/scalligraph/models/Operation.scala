@@ -3,7 +3,7 @@ package org.thp.scalligraph.models
 import org.apache.tinkerpop.gremlin.structure.Vertex
 import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.traversal.TraversalOps._
+import org.thp.scalligraph.traversal.TraversalOps
 import org.thp.scalligraph.traversal.{Converter, Traversal}
 import play.api.Logger
 
@@ -33,7 +33,7 @@ object Operations {
   def apply(schemaName: String): Operations = new Operations(schemaName, Nil)
 }
 
-case class Operations private (schemaName: String, operations: Seq[Operation]) {
+case class Operations private (schemaName: String, operations: Seq[Operation]) extends TraversalOps {
   lazy val logger: Logger                               = Logger(getClass)
   val lastVersion: Int                                  = operations.length + 2
   private def addOperations(op: Operation*): Operations = copy(operations = operations ++ op)

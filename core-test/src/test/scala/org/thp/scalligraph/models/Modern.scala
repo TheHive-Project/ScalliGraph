@@ -4,7 +4,7 @@ import org.apache.tinkerpop.gremlin.process.traversal.P
 import org.thp.scalligraph._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.services._
-import org.thp.scalligraph.traversal.TraversalOps._
+import org.thp.scalligraph.traversal.TraversalOps
 import org.thp.scalligraph.traversal.{Converter, Graph, Traversal}
 
 import scala.util.Try
@@ -25,7 +25,7 @@ case class Knows(weight: Double)
 @BuildEdgeEntity[Person, Software]
 case class Created(weight: Double)
 
-object ModernOps {
+trait ModernOps extends TraversalOps {
   implicit class PersonOpsDefs(traversal: Traversal.V[Person]) {
     def created: Traversal.V[Software]               = traversal.out[Created].v[Software]
     def getByName(name: String): Traversal.V[Person] = traversal.has(_.name, name)
@@ -48,9 +48,7 @@ object ModernOps {
   }
 }
 
-import org.thp.scalligraph.models.ModernOps._
-
-class PersonSrv extends VertexSrv[Person] {
+class PersonSrv extends VertexSrv[Person] with ModernOps {
   def create(e: Person)(implicit graph: Graph, authContext: AuthContext): Try[Person with Entity] = createEntity(e)
 
   override def getByName(name: String)(implicit graph: Graph): Traversal.V[Person] =

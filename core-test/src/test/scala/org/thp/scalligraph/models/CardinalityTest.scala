@@ -5,7 +5,7 @@ import org.thp.scalligraph.BuildVertexEntity
 import org.thp.scalligraph.auth.{AuthContext, UserSrv}
 import org.thp.scalligraph.services.VertexSrv
 import org.thp.scalligraph.traversal.Graph
-import org.thp.scalligraph.traversal.TraversalOps._
+import org.thp.scalligraph.traversal.TraversalOps
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
@@ -19,7 +19,7 @@ class EntityWithSeqSrv extends VertexSrv[EntityWithSeq] {
   def create(e: EntityWithSeq)(implicit graph: Graph, authContext: AuthContext): Try[EntityWithSeq with Entity] = createEntity(e)
 }
 
-class CardinalityTest extends PlaySpecification {
+class CardinalityTest extends PlaySpecification with TraversalOps {
 
   val userSrv: UserSrv                  = DummyUserSrv()
   implicit val authContext: AuthContext = userSrv.getSystemAuthContext

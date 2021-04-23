@@ -5,8 +5,7 @@ import org.scalactic.Accumulation._
 import org.scalactic._
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
-import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal._
+import org.thp.scalligraph.traversal.{TraversalOps, _}
 import org.thp.scalligraph.{BadRequestError, InvalidFormatAttributeError}
 import play.api.Logger
 import play.api.libs.json.{JsNull, JsNumber, JsObject, Json}
@@ -19,6 +18,7 @@ import scala.util.Try
 import scala.util.matching.Regex
 
 object Aggregation {
+  lazy val logger: Logger = Logger(getClass)
 
   object AggObj {
     def unapply(field: Field): Option[(String, FObject)] =
@@ -197,7 +197,7 @@ object Aggregation {
     }
 }
 
-abstract class Aggregation(val name: String) extends InputQuery[Traversal.Unk, Output[_]] {
+abstract class Aggregation(val name: String) extends InputQuery[Traversal.Unk, Output[_]] with TraversalOps {
 
   override def apply(
       publicProperties: PublicProperties,
@@ -478,7 +478,7 @@ case class TimeAggregation(
                 val json = outputs.map(_.toJson).foldLeft(JsObject.empty) {
                   case (acc, jsObject: JsObject) => acc ++ jsObject
                   case (acc, r) =>
-                    logger.warn(s"Invalid stats result: $r")
+                    Aggregation.logger.warn(s"Invalid stats result: $r")
                     acc
                 }
                 Output(outputs.map(_.toValue), json)
