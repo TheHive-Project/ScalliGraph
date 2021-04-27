@@ -215,7 +215,7 @@ abstract class Aggregation(val name: String) extends InputQuery[Traversal.Unk, O
 }
 
 case class AggSum(aggName: Option[String], fieldName: String, filter: Option[InputQuery[Traversal.Unk, Traversal.Unk]])
-    extends Aggregation(s"sum_$fieldName") {
+    extends Aggregation(aggName.getOrElse(s"sum_$fieldName")) {
   override def getTraversal(
       publicProperties: PublicProperties,
       traversalType: ru.Type,
@@ -239,7 +239,7 @@ case class AggSum(aggName: Option[String], fieldName: String, filter: Option[Inp
   }
 }
 case class AggAvg(aggName: Option[String], fieldName: String, filter: Option[InputQuery[Traversal.Unk, Traversal.Unk]])
-    extends Aggregation(s"sum_$fieldName") {
+    extends Aggregation(aggName.getOrElse(s"avg_$fieldName")) {
   override def getTraversal(
       publicProperties: PublicProperties,
       traversalType: ru.Type,
@@ -264,7 +264,7 @@ case class AggAvg(aggName: Option[String], fieldName: String, filter: Option[Inp
 }
 
 case class AggMin(aggName: Option[String], fieldName: String, filter: Option[InputQuery[Traversal.Unk, Traversal.Unk]])
-    extends Aggregation(s"min_$fieldName") {
+    extends Aggregation(aggName.getOrElse(s"min_$fieldName")) {
   override def getTraversal(
       publicProperties: PublicProperties,
       traversalType: ru.Type,
@@ -288,7 +288,7 @@ case class AggMin(aggName: Option[String], fieldName: String, filter: Option[Inp
 }
 
 case class AggMax(aggName: Option[String], fieldName: String, filter: Option[InputQuery[Traversal.Unk, Traversal.Unk]])
-    extends Aggregation(s"max_$fieldName") {
+    extends Aggregation(aggName.getOrElse(s"max_$fieldName")) {
   override def getTraversal(
       publicProperties: PublicProperties,
       traversalType: ru.Type,
