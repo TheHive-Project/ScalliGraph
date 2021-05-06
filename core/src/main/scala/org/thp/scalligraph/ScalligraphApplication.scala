@@ -26,6 +26,7 @@ import java.io.File
 import scala.concurrent.ExecutionContext
 import scala.reflect.{classTag, ClassTag}
 import scala.util.control.NonFatal
+
 trait ScalligraphModule {
   def init(): Unit = ()
 }
@@ -72,14 +73,14 @@ trait ScalligraphApplication {
   def wsClient: WSClient
   def defaultActionBuilder: DefaultActionBuilder
   def singleInstance: SingleInstance
-  def schemas: SemiMutableSeq[UpdatableSchema]
-  def queryExecutors: SemiMutableSeq[QueryExecutor]
+  def schemas: LazyMutableSeq[UpdatableSchema]
+  def queryExecutors: LazyMutableSeq[QueryExecutor]
   def tempFileReaper: TemporaryFileReaper
   def tempFileCreator: TemporaryFileCreator
-  def routers: SemiMutableSeq[Router]
+  def routers: LazyMutableSeq[Router]
   def fileMimeTypes: FileMimeTypes
   def getQueryExecutor(version: Int): QueryExecutor
-  def authSrvProviders: SemiMutableSeq[AuthSrvProvider]
+  def authSrvProviders: LazyMutableSeq[AuthSrvProvider]
   def assets: Assets
 }
 
@@ -114,38 +115,55 @@ class ScalligraphApplicationImpl(val context: Context)
       ApplicationLoader.Context.create(Environment(rootDir, classLoader, mode), initialSettings)
     )
 
-  val logger: Logger = Logger(getClass)
+  val logger: Logger = Logger(classOf[ScalligraphApplication])
+
+  private class InitialisationFailure(val error: Throwable) extends Throwable
+
+  private def initCheck[A](body: => A): A =
+    try body
+    catch {
+      case error: Throwable => throw new InitialisationFailure(error)
+    }
 
   private var _loadedModules: Seq[ScalligraphModule] = Seq.empty
 
   override def getModule[M: ClassTag]: M = {
     val moduleClass = classTag[M].runtimeClass
-    loadedModules.find(m => moduleClass.isAssignableFrom(m.getClass)).getOrElse(???).asInstanceOf[M]
+    loadedModules
+      .find(m => moduleClass.isAssignableFrom(m.getClass))
+      .getOrElse(throw InternalError(s"The module $moduleClass is not found"))
+      .asInstanceOf[M]
   }
 
   override def injectModule(module: ScalligraphModule): Unit = _loadedModules = _loadedModules :+ module
 
   override def loadedModules: Seq[ScalligraphModule] = _loadedModules
 
-  lazy val singleInstance: SingleInstance = new SingleInstance(configuration.get[Seq[String]]("akka.cluster.seed-nodes").isEmpty) {
-    if (value) {
-      logger.info("Initialising cluster")
-      val cluster = Cluster(actorSystem)
-      cluster.join(cluster.system.provider.getDefaultAddress)
+  lazy val singleInstance: SingleInstance = initCheck {
+    new SingleInstance(configuration.get[Seq[String]]("akka.cluster.seed-nodes").isEmpty) {
+      if (value) {
+        logger.info("Initialising cluster")
+        val cluster = Cluster(actorSystem)
+        cluster.join(cluster.system.provider.getDefaultAddress)
+      }
     }
   }
 
-  lazy val schemas: SemiMutableSeq[UpdatableSchema] = SemiMutableSeq[UpdatableSchema]
+  lazy val schemas: LazyMutableSeq[UpdatableSchema] = initCheck(LazyMutableSeq[UpdatableSchema])
 
-  lazy val syncCacheApi: SyncCacheApi = defaultCacheApi.sync match {
-    case sync: SyncCacheApi => sync
-    case _                  => new DefaultSyncCacheApi(defaultCacheApi)
+  lazy val syncCacheApi: SyncCacheApi = initCheck {
+    defaultCacheApi.sync match {
+      case sync: SyncCacheApi => sync
+      case _                  => new DefaultSyncCacheApi(defaultCacheApi)
+    }
   }
 
-  val routers: SemiMutableSeq[Router] = SemiMutableSeq[Router]
-  override lazy val router: Router = routers()
-    .reduceOption(_ orElse _)
-    .getOrElse(Router.empty)
+  val routers: LazyMutableSeq[Router] = LazyMutableSeq[Router]
+  override lazy val router: Router = initCheck {
+    routers()
+      .reduceOption(_ orElse _)
+      .getOrElse(Router.empty)
+  }
   //  val authRoutes: Routes = {
   //    case _ =>
   //      actionBuilder.async { request =>
@@ -164,12 +182,12 @@ class ScalligraphApplicationImpl(val context: Context)
 
   override lazy val httpErrorHandler: HttpErrorHandler = ErrorHandler
 
-  lazy val queryExecutors: SemiMutableSeq[QueryExecutor] = SemiMutableSeq[QueryExecutor]
+  lazy val queryExecutors: LazyMutableSeq[QueryExecutor] = initCheck(LazyMutableSeq[QueryExecutor])
 
   override def httpFilters: Seq[EssentialFilter] = Seq(new AccessLogFilter()(executionContext))
 
-  lazy val database: Database     = DatabaseFactory.apply(this)
-  lazy val storageSrv: StorageSrv = StorageFactory.apply(this)
+  lazy val database: Database     = initCheck(DatabaseFactory.apply(this))
+  lazy val storageSrv: StorageSrv = initCheck(StorageFactory.apply(this))
 
   def getQueryExecutor(version: Int): QueryExecutor =
     syncCacheApi.getOrElseUpdate(s"QueryExecutor.$version") {
@@ -179,42 +197,56 @@ class ScalligraphApplicationImpl(val context: Context)
         .getOrElse(throw BadRequestError(s"No available query executor for version $version"))
     }
 
-  lazy val authSrvProviders: SemiMutableSeq[AuthSrvProvider] = SemiMutableSeq[AuthSrvProvider]
+  lazy val authSrvProviders: LazyMutableSeq[AuthSrvProvider] = initCheck(LazyMutableSeq[AuthSrvProvider])
 
-  def init(): Unit = {
+  def initializeLogger(): Unit =
     LoggerConfigurator(environment.classLoader).foreach {
       _.configure(environment, context.initialConfiguration, Map.empty)
     }
 
+  def loadModule(moduleName: String): Unit = {
+    logger.info(s"Loading module $moduleName")
+    try {
+      if (loadedModules.exists(_.getClass.getName == moduleName))
+        throw InternalError(s"The module $moduleName is already loaded")
+      val module = context
+        .environment
+        .classLoader
+        .loadClass(moduleName)
+        .getConstructor(classOf[ScalligraphApplication])
+        .newInstance(this)
+        .asInstanceOf[ScalligraphModule]
+      injectModule(module)
+      module.init()
+    } catch {
+      case initError: InitialisationFailure =>
+        logger.error("Initialisation error", initError.error)
+        throw initError.error
+      case NonFatal(e) => logger.error(s"Fail to load module $moduleName", e)
+    }
+  }
+
+  def init(): Unit = {
+    initializeLogger()
+
     configuration
       .get[Seq[String]]("scalligraph.modules")
-      .foreach { moduleName =>
-        logger.info(s"Loading module $moduleName")
-        try {
-          val module = context
-            .environment
-            .classLoader
-            .loadClass(moduleName)
-            .getConstructor(classOf[ScalligraphApplication])
-            .newInstance(this)
-            .asInstanceOf[ScalligraphModule]
-          injectModule(module)
-          module.init()
-        } catch {
-          case NonFatal(e) => logger.error(s"Fail to load module $moduleName", e)
-        }
-      }
+      .foreach(loadModule)
     router
     ()
   }
 }
 
-class SemiMutableSeq[T] private (private var _values: Seq[() => T] = Seq.empty) extends Seq[T] {
+class LazyMutableSeq[T] private (private var _values: Seq[() => T] = Seq.empty) extends Seq[T] {
   private var initPhase: Boolean = true
 
   def +=(v: => T): Unit =
     if (initPhase) _values = _values :+ (() => v)
-    else throw new IllegalStateException("SemiMutableSeq initialisation is over", firstInit)
+    else throw new IllegalStateException("LazyMutableSeq initialisation is over", firstInit)
+
+  def prepend(v: => T): Unit =
+    if (initPhase) _values = (() => v) +: _values
+    else throw new IllegalStateException("LazyMutableSeq initialisation is over", firstInit)
 
   def apply(): Seq[T] = values
 
@@ -222,7 +254,7 @@ class SemiMutableSeq[T] private (private var _values: Seq[() => T] = Seq.empty) 
 
   lazy val values: Seq[T] = {
     initPhase = false
-    try ???
+    try sys.error("LazyMutableSeq initialisation")
     catch {
       case t: Throwable => firstInit = t
     }
@@ -234,7 +266,7 @@ class SemiMutableSeq[T] private (private var _values: Seq[() => T] = Seq.empty) 
   override def iterator: Iterator[T] = apply().iterator
 }
 
-object SemiMutableSeq {
-  def apply[T]                                    = new SemiMutableSeq[T]
-  def apply[T](vv: (() => T)*): SemiMutableSeq[T] = new SemiMutableSeq[T](vv)
+object LazyMutableSeq {
+  def apply[T]                                    = new LazyMutableSeq[T]
+  def apply[T](vv: (() => T)*): LazyMutableSeq[T] = new LazyMutableSeq[T](vv)
 }
