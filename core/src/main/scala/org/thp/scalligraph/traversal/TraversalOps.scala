@@ -25,7 +25,7 @@ import scala.util.{Failure, Success, Try}
 
 object NO_VALUE
 trait TraversalOps extends TraversalPrinter {
-  val loggerBaseName: String                   = getClass.getName.stripSuffix("$")
+  val loggerBaseName: String                   = "org.thp.scalligraph.traversal"
   private lazy val logger: Logger              = Logger(loggerBaseName)
   private lazy val loggerForGremlin: Logger    = Logger(loggerBaseName + ".Gremlin")
   private lazy val loggerForByteCode: Logger   = Logger(loggerBaseName + ".ByteCode")
