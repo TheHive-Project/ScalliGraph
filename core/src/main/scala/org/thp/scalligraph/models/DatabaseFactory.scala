@@ -5,8 +5,8 @@ import org.thp.scalligraph.ScalligraphApplication
 import javax.inject.Provider
 
 object DatabaseFactory {
-  def apply(scalligraphApplication: ScalligraphApplication): Database = {
-    val providerName = scalligraphApplication.configuration.get[String]("db.provider") match {
+  def apply(app: ScalligraphApplication): Database = {
+    val providerName = app.configuration.get[String]("db.provider") match {
       case "janusgraph" => "org.thp.scalligraph.janus.JanusDatabaseProvider"
       case other        => other
     }
@@ -14,7 +14,7 @@ object DatabaseFactory {
       .getClassLoader
       .loadClass(providerName)
       .getConstructor(classOf[ScalligraphApplication])
-      .newInstance(scalligraphApplication)
+      .newInstance(app)
       .asInstanceOf[Provider[Database]]
       .get
   }

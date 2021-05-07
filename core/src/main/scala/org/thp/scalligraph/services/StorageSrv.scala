@@ -45,24 +45,24 @@ trait StorageSrv {
 }
 
 object StorageFactory {
-  def apply(scalligraphApplication: ScalligraphApplication): StorageSrv =
-    scalligraphApplication.configuration.get[String]("storage.provider") match {
-      case "localfs" => new LocalFileSystemStorageSrv(scalligraphApplication.configuration)
+  def apply(app: ScalligraphApplication): StorageSrv =
+    app.configuration.get[String]("storage.provider") match {
+      case "localfs" => new LocalFileSystemStorageSrv(app.configuration)
       // case "database" => new DatabaseStorageSrv(scalligraphApplication.configuration)
-      case "hdfs" => new HadoopStorageSrv(scalligraphApplication.configuration)
+      case "hdfs" => new HadoopStorageSrv(app.configuration)
       case "s3" =>
         new S3StorageSrv(
-          scalligraphApplication.configuration,
-          scalligraphApplication.actorSystem,
-          scalligraphApplication.executionContext,
-          scalligraphApplication.materializer
+          app.configuration,
+          app.actorSystem,
+          app.executionContext,
+          app.materializer
         )
       case providerName =>
         getClass
           .getClassLoader
           .loadClass(providerName)
           .getConstructor(classOf[ScalligraphApplication])
-          .newInstance(scalligraphApplication)
+          .newInstance(app)
           .asInstanceOf[StorageSrv]
     }
 }

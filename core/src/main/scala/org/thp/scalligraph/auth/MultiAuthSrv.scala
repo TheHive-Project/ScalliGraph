@@ -3,11 +3,10 @@ package org.thp.scalligraph.auth
 import org.thp.scalligraph.controllers.AuthenticatedRequest
 import org.thp.scalligraph.services.config.ApplicationConfig.configurationFormat
 import org.thp.scalligraph.services.config.{ApplicationConfig, ConfigItem}
-import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError, EntityIdOrName, RichSeq}
+import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError, EntityIdOrName, RichSeq, ScalligraphApplication}
 import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
 import play.api.{Configuration, Logger}
 
-import javax.inject.Provider
 import scala.util.{Failure, Success, Try}
 
 class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, availableAuthProviders: Seq[AuthSrvProvider]) extends AuthSrv {
@@ -114,7 +113,10 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
     forAllAuthProviders(authProviders)(_.removeKey(username))
 }
 
-class MultiAuthSrvProvider(configuration: Configuration, appConfig: ApplicationConfig, authProviders: Seq[AuthSrvProvider])
-    extends Provider[AuthSrv] {
-  override def get(): AuthSrv = new MultiAuthSrv(configuration, appConfig, authProviders)
+class MultiAuthSrvProvider(appConfig: ApplicationConfig, authProviders: Seq[AuthSrvProvider]) extends AuthSrvProvider {
+  def this(app: ScalligraphApplication) = this(app.applicationConfig, app.authSrvProviders)
+
+  override val name: String = "Multi"
+
+  override def apply(configuration: Configuration): Try[AuthSrv] = Try(new MultiAuthSrv(configuration, appConfig, authProviders))
 }

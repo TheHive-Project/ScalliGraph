@@ -1,7 +1,7 @@
 package org.thp.scalligraph.auth
 
 import org.thp.scalligraph.controllers.AuthenticatedRequest
-import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError, EntityIdOrName}
+import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError, EntityIdOrName, ScalligraphApplication}
 import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
 import play.api.{ConfigLoader, Configuration}
 
@@ -90,4 +90,18 @@ trait AuthSrvWithActionFunction extends AuthSrv {
 
       override protected def executionContext: ExecutionContext = ec
     }
+}
+
+object AuthSrvFactory {
+  def apply(app: ScalligraphApplication): AuthSrv = {
+    val providerName = app.configuration.get[String]("auth.provider")
+    getClass
+      .getClassLoader
+      .loadClass(providerName)
+      .getConstructor(classOf[ScalligraphApplication])
+      .newInstance(app)
+      .asInstanceOf[AuthSrvProvider]
+      .apply(app.configuration)
+      .get
+  }
 }

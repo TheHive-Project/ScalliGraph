@@ -6,10 +6,13 @@ import akka.cluster.Cluster
 import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
 import akka.stream.Materializer
 import com.softwaremill.macwire.Module
-import org.thp.scalligraph.auth.AuthSrvProvider
+import com.softwaremill.tagging.@@
+import org.thp.scalligraph.auth.{AuthSrv, AuthSrvFactory, AuthSrvProvider}
+import org.thp.scalligraph.controllers.AuthenticatedRequest
 import org.thp.scalligraph.models.{Database, DatabaseFactory, UpdatableSchema}
 import org.thp.scalligraph.query.QueryExecutor
-import org.thp.scalligraph.services.{StorageFactory, StorageSrv}
+import org.thp.scalligraph.services.config.{ApplicationConfig, ConfigActor, ConfigTag}
+import org.thp.scalligraph.services.{EventSrv, StorageFactory, StorageSrv}
 import play.api.ApplicationLoader.Context
 import play.api._
 import play.api.cache.caffeine.CaffeineCacheComponents
@@ -19,11 +22,11 @@ import play.api.libs.Files.{TemporaryFileCreator, TemporaryFileReaper}
 import play.api.libs.concurrent.ActorSystemProvider.ApplicationShutdownReason
 import play.api.libs.ws.WSClient
 import play.api.libs.ws.ahc.AhcWSComponents
-import play.api.mvc.{DefaultActionBuilder, EssentialFilter}
-import play.api.routing.Router
+import play.api.mvc._
+import play.api.routing.{Router, SimpleRouter}
 
 import java.io.File
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.{classTag, ClassTag}
 import scala.util.control.NonFatal
 
@@ -82,6 +85,10 @@ trait ScalligraphApplication {
   def getQueryExecutor(version: Int): QueryExecutor
   def authSrvProviders: LazyMutableSeq[AuthSrvProvider]
   def assets: Assets
+  def configActor: ActorRef @@ ConfigTag
+  def eventSrv: EventSrv
+  def applicationConfig: ApplicationConfig
+  def authSrv: AuthSrv
 }
 
 class ScalligraphApplicationLoader extends ApplicationLoader {
@@ -108,7 +115,12 @@ class ScalligraphApplicationImpl(val context: Context)
     with CaffeineCacheComponents
     with AhcWSComponents
     with AssetsComponents
-    with ScalligraphApplication /*with HttpFiltersComponents*/ {
+    with ActorSingletonUtils
+    with ScalligraphApplication /*with HttpFiltersComponents*/ { app =>
+
+  import com.softwaremill.macwire._
+  import com.softwaremill.macwire.akkasupport._
+  import com.softwaremill.tagging._
 
   def this(rootDir: File, classLoader: ClassLoader, mode: Mode, initialSettings: Map[String, AnyRef] = Map.empty[String, AnyRef]) =
     this(
@@ -117,7 +129,9 @@ class ScalligraphApplicationImpl(val context: Context)
 
   val logger: Logger = Logger(classOf[ScalligraphApplication])
 
-  private class InitialisationFailure(val error: Throwable) extends Throwable
+  private class InitialisationFailure(error: Throwable) extends Throwable(error) {
+    override def getMessage: String = error.getMessage
+  }
 
   private def initCheck[A](body: => A): A =
     try body
@@ -163,22 +177,27 @@ class ScalligraphApplicationImpl(val context: Context)
     routers()
       .reduceOption(_ orElse _)
       .getOrElse(Router.empty)
+      .orElse {
+        SimpleRouter {
+          case _ => authAction
+        }
+      }
   }
-  //  val authRoutes: Routes = {
-  //    case _ =>
-  //      actionBuilder.async { request =>
-  //        authSrv
-  //          .actionFunction(defaultAction)
-  //          .invokeBlock(
-  //            request,
-  //            (_: AuthenticatedRequest[AnyContent]) =>
-  //              if (request.path.endsWith("/ssoLogin"))
-  //                Future.successful(Results.Redirect(prefix))
-  //              else
-  //                Future.failed(NotFoundError(request.path))
-  //          )
-  //      }
-  //  }
+
+  lazy val defaultAction: ActionFunction[Request, AuthenticatedRequest] = new ActionFunction[Request, AuthenticatedRequest] {
+    override def invokeBlock[A](request: Request[A], block: AuthenticatedRequest[A] => Future[Result]): Future[Result] =
+      Future.failed(NotFoundError(request.path))
+    override protected def executionContext: ExecutionContext = app.executionContext
+  }
+
+  lazy val authAction: Action[AnyContent] = defaultActionBuilder.async { request =>
+    authSrv
+      .actionFunction(defaultAction)
+      .invokeBlock(
+        request,
+        (_: AuthenticatedRequest[AnyContent]) => Future.failed(NotFoundError(request.path))
+      )
+  }
 
   override lazy val httpErrorHandler: HttpErrorHandler = ErrorHandler
 
@@ -198,6 +217,8 @@ class ScalligraphApplicationImpl(val context: Context)
     }
 
   lazy val authSrvProviders: LazyMutableSeq[AuthSrvProvider] = initCheck(LazyMutableSeq[AuthSrvProvider])
+
+  lazy val authSrv: AuthSrv = initCheck(AuthSrvFactory(this))
 
   def initializeLogger(): Unit =
     LoggerConfigurator(environment.classLoader).foreach {
@@ -220,8 +241,8 @@ class ScalligraphApplicationImpl(val context: Context)
       module.init()
     } catch {
       case initError: InitialisationFailure =>
-        logger.error("Initialisation error", initError.error)
-        throw initError.error
+        logger.error("Initialisation error", initError.getCause)
+        throw initError.getCause
       case NonFatal(e) => logger.error(s"Fail to load module $moduleName", e)
     }
   }
@@ -235,6 +256,12 @@ class ScalligraphApplicationImpl(val context: Context)
     router
     ()
   }
+
+  override lazy val configActor: ActorRef @@ ConfigTag = wireActorSingleton(actorSystem, wireProps[ConfigActor], "config-actor").taggedWith[ConfigTag]
+
+  override lazy val eventSrv: EventSrv = wire[EventSrv]
+
+  override lazy val applicationConfig: ApplicationConfig = wire[ApplicationConfig]
 }
 
 class LazyMutableSeq[T] private (private var _values: Seq[() => T] = Seq.empty) extends Seq[T] {
