@@ -1,72 +1,89 @@
 import Dependencies._
 
-val scalligraphVersion     = "0.1.0-SNAPSHOT"
 val scala212               = "2.12.13"
 val scala213               = "2.13.1"
 val supportedScalaVersions = List(scala212, scala213)
 
-ThisBuild / organization := "org.thp"
-ThisBuild / scalaVersion := scala212
-ThisBuild / crossScalaVersions := supportedScalaVersions
-ThisBuild / resolvers ++= Seq(
-  Resolver.mavenLocal,
-  "Oracle Released Java Packages" at "https://download.oracle.com/maven",
-  "TheHive project repository" at "https://dl.bintray.com/thehive-project/maven/"
+val defaultSettings = Seq(
+  version := "0.1.0-SNAPSHOT",
+  organization := "org.thp",
+  scalaVersion := scala212,
+  crossScalaVersions := supportedScalaVersions,
+  resolvers ++= Seq(
+    Resolver.mavenLocal,
+    "Oracle Released Java Packages" at "https://download.oracle.com/maven",
+    "TheHive project repository" at "https://dl.bintray.com/thehive-project/maven/"
+  ),
+  crossScalaVersions := Nil,
+  scalacOptions ++= Seq(
+    "-encoding",
+    "UTF-8",
+    "-deprecation", // Emit warning and location for usages of deprecated APIs.
+    "-feature",     // Emit warning and location for usages of features that should be imported explicitly.
+    "-unchecked",   // Enable additional warnings where generated code depends on assumptions.
+    //"-Xfatal-warnings",      // Fail the compilation if there are any warnings.
+    "-Xlint", // Enable recommended additional warnings.
+    //    "-Ywarn-adapted-args",     // Warn if an argument list is modified to match the receiver.
+    //"-Ywarn-dead-code",      // Warn when dead code is identified.
+    //    "-Ywarn-inaccessible",     // Warn about inaccessible types in method signatures.
+    //    "-Ywarn-nullary-override", // Warn when non-nullary overrides nullary, e.g. def foo() over def foo.
+    "-Ywarn-numeric-widen", // Warn when numerics are widened.
+    "-Ywarn-value-discard", // Warn when non-Unit expression results are unused
+    //"-Ylog-classpath",
+    //"-Xlog-implicits",
+    //"-Yshow-trees-compact",
+    //"-Yshow-trees-stringified",
+    //"-Ymacro-debug-lite",
+    "-Xlog-free-types",
+    "-Xlog-free-terms",
+    "-Xprint-types"
+  ),
+  scalafmtConfig := (ThisBuild / baseDirectory).value / ".scalafmt.conf",
+  Test / fork := true,
+  scalacOptions ++= {
+    CrossVersion.partialVersion((Compile / scalaVersion).value) match {
+      case Some((2, n)) if n >= 13 => "-Ymacro-annotations" :: Nil
+      case _                       => Nil
+    }
+  },
+  libraryDependencies ++= {
+    CrossVersion.partialVersion(scalaVersion.value) match {
+      case Some((2, n)) if n >= 13 => Nil
+      case _                       => compilerPlugin(macroParadise) :: Nil
+    }
+  },
+  dependencyOverrides += "io.netty" % "netty-all" % "4.0.56.Final",
+  Compile / packageDoc / publishArtifact := false,
+  Compile / doc / sources := Nil,
+  Test / packageDoc / publishArtifact := false,
+  Test / doc / sources := Nil
 )
-ThisBuild / scalacOptions ++= Seq(
-  "-encoding",
-  "UTF-8",
-  "-deprecation", // Emit warning and location for usages of deprecated APIs.
-  "-feature",     // Emit warning and location for usages of features that should be imported explicitly.
-  "-unchecked",   // Enable additional warnings where generated code depends on assumptions.
-  //"-Xfatal-warnings",      // Fail the compilation if there are any warnings.
-  "-Xlint", // Enable recommended additional warnings.
-//    "-Ywarn-adapted-args",     // Warn if an argument list is modified to match the receiver.
-  //"-Ywarn-dead-code",      // Warn when dead code is identified.
-//    "-Ywarn-inaccessible",     // Warn about inaccessible types in method signatures.
-//    "-Ywarn-nullary-override", // Warn when non-nullary overrides nullary, e.g. def foo() over def foo.
-  "-Ywarn-numeric-widen", // Warn when numerics are widened.
-  "-Ywarn-value-discard", // Warn when non-Unit expression results are unused
-  //"-Ylog-classpath",
-  //"-Xlog-implicits",
-  //"-Yshow-trees-compact",
-  //"-Yshow-trees-stringified",
-  //"-Ymacro-debug-lite",
-  "-Xlog-free-types",
-  "-Xlog-free-terms",
-  "-Xprint-types"
+
+val noPackageSettings = Seq(
+  Universal / stage := file(""),
+  Universal / packageBin := file(""),
+  Debian / stage := file(""),
+  Debian / packageBin := file(""),
+  Rpm / stage := file(""),
+  Rpm / packageBin := file(""),
+  publish / skip := true
 )
-ThisBuild / Test / fork := true
-//        javaOptions += "-Xmx1G",
-ThisBuild / scalafmtConfig := file(".scalafmt.conf")
-ThisBuild / scalacOptions ++= {
-  CrossVersion.partialVersion((Compile / scalaVersion).value) match {
-    case Some((2, n)) if n >= 13 => "-Ymacro-annotations" :: Nil
-    case _                       => Nil
-  }
-}
-ThisBuild / libraryDependencies ++= {
-  CrossVersion.partialVersion(scalaVersion.value) match {
-    case Some((2, n)) if n >= 13 => Nil
-    case _                       => compilerPlugin(macroParadise) :: Nil
-  }
-}
 
-ThisBuild / dependencyOverrides += "io.netty" % "netty-all" % "4.0.56.Final"
-
-lazy val scalligraph = (project in file("."))
-  .dependsOn(core, /*graphql, */ janus /* , orientdb , neo4j, coreTest*/ )
-  .dependsOn(coreTest % "test -> test")
-  .aggregate(core, /*graphql, */ janus /* , orientdb, neo4j */, coreTest)
+lazy val scalligraphRoot = (project in file("."))
+//  .dependsOn(core, /*graphql, */ janus /* , orientdb , neo4j, coreTest*/ )
+//  .dependsOn(coreTest % "test -> test")
+  .aggregate(scalligraph, /*graphql, */ scalligraphJanusgraph /* , orientdb, neo4j */, scalligraphTest)
+  .settings(defaultSettings)
+  .settings(noPackageSettings)
   .settings(
-    name := "scalligraph",
-    version := scalligraphVersion
+    name := "root"
   )
 
-lazy val core = (project in file("core"))
+lazy val scalligraph = (project in file("core"))
+  .settings(defaultSettings)
+  .settings(noPackageSettings)
   .settings(
-    name := "scalligraph-core",
-    version := scalligraphVersion,
+    name := "scalligraph",
     libraryDependencies ++= Seq(
       tinkerpop,
       scalactic,
@@ -95,14 +112,15 @@ lazy val core = (project in file("core"))
     )
   )
 
-lazy val coreTest = (project in file("core-test"))
-  .dependsOn(core)
-  .dependsOn(janus)
+lazy val scalligraphTest = (project in file("core-test"))
+  .dependsOn(scalligraph)
+  .dependsOn(scalligraphJanusgraph)
   //  .dependsOn(orientdb)
   //  .dependsOn(neo4j)
+  .settings(defaultSettings)
+  .settings(noPackageSettings)
   .settings(
-    name := "scalligraph-core-test",
-    version := scalligraphVersion,
+    name := "scalligraph-test",
     libraryDependencies ++= Seq(
       janusGraphInMemory % Test,
       specs              % Test,
@@ -110,11 +128,12 @@ lazy val coreTest = (project in file("core-test"))
     )
   )
 
-lazy val janus = (project in file("database/janusgraph"))
-  .dependsOn(core)
+lazy val scalligraphJanusgraph = (project in file("database/janusgraph"))
+  .dependsOn(scalligraph)
+  .settings(defaultSettings)
+  .settings(noPackageSettings)
   .settings(
     name := "scalligraph-janusgraph",
-    version := scalligraphVersion,
     libraryDependencies ++= Seq(
       janusGraph,
       janusGraphBerkeleyDB,
