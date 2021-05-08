@@ -18,12 +18,13 @@ import scala.util.{Failure, Success, Try}
 
 class ApplicationConfig(
     configuration: Configuration,
-    db: Database,
+    _db: => Database,
     eventSrv: EventSrv,
     configActor: ActorRef @@ ConfigTag,
     implicit val ec: ExecutionContext
 ) {
   lazy val logger: Logger                  = Logger(getClass)
+  lazy val db: Database                    = _db
   val ignoreDatabaseConfiguration: Boolean = configuration.get[Boolean]("ignoreDatabaseConfiguration")
   if (ignoreDatabaseConfiguration)
     logger.warn("Stored configuration is ignored. Only file application.conf is used. You can revert by setting ignoreDatabaseConfiguration=false")

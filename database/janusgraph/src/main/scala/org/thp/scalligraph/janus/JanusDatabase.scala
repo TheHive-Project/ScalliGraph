@@ -164,7 +164,7 @@ class JanusDatabase(
   }
 
   override def close(): Unit = {
-    logger.info(s"Closing database (${System.identityHashCode(this)}")
+    logger.info(s"Closing database")
     janusGraph.close()
   }
 
