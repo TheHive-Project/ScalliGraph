@@ -16,7 +16,7 @@ import org.thp.scalligraph.{InternalError, ScalligraphApplication, SingleInstanc
 import play.api.{Configuration, Logger}
 
 import javax.inject.Provider
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
 

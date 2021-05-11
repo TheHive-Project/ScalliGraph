@@ -24,7 +24,7 @@ class AccessLogFilter(implicit ec: ExecutionContext) extends EssentialFilter {
               s"${requestHeader.remoteAddress} ${requestHeader.method} ${requestHeader.uri} took ${requestTime}ms and returned ${result.header.status} ${result
                 .body
                 .contentLength
-                .fold("")(_ + " bytes")}"
+                .fold("")(b => s"$b bytes")}"
             )
 
             result.withHeaders("Request-Time" -> requestTime.toString)

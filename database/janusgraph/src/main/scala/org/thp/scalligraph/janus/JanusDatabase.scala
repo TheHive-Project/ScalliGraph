@@ -29,7 +29,7 @@ import play.api.{Configuration, Logger}
 import java.lang.{Long => JLong}
 import java.nio.file.{Files, Paths}
 import java.util.{Date, Properties}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success, Try}
 

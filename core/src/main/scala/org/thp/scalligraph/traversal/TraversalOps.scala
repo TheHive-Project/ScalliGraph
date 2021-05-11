@@ -1,7 +1,5 @@
 package org.thp.scalligraph.traversal
 
-import java.lang.{Double => JDouble, Long => JLong}
-import java.util.{Date, NoSuchElementException, UUID, Collection => JCollection, List => JList, Map => JMap}
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, GraphTraversal}
 import org.apache.tinkerpop.gremlin.process.traversal.step.map.{OrderGlobalStep, OrderLocalStep}
 import org.apache.tinkerpop.gremlin.process.traversal.{P, Scope}
@@ -17,8 +15,10 @@ import shapeless.ops.hlist.{Mapper, RightFolder, ToTraversable, Tupler}
 import shapeless.syntax.std.tuple._
 import shapeless.{Generic, HList, HNil}
 
-import scala.collection.{AbstractIterator, GenTraversableOnce}
-import scala.collection.JavaConverters._
+import java.lang.{Double => JDouble, Long => JLong}
+import java.util.{Date, NoSuchElementException, UUID, Collection => JCollection, List => JList, Map => JMap}
+import scala.collection.{AbstractIterator, IterableOnce}
+import scala.jdk.CollectionConverters._
 import scala.language.experimental.macros
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
@@ -82,8 +82,8 @@ trait TraversalOps extends TraversalPrinter {
           v.getOrElse(throw new NoSuchElementException)
         }
 
-        override def map[B](f: A => B): Iterator[B]                         = safeIterator(ite.map(f))
-        override def flatMap[B](f: A => GenTraversableOnce[B]): Iterator[B] = safeIterator(ite.flatMap(f))
+        override def map[B](f: A => B): Iterator[B]                   = safeIterator(ite.map(f))
+        override def flatMap[B](f: A => IterableOnce[B]): Iterator[B] = safeIterator(ite.flatMap(f))
       }
 
     def toIterator: Iterator[D] = {
@@ -112,17 +112,17 @@ trait TraversalOps extends TraversalPrinter {
 
     def getCount: Long = {
       debug("count")
-      count._toIterator.next
+      count._toIterator.next()
     }
 
     def getLimitedCount(threshold: Long): Long = {
       debug(s"limitedCount($threshold)")
-      limitedCount(threshold)._toIterator.next
+      limitedCount(threshold)._toIterator.next()
     }
 
     def head: D = {
       debug("head")
-      _toIterator.next
+      _toIterator.next()
     }
 
     def headOption: Option[D] = {
@@ -542,7 +542,7 @@ trait TraversalOps extends TraversalPrinter {
       traversal.onRawMap[String, String, IdentityConverter[String]](_.label())(Converter.identity[String])
 
     def _id(implicit ev: G <:< Element): Traversal[EntityId, AnyRef, Converter[EntityId, AnyRef]] =
-      traversal.onRawMap[EntityId, AnyRef, Converter[EntityId, AnyRef]](_.id())(EntityId.apply)
+      traversal.onRawMap[EntityId, AnyRef, Converter[EntityId, AnyRef]](_.id())(EntityId.apply _)
 
     def update[V](selector: D => V, value: V)(implicit mapping: Mapping[V, _, _], ev: G <:< Element): Traversal[D, G, C] =
       macro TraversalMacro.update[V]

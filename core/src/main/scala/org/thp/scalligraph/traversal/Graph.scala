@@ -20,7 +20,7 @@ trait Graph {
   def variables: TinkerGraph.Variables
   def indexCountQuery(query: String): Long
   def escapeQueryParameter(param: String): String =
-    "\"" + param.replaceAllLiterally("\\", "").replaceAllLiterally("\"", "\\\"") + "\""
+    "\"" + param.replace("\\", "").replace("\"", "\\\"") + "\""
   def db: Database
   def V[D <: Product](ids: EntityId*)(implicit model: Model.Vertex[D]): Traversal.V[D]        = db.V[D](ids: _*)(model, this)
   def V(label: String, ids: EntityId*): Traversal[Vertex, Vertex, Converter.Identity[Vertex]] = db.V(label, ids: _*)(this)

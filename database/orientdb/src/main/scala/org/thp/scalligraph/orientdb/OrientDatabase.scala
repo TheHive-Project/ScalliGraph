@@ -13,7 +13,7 @@ import org.thp.scalligraph.models._
 import org.thp.scalligraph.utils.Retry
 import play.api.{Configuration, Environment}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success, Try}
 

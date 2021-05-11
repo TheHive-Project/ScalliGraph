@@ -9,7 +9,7 @@ import org.thp.scalligraph.traversal.TraversalOps
 import org.thp.scalligraph.traversal._
 import play.api.Logger
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.reflect.runtime.{universe => ru}
 import scala.util.Try
@@ -46,7 +46,7 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps with Traversa
         map
           .values
           .collect {
-            case vertexIds if vertexIds.lengthCompare(1) > 0 => service.getByIds(vertexIds: _*).toList
+            case vertexIds if vertexIds.lengthCompare(1) > 0 => service.getByIds(vertexIds.toSeq: _*).toList
           }
           .toSeq
       }

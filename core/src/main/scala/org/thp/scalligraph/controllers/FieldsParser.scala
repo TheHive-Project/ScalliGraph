@@ -15,7 +15,6 @@ import play.api.Logger
 import play.api.libs.json.{JsObject, JsValue}
 
 import scala.language.experimental.macros
-import scala.language.higherKinds
 import scala.util.Try
 import scala.xml.{Elem, XML}
 

@@ -8,7 +8,7 @@ import java.io.ByteArrayInputStream
 import java.security.cert.X509Certificate
 import java.util.{List => JList}
 import javax.naming.ldap.LdapName
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.concurrent.ExecutionContext
 import scala.util.Try
 

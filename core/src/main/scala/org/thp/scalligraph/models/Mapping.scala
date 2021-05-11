@@ -13,7 +13,7 @@ import org.thp.scalligraph.{EntityId, InternalError}
 import play.api.Logger
 import play.api.libs.json._
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.reflect.runtime.{universe => ru}
 import scala.reflect.{classTag, ClassTag}
 

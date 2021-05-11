@@ -1,14 +1,9 @@
 import Dependencies._
 
-val scala212               = "2.12.13"
-val scala213               = "2.13.1"
-val supportedScalaVersions = List(scala212, scala213)
-
 val defaultSettings = Seq(
   version := "0.1.0-SNAPSHOT",
   organization := "org.thp",
-  scalaVersion := scala212,
-  crossScalaVersions := supportedScalaVersions,
+  scalaVersion := "2.13.5",
   resolvers ++= Seq(
     Resolver.mavenLocal,
     "Oracle Released Java Packages" at "https://download.oracle.com/maven",
@@ -36,22 +31,11 @@ val defaultSettings = Seq(
     //"-Ymacro-debug-lite",
     "-Xlog-free-types",
     "-Xlog-free-terms",
-    "-Xprint-types"
+    "-Xprint-types",
+    "-Ymacro-annotations"
   ),
   scalafmtConfig := (ThisBuild / baseDirectory).value / ".scalafmt.conf",
   Test / fork := true,
-  scalacOptions ++= {
-    CrossVersion.partialVersion((Compile / scalaVersion).value) match {
-      case Some((2, n)) if n >= 13 => "-Ymacro-annotations" :: Nil
-      case _                       => Nil
-    }
-  },
-  libraryDependencies ++= {
-    CrossVersion.partialVersion(scalaVersion.value) match {
-      case Some((2, n)) if n >= 13 => Nil
-      case _                       => compilerPlugin(macroParadise) :: Nil
-    }
-  },
   dependencyOverrides += "io.netty" % "netty-all" % "4.0.56.Final",
   Compile / packageDoc / publishArtifact := false,
   Compile / doc / sources := Nil,

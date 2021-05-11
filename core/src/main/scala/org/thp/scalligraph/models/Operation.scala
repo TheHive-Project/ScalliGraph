@@ -88,7 +88,7 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) e
                       ._id
                       .toSeq
                   }
-                  .toIterator
+                  .iterator
                   .grouped(pageSize)
                   .foldLeft[Try[Int]](Success(0)) {
                     case (Success(count), page) =>

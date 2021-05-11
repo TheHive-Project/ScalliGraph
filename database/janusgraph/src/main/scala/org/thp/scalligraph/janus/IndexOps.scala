@@ -10,7 +10,7 @@ import org.thp.scalligraph.{InternalError, RichSeq}
 
 import java.util.regex.Pattern
 import scala.annotation.tailrec
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
 trait IndexOps {
@@ -167,8 +167,10 @@ trait IndexOps {
         case (_, indexType, props)       => props.map(_ -> indexType)
       }
       .groupBy(_._1)
+      .view
       .filterKeys(!_.startsWith("_"))
-      .mapValues(_.map(_._2).distinct) ++ Seq(
+      .mapValues(_.map(_._2).distinct)
+      .toMap ++ Seq(
       "_label"     -> Seq(IndexType.standard),
       "_createdAt" -> Seq(IndexType.standard),
       "_createdBy" -> Seq(IndexType.standard),

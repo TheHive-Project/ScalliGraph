@@ -39,7 +39,7 @@ trait MappingMacroHelper extends MacroUtil with MacroLogger {
           val mapping = getImplicitMapping(s)
             .orElse(getEnumMapping(s.typeSignature, s))
             .getOrElse(fatal(s"Fail to get mapping of $s (${s.typeSignature})"))
-          MappingSymbol(s.name.decodedName.toString.trim, TermName(c.freshName(s.name + "Mapping")), mapping, s.typeSignature)
+          MappingSymbol(s.name.decodedName.toString.trim, TermName(c.freshName(s"${s.name}Mapping")), mapping, s.typeSignature)
         }
     }
   }

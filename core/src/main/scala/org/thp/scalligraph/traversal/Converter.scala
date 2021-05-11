@@ -6,7 +6,7 @@ import java.util.{Collection => JCollection, List => JList, Map => JMap}
 import org.apache.tinkerpop.gremlin.process.traversal.P
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 trait BiConverter[D, G] extends Converter[D, G] {
   val reverse: Converter[G, D]
@@ -43,8 +43,8 @@ object Converter {
       override val subConverter: C = converter
       override def apply(l: JList[G]): Seq[D] =
         converter match {
-          case _: IdentityConverter[_] => l.asScala.asInstanceOf[Seq[D]]
-          case c                       => l.asScala.map(c)
+          case _: IdentityConverter[_] => l.asScala.toSeq.asInstanceOf[Seq[D]]
+          case c                       => l.asScala.map(c).toSeq
         }
     }
   def ccollection[D, G, C <: Converter[D, G]](converter: C): CCollection[D, G, C] = new CollectionConverter[D, G, C](converter)

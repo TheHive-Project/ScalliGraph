@@ -6,7 +6,7 @@ import play.api.{Configuration => PlayConfig}
 import java.lang.{Boolean => JBoolean, Byte => JByte, Double => JDouble, Float => JFloat, Long => JLong, Short => JShort}
 import java.math.{BigInteger, BigDecimal => JBigDecimal}
 import java.util.{Properties, Iterator => JIterator, List => JList}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class Config(config: PlayConfig) extends ApacheConfig {
   override def subset(prefix: String): ApacheConfig                               = new Config(config.getOptional[PlayConfig](prefix).getOrElse(PlayConfig.empty))
@@ -17,8 +17,8 @@ class Config(config: PlayConfig) extends ApacheConfig {
   override def clearProperty(key: String): Unit                                   = ???
   override def clear(): Unit                                                      = ???
   override def getProperty(key: String): AnyRef                                   = config.underlying.getAnyRef(key)
-  override def getKeys(prefix: String): JIterator[String]                         = config.keys.filter(_.startsWith(prefix)).toIterator.asJava
-  override def getKeys: JIterator[String]                                         = config.keys.toIterator.asJava
+  override def getKeys(prefix: String): JIterator[String]                         = config.keys.filter(_.startsWith(prefix)).iterator.asJava
+  override def getKeys: JIterator[String]                                         = config.keys.iterator.asJava
   override def getProperties(key: String): Properties                             = ???
   override def getBoolean(key: String): Boolean                                   = config.get[Boolean](key)
   override def getBoolean(key: String, defaultValue: Boolean): Boolean            = config.getOptional[Boolean](key).getOrElse(defaultValue)

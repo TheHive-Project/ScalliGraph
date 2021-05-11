@@ -19,7 +19,7 @@ import org.apache.tinkerpop.gremlin.process.traversal.{P, Pop, Step, Traversal =
 import org.apache.tinkerpop.gremlin.structure.PropertyType
 
 import java.util.{Comparator, Date}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.util.Try
 
 trait TraversalPrinter {
@@ -59,7 +59,7 @@ trait TraversalPrinter {
             if (s.returnsVertex()) sb.append("V")
             else if (s.returnsEdge()) sb.append("E")
             else sb.append("???")
-            sb.append(s.getIds.map(i => '"' + i.toString + '"').mkString("(", ", ", ")"))
+            sb.append(s.getIds.map(i => s""""$i"""").mkString("(", ", ", ")"))
             sb.toString
           case s: HasStep[_] =>
             s.getHasContainers
@@ -73,7 +73,7 @@ trait TraversalPrinter {
             val sb = new StringBuilder
             sb.append(s.getDirection.toString.toLowerCase)
             if (s.returnsEdge()) sb.append("E")
-            sb.append(s"(${s.getEdgeLabels.map('"' + _ + '"').mkString(", ")})")
+            sb.append(s"(${s.getEdgeLabels.map(l => s""""$l"""").mkString(", ")})")
             sb.toString
           case s: EdgeVertexStep         => s"${s.getDirection.toString.toLowerCase}V()"
           case s: TraversalFilterStep[_] => s"filter(${printLocalChildren(s)})"
@@ -88,12 +88,12 @@ trait TraversalPrinter {
           case s: WhereStartStep[_] =>
             val keys = s.getScopeKeys.asScala
             if (keys.nonEmpty)
-              s"__.as(${keys.map('"' + _ + '"').mkString(", ")})"
+              s"__.as(${keys.map(k => s""""$k"""").mkString(", ")})"
             else "__"
           case s: WhereEndStep =>
             val keys = s.getScopeKeys.asScala
             if (keys.nonEmpty)
-              s"as(${keys.map('"' + _ + '"').mkString(", ")})"
+              s"as(${keys.map(k => s""""$k"""").mkString(", ")})"
             else ""
           case s: TraversalFlatMapStep[_, _] => s"flatMap(${printLocalChildren(s)})"
           case s: GroupStep[_, _, _]         => s"group()${printChildrenBy(s)}"
@@ -110,29 +110,29 @@ trait TraversalPrinter {
           case s: IsStep[_]          => s"is(${printPredicate(s.getPredicate)})"
           case _: IdStep[_]          => "id()"
           case s: ProjectStep[_, _] =>
-            s"project(${s.getProjectKeys.asScala.map('"' + _ + '"').mkString(", ")})${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"
+            s"project(${s.getProjectKeys.asScala.map(k => s""""$k"""").mkString(", ")})${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"
           case s: SelectStep[_, _] =>
             val pop =
               if (s.getPop == Pop.last) ""
               else s"${s.getPop}, "
             val selectEntries = s.getByTraversals.asScala.toSeq
-            s"select($pop${selectEntries.map(e => '"' + e._1 + '"').mkString(", ")})${selectEntries.map(e => printBy(e._2, None)).mkString}"
+            s"select($pop${selectEntries.map(e => s""""${e._1}"""").mkString(", ")})${selectEntries.map(e => printBy(e._2, None)).mkString}"
           case s: SelectOneStep[_, _] =>
             val pop =
               if (s.getPop == Pop.last) ""
               else s"${s.getPop}, "
-            s"select($pop${s.getScopeKeys.asScala.map('"' + _ + '"').mkString(", ")})${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"
+            s"select($pop${s.getScopeKeys.asScala.map(k => s""""$k"""").mkString(", ")})${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"
           case s: StoreStep[_] =>
-            s"aggregate(local, ${s.getLabels.asScala.map('"' + _ + '"').mkString(", ")})${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"
+            s"aggregate(local, ${s.getLabels.asScala.map(k => s""""$k"""").mkString(", ")})${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"
           case s: AggregateStep[_] =>
-            s"aggregate(global, ${s.getLabels.asScala.map('"' + _ + '"').mkString(", ")})${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"
+            s"aggregate(global, ${s.getLabels.asScala.map(k => s""""$k"""").mkString(", ")})${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"
           case s: OrderGlobalStep[_, _] => s"order()${s.getComparators.asScala.map(p => printBy(p.getValue0, Some(p.getValue1))).mkString}"
           case s: PropertiesStep[_] =>
             s.getReturnType match {
-              case PropertyType.VALUE    => s"values(${s.getPropertyKeys.map('"' + _ + '"').mkString(", ")})"
-              case PropertyType.PROPERTY => s"properties(${s.getPropertyKeys.map('"' + _ + '"').mkString(", ")})"
+              case PropertyType.VALUE    => s"values(${s.getPropertyKeys.map(k => s""""$k"""").mkString(", ")})"
+              case PropertyType.PROPERTY => s"properties(${s.getPropertyKeys.map(k => s""""$k"""").mkString(", ")})"
             }
-          case s: DedupGlobalStep[_]         => s"dedup(${s.getScopeKeys.asScala.map('"' + _ + '"').mkString(",")})"
+          case s: DedupGlobalStep[_]         => s"dedup(${s.getScopeKeys.asScala.map(k => s""""$k"""").mkString(",")})"
           case s: UnionStep[_, _]            => s"union(${printGlobalChildren(s)})"
           case s: CoalesceStep[_, _]         => s"coalesce(${printLocalChildren(s)})"
           case _: EndStep[_]                 => "identity()"
@@ -157,7 +157,7 @@ trait TraversalPrinter {
         }
         val labels = step.getLabels.asScala
         if (labels.nonEmpty)
-          s"$stepStr.as(${labels.map('"' + _ + '"').mkString(", ")})"
+          s"$stepStr.as(${labels.map(k => s""""$k"""").mkString(", ")})"
         else
           stepStr
       }.getOrElse(s"{UNKNOWN-FAIL:$step}")
@@ -185,7 +185,7 @@ trait TraversalPrinter {
 
     def printValue(value: Any): String =
       value match {
-        case s: String          => '"' + s + '"'
+        case s: String          => s""""$s""""
         case d: Date            => s"new Date(${d.getTime})"
         case v if v == NO_VALUE => """"<NO_VALUE>"""""
         case null               => "null"

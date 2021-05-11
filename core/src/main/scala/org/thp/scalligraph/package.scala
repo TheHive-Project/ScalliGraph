@@ -11,11 +11,12 @@ package object scalligraph {
     def toTry(f: Failure[A]): Try[A] = o.fold[Try[A]](f)(Success.apply)
   }
 
-  implicit class RichSeq[A](s: TraversableOnce[A]) {
+  implicit class RichSeq[A](s: IterableOnce[A]) {
 
-    def toTry[B](f: A => Try[B]): Try[Seq[B]] = s.foldLeft[Try[Seq[B]]](Success(Nil)) {
-      case (Success(l), a) => f(a).map(l :+ _)
-      case (failure, _)    => failure
-    }
+    def toTry[B](f: A => Try[B]): Try[Seq[B]] =
+      s.iterator.foldLeft[Try[Seq[B]]](Success(Nil)) {
+        case (Success(l), a) => f(a).map(l :+ _)
+        case (failure, _)    => failure
+      }
   }
 }

@@ -163,7 +163,7 @@ object FObject {
   def empty                                   = new FObject(Map.empty)
   def apply(elems: (String, Field)*): FObject = new FObject(Map(elems: _*))
   def apply(map: Map[String, Field]): FObject = new FObject(map)
-  def apply(o: JsObject): FObject             = new FObject(o.value.mapValues(Field.apply).toMap)
+  def apply(o: JsObject): FObject             = new FObject(o.value.view.mapValues(Field.apply).toMap)
   implicit val parser: FieldsParser[FObject] = FieldsParser[FObject]("FObject") {
     case (_, field: FObject) => Good(field)
   }

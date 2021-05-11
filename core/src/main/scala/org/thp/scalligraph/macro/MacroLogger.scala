@@ -84,7 +84,7 @@ trait MacroLogger {
 
   def cleanupCode(code: String): String =
     code
-      .replaceAllLiterally("/" + "*{<null>}*/", "")
+      .replace("/" + "*{<null>}*/", "")
       .replaceAll(";\n", "\n")
 
   def ret(msg: => String, tree: Tree): Tree = {

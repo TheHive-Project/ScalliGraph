@@ -102,10 +102,7 @@ object HadoopStorageSrv {
     conf.entrySet.foreach {
       case ("username", username) =>
         System.setProperty("HADOOP_USER_NAME", username.unwrapped().toString)
-      case (name, value) =>
-        value.unwrapped() match {
-          case s: String => hadoopConfig.set(name, s)
-        }
+      case (name, value) => hadoopConfig.set(name, value.toString)
     }
     hadoopConfig
   }
@@ -232,7 +229,7 @@ class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Data
         db.createVertex(graph, userSrv.getSystemAuthContext, db.binaryModel, Binary(None, None, Array.emptyByteArray))
       } else {
         logger.debug(s"Save file $folder/$id")
-        chunks.foldLeft(chunks.next) {
+        chunks.foldLeft(chunks.next()) {
           case (previousVertex, currentVertex) =>
             db.createEdge[BinaryLink, Binary, Binary](
               graph,

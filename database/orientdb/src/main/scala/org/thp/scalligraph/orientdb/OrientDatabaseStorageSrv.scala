@@ -6,7 +6,7 @@ import java.util.{Base64, List => JList}
 import org.thp.scalligraph.services.StorageSrv
 import play.api.Configuration
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.util.{Success, Try}
 
 
