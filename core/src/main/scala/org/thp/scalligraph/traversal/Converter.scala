@@ -36,6 +36,12 @@ object Converter {
   def identity[A]: IdentityConverter[A]  = new IdentityConverter[A] {}
   val long: Converter[Long, JLong]       = _.toLong
   val double: Converter[Double, JDouble] = _.toDouble
+
+  def bi[A, B](a2b: A => B, b2a: B => A): BiConverter[A, B] =
+    new BiConverter[A, B] {
+      override val reverse: Converter[B, A] = (a: A) => a2b(a)
+      override def apply(b: B): A           = b2a(b)
+    }
   type CCollection[D, G, C <: Converter[D, G]] = Poly1Converter[Seq[D], JCollection[G], D, G, C]
   type CList[D, G, C <: Converter[D, G]]       = Poly1Converter[Seq[D], JList[G], D, G, C]
   def clist[D, G, C <: Converter[D, G]](converter: C): CList[D, G, C] =
@@ -71,6 +77,7 @@ object Converter {
       Converter[(DK, DV), JMap.Entry[GK, GV]] with Poly2Converter[(DK, DV), JMap.Entry[GK, GV], DK, DV, GK, GV, CK, CV]
     ] with Poly2Converter[Map[DK, DV], JMap[GK, GV], DK, DV, GK, GV, CK, CV]
 }
+
 class MapConverter[DK, DV, GK, GV, CK <: Converter[DK, GK], CV <: Converter[DV, GV]](
     override val subConverterKey: CK,
     override val subConverterValue: CV
@@ -92,11 +99,6 @@ class MapConverter[DK, DV, GK, GV, CK <: Converter[DK, GK], CV <: Converter[DV, 
       .toMap
 }
 
-/*
-Error:(80, 5) type arguments [Map[DK,DV],java.util.Map[GK,GV],(DK, DV),java.util.Map.Entry[GK,GV],org.thp.scalligraph.traversal.Poly2Converter[(DK, DV),java.util.Map.Entry[GK,GV],DK,DV,GK,GV,CK,CV]]
-do not conform to trait Poly1Converter's type parameter bounds [+SD,SG,D,G,C <: org.thp.scalligraph.traversal.Converter[D,G]]
-    Poly1Converter[Map[DK, DV], JMap[GK, GV], (DK, DV), JMap.Entry[GK, GV], Poly2Converter[(DK, DV), JMap.Entry[GK, GV], DK, DV, GK, GV, CK, CV]]
- */
 class GroupMapConverter[DK, DV, GK, GV, CK <: Converter[DK, GK], CV <: Converter[DV, GV]](override val subConverterKey: CK, vConverter: CV)
     extends Poly1Converter[
       Map[DK, Seq[DV]],

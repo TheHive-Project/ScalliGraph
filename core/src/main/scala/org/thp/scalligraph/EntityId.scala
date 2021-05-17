@@ -19,6 +19,7 @@ case class EntityId(override val value: String) extends EntityIdOrName(value) {
   override def toString: String                                         = s"${EntityIdOrName.prefixChar}$value"
   def isDefined: Boolean                                                = value.nonEmpty
   def isEmpty: Boolean                                                  = value.isEmpty
+  def toOption: Option[EntityId]                                        = if (isDefined) Some(this) else None
 }
 object EntityId {
   def apply(id: AnyRef): EntityId                   = read(id.toString)
