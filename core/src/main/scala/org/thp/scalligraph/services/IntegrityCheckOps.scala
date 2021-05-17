@@ -26,32 +26,33 @@ trait EntitySelector[E]             extends (Seq[E with Entity] => Option[(E wit
 trait ElementSelector[E <: Element] extends (Seq[E] => Option[(E, Seq[E])])
 
 object ElementSelector {
-  def firstCreatedElement[ELEMENT <: Element]: ElementSelector[ELEMENT] =
-    (elements: Seq[ELEMENT]) =>
-      if (elements.isEmpty) None
-      else {
-        val firstIndex = elements.map(e => UMapping.date.getProperty(e, "_createdAt")).zipWithIndex.minBy(_._1)._2
-        Some((elements(firstIndex), elements.patch(firstIndex, Nil, 1)))
-      }
+  private def generic[ELEMENT <: Element](select: Seq[ELEMENT] => ELEMENT): ElementSelector[ELEMENT] = { (elements: Seq[ELEMENT]) =>
+    if (elements.isEmpty) None
+    else {
+      val selected = select(elements)
+      val (a, b)   = elements.span(_ != selected)
+      Some((selected, a ++ b.tail))
+    }
+  }
+  def firstCreatedElement[ELEMENT <: Element]: ElementSelector[ELEMENT] = generic(_.minBy(e => UMapping.date.getProperty(e, "_createdAt")))
+  def lastCreatedElement[ELEMENT <: Element]: ElementSelector[ELEMENT]  = generic(_.maxBy(e => UMapping.date.getProperty(e, "_createdAt")))
+  def firstUpdatedElement[ELEMENT <: Element]: ElementSelector[ELEMENT] = generic(_.minBy(e => UMapping.date.getProperty(e, "_updatedAt")))
+  def lastUpdatedElement[ELEMENT <: Element]: ElementSelector[ELEMENT]  = generic(_.maxBy(e => UMapping.date.getProperty(e, "_updatedAt")))
 }
 
 object EntitySelector {
-  def firstCreatedEntity[E]: EntitySelector[E] =
+  private def generic[E](select: Seq[E with Entity] => E with Entity): EntitySelector[E] =
     (entities: Seq[E with Entity]) =>
       if (entities.isEmpty) None
       else {
-        val selected = entities.minBy(_._createdAt)
+        val selected = select(entities)
         val (a, b)   = entities.span(_ != selected)
         Some((selected, a ++ b.tail))
       }
-  def lastCreatedEntity[E]: EntitySelector[E] =
-    (entities: Seq[E with Entity]) =>
-      if (entities.isEmpty) None
-      else {
-        val selected = entities.maxBy(_._createdAt)
-        val (a, b)   = entities.span(_ != selected)
-        Some((selected, a ++ b.tail))
-      }
+  def lastCreatedEntity[E]: EntitySelector[E]  = generic(_.maxBy(_._createdAt))
+  def firstCreatedEntity[E]: EntitySelector[E] = generic(_.minBy(_._createdAt))
+  def lastUpdatedEntity[E]: EntitySelector[E]  = generic(_.maxBy(_._updatedAt))
+  def firstUpdatedEntity[E]: EntitySelector[E] = generic(_.minBy(_._updatedAt))
 }
 
 trait LinkRemover extends ((Entity, Entity) => Unit)
@@ -74,6 +75,10 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
     def outEdge[EDGE <: Product: ru.TypeTag](implicit graph: Graph): LinkRemover = {
       val edgeName = ru.typeOf[EDGE].typeSymbol.name.toString
       (from, to) => service.getByIds(from._id).outE(edgeName).filter(_.inV.hasId(to._id)).remove()
+    }
+    def inEdge[EDGE <: Product: ru.TypeTag](implicit graph: Graph): LinkRemover = {
+      val edgeName = ru.typeOf[EDGE].typeSymbol.name.toString
+      (from, to) => service.getByIds(from._id).inE(edgeName).filter(_.outV.hasId(to._id)).remove()
     }
   }
 
