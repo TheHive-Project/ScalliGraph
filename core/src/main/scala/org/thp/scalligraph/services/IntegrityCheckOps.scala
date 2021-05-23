@@ -122,15 +122,15 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
   }
 
   class MultiLinkChecker[L <: Product: ru.TypeTag, I](
-      orphanStrategy: OrphanStrategy[E, Seq[I]],
+      orphanStrategy: OrphanStrategy[E, Set[I]],
       setField: (E with Entity, Seq[L with Entity]) => Unit,
       getLink: I => L with Entity
   ) {
     lazy val linkName: String = ru.typeOf[L].typeSymbol.name.toString
 
-    def check(entity: E with Entity, fields: Seq[I], links: Seq[I]): Map[String, Int] =
+    def check(entity: E with Entity, fields: Set[I], links: Seq[I]): Map[String, Int] =
       // [field:ABC] ---> [links:ABC]
-      if (fields == links) Map.empty
+      if (fields == links.toSet) Map.empty
 
       // [field:ABC] --->
       else if (links.isEmpty) orphanStrategy(fields, entity)
@@ -138,7 +138,7 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
       // [field:ABC] ---> [links:(B)CD]
       else {
         val extraLinks  = (links.toSet -- fields).size
-        val extraFields = (fields.toSet -- links).size
+        val extraFields = (fields -- links).size
         setField(entity, links.map(getLink))
 
         Map
@@ -213,20 +213,20 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
     )
 
   def multiLink[L <: Product: ru.TypeTag, I](fieldName: String, getLink: I => L with Entity, linkValue: L with Entity => I)(
-      orphanStrategy: OrphanStrategySelector[Seq[I]] => OrphanStrategy[E, Seq[I]]
-  )(implicit graph: Graph, mapping: UMapping[Seq[I]]) =
+      orphanStrategy: OrphanStrategySelector[Set[I]] => OrphanStrategy[E, Set[I]]
+  )(implicit graph: Graph, mapping: UMapping[Set[I]]) =
     new MultiLinkChecker[L, I](
-      orphanStrategy(new OrphanStrategySelector[Seq[I]](fieldName)),
-      (entity, links) => mapping.toMapping.setProperty(service.get(entity), fieldName, links.map(linkValue)).iterate(),
+      orphanStrategy(new OrphanStrategySelector[Set[I]](fieldName)),
+      (entity, links) => mapping.toMapping.setProperty(service.get(entity), fieldName, links.map(linkValue).toSet).iterate(),
       getLink
     )
 
   def multiIdLink[L <: Product: ru.TypeTag](fieldName: String, linkService: VertexSrv[L])(
-      orphanStrategy: OrphanStrategySelector[Seq[EntityId]] => OrphanStrategy[E, Seq[EntityId]]
+      orphanStrategy: OrphanStrategySelector[Set[EntityId]] => OrphanStrategy[E, Set[EntityId]]
   )(implicit graph: Graph) =
     new MultiLinkChecker[L, EntityId](
-      orphanStrategy(new OrphanStrategySelector[Seq[EntityId]](fieldName)),
-      (entity, links) => UMapping.entityId.sequence.setProperty(service.get(entity), fieldName, links.map(_._id)).iterate(),
+      orphanStrategy(new OrphanStrategySelector[Set[EntityId]](fieldName)),
+      (entity, links) => UMapping.entityId.set.setProperty(service.get(entity), fieldName, links.map(_._id).toSet).iterate(),
       linkService.getOrFail(_).get
     )
 
