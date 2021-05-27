@@ -81,6 +81,7 @@ trait ScalligraphApplication {
   def tempFileReaper: TemporaryFileReaper
   def tempFileCreator: TemporaryFileCreator
   def routers: LazyMutableSeq[Router]
+  def router: Router
   def fileMimeTypes: FileMimeTypes
   def getQueryExecutor(version: Int): QueryExecutor
   def authSrvProviders: LazyMutableSeq[AuthSrvProvider]
@@ -225,11 +226,12 @@ class ScalligraphApplicationImpl(val context: Context)
       _.configure(environment, context.initialConfiguration, Map.empty)
     }
 
-  def loadModule(moduleName: String): Unit = {
+  def loadModule(moduleName: String): Option[ScalligraphModule] = {
     logger.info(s"Loading module $moduleName")
-    try {
-      if (loadedModules.exists(_.getClass.getName == moduleName))
-        throw InternalError(s"The module $moduleName is already loaded")
+    try if (loadedModules.exists(_.getClass.getName == moduleName)) {
+      logger.error(s"The module $moduleName is already loaded")
+      None
+    } else {
       val module = context
         .environment
         .classLoader
@@ -238,12 +240,14 @@ class ScalligraphApplicationImpl(val context: Context)
         .newInstance(this)
         .asInstanceOf[ScalligraphModule]
       injectModule(module)
-      module.init()
+      Some(module)
     } catch {
       case initError: InitialisationFailure =>
         logger.error("Initialisation error", initError.getCause)
         throw initError.getCause
-      case NonFatal(e) => logger.error(s"Fail to load module $moduleName", e)
+      case NonFatal(e) =>
+        logger.error(s"Fail to load module $moduleName", e)
+        None
     }
   }
 
@@ -252,8 +256,9 @@ class ScalligraphApplicationImpl(val context: Context)
 
     configuration
       .get[Seq[String]]("scalligraph.modules")
+      .distinct
       .foreach(loadModule)
-    router
+    loadedModules.foreach(_.init())
     ()
   }
 
