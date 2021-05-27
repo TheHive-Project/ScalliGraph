@@ -20,6 +20,7 @@ sealed trait GenIntegrityCheckOps {
   def name: String
   def duplicationCheck(): Map[String, Int]
   def initialCheck()(implicit graph: Graph, authContext: AuthContext): Unit
+  def globalCheck(): Map[String, Int]
 }
 
 trait EntitySelector[E]             extends (Seq[E with Entity] => Option[(E with Entity, Seq[E with Entity])])
@@ -59,17 +60,20 @@ trait LinkRemover extends ((Entity, Entity) => Unit)
 
 trait OrphanStrategy[E <: Product, I] extends ((I, E with Entity) => Map[String, Int])
 
-trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps {
+trait MapMerger {
+  implicit class MapMergerDefs(m1: Map[String, Int]) {
+    def <+>(m2: Map[String, Int]): Map[String, Int] = (m1.keySet ++ m2.keySet).map(k => k -> (m1.getOrElse(k, 0) + m2.getOrElse(k, 0))).toMap
+  }
+}
+object MapMerger extends MapMerger
+
+trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps with MapMerger {
   val db: Database
   val service: VertexSrv[E]
 
   lazy val name: String     = service.model.label
   lazy val logger: Logger   = Logger(getClass)
   final private val noValue = new Object
-
-  implicit class MapMerger(m1: Map[String, Int]) {
-    def <+>(m2: Map[String, Int]): Map[String, Int] = (m1.keySet ++ m2.keySet).map(k => k -> (m1.getOrElse(k, 0) + m2.getOrElse(k, 0))).toMap
-  }
 
   class LinkRemoverSelector {
     def outEdge[EDGE <: Product: ru.TypeTag](implicit graph: Graph): LinkRemover = {
