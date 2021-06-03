@@ -23,6 +23,7 @@ object Dependencies {
   lazy val janusGraphLucene        = "org.janusgraph"            % "janusgraph-lucene"                  % janusVersion
   lazy val janusGraphElasticSearch = "org.janusgraph"            % "janusgraph-es"                      % janusVersion
   lazy val janusGraphCassandra     = "org.janusgraph"            % "janusgraph-cql"                     % janusVersion
+  lazy val cassandraDriverShaded   = "com.datastax.cassandra"    % "cassandra-driver-core"              % "3.9.0" classifier "shaded" exclude("io.netty", "*") // align with janusgraph-cql
   lazy val janusGraphInMemory      = "org.janusgraph"            % "janusgraph-inmemory"                % janusVersion
   lazy val tinkerpop               = "org.apache.tinkerpop"      % "gremlin-core"                       % "3.4.6"         // align with janusgraph
   lazy val scalactic               = "org.scalactic"            %% "scalactic"                          % "3.2.3"

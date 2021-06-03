@@ -124,7 +124,8 @@ lazy val scalligraphJanusgraph = (project in file("database/janusgraph"))
 //      janusGraphHBase,
       janusGraphLucene,
       janusGraphElasticSearch,
-      janusGraphCassandra,
+      janusGraphCassandra exclude (cassandraDriverShaded.organization, cassandraDriverShaded.name),
+      cassandraDriverShaded,
 //      janusGraphDriver,
 //      janusGraphCore,
       specs % Test
