@@ -71,7 +71,7 @@ class ProjectionBuilder[E <: Product, D, G, C <: Converter[D, G]](
       traversal,
       labels :+ label,
       addBy.andThen(_.by(p.raw)),
-      map => buildResult(map) :+ p.converter.asInstanceOf[Converter[DD, GG]](map.get(label).asInstanceOf[GG])
+      map => buildResult(map) :+ p.converter(map.get(label).asInstanceOf[GG])
     )
   }
 

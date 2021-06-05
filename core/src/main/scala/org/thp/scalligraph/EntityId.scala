@@ -25,11 +25,12 @@ case class EntityId(override val value: String) extends EntityIdOrName(value) {
   override def toString: String                                         = s"${EntityIdOrName.prefixChar}$value"
   def isDefined: Boolean                                                = value.nonEmpty
   def isEmpty: Boolean                                                  = value.isEmpty
+  def toOption: Option[EntityId]                                        = if (isDefined) Some(this) else None
 }
 object EntityId {
   def apply(id: AnyRef): EntityId                   = read(id.toString)
   def read(id: String): EntityId                    = EntityIdOrName.fold(id)(new EntityId(_), new EntityId(_))
-  def empty                                         = EntityId("")
+  val empty: EntityId                               = EntityId("")
   implicit val format: Format[EntityId]             = Format(Reads.StringReads.map(EntityId.read), Writes.StringWrites.contramap(_.toString))
   implicit val fieldsParser: FieldsParser[EntityId] = FieldsParser.string.map("EntityId")(EntityId.read)
 }
