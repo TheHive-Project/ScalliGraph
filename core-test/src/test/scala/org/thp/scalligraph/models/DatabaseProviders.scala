@@ -32,5 +32,5 @@ class DatabaseProviders(config: Configuration, system: ActorSystem) {
 }
 
 class DatabaseProvider(val name: String, db: => Database) extends Provider[Database] {
-  override lazy val get: Database = db
+  override def get: Database = db
 }

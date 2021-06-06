@@ -1,18 +1,17 @@
 package org.thp.scalligraph.services
 
-import java.io.InputStream
-import java.nio.file.{Files, Path, Paths}
-
 import akka.actor.ActorSystem
 import org.specs2.mock.Mockito
 import org.specs2.mutable.Specification
 import org.specs2.specification.core.{Fragment, Fragments}
 import org.thp.scalligraph.EntityName
 import org.thp.scalligraph.auth.{AuthContextImpl, UserSrv}
-import org.thp.scalligraph.models.{Database, DatabaseProvider, DatabaseProviders}
+import org.thp.scalligraph.models.{Database, DatabaseProviders}
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.{Configuration, Environment}
 
+import java.io.InputStream
+import java.nio.file.{Files, Path, Paths}
 import scala.annotation.tailrec
 //import org.thp.scalligraph.orientdb.{OrientDatabase, OrientDatabaseStorageSrv}
 
@@ -35,15 +34,15 @@ class StorageSrvTest extends Specification with Mockito {
   val userSrv: UserSrv         = mock[UserSrv]
   userSrv.getSystemAuthContext returns AuthContextImpl("test", "Test user", EntityName("test"), "test-request-id", Set.empty)
 
-  val dbProvStorageSrv: Seq[(DatabaseProvider, StorageSrv)] = dbProviders.list.map { db =>
-    db -> new DatabaseStorageSrv(32 * 1024, userSrv, db.get)
+  val dbStorageSrv: Seq[(String, Database, StorageSrv)] = dbProviders.list.map { dbProvider =>
+    val db = dbProvider.get
+    (dbProvider.name, db, new DatabaseStorageSrv(32 * 1024, userSrv, db))
 //    case db if db.name == "orientdb" => db -> new OrientDatabaseStorageSrv(db.get().asInstanceOf[OrientDatabase], 32 * 1024)
   } // :+ (new DatabaseProvider("janus", new JanusDatabase(actorSystem)) -> new LocalFileSystemStorageSrv(storageDirectory))
 
-  Fragments.foreach(dbProvStorageSrv) {
-    case (dbProvider, storageSrv) =>
-      val db = dbProvider.get
-      step(db.createSchema(Nil)) ^ specs(dbProvider.name, db, storageSrv) ^ step(db.drop())
+  Fragments.foreach(dbStorageSrv) {
+    case (name, db, storageSrv) =>
+      step(db.createSchema(Nil)) ^ specs(name, db, storageSrv) ^ step(db.drop())
   }
 
   def specs(dbName: String, db: Database, storageSrv: StorageSrv): Fragment =

@@ -13,7 +13,8 @@ class ModernTest extends PlaySpecification with TraversalOps {
   implicit val authContext: AuthContext = AuthContextImpl("me", "", EntityName(""), "", Set.empty)
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    step(setupDatabase(dbProvider.get)) ^ specs(dbProvider.name, dbProvider.get) ^ step(teardownDatabase(dbProvider.get))
+    val db = dbProvider.get
+    step(setupDatabase(db)) ^ specs(dbProvider.name, db) ^ step(teardownDatabase(db))
   }
 
   def setupDatabase(db: Database): Try[Unit] =

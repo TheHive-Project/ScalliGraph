@@ -44,7 +44,7 @@ class BSrv extends VertexSrv[B] {
   override def getByName(name: String)(implicit graph: Graph): Traversal.V[B]           = startTraversal.has(_.name, name)
 }
 
-class MeshSchema extends Schema {
+object MeshSchema extends Schema {
   val aSrv           = new ASrv
   val bSrv           = new BSrv
   val baOneSrv       = new EdgeSrv[BAOne, B, A]
@@ -58,39 +58,39 @@ class MeshSchema extends Schema {
 }
 
 object MeshDatabaseBuilder {
-  def build(schema: MeshSchema)(implicit db: Database, authContext: AuthContext): Try[Unit] =
-    db.createSchemaFrom(schema)
-      .flatMap(_ => db.addSchemaIndexes(schema))
+  def build(implicit db: Database, authContext: AuthContext): Try[Unit] =
+    db.createSchemaFrom(MeshSchema)
+      .flatMap(_ => db.addSchemaIndexes(MeshSchema))
       .flatMap { _ =>
         db.tryTransaction { implicit graph =>
           for {
-            a <- schema.aSrv.create(A("a"))
+            a <- MeshSchema.aSrv.create(A("a"))
             _ = Thread.sleep(1)
-            b <- schema.aSrv.create(A("b"))
+            b <- MeshSchema.aSrv.create(A("b"))
             _ = Thread.sleep(1)
-            c <- schema.aSrv.create(A("c"))
+            c <- MeshSchema.aSrv.create(A("c"))
             _ = Thread.sleep(1)
-            d <- schema.aSrv.create(A("d"))
+            d <- MeshSchema.aSrv.create(A("d"))
             _ = Thread.sleep(1)
-            e <- schema.aSrv.create(A("e"))
+            e <- MeshSchema.aSrv.create(A("e"))
             _ = Thread.sleep(1)
-            f <- schema.aSrv.create(A("f"))
+            f <- MeshSchema.aSrv.create(A("f"))
             _ = Thread.sleep(1)
-            g <- schema.aSrv.create(A("g"))
+            g <- MeshSchema.aSrv.create(A("g"))
             _ = Thread.sleep(1)
-            h <- schema.aSrv.create(A("h"))
+            h <- MeshSchema.aSrv.create(A("h"))
             _ = Thread.sleep(1)
-            i  <- schema.aSrv.create(A("i"))
-            b1 <- schema.bSrv.create(B("b1", a._id, Some(b._id), "c", Some("d"), Seq(e._id, f._id), Seq("g", "h", "i")))
-            _  <- schema.baOneSrv.create(new BAOne, b1, a)
-            _  <- schema.baMaybeSrv.create(new BAMaybe, b1, b)
-            _  <- schema.baNameSrv.create(new BAName, b1, c)
-            _  <- schema.baMaybeNameSrv.create(new BAMaybeName, b1, d)
-            _  <- schema.baSomeSrv.create(new BASome, b1, e)
-            _  <- schema.baSomeSrv.create(new BASome, b1, f)
-            _  <- schema.baSomeNameSrv.create(new BASomeName, b1, g)
-            _  <- schema.baSomeNameSrv.create(new BASomeName, b1, h)
-            _  <- schema.baSomeNameSrv.create(new BASomeName, b1, i)
+            i  <- MeshSchema.aSrv.create(A("i"))
+            b1 <- MeshSchema.bSrv.create(B("b1", a._id, Some(b._id), "c", Some("d"), Seq(e._id, f._id), Seq("g", "h", "i")))
+            _  <- MeshSchema.baOneSrv.create(new BAOne, b1, a)
+            _  <- MeshSchema.baMaybeSrv.create(new BAMaybe, b1, b)
+            _  <- MeshSchema.baNameSrv.create(new BAName, b1, c)
+            _  <- MeshSchema.baMaybeNameSrv.create(new BAMaybeName, b1, d)
+            _  <- MeshSchema.baSomeSrv.create(new BASome, b1, e)
+            _  <- MeshSchema.baSomeSrv.create(new BASome, b1, f)
+            _  <- MeshSchema.baSomeNameSrv.create(new BASomeName, b1, g)
+            _  <- MeshSchema.baSomeNameSrv.create(new BASomeName, b1, h)
+            _  <- MeshSchema.baSomeNameSrv.create(new BASomeName, b1, i)
           } yield ()
         }
       }

@@ -2,10 +2,10 @@ package org.thp.scalligraph.services
 
 import org.apache.tinkerpop.gremlin.structure.Vertex
 import org.specs2.specification.core.Fragments
-import org.thp.scalligraph.EntityName
-import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl}
+import org.thp.scalligraph.{EntityId, EntityName}
+import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl, UserSrv}
 import org.thp.scalligraph.models.{ModernOps, _}
-import org.thp.scalligraph.traversal.Graph
+import org.thp.scalligraph.traversal.{Converter, Graph, ProjectionBuilder}
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
@@ -15,15 +15,16 @@ import scala.util.{Success, Try}
 class IntegrityCheckTest extends PlaySpecification with ModernOps {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
   implicit val authContext: AuthContext = AuthContextImpl("me", "", EntityName(""), "", Set.empty)
+  val userSrv: UserSrv = new DummyUserSrv
 
-  Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    s"[${dbProvider.name}] integrity check" should {
+  Fragments.foreach(new DatabaseProviders().list) { databaseProvider =>
+    s"[${databaseProvider.name}] integrity check" should {
       "copy edges vertex" in {
-        implicit val database: Database = dbProvider.get
+        val database = databaseProvider.get
+        ModernDatabaseBuilder.build(database)(userSrv.getSystemAuthContext)
         val personSrv                   = new PersonSrv
         val softwareSrv                 = new SoftwareSrv
         val createdSrv                  = new EdgeSrv[Created, Person, Software]
-        ModernDatabaseBuilder.build(database)(authContext).get
         val newLop = database.tryTransaction { implicit graph =>
           val lop   = softwareSrv.create(Software("lop", "asm")).get
           val vadas = personSrv.getByName("vadas").head
@@ -57,71 +58,64 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
         }
       }
     }
-  }
 
-  Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    s"[${dbProvider.name}] do nothing if mandatory field id is present (byId)" in {
-      val app: AppBuilder = new AppBuilder().bindToProvider(dbProvider)
-      MeshDatabaseBuilder.build(app[MeshSchema])(app[Database], authContext).get
+    s"[${databaseProvider.name}] do nothing if mandatory field id is present (byId)" in {
+      val database = databaseProvider.get
+      MeshDatabaseBuilder.build(database, authContext).get
       val aSrv = new ASrv
-      integrityTest(app)(_.by.by(_.out[BAOne]._id.fold)) { implicit graph => i =>
+      integrityTest(database)(_.by.by(_.out[BAOne]._id.fold)) { implicit graph => i =>
         {
           case (b, as) => i.singleIdLink[A]("oneA", aSrv)(_.outEdge[BAOne], _.remove).check(b, b.oneA, as)
         }
       } must beEqualTo(Map.empty)
     }
-  }
 
-  Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    s"[${dbProvider.name}] remove entity if link has been removed (byId)" in {
-      val app: AppBuilder = new AppBuilder().bindToProvider(dbProvider)
-      MeshDatabaseBuilder.build(app[MeshSchema])(app[Database], authContext).get
+    s"[${databaseProvider.name}] remove entity if link has been removed (byId)" in {
+      val database = databaseProvider.get
+      MeshDatabaseBuilder.build(database, authContext).get
       val aSrv = new ASrv
-      app[Database].tryTransaction(implicit graph => Try(aSrv.getByName("a").remove())).get
-      integrityTest(app)(_.by.by(_.out[BAOne]._id.fold)) { implicit graph => i =>
+      database.tryTransaction(implicit graph => Try(aSrv.getByName("a").remove())).get
+      integrityTest(database)(_.by.by(_.out[BAOne]._id.fold)) { implicit graph => i =>
         {
           case (b, as) => i.singleIdLink[A]("oneA", aSrv)(_.outEdge[BAOne], _.remove).check(b, b.oneA, as)
         }
       } must beEqualTo(Map("B-oneA-removeOrphan" -> 1))
       val bSrv = new BSrv
-      app[Database].roTransaction(implicit graph => bSrv.getByName("b1").getCount) must beEqualTo(0)
+      database.roTransaction(implicit graph => bSrv.getByName("b1").getCount) must beEqualTo(0)
     }
-  }
 
-  Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    s"[${dbProvider.name}] set empty entity if link has been removed (byId)" in {
-      val app: AppBuilder = new AppBuilder().bindToProvider(dbProvider)
-      MeshDatabaseBuilder.build(app[MeshSchema])(app[Database], authContext).get
+    s"[${databaseProvider.name}] set empty entity if link has been removed (byId)" in {
+      val database = databaseProvider.get
+      MeshDatabaseBuilder.build(database, authContext).get
       val aSrv = new ASrv
-      app[Database].tryTransaction(implicit graph => Try(aSrv.getByName("a").remove())).get
-      integrityTest(app)(_.by.by(_.out[BAOne]._id.fold)) { implicit graph => i =>
+      database.tryTransaction(implicit graph => Try(aSrv.getByName("a").remove())).get
+      integrityTest(database)(_.by.by(_.out[BAOne]._id.fold)) { implicit graph => i =>
         {
           case (b, as) => i.singleIdLink[A]("oneA", aSrv)(_.outEdge[BAOne], _.set(EntityId.empty)).check(b, b.oneA, as)
         }
       } must beEqualTo(Map("B-oneA-removeOrphan" -> 1))
       val bSrv = new BSrv
-      app[Database].roTransaction(implicit graph => bSrv.getByName("b1").value(_.oneA).toSeq) must beEqualTo(Seq(EntityId.empty))
+      database.roTransaction(implicit graph => bSrv.getByName("b1").value(_.oneA).toSeq) must beEqualTo(Seq(EntityId.empty))
     }
-  }
 
-  Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    s"[${dbProvider.name}] remove extra links (byId)" in {
-      val app: AppBuilder = new AppBuilder().bindToProvider(dbProvider)
-      MeshDatabaseBuilder.build(app[MeshSchema])(app[Database], authContext).get
+
+    s"[${databaseProvider.name}] remove extra links (byId)" in {
+      val database = databaseProvider.get
+      MeshDatabaseBuilder.build(database, authContext).get
       val aSrv     = new ASrv
       val bSrv     = new BSrv
       val baOneSrv = new EdgeSrv[BAOne, B, A]
-      app[Database].tryTransaction { implicit graph =>
+      database.tryTransaction { implicit graph =>
         baOneSrv.create(new BAOne, bSrv.getByName("b1").head, aSrv.getByName("b").head).get
         baOneSrv.create(new BAOne, bSrv.getByName("b1").head, aSrv.getByName("c").head)
       }.get
-      integrityTest(app)(_.by.by(_.out[BAOne]._id.fold)) { implicit graph => i =>
+      integrityTest(database)(_.by.by(_.out[BAOne]._id.fold)) { implicit graph => i =>
         {
           case (b, as) => i.singleIdLink[A]("oneA", aSrv)(_.outEdge[BAOne], _.set(EntityId.empty)).check(b, b.oneA, as)
         }
       } must beEqualTo(Map("B-A-unlink" -> 2))
 
-      app[Database].roTransaction { implicit graph =>
+      database.roTransaction { implicit graph =>
         val aIds = bSrv
           .getByName("b1")
           .value(_.oneA)
@@ -129,28 +123,27 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
         aSrv.getByIds(aIds: _*).value(_.name).toSeq
       } must beEqualTo(Seq("a"))
     }
-  }
 
-  Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    s"[${dbProvider.name}] update field (keep last created) (byId)" in {
-      val app: AppBuilder = new AppBuilder().bindToProvider(dbProvider)
-      MeshDatabaseBuilder.build(app[MeshSchema])(app[Database], authContext).get
+
+    s"[${databaseProvider.name}] update field (keep last created) (byId)" in {
+      val database = databaseProvider.get
+      MeshDatabaseBuilder.build(database, authContext).get
       val aSrv     = new ASrv
       val bSrv     = new BSrv
       val baOneSrv = new EdgeSrv[BAOne, B, A]
-      app[Database].tryTransaction { implicit graph =>
+      database.tryTransaction { implicit graph =>
         bSrv.getByName("b1").update(_.oneA, EntityId("foo")).iterate()
         baOneSrv.create(new BAOne, bSrv.getByName("b1").head, aSrv.getByName("b").head).get
         baOneSrv.create(new BAOne, bSrv.getByName("b1").head, aSrv.getByName("c").head)
       }.get
-      integrityTest(app)(_.by.by(_.out[BAOne]._id.fold)) { implicit graph => i =>
+      integrityTest(database)(_.by.by(_.out[BAOne]._id.fold)) { implicit graph => i =>
         {
           case (b, as) =>
             i.singleIdLink[A]("oneA", aSrv)(_.outEdge[BAOne], _.set(EntityId.empty), _ => EntitySelector.lastCreatedEntity).check(b, b.oneA, as)
         }
       } must beEqualTo(Map("B-A-unlink" -> 2, "B-A-setField" -> 1))
 
-      app[Database].roTransaction { implicit graph =>
+      database.roTransaction { implicit graph =>
         val aIds = bSrv
           .getByName("b1")
           .value(_.oneA)
@@ -158,21 +151,20 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
         aSrv.getByIds(aIds: _*).value(_.name).toSeq
       } must beEqualTo(Seq("c"))
     }
-  }
 
-  Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    s"[${dbProvider.name}] update field (keep first created) (byId)" in {
-      val app: AppBuilder = new AppBuilder().bindToProvider(dbProvider)
-      MeshDatabaseBuilder.build(app[MeshSchema])(app[Database], authContext).get
+
+    s"[${databaseProvider.name}] update field (keep first created) (byId)" in {
+      val database = databaseProvider.get
+      MeshDatabaseBuilder.build(database, authContext).get
       val aSrv     = new ASrv
       val bSrv     = new BSrv
       val baOneSrv = new EdgeSrv[BAOne, B, A]
-      app[Database].tryTransaction { implicit graph =>
+      database.tryTransaction { implicit graph =>
         bSrv.getByName("b1").update(_.oneA, EntityId("foo")).iterate()
         baOneSrv.create(new BAOne, bSrv.getByName("b1").head, aSrv.getByName("b").head).get
         baOneSrv.create(new BAOne, bSrv.getByName("b1").head, aSrv.getByName("c").head)
       }.get
-      integrityTest(app)(_.by.by(_.out[BAOne]._id.fold)) { implicit graph => i =>
+      integrityTest(database)(_.by.by(_.out[BAOne]._id.fold)) { implicit graph => i =>
         {
           case (b, as) =>
             i.singleIdLink[A]("oneA", aSrv)(_.outEdge[BAOne], _.set(EntityId.empty), _ => EntitySelector.firstCreatedEntity)
@@ -180,7 +172,7 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
         }
       } must beEqualTo(Map("B-A-unlink" -> 2, "B-A-setField" -> 1))
 
-      app[Database].roTransaction { implicit graph =>
+      database.roTransaction { implicit graph =>
         val aIds = bSrv
           .getByName("b1")
           .value(_.oneA)
@@ -188,78 +180,74 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
         aSrv.getByIds(aIds: _*).value(_.name).toSeq
       } must beEqualTo(Seq("a"))
     }
-  }
 
   /* use name field */
-  Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    s"[${dbProvider.name}] do nothing if mandatory field id is present (byName)" in {
-      val app: AppBuilder = new AppBuilder().bindToProvider(dbProvider)
-      MeshDatabaseBuilder.build(app[MeshSchema])(app[Database], authContext).get
+
+    s"[${databaseProvider.name}] do nothing if mandatory field id is present (byName)" in {
+      val database = databaseProvider.get
+      MeshDatabaseBuilder.build(database, authContext).get
       val aSrv = new ASrv
-      integrityTest(app)(_.by.by(_.out[BAName].v[A].value(_.name).fold)) { implicit graph => i =>
+      integrityTest(database)(_.by.by(_.out[BAName].v[A].value(_.name).fold)) { implicit graph => i =>
         {
           case (b, as) => i.singleLink[A, String]("aName", aSrv.getByName(_).head, _.name)(_.outEdge[BAName], _.remove).check(b, b.aName, as)
         }
       } must beEqualTo(Map.empty)
     }
-  }
 
-  Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    s"[${dbProvider.name}] remove entity if link has been removed (byName)" in {
-      val app: AppBuilder = new AppBuilder().bindToProvider(dbProvider)
-      MeshDatabaseBuilder.build(app[MeshSchema])(app[Database], authContext).get
+
+    s"[${databaseProvider.name}] remove entity if link has been removed (byName)" in {
+      val database = databaseProvider.get
+      MeshDatabaseBuilder.build(database, authContext).get
       val aSrv = new ASrv
-      app[Database].tryTransaction(implicit graph => Try(aSrv.getByName("c").remove())).get
-      integrityTest(app)(_.by.by(_.out[BAName].v[A].value(_.name).fold)) { implicit graph => i =>
+      database.tryTransaction(implicit graph => Try(aSrv.getByName("c").remove())).get
+      integrityTest(database)(_.by.by(_.out[BAName].v[A].value(_.name).fold)) { implicit graph => i =>
         {
           case (b, as) => i.singleLink[A, String]("aName", aSrv.getByName(_).head, _.name)(_.outEdge[BAName], _.remove).check(b, b.aName, as)
         }
       } must beEqualTo(Map("B-aName-removeOrphan" -> 1))
       val bSrv = new BSrv
-      app[Database].roTransaction(implicit graph => bSrv.getByName("b1").getCount) must beEqualTo(0)
+      database.roTransaction(implicit graph => bSrv.getByName("b1").getCount) must beEqualTo(0)
     }
-  }
 
-  Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    s"[${dbProvider.name}] remove extra links (byName)" in {
-      val app: AppBuilder = new AppBuilder().bindToProvider(dbProvider)
-      MeshDatabaseBuilder.build(app[MeshSchema])(app[Database], authContext).get
+
+    s"[${databaseProvider.name}] remove extra links (byName)" in {
+      val database = databaseProvider.get
+      MeshDatabaseBuilder.build(database, authContext).get
       val aSrv      = new ASrv
       val bSrv      = new BSrv
       val baNameSrv = new EdgeSrv[BAName, B, A]
-      app[Database].tryTransaction { implicit graph =>
+      database.tryTransaction { implicit graph =>
         baNameSrv.create(new BAName, bSrv.getByName("b1").head, aSrv.getByName("a").head).get
         baNameSrv.create(new BAName, bSrv.getByName("b1").head, aSrv.getByName("b").head)
       }.get
-      integrityTest(app)(_.by.by(_.out[BAName].v[A].value(_.name).fold)) { implicit graph => i =>
+      integrityTest(database)(_.by.by(_.out[BAName].v[A].value(_.name).fold)) { implicit graph => i =>
         {
           case (b, as) =>
             i.singleLink[A, String]("aName", aSrv.getByName(_).head, _.name)(_.outEdge[BAName], _.remove).check(b, b.aName, as)
         }
       } must beEqualTo(Map("B-A-unlink" -> 2))
 
-      app[Database].roTransaction { implicit graph =>
+      database.roTransaction { implicit graph =>
         bSrv
           .getByName("b1")
           .value(_.aName)
           .toSeq
       } must beEqualTo(Seq("c"))
     }
-  }
 
-  Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    s"[${dbProvider.name}] update field (keep last created) (byName)" in {
-      val app: AppBuilder = new AppBuilder().bindToProvider(dbProvider)
-      MeshDatabaseBuilder.build(app[MeshSchema])(app[Database], authContext).get
+
+    s"[${databaseProvider.name}] update field (keep last created) (byName)" in {
+      val database = databaseProvider.get
+      MeshDatabaseBuilder.build(database, authContext).get
       val aSrv      = new ASrv
       val bSrv      = new BSrv
       val baNameSrv = new EdgeSrv[BAName, B, A]
-      app[Database].tryTransaction { implicit graph =>
+      database.tryTransaction { implicit graph =>
         bSrv.getByName("b1").update(_.aName, "foo").iterate()
         baNameSrv.create(new BAName, bSrv.getByName("b1").head, aSrv.getByName("a").head).get
         baNameSrv.create(new BAName, bSrv.getByName("b1").head, aSrv.getByName("b").head)
       }.get
-      integrityTest(app)(_.by.by(_.out[BAName].v[A].value(_.name).fold)) { implicit graph => i =>
+      integrityTest(database)(_.by.by(_.out[BAName].v[A].value(_.name).fold)) { implicit graph => i =>
         {
           case (b, as) =>
             i.singleLink[A, String]("aName", aSrv.getByName(_).head, _.name)(
@@ -278,28 +266,27 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
         }
       } must beEqualTo(Map("B-A-unlink" -> 2, "B-A-setField" -> 1))
 
-      app[Database].roTransaction { implicit graph =>
+      database.roTransaction { implicit graph =>
         bSrv
           .getByName("b1")
           .value(_.aName)
           .toSeq
       } must beEqualTo(Seq("b"))
     }
-  }
 
-  Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    s"[${dbProvider.name}] update field (keep first created) (byName)" in {
-      val app: AppBuilder = new AppBuilder().bindToProvider(dbProvider)
-      MeshDatabaseBuilder.build(app[MeshSchema])(app[Database], authContext).get
+
+    s"[${databaseProvider.name}] update field (keep first created) (byName)" in {
+      val database = databaseProvider.get
+      MeshDatabaseBuilder.build(database, authContext).get
       val aSrv      = new ASrv
       val bSrv      = new BSrv
       val baNameSrv = new EdgeSrv[BAName, B, A]
-      app[Database].tryTransaction { implicit graph =>
+      database.tryTransaction { implicit graph =>
         bSrv.getByName("b1").update(_.aName, "foo").iterate()
         baNameSrv.create(new BAName, bSrv.getByName("b1").head, aSrv.getByName("a").head).get
         baNameSrv.create(new BAName, bSrv.getByName("b1").head, aSrv.getByName("b").head)
       }.get
-      integrityTest(app)(_.by.by(_.out[BAName].v[A].value(_.name).fold)) { implicit graph => i =>
+      integrityTest(database)(_.by.by(_.out[BAName].v[A].value(_.name).fold)) { implicit graph => i =>
         {
           case (b, as) =>
             i.singleLink[A, String]("aName", aSrv.getByName(_).head, _.name)(
@@ -310,7 +297,7 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
         }
       } must beEqualTo(Map("B-A-unlink" -> 2, "B-A-setField" -> 1))
 
-      app[Database].roTransaction { implicit graph =>
+      database.roTransaction { implicit graph =>
         bSrv
           .getByName("b1")
           .value(_.aName)
@@ -319,9 +306,7 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
     }
   }
 
-  def integrityTest[D <: Product, G](
-      app: AppBuilder
-  )(
+  def integrityTest[D <: Product, G](database: Database)(
       proj: ProjectionBuilder[Nil.type, B with Entity, Vertex, Converter[B with Entity, Vertex]] => ProjectionBuilder[
         D,
         B with Entity,
@@ -330,7 +315,7 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
       ]
   )(check: Graph => IntegrityCheckOps[B] => D => Map[String, Int]): Map[String, Int] = {
     val ic = new IntegrityCheckOps[B] {
-      override val db: Database                                                            = app[Database]
+      override val db: Database                                                            = database
       override val service: VertexSrv[B]                                                   = new BSrv
       override def resolve(entities: Seq[B with Entity])(implicit graph: Graph): Try[Unit] = Success(())
 

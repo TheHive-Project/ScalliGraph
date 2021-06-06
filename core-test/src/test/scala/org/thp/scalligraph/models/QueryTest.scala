@@ -17,7 +17,8 @@ class QueryTest extends PlaySpecification {
   val userSrv: UserSrv = new DummyUserSrv
 
   Fragments.foreach(new DatabaseProviders().list) { dbProvider =>
-    step(setupDatabase(dbProvider.get)) ^ specs(dbProvider.name, dbProvider.get) ^ step(teardownDatabase(dbProvider.get))
+    val db = dbProvider.get
+    step(setupDatabase(db)) ^ specs(dbProvider.name, db) ^ step(teardownDatabase(db))
   }
 
   def setupDatabase(db: Database): Try[Unit] =
