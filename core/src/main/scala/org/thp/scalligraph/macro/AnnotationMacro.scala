@@ -25,12 +25,13 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
               moduleName,
               Template(parents = parents, self = moduleTemplate.self, body = moduleTemplate.body ++ modelDef)
             )
-          case Nil =>
+          case _ =>
             val moduleName = className.toTermName
             q"object $moduleName extends org.thp.scalligraph.models.HasModel { ..$modelDef }"
         }
 
         Block(modelClass :: modelModule :: Nil, Literal(Constant(())))
+      case _ => fatal("Invalid annotation")
     }
 
   def buildEdgeModel(annottees: Tree*): Tree =
@@ -54,11 +55,12 @@ class AnnotationMacro(val c: whitebox.Context) extends MacroUtil with MappingMac
                 body = moduleTemplate.body ++ modelDef
               )
             )
-          case Nil =>
+          case _ =>
             val moduleName = className.toTermName
             q"object $moduleName extends org.thp.scalligraph.models.HasModel { ..$modelDef }"
         }
 
         Block(modelClass :: modelModule :: Nil, Literal(Constant(())))
+      case _ => fatal("Invalid annotation")
     }
 }

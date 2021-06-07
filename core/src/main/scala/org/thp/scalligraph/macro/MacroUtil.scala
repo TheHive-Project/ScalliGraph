@@ -45,13 +45,14 @@ trait MacroUtil extends MacroLogger {
       s match {
         case _: TypeSymbol => unapply(s.asType.toType)
         case _: TermSymbol => unapply(s.typeSignature)
+        case _             => None
       }
 
     def unapply(tpe: Type): Option[Type] =
-      if (tpe <:< weakTypeOf[Seq[_]]) {
-        val TypeRef(_, _, List(subElementType)) = tpe
-        Some(subElementType)
-      } else None
+      tpe match {
+        case TypeRef(_, _, List(subElementType)) if tpe <:< weakTypeOf[Seq[_]] => Some(subElementType)
+        case _                                                                 => None
+      }
   }
 
   object SetType {
@@ -60,13 +61,14 @@ trait MacroUtil extends MacroLogger {
       s match {
         case _: TypeSymbol => unapply(s.asType.toType)
         case _: TermSymbol => unapply(s.typeSignature)
+        case _             => None
       }
 
     def unapply(tpe: Type): Option[Type] =
-      if (tpe <:< weakTypeOf[Set[_]]) {
-        val TypeRef(_, _, List(subElementType)) = tpe
-        Some(subElementType)
-      } else None
+      tpe match {
+        case TypeRef(_, _, List(subElementType)) if tpe <:< weakTypeOf[Set[_]] => Some(subElementType)
+        case _                                                                 => None
+      }
   }
 
   object OptionType {
@@ -75,13 +77,15 @@ trait MacroUtil extends MacroLogger {
       s match {
         case _: TypeSymbol => unapply(s.asType.toType)
         case _: TermSymbol => unapply(s.typeSignature)
+        case _             => None
       }
 
     def unapply(tpe: Type): Option[Type] =
-      if (tpe <:< weakTypeOf[Option[_]]) {
-        val TypeRef(_, _, List(subElementType)) = tpe
-        Some(subElementType)
-      } else None
+      tpe match {
+        case TypeRef(_, _, List(subElementType)) if tpe <:< weakTypeOf[Option[_]] =>
+          Some(subElementType)
+        case _ => None
+      }
   }
 
   def getTypeArgs(t: Type, fromType: Type): List[Type] =

@@ -17,10 +17,10 @@ case class AddEdgeModel(label: String, mapping: Map[String, Mapping[_, _, _]])  
 case class AddProperty(model: String, propertyName: String, mapping: Mapping[_, _, _])                                       extends Operation
 case class RemoveProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean)                                 extends Operation
 case class UpdateGraph(model: String, update: Traversal.Identity[Vertex] => Try[Unit], comment: String, pageSize: Int = 100) extends Operation
-case class AddIndex(model: String, indexType: IndexType.Value, properties: Seq[String])                                      extends Operation
+case class AddIndex(model: String, indexType: IndexType, properties: Seq[String])                                            extends Operation
 object RebuildIndexes                                                                                                        extends Operation
 object NoOperation                                                                                                           extends Operation
-case class RemoveIndex(model: String, indexType: IndexType.Value, fields: Seq[String])                                       extends Operation
+case class RemoveIndex(model: String, indexType: IndexType, fields: Seq[String])                                             extends Operation
 case class DBOperation[DB <: Database: ClassTag](comment: String, op: DB => Try[Unit]) extends Operation {
   def apply(db: Database): Try[Unit] =
     if (classTag[DB].runtimeClass.isAssignableFrom(db.getClass))
@@ -47,13 +47,13 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) e
     addOperations(RemoveProperty(model, propertyName, usedOnlyByThisModel))
   def updateGraph(comment: String, model: String)(update: Traversal[Vertex, Vertex, Converter.Identity[Vertex]] => Try[Unit]): Operations =
     addOperations(UpdateGraph(model, update, comment))
-  def addIndex(model: String, indexType: IndexType.Value, properties: String*): Operations =
+  def addIndex(model: String, indexType: IndexType, properties: String*): Operations =
     addOperations(AddIndex(model, indexType, properties))
   def dbOperation[DB <: Database: ClassTag](comment: String)(op: DB => Try[Unit]): Operations =
     addOperations(DBOperation[DB](comment, op))
-  def noop: Operations                                                                    = addOperations(NoOperation)
-  def rebuildIndexes: Operations                                                          = addOperations(RebuildIndexes)
-  def removeIndex(model: String, indexType: IndexType.Value, fields: String*): Operations = addOperations(RemoveIndex(model, indexType, fields))
+  def noop: Operations                                                              = addOperations(NoOperation)
+  def rebuildIndexes: Operations                                                    = addOperations(RebuildIndexes)
+  def removeIndex(model: String, indexType: IndexType, fields: String*): Operations = addOperations(RemoveIndex(model, indexType, fields))
 
   def info(schemaName: String, version: Int, message: String): Unit = logger.info(s"*** UPDATE SCHEMA OF $schemaName (${version + 1}): $message")
 

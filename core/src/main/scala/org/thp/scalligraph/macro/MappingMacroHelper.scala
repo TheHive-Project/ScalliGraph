@@ -41,6 +41,7 @@ trait MappingMacroHelper extends MacroUtil with MacroLogger {
             .getOrElse(fatal(s"Fail to get mapping of $s (${s.typeSignature})"))
           MappingSymbol(s.name.decodedName.toString.trim, TermName(c.freshName(s"${s.name}Mapping")), mapping, s.typeSignature)
         }
+      case _ => fatal("Invalid entity (must be a case class)")
     }
   }
 }

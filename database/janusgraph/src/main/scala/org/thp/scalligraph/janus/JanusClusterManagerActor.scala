@@ -194,6 +194,8 @@ object JanusClusterManagerActor {
         Behaviors.same
       case ClusterInitSuccess =>
         Behaviors.same
+      case ClusterInitFailure =>
+        leaderFailed
     }
 
   def leaderFailed: Behavior[Command] =

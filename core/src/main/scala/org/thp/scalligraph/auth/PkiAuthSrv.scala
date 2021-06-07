@@ -23,6 +23,7 @@ class PkiAuthSrv(certificateField: String, requestOrganisation: RequestOrganisat
       case to: ASN1TaggedObject => asn1String(ASN1TaggedObject.getInstance(to).getObject)
       case os: ASN1OctetString  => new String(os.getOctets)
       case as: ASN1String       => as.getString
+      case other                => other.toString
     }
 
   object CertificateSAN {

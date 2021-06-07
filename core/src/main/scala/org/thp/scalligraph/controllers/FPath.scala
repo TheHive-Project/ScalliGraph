@@ -2,7 +2,7 @@ package org.thp.scalligraph.controllers
 
 import org.thp.scalligraph.{InternalError, InvalidFormatAttributeError}
 
-trait FPath {
+sealed trait FPath {
   val isEmpty: Boolean  = false
   def nonEmpty: Boolean = !isEmpty
   def :/(elem: FPath): FPath
@@ -98,5 +98,6 @@ object FPath {
       case FPathElem(head, FPath(tail @ _*))         => Some(head +: tail)
       case FPathElemInSeq(head, _, FPath(tail @ _*)) => Some(head +: tail) // TODO add index ?
       case FPathSeq(head, FPath(tail @ _*))          => Some(head +: tail) // TODO add [] ?
+      case _                                         => None
     }
 }

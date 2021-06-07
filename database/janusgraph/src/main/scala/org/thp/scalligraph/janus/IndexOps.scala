@@ -92,7 +92,7 @@ trait IndexOps {
       _ = registeredIndexes.foreach(reindex)
     } yield ()
 
-  override def addIndex(model: String, indexDefinition: Seq[(IndexType.Value, Seq[String])]): Try[Unit] =
+  override def addIndex(model: String, indexDefinition: Seq[(IndexType, Seq[String])]): Try[Unit] =
     managementTransaction { mgmt =>
       Option(mgmt.getVertexLabel(model))
         .map(_ => classOf[Vertex])
@@ -155,12 +155,12 @@ trait IndexOps {
   private def createMixedIndex(
       mgmt: JanusGraphManagement,
       elementClass: Class[_ <: Element],
-      indexDefinitions: Seq[(String, IndexType.Value, Seq[String])]
+      indexDefinitions: Seq[(String, IndexType, Seq[String])]
   ): Unit = {
     def getPropertyKey(name: String) = Option(mgmt.getPropertyKey(name)).getOrElse(throw InternalError(s"Property $name doesn't exist"))
 
     // check if a property hasn't different index types
-    val groupedIndex: Map[String, Seq[IndexType.Value]] = indexDefinitions
+    val groupedIndex: Map[String, Seq[IndexType]] = indexDefinitions
       .flatMap {
         case (_, IndexType.basic, props) => props.map(_ -> IndexType.standard)
         case (_, IndexType.unique, _)    => Nil
@@ -224,7 +224,7 @@ trait IndexOps {
   private def createIndex(
       mgmt: JanusGraphManagement,
       elementClass: Class[_ <: Element],
-      indexDefinitions: Seq[(String, IndexType.Value, Seq[String])]
+      indexDefinitions: Seq[(String, IndexType, Seq[String])]
   ): Unit = {
 
     def getPropertyKey(name: String) = Option(mgmt.getPropertyKey(name)).getOrElse(throw InternalError(s"Property $name doesnt exist"))
@@ -269,7 +269,7 @@ trait IndexOps {
       Success(())
     }.flatMap(_ => enableIndexes())
 
-  override def removeIndex(model: String, indexType: IndexType.Value, fields: Seq[String]): Try[Unit] =
+  override def removeIndex(model: String, indexType: IndexType, fields: Seq[String]): Try[Unit] =
     managementTransaction { mgmt =>
       val eitherIndex = indexType match {
         case IndexType.basic | IndexType.unique =>

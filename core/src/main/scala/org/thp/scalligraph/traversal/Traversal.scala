@@ -3,6 +3,7 @@ package org.thp.scalligraph.traversal
 import org.apache.tinkerpop.gremlin.process.traversal.Traverser
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, DefaultGraphTraversal, GraphTraversal}
 import org.apache.tinkerpop.gremlin.structure.{Edge, Vertex}
+import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.models.Entity
 
 import scala.language.existentials
@@ -41,5 +42,9 @@ class Traversal[+D, G, +C <: Converter[D, G]](val graph: Graph, val raw: GraphTr
   override def clone(): Traversal[D, G, C] =
     raw match {
       case dgt: DefaultGraphTraversal[_, G] => new Traversal[D, G, C](graph, dgt.clone, converter)
+      case other =>
+        throw InternalError(
+          s"Unknown graph traversal (found: ${other.getClass}, expected: org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.DefaultGraphTraversal)"
+        )
     }
 }

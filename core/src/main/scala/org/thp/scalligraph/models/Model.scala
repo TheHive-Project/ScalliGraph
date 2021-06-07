@@ -12,10 +12,16 @@ import scala.language.experimental.macros
 
 class Readonly extends StaticAnnotation
 
-object IndexType extends Enumeration {
-  val basic, standard, unique, fulltext, fulltextOnly = Value
+sealed abstract class IndexType extends Product with Serializable
+object IndexType {
+  final case object basic        extends IndexType
+  final case object standard     extends IndexType
+  final case object unique       extends IndexType
+  final case object fulltext     extends IndexType
+  final case object fulltextOnly extends IndexType
 }
-class DefineIndex(indexType: IndexType.Value, fields: String*) extends StaticAnnotation
+
+class DefineIndex(indexType: IndexType, fields: String*) extends StaticAnnotation
 
 trait HasModel {
   val model: Model
@@ -67,7 +73,7 @@ abstract class Model {
 
   val label: String
 
-  val indexes: Seq[(IndexType.Value, Seq[String])]
+  val indexes: Seq[(IndexType, Seq[String])]
 
   def get(id: EntityId)(implicit graph: Graph): ElementType
   val fields: Map[String, Mapping[_, _, _]]

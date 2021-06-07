@@ -55,7 +55,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
         override val label: String = $label
 
         override val initialValues: Seq[E] = $initialValues
-        override val indexes: Seq[(IndexType.Value, Seq[String])] = ${getIndexes[E]}
+        override val indexes: Seq[(IndexType, Seq[String])] = ${getIndexes[E]}
 
         ..$mappingDefinitions
 
@@ -117,7 +117,7 @@ class ModelMacro(val c: blackbox.Context) extends MappingMacroHelper with IndexM
 
         override val label: String = $label
 
-        override val indexes: Seq[(IndexType.Value, Seq[String])] = ${getIndexes[E]}
+        override val indexes: Seq[(IndexType, Seq[String])] = ${getIndexes[E]}
 
         ..$mappingDefinitions
 

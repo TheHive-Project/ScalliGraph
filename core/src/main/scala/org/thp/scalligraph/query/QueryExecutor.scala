@@ -71,6 +71,7 @@ abstract class QueryExecutor { executor =>
       case b: Byte    => Output(b)
       case u: Unit    => Output(u, JsNull)
       case b: Boolean => Output(b)
+      case other      => Output(other.toString)
     })
     else if (SubType(tpe, ru.typeOf[Number])) Success(Renderer(n => Output(n, JsNumber(BigDecimal(n.toString)))))
     else if (SubType(tpe, ru.typeOf[Seq[_]])) {

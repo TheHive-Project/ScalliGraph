@@ -56,8 +56,8 @@ trait Database {
   def addSchemaIndexes(models: Seq[Model]): Try[Unit]
   def addProperty(model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit]
   def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit]
-  def addIndex(model: String, indexDefinition: Seq[(IndexType.Value, Seq[String])]): Try[Unit]
-  def removeIndex(model: String, indexType: IndexType.Value, fields: Seq[String]): Try[Unit]
+  def addIndex(model: String, indexDefinition: Seq[(IndexType, Seq[String])]): Try[Unit]
+  def removeIndex(model: String, indexType: IndexType, fields: Seq[String]): Try[Unit]
   def reindexData(model: String): Try[Unit]
   def rebuildIndexes(): Unit
 //  def removeIndex(model: String, properties: Seq[String]): Try[Unit]
@@ -205,8 +205,8 @@ case class Binary(attachmentId: Option[String], folder: Option[String], data: Ar
 object Binary {
   val model: Model.Vertex[Binary] = new VertexModel {
     override type E = Binary
-    override val label: String                                = "Binary"
-    override val indexes: Seq[(IndexType.Value, Seq[String])] = Nil
+    override val label: String                          = "Binary"
+    override val indexes: Seq[(IndexType, Seq[String])] = Nil
     override val fields: Map[String, Mapping[_, _, _]] =
       Map("data" -> UMapping.binary, "folder" -> UMapping.string.optional, "attachmentId" -> UMapping.string.optional)
 
@@ -249,9 +249,9 @@ object BinaryLink {
   lazy val model: Model.Edge[BinaryLink] = new EdgeModel {
     override def create(e: BinaryLink, from: Vertex, to: Vertex)(implicit graph: Graph): Edge = from.addEdge(label, to)
     override type E = BinaryLink
-    override val label: String                                = "NextChunk"
-    override val indexes: Seq[(IndexType.Value, Seq[String])] = Nil
-    override val fields: Map[String, Mapping[_, _, _]]        = Map.empty
+    override val label: String                          = "NextChunk"
+    override val indexes: Seq[(IndexType, Seq[String])] = Nil
+    override val fields: Map[String, Mapping[_, _, _]]  = Map.empty
 
     override val converter: Converter[BinaryLink with Entity, Edge] = (element: Edge) =>
       new BinaryLink with Entity {

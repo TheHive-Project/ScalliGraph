@@ -21,7 +21,7 @@ import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
 
 class JanusDatabaseProvider(app: ScalligraphApplication) extends Provider[Database] {
-  lazy val logger: Logger                      = Logger("org.thp.scalligraph.models.Database")
+  val logger: Logger                           = Logger("org.thp.scalligraph.models.Database")
   val configuration: Configuration             = app.configuration
   def schemas: Seq[UpdatableSchema]            = app.schemas()
   val actorSystem: ActorSystem                 = app.actorSystem
@@ -103,6 +103,7 @@ class JanusDatabaseProvider(app: ScalligraphApplication) extends Provider[Databa
           .ask[Result](replyTo => JoinCluster(replyTo, indexBackend.name, indexLocation))
           .map {
             case ClusterRequestInit =>
+              logger.info("Initialising database ...")
               val initialDb = JanusDatabase.openDatabase(configuration, actorSystem)
               dropOtherConnections(initialDb)
               val effectiveDB = if (indexBackend.hasChanged(initialDb, indexLocation)) {

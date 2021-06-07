@@ -28,12 +28,13 @@ object Field {
 
   def apply(json: JsValue): Field =
     json match {
-      case JsString(s)  => FString(s)
-      case JsNumber(n)  => FNumber(n.toDouble)
-      case JsBoolean(b) => FBoolean(b)
-      case JsObject(o)  => FObject(o.map { case (k, v) => k -> Field(v) }.toMap)
-      case JsArray(a)   => FSeq(a.map(Field.apply).toList)
-      case JsNull       => FNull
+      case JsString(s) => FString(s)
+      case JsNumber(n) => FNumber(n.toDouble)
+      case JsTrue      => FBoolean(true)
+      case JsFalse     => FBoolean(false)
+      case JsObject(o) => FObject(o.map { case (k, v) => k -> Field(v) }.toMap)
+      case JsArray(a)  => FSeq(a.map(Field.apply).toList)
+      case JsNull      => FNull
     }
 
   def apply(request: Request[AnyContent]): FObject =
@@ -127,6 +128,7 @@ case class FSeq(values: List[Field]) extends Field {
       case FPathSeq(_, FPathEmpty) => FSeq(values :+ field)
       case FPathElemInSeq(_, index, tail) =>
         FSeq(values.patch(index, Seq(values.applyOrElse(index, (_: Int) => FUndefined).set(tail, field)), 1))
+      case _ => throw InternalError(s"The seq field $this cannot be set with path $path")
     }
   override def toJson: JsValue = JsArray(values.map(_.toJson))
 }

@@ -80,8 +80,8 @@ trait TraversalPrinter {
           case s: WherePredicateStep[_] =>
             val sb = new StringBuilder
             sb.append("where(")
-            s.getStartKey.ifPresent(k => sb.append(s"$k, "))
-            s.getPredicate.ifPresent(predicate => sb.append(printPredicate(predicate)))
+            s.getStartKey.ifPresent { k => sb.append(s"$k, "); () }
+            s.getPredicate.ifPresent { predicate => sb.append(printPredicate(predicate)); () }
             sb.append(")")
             sb.toString
           case s: WhereTraversalStep[_] => s"where(${printLocalChildren(s)})"
