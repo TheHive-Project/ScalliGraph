@@ -55,7 +55,7 @@ trait Database {
   def addSchemaIndexes(model: Model, models: Model*): Try[Unit] = addSchemaIndexes(model +: models)
   def addSchemaIndexes(models: Seq[Model]): Try[Unit]
   def addProperty(model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit]
-  def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit]
+  def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean, mapping: Mapping[_, _, _]): Try[Unit]
   def addIndex(model: String, indexDefinition: Seq[(IndexType.Value, Seq[String])]): Try[Unit]
   def removeIndex(model: String, indexType: IndexType.Value, fields: Seq[String]): Try[Unit]
   def reindexData(model: String): Try[Unit]
