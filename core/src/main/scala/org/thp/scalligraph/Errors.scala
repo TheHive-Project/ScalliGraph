@@ -12,6 +12,8 @@ abstract class GenericError(val `type`: String, message: String, cause: Throwabl
   }
 }
 
+case class NotSupportedError(message: String = "Operation not supported", cause: Throwable = null)
+    extends GenericError("NotSupportedError", message, cause)
 case class AuthenticationError(message: String, cause: Throwable = null)     extends GenericError("AuthenticationError", message, cause)
 case class AuthorizationError(message: String, cause: Throwable = null)      extends GenericError("AuthorizationError", message, cause)
 case class MultiFactorCodeRequired(message: String, cause: Throwable = null) extends GenericError("MultiFactorCodeRequired", message, cause)

@@ -1,11 +1,11 @@
 package org.thp.scalligraph.auth
 
-import javax.inject.{Inject, Singleton}
 import org.thp.scalligraph.controllers.AuthenticatedRequest
-import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError, EntityIdOrName}
+import org.thp.scalligraph.{BadConfigurationError, EntityIdOrName, NotSupportedError}
 import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
 import play.api.{ConfigLoader, Configuration}
 
+import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.matching.Regex
 import scala.util.{Failure, Success, Try}
@@ -52,27 +52,27 @@ trait AuthSrv {
   def authenticate(username: String, password: String, organisation: Option[EntityIdOrName], code: Option[String])(implicit
       request: RequestHeader
   ): Try[AuthContext] =
-    Failure(AuthenticationError("Operation not supported"))
+    Failure(NotSupportedError())
 
   def authenticate(key: String, organisation: Option[EntityIdOrName])(implicit request: RequestHeader): Try[AuthContext] =
-    Failure(AuthenticationError("Operation not supported"))
+    Failure(NotSupportedError())
 
   def setSessionUser(authContext: AuthContext): Result => Result = identity
 
   def changePassword(username: String, oldPassword: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] =
-    Failure(AuthorizationError("Operation not supported"))
+    Failure(NotSupportedError())
 
   def setPassword(username: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] =
-    Failure(AuthorizationError("Operation not supported"))
+    Failure(NotSupportedError())
 
   def renewKey(username: String)(implicit authContext: AuthContext): Try[String] =
-    Failure(AuthorizationError("Operation not supported"))
+    Failure(NotSupportedError())
 
   def getKey(username: String)(implicit authContext: AuthContext): Try[String] =
-    Failure(AuthorizationError("Operation not supported"))
+    Failure(NotSupportedError())
 
   def removeKey(username: String)(implicit authContext: AuthContext): Try[Unit] =
-    Failure(AuthorizationError("Operation not supported"))
+    Failure(NotSupportedError())
 }
 
 trait AuthSrvWithActionFunction extends AuthSrv {
