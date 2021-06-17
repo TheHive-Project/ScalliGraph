@@ -3,7 +3,15 @@ package org.thp.scalligraph.auth
 import org.thp.scalligraph.controllers.AuthenticatedRequest
 import org.thp.scalligraph.services.config.ApplicationConfig.configurationFormat
 import org.thp.scalligraph.services.config.{ApplicationConfig, ConfigItem}
-import org.thp.scalligraph.{AuthenticationError, AuthorizationError, BadConfigurationError, EntityIdOrName, RichSeq, ScalligraphApplication}
+import org.thp.scalligraph.{
+  AuthenticationError,
+  AuthorizationError,
+  BadConfigurationError,
+  EntityIdOrName,
+  NotSupportedError,
+  RichSeq,
+  ScalligraphApplication
+}
 import play.api.mvc.{ActionFunction, Request, RequestHeader, Result}
 import play.api.{Configuration, Logger}
 
@@ -54,22 +62,22 @@ class MultiAuthSrv(configuration: Configuration, appConfig: ApplicationConfig, a
       case (right: Right[_, _], _) => right
       case (Left(errors), auth) =>
         body(auth).fold(
-          error => Left(errors :+ ((auth.name, error))),
+          {
+            case _: NotSupportedError => Left(errors)
+            case error                => Left(errors :+ ((auth.name, error)))
+          },
           success => Right(success)
         )
     } match {
       case Right(auth) => Success(auth)
-      case Left(Seq()) => Failure(AuthorizationError("no authentication provider found"))
       case Left(errors) =>
-        errors.foreach {
-          case (authName, AuthenticationError(_, cause)) if cause != null => logAuthError(authName, cause)
-          case (authName, AuthorizationError(_, cause)) if cause != null  => logAuthError(authName, cause)
-          case (authName, error)                                          => logAuthError(authName, error)
-        }
-        if (errors.exists(_._2.isInstanceOf[AuthorizationError]))
-          Failure(AuthorizationError("Operation not permitted"))
-        else
-          Failure(AuthenticationError("Authentication failure"))
+        errors
+          .foreach {
+            case (authName, AuthenticationError(_, cause)) if cause != null => logAuthError(authName, cause)
+            case (authName, AuthorizationError(_, cause)) if cause != null  => logAuthError(authName, cause)
+            case (authName, error)                                          => logAuthError(authName, error)
+          }
+        errors.headOption.fold(Failure(AuthorizationError("Operation not supported")))(e => Failure(e._2))
     }
 
   private def logAuthError(authName: String, error: Throwable): Unit = {

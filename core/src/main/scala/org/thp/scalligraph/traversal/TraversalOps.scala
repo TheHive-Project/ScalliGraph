@@ -639,7 +639,8 @@ trait TraversalOps extends TraversalPrinter {
     def math(expression: String): Traversal[Double, JDouble, Converter[Double, JDouble]] =
       traversal.onRawMap[Double, JDouble, Converter[Double, JDouble]](_.math(expression))(Converter.double)
 
-    def is(predicate: P[G]): Traversal[D, G, C] = traversal.onRaw(_.is(predicate))
+    def is(predicate: P[G]): Traversal[D, G, C]          = traversal.onRaw(_.is(predicate))
+    def isStep(predicate: P[String]): Traversal[D, G, C] = traversal.onRaw(_.is(predicate))
 
     def or(f: (Traversal[D, G, C] => Traversal[_, _, _])*): Traversal[D, G, C] =
       traversal.onRaw(_.or(f.map(_(traversal.start).raw): _*))

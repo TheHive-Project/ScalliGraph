@@ -404,15 +404,18 @@ class JanusDatabase(
       addProperty(mgmt, propertyName, mapping)
     }
 
-  def addProperty(mgmt: JanusGraphManagement, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit] = {
-    logger.debug(s"Create property $propertyName of type ${mapping.graphTypeClass} (${mapping.cardinality})")
-
-    val cardinality = mapping.cardinality match {
+  def adaptCardinality(cardinality: MappingCardinality.Value): Cardinality =
+    cardinality match {
       case MappingCardinality.single => Cardinality.SINGLE
       case MappingCardinality.option => Cardinality.SINGLE
       case MappingCardinality.list   => Cardinality.LIST
       case MappingCardinality.set    => Cardinality.SET
     }
+
+  def addProperty(mgmt: JanusGraphManagement, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit] = {
+    logger.debug(s"Create property $propertyName of type ${mapping.graphTypeClass} (${mapping.cardinality})")
+
+    val cardinality = adaptCardinality(mapping.cardinality)
     logger.trace(s"mgmt.makePropertyKey($propertyName).dataType(${mapping.graphTypeClass.getSimpleName}.class).cardinality($cardinality).make()")
     Option(mgmt.getPropertyKey(propertyName)) match {
       case None =>
@@ -437,17 +440,23 @@ class JanusDatabase(
     }
   }
 
-  override def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean): Try[Unit] =
+  override def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean, mapping: Mapping[_, _, _]): Try[Unit] =
     if (usedOnlyByThisModel)
-      managementTransaction(mgmt => removeProperty(mgmt, propertyName))
+      managementTransaction(mgmt => removeProperty(mgmt, propertyName, mapping))
     else Success(())
 
-  def removeProperty(mgmt: JanusGraphManagement, propertyName: String): Try[Unit] =
+  def removeProperty(mgmt: JanusGraphManagement, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit] =
     Try {
       Option(mgmt.getPropertyKey(propertyName)).fold(logger.info(s"Cannot remove the property $propertyName, it doesn't exist")) { prop =>
-        val newName = s"propertyName-removed-${System.currentTimeMillis()}"
-        logger.info(s"Rename the property $propertyName to $newName")
-        mgmt.changeName(prop, newName)
+        if (prop.dataType() == mapping.graphTypeClass && prop.cardinality() == adaptCardinality(mapping.cardinality)) {
+          val newName = s"$propertyName-removed-${System.currentTimeMillis()}"
+          logger.info(s"Rename the property $propertyName to $newName")
+          mgmt.changeName(prop, newName)
+        } else
+          logger.info(
+            s"Refuse to remove property $propertyName because its type is what is expected " +
+              s"(expected: ${adaptCardinality(mapping.cardinality)}/${mapping.graphTypeClass} found: ${prop.cardinality()}/${prop.dataType()})"
+          )
       }
     }
 

@@ -123,9 +123,9 @@ trait TraversalPrinter {
               else s"${s.getPop}, "
             s"select($pop${s.getScopeKeys.asScala.map(k => s""""$k"""").mkString(", ")})${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"
           case s: StoreStep[_] =>
-            s"aggregate(local, ${s.getLabels.asScala.map(k => s""""$k"""").mkString(", ")})${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"
+            s"""aggregate(local, "${s.getSideEffectKey}")${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"""
           case s: AggregateStep[_] =>
-            s"aggregate(global, ${s.getLabels.asScala.map(k => s""""$k"""").mkString(", ")})${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"
+            s"""aggregate(global, "${s.getSideEffectKey}")${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"""
           case s: OrderGlobalStep[_, _] => s"order()${s.getComparators.asScala.map(p => printBy(p.getValue0, Some(p.getValue1))).mkString}"
           case s: PropertiesStep[_] =>
             s.getReturnType match {
@@ -150,9 +150,9 @@ trait TraversalPrinter {
           case _: EdgeOtherVertexStep        => "otherV()"
           case s: InjectStep[_]              => s"inject(${s.getInjections.mkString(",")})"
           case s: OptionalStep[_]            => s"optional(${printLocalChildren(s)})"
-          case s: PropertyMapStep[_, _]      => s"valueMap(${s.getPropertyKeys().mkString(",")})"
+          case s: PropertyMapStep[_, _]      => s"valueMap(${s.getPropertyKeys.mkString(",")})"
           case s: TraversalSideEffectStep[_] => s"sideEffect(${printLocalChildren(s)})"
-          case s: DropStep[_]                => "remove()"
+          case _: DropStep[_]                => "remove()"
           case other                         => s"{UNKNOWN:$other}"
         }
         val labels = step.getLabels.asScala
