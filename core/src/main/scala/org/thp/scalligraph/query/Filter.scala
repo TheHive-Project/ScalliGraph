@@ -77,7 +77,7 @@ case class NotFilter(inputFilter: InputQuery[Traversal.Unk, Traversal.Unk]) exte
       traversal: Traversal.Unk,
       authContext: AuthContext
   ): Traversal.Unk =
-    traversal.filter(_.not(t => inputFilter(publicProperties, traversalType, t, authContext)))
+    traversal.not(t => inputFilter(publicProperties, traversalType, t, authContext))
 }
 
 object YesFilter extends InputQuery[Traversal.Unk, Traversal.Unk] {
