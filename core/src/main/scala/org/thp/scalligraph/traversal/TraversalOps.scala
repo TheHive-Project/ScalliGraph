@@ -111,13 +111,15 @@ trait TraversalOps extends TraversalPrinter {
     }
 
     def getCount: Long = {
-      debug("count")
-      count._toIterator.next()
+      val newTraversal = count
+      newTraversal.debug("count")
+      newTraversal._toIterator.next()
     }
 
     def getLimitedCount(threshold: Long): Long = {
-      debug(s"limitedCount($threshold)")
-      limitedCount(threshold)._toIterator.next()
+      val newTraversal = limitedCount(threshold)
+      newTraversal.debug(s"limitedCount($threshold)")
+      newTraversal._toIterator.next()
     }
 
     def head: D = {
