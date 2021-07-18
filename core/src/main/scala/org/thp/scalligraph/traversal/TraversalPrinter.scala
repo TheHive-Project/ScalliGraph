@@ -11,6 +11,7 @@ import org.apache.tinkerpop.gremlin.process.traversal.step.sideEffect.{
   AggregateStep,
   IdentityStep,
   InjectStep,
+  StartStep,
   StoreStep,
   TraversalSideEffectStep
 }
@@ -116,7 +117,10 @@ trait TraversalPrinter {
               if (s.getPop == Pop.last) ""
               else s"${s.getPop}, "
             val selectEntries = s.getByTraversals.asScala.toSeq
-            s"select($pop${selectEntries.map(e => s""""${e._1}"""").mkString(", ")})${selectEntries.map(e => printBy(e._2, None)).mkString}"
+            val modulators =
+              if (selectEntries.forall(_._2 == null)) ""
+              else selectEntries.map(e => printBy(e._2, None)).mkString
+            s"select($pop${selectEntries.map(e => s""""${e._1}"""").mkString(", ")})$modulators"
           case s: SelectOneStep[_, _] =>
             val pop =
               if (s.getPop == Pop.last) ""
@@ -153,6 +157,7 @@ trait TraversalPrinter {
           case s: PropertyMapStep[_, _]      => s"valueMap(${s.getPropertyKeys.mkString(",")})"
           case s: TraversalSideEffectStep[_] => s"sideEffect(${printLocalChildren(s)})"
           case _: DropStep[_]                => "remove()"
+          case _: StartStep[_]               => ""
           case other                         => s"{UNKNOWN:$other}"
         }
         val labels = step.getLabels.asScala
@@ -160,7 +165,7 @@ trait TraversalPrinter {
           s"$stepStr.as(${labels.map(k => s""""$k"""").mkString(", ")})"
         else
           stepStr
-      }.getOrElse(s"{UNKNOWN-FAIL:$step}")
+      }.fold(error => s"{UNKNOWN-FAIL:$step}($error", identity)
 
     def printLocalChildren(step: TraversalParent): String =
       step.getLocalChildren.asScala.map(c => s"__.${printTraversal(c)}").mkString(", ")
@@ -176,6 +181,7 @@ trait TraversalPrinter {
         case e: TokenTraversal[_, _]     => s".by(${e.getToken}$cmpStr)"
         case _: IdentityTraversal[_]     => s".by(${comparator.getOrElse("")})"
         case e: ColumnTraversal          => s".by(${e.getColumn}$cmpStr)"
+        case null                        => "by()"
         case t                           => s".by(__.${printTraversal(t)}$cmpStr)"
       }
     }
