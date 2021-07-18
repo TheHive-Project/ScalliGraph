@@ -1,6 +1,6 @@
 package org.thp.scalligraph.models
 
-import org.apache.tinkerpop.gremlin.structure.Vertex
+import org.apache.tinkerpop.gremlin.structure.{Edge, Vertex}
 import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.traversal.TraversalOps
@@ -35,7 +35,7 @@ case class RemoveProperty(model: String, propertyName: String, usedOnlyByThisMod
   override def execute(db: Database, logger: String => Unit): Try[Unit] = db.removeProperty(model, propertyName, usedOnlyByThisModel, mapping)
 }
 
-case class UpdateGraph(model: String, update: Traversal.Identity[Vertex] => Try[Unit], comment: String, pageSize: Int = 100)
+case class UpdateGraphVertices(model: String, update: Traversal.Identity[Vertex] => Try[Unit], comment: String, pageSize: Int = 100)
     extends Operation
     with TraversalOps {
   override def info: String = s"Update graph: $comment"
@@ -54,6 +54,32 @@ case class UpdateGraph(model: String, update: Traversal.Identity[Vertex] => Try[
           logger(s"Update graph in progress ($count): $comment")
           db.tryTransaction { rwGraph =>
             update(db.V(model, page: _*)(rwGraph))
+          }.map(_ => count + pageSize)
+        case (failure, _) => failure
+      }
+      .map(_ => ())
+      .recoverWith { case error => Failure(InternalError(s"Unable to execute migration operation: $comment", error)) }
+}
+
+case class UpdateGraphEdges(model: String, update: Traversal.Identity[Edge] => Try[Unit], comment: String, pageSize: Int = 100)
+    extends Operation
+    with TraversalOps {
+  override def info: String = s"Update graph edges: $comment"
+
+  override def execute(db: Database, logger: String => Unit): Try[Unit] =
+    db
+      .roTransaction { roGraph =>
+        db
+          .E(model)(roGraph)
+          ._id
+          .toSeq
+      }
+      .grouped(pageSize)
+      .foldLeft[Try[Int]](Success(0)) {
+        case (Success(count), page) =>
+          logger(s"Update graph edges in progress ($count): $comment")
+          db.tryTransaction { rwGraph =>
+            update(db.E(model, page: _*)(rwGraph))
           }.map(_ => count + pageSize)
         case (failure, _) => failure
       }
@@ -104,8 +130,10 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) e
     addOperations(AddProperty(model, propertyName, mapping.toMapping))
   def removeProperty[T](model: String, propertyName: String, usedOnlyByThisModel: Boolean)(implicit mapping: UMapping[T]): Operations =
     addOperations(RemoveProperty(model, propertyName, usedOnlyByThisModel, mapping.toMapping))
-  def updateGraph(comment: String, model: String)(update: Traversal[Vertex, Vertex, Converter.Identity[Vertex]] => Try[Unit]): Operations =
-    addOperations(UpdateGraph(model, update, comment))
+  def updateGraphVertices(comment: String, model: String)(update: Traversal[Vertex, Vertex, Converter.Identity[Vertex]] => Try[Unit]): Operations =
+    addOperations(UpdateGraphVertices(model, update, comment))
+  def updateGraphEdges(comment: String, model: String)(update: Traversal[Edge, Edge, Converter.Identity[Edge]] => Try[Unit]): Operations =
+    addOperations(UpdateGraphEdges(model, update, comment))
   def addIndex(model: String, indexType: IndexType, properties: String*): Operations =
     addOperations(AddIndex(model, indexType, properties))
   def dbOperation[DB <: Database: ClassTag](comment: String)(op: DB => Try[Unit]): Operations =
