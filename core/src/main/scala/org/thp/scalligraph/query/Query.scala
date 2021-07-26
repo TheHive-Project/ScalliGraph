@@ -138,8 +138,8 @@ object FilterQuery {
   def apply(publicProperties: PublicProperties)(
       fieldsParser: (
           ru.Type,
-          ru.Type => FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]]
-      ) => FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]]
+          ru.Type => FieldsParser[InputFilter]
+      ) => FieldsParser[InputFilter]
   ): FilterQuery = new FilterQuery(publicProperties, fieldsParser :: Nil)
   def default(publicProperties: PublicProperties): FilterQuery =
     apply(publicProperties)(InputFilter.fieldsParser(_, publicProperties, _))
@@ -149,22 +149,22 @@ object FilterQuery {
 final class FilterQuery(
     publicProperties: PublicProperties,
     protected val fieldsParsers: List[
-      (ru.Type, ru.Type => FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]]) => FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]]
+      (ru.Type, ru.Type => FieldsParser[InputFilter]) => FieldsParser[InputFilter]
     ] = Nil
-) extends ParamQuery[InputQuery[Traversal.Unk, Traversal.Unk]] { filterQuery =>
-  def paramParser(tpe: ru.Type): FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]] =
-    fieldsParsers.foldLeft(FieldsParser.empty[InputQuery[Traversal.Unk, Traversal.Unk]])((fp, f) => fp orElse f(tpe, t => paramParser(t)))
+) extends ParamQuery[InputFilter] { filterQuery =>
+  def paramParser(tpe: ru.Type): FieldsParser[InputFilter] =
+    fieldsParsers.foldLeft(FieldsParser.empty[InputFilter])((fp, f) => fp orElse f(tpe, t => paramParser(t)))
   override val name: String                   = "filter"
   override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[Traversal[_, _, _]])
   override def toType(t: ru.Type): ru.Type    = t
-  override def apply(inputFilter: InputQuery[Traversal.Unk, Traversal.Unk], fromType: ru.Type, from: Any, authContext: AuthContext): Any =
+  override def apply(inputFilter: InputFilter, fromType: ru.Type, from: Any, authContext: AuthContext): Any =
     inputFilter(
       publicProperties,
       fromType,
       from.asInstanceOf[Traversal.Unk], //.asInstanceOf[X forSome { type X <: Traversal.V[BaseVertex][_, X] }],
       authContext
     )
-//  def addParser(parser: (ru.Type, () => FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]])): FilterQuery = new FilterQuery(db, publicProperties, parser :: fieldsParsers)
+//  def addParser(parser: (ru.Type, () => FieldsParser[InputFilter])): FilterQuery = new FilterQuery(db, publicProperties, parser :: fieldsParsers)
   def ++(other: FilterQuery): FilterQuery = new FilterQuery(publicProperties, filterQuery.fieldsParsers ::: other.fieldsParsers)
 }
 

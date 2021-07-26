@@ -12,7 +12,7 @@ import play.api.Logger
 
 import scala.reflect.runtime.{universe => ru}
 
-case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputQuery[Traversal.Unk, Traversal.Unk] {
+case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputFilter {
   override def apply(
       publicProperties: PublicProperties,
       traversalType: ru.Type,
@@ -24,11 +24,11 @@ case class PredicateFilter(fieldName: String, predicate: P[_]) extends InputQuer
       publicProperties
         .get[Traversal.UnkD, Traversal.UnkDU](propertyPath, traversalType)
         .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
-    property.filter(propertyPath, traversal, authContext, predicate)
+    property.filter(propertyPath, traversal, authContext, if (isNegate) predicate.negate() else predicate)
   }
 }
 
-case class IsDefinedFilter(fieldName: String) extends InputQuery[Traversal.Unk, Traversal.Unk] with TraversalOps {
+case class IsDefinedFilter(fieldName: String) extends InputFilter with TraversalOps {
   override def apply(
       publicProperties: PublicProperties,
       traversalType: ru.Type,
@@ -36,87 +36,99 @@ case class IsDefinedFilter(fieldName: String) extends InputQuery[Traversal.Unk, 
       authContext: AuthContext
   ): Traversal.Unk = {
     val propertyPath = FPath(fieldName)
-    val property =
-      publicProperties
-        .get[Traversal.UnkD, Traversal.UnkDU](propertyPath, traversalType)
-        .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
-    traversal.filter(t => property.select(propertyPath, t, authContext))
+    publicProperties
+      .get[Traversal.UnkD, Traversal.UnkDU](propertyPath, traversalType)
+      .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
+      .filter
+      .existenceTest(propertyPath, traversal, authContext, !isNegate)
   }
 }
 
-case class OrFilter(inputFilters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]]) extends InputQuery[Traversal.Unk, Traversal.Unk] with TraversalOps {
+case class OrFilter(inputFilters: Seq[InputFilter]) extends InputFilter with TraversalOps {
   override def apply(
       publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
   ): Traversal.Unk =
-    inputFilters.map(ff => (t: Traversal.Unk) => ff(publicProperties, traversalType, t, authContext)) match {
-      case Seq(f) => traversal.filter(f)
-      case Seq()  => traversal.empty
-      case f      => traversal.filter(_.or(f: _*))
-    }
+    if (isNegate)
+      AndFilter(inputFilters.map(_.negate))(publicProperties, traversalType, traversal, authContext)
+    else
+      inputFilters.map(ff => (t: Traversal.Unk) => ff(publicProperties, traversalType, t, authContext)) match {
+        case Seq(f) => traversal.filter(f)
+        case Seq()  => traversal.empty
+        case f      => traversal.filter(_.or(f: _*))
+      }
 }
 
-case class AndFilter(inputFilters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]]) extends InputQuery[Traversal.Unk, Traversal.Unk] {
+case class AndFilter(inputFilters: Seq[InputFilter]) extends InputFilter {
   override def apply(
       publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
   ): Traversal.Unk =
-    inputFilters
-      .map(ff => (t: Traversal.Unk) => ff(publicProperties, traversalType, t, authContext))
-      .foldLeft(traversal)((t, f) => f(t))
+    if (isNegate)
+      OrFilter(inputFilters.map(_.negate))(publicProperties, traversalType, traversal, authContext)
+    else
+      inputFilters
+        .map(ff => (t: Traversal.Unk) => ff(publicProperties, traversalType, t, authContext))
+        .foldLeft(traversal)((t, f) => f(t))
 }
 
-case class NotFilter(inputFilter: InputQuery[Traversal.Unk, Traversal.Unk]) extends InputQuery[Traversal.Unk, Traversal.Unk] with TraversalOps {
+case class YesNoFilter(isYes: Boolean = true) extends InputFilter with TraversalOps {
+  override def apply(
+      publicProperties: PublicProperties,
+      traversalType: ru.Type,
+      traversal: Traversal.Unk,
+      authContext: AuthContext
+  ): Traversal.Unk = if (isYes == isNegate) traversal.empty else traversal
+}
+
+case class IdFilter(id: EntityId) extends InputFilter with TraversalOps {
   override def apply(
       publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
   ): Traversal.Unk =
-    traversal.not(t => inputFilter(publicProperties, traversalType, t, authContext))
+    if (isNegate) traversal.cast[Traversal.UnkD, Element].hasNotId(id).asInstanceOf[Traversal.Unk]
+    else traversal.cast[Traversal.UnkD, Element].hasId(id).asInstanceOf[Traversal.Unk]
 }
 
-object YesFilter extends InputQuery[Traversal.Unk, Traversal.Unk] {
-  override def apply(
+trait InputFilter extends InputQuery[Traversal.Unk, Traversal.Unk] {
+  protected var isNegate: Boolean = false
+  def apply(
       publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
-  ): Traversal.Unk = traversal
-}
-
-class IdFilter(id: EntityId) extends InputQuery[Traversal.Unk, Traversal.Unk] with TraversalOps {
-  override def apply(
-      publicProperties: PublicProperties,
-      traversalType: ru.Type,
-      traversal: Traversal.Unk,
-      authContext: AuthContext
-  ): Traversal.Unk = traversal.cast[Traversal.UnkD, Element].getByIds(id).asInstanceOf[Traversal.Unk]
+  ): Traversal.Unk
+  final def negate: this.type = {
+    isNegate = !isNegate
+    this
+  }
 }
 
 object InputFilter {
-  lazy val logger: Logger                                                    = Logger(getClass)
-  def is(field: String, value: Any): PredicateFilter                         = PredicateFilter(field, P.eq(value))
-  def neq(field: String, value: Any): PredicateFilter                        = PredicateFilter(field, P.neq(value))
-  def lt(field: String, value: Any): PredicateFilter                         = PredicateFilter(field, P.lt(value))
-  def gt(field: String, value: Any): PredicateFilter                         = PredicateFilter(field, P.gt(value))
-  def lte(field: String, value: Any): PredicateFilter                        = PredicateFilter(field, P.lte(value))
-  def gte(field: String, value: Any): PredicateFilter                        = PredicateFilter(field, P.gte(value))
-  def isDefined(field: String): IsDefinedFilter                              = IsDefinedFilter(field)
-  def between(field: String, from: Any, to: Any): PredicateFilter            = PredicateFilter(field, P.between(from, to))
-  def inside(field: String, from: Any, to: Any): PredicateFilter             = PredicateFilter(field, P.inside(from, to))
-  def in(field: String, values: Any*): PredicateFilter                       = PredicateFilter(field, P.within(values: _*))
-  def startsWith(field: String, value: String): PredicateFilter              = PredicateFilter(field, TextP.startingWith(value))
-  def endsWith(field: String, value: String): PredicateFilter                = PredicateFilter(field, TextP.endingWith(value))
-  def or(filters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]]): OrFilter   = OrFilter(filters)
-  def and(filters: Seq[InputQuery[Traversal.Unk, Traversal.Unk]]): AndFilter = AndFilter(filters)
-  def not(filter: InputQuery[Traversal.Unk, Traversal.Unk]): NotFilter       = NotFilter(filter)
-  def yes: YesFilter.type                                                    = YesFilter
-  def withId(id: EntityId): InputQuery[Traversal.Unk, Traversal.Unk]         = new IdFilter(id)
+  lazy val logger: Logger                                         = Logger(getClass)
+  def is(field: String, value: Any): PredicateFilter              = PredicateFilter(field, P.eq(value))
+  def neq(field: String, value: Any): PredicateFilter             = PredicateFilter(field, P.neq(value))
+  def lt(field: String, value: Any): PredicateFilter              = PredicateFilter(field, P.lt(value))
+  def gt(field: String, value: Any): PredicateFilter              = PredicateFilter(field, P.gt(value))
+  def lte(field: String, value: Any): PredicateFilter             = PredicateFilter(field, P.lte(value))
+  def gte(field: String, value: Any): PredicateFilter             = PredicateFilter(field, P.gte(value))
+  def isDefined(field: String): IsDefinedFilter                   = IsDefinedFilter(field)
+  def between(field: String, from: Any, to: Any): PredicateFilter = PredicateFilter(field, P.between(from, to))
+  def inside(field: String, from: Any, to: Any): PredicateFilter  = PredicateFilter(field, P.inside(from, to))
+  def in(field: String, values: Any*): PredicateFilter            = PredicateFilter(field, P.within(values: _*))
+  def startsWith(field: String, value: String): PredicateFilter   = PredicateFilter(field, TextP.startingWith(value))
+  def endsWith(field: String, value: String): PredicateFilter     = PredicateFilter(field, TextP.endingWith(value))
+  def or(filters: Seq[InputFilter]): OrFilter                     = OrFilter(filters)
+  def and(filters: Seq[InputFilter]): AndFilter                   = AndFilter(filters)
+  def not(filter: InputFilter): InputFilter                       = filter.negate
+  def yes: YesNoFilter                                            = YesNoFilter()
+  def withId(id: EntityId): InputFilter                           = IdFilter(id)
   def like(field: String, value: String): PredicateFilter = {
     val s = value.headOption.contains('*')
     val e = value.lastOption.contains('*')
@@ -129,17 +141,15 @@ object InputFilter {
   def fieldsParser(
       tpe: ru.Type,
       properties: PublicProperties,
-      globalParser: ru.Type => FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]]
-  ): FieldsParser[InputQuery[Traversal.Unk, Traversal.Unk]] = {
-    def propParser(name: String): FieldsParser[Any] = {
-      val fieldPath = FPath(name)
+      globalParser: ru.Type => FieldsParser[InputFilter]
+  ): FieldsParser[InputFilter] = {
+    def propParser(name: String): FieldsParser[Any] =
       properties
-        .get[Traversal.UnkD, Traversal.UnkDU](fieldPath, tpe)
+        .get[Traversal.UnkD, Traversal.UnkDU](FPath(name), tpe)
         .getOrElse(throw BadRequestError(s"Property $name for type $tpe not found"))
         .filter
         .fieldsParser
         .asInstanceOf[FieldsParser[Any]]
-    }
 
     FieldsParser("query") {
       case (path, FObjOne("_and", FSeq(fields))) =>
@@ -170,7 +180,6 @@ object InputFilter {
           case _                  => Bad(One(InvalidFormatAttributeError("_id", "id", Set.empty, FString(id))))
         }
       case (_, FObjOne("_between", FFieldFromTo(key, fromField, toField))) =>
-        BadRequestError
         withGood(propParser(key)(fromField), propParser(key)(toField))(between(key, _, _))
       case (_, FObjOne("_string", _)) =>
         logger.warn("string filter is not supported, it is ignored")

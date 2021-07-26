@@ -536,6 +536,11 @@ trait TraversalOps extends TraversalPrinter {
         case _                    => empty.asInstanceOf[Traversal[D, G, C]]
       }
 
+    def hasNotId(ids: EntityId*)(implicit ev: G <:< Element): Traversal[D, G, C] =
+      if (ids.isEmpty) traversal
+      else if (ids.sizeIs == 1) traversal.onRaw(_.hasId(P.neq(ids.head.value)))
+      else traversal.onRaw(_.hasId(P.without(ids.map(_.value): _*)))
+
     def where(predicate: P[String]): Traversal[D, G, C] = traversal.onRaw(_.where(predicate))
     def where[DD, GG, CC <: Converter[DD, GG]](f: Traversal[D, G, C] => Traversal[DD, GG, CC]): Traversal[D, G, C] =
       traversal.onRaw(_.where(f(traversal.start).raw))
