@@ -6,6 +6,7 @@ import org.scalactic.Accumulation._
 import org.scalactic.{Bad, Good, One}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers._
+import org.thp.scalligraph.models.IndexType
 import org.thp.scalligraph.traversal.{Traversal, TraversalOps}
 import org.thp.scalligraph.{BadRequestError, EntityId, EntityIdOrName, InvalidFormatAttributeError}
 import play.api.Logger
@@ -152,6 +153,16 @@ object InputFilter {
         .asInstanceOf[FieldsParser[Any]]
 
     FieldsParser("query") {
+      case (_, FObjOne("_match", FFieldValue(key, field))) =>
+        val property = properties
+          .get[Traversal.UnkD, Traversal.UnkDU](FPath(key), tpe)
+          .getOrElse(throw BadRequestError(s"Property $key for type $tpe not found"))
+        property.filter.fieldsParser.asInstanceOf[FieldsParser[Any]](field).map { value =>
+          property.indexType match {
+            case IndexType.basic | IndexType.standard | IndexType.unique | IndexType.none => is(key, value)
+            case IndexType.fulltext | IndexType.fulltextOnly                              => like(key, value.toString)
+          }
+        }
       case (path, FObjOne("_and", FSeq(fields))) =>
         fields.zipWithIndex.validatedBy { case (field, index) => globalParser(tpe)((path :/ "_and").toSeq(index), field) }.map(and)
       case (path, FObjOne("_or", FSeq(fields))) =>
