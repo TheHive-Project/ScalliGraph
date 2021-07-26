@@ -4,7 +4,7 @@ import org.apache.tinkerpop.gremlin.process.traversal.{Order, P}
 import org.apache.tinkerpop.gremlin.structure.Vertex
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.controllers.{FPath, FieldsParser, Renderer}
-import org.thp.scalligraph.models.Mapping
+import org.thp.scalligraph.models.{IndexType, Mapping, Model, UMapping}
 import org.thp.scalligraph.traversal._
 import play.api.libs.json.{JsObject, JsValue}
 
@@ -25,24 +25,59 @@ import scala.util.Try
 //  * @tparam U
 //  */
 case class PublicProperty(
-    typeFilter: TypeFilter,
+    propertyOwner: PropertyOwner,
     propertyName: String,
     mapping: Mapping[_, _, _],
     select: TraversalSelect,
     updateFieldsParser: Option[FieldsParser[PropertyUpdater]],
     filter: PropertyFilter[_],
-    sort: PropertyOrder
+    sort: PropertyOrder,
+    indexType: IndexType
 ) {
   def toJson[A](value: A): JsValue = mapping.selectRenderer.asInstanceOf[Renderer[A]].toJson(value)
 }
 
-trait TypeFilter {
-  def apply(tpe: ru.Type): Boolean
+trait PropertyOwner {
+  def name: String
+  def is(tpe: ru.Type): Boolean
+  def indexType(propertyName: String): IndexType
+  def mappingOf(propertyName: String): Option[Mapping[_, _, _]]
 }
 
-class TraversalTypeFilter[E <: Product: ru.TypeTag] extends TypeFilter {
-  val refType: ru.Type                    = ru.typeOf[Traversal.V[E]]
-  override def apply(t: ru.Type): Boolean = t <:< refType
+class VertexPropertyOwner[E <: Product: ru.TypeTag](implicit model: Model.Vertex[E]) extends MetadataPropertyOwner {
+  val refType: ru.Type                 = ru.typeOf[Traversal.V[E]]
+  override def name: String            = model.label
+  override def is(t: ru.Type): Boolean = t <:< refType
+  override def mappingOf(propertyName: String): Option[Mapping[_, _, _]] =
+    model.fields.get(propertyName) orElse super.mappingOf(propertyName)
+  override def indexType(propertyName: String): IndexType =
+    if (model.fields.contains(propertyName)) {
+      val indexes = model.indexes.filter(_._2.contains(propertyName))
+      if (indexes.isEmpty) IndexType.none
+      else if (indexes.exists(_._1 == IndexType.fulltextOnly)) IndexType.fulltextOnly
+      else if (indexes.exists(_._1 == IndexType.fulltext)) IndexType.fulltext
+      else if (indexes.exists(_._1 == IndexType.standard)) IndexType.standard
+      else indexes.find(_._2.sizeIs == 1).fold[IndexType](IndexType.none)(_._1)
+    } else
+      super.indexType(propertyName)
+}
+
+class MetadataPropertyOwner extends PropertyOwner {
+  val metadata = Map(
+    "_id"        -> UMapping.entityId.toMapping,
+    "_createdAt" -> UMapping.date.toMapping,
+    "_createdBy" -> UMapping.string.toMapping,
+    "_updatedAt" -> UMapping.date.optional.toMapping,
+    "_updatedBy" -> UMapping.string.optional.toMapping,
+    "_label"     -> UMapping.string.toMapping
+  )
+  override def name: String                                              = "MetaData"
+  override def is(tpe: ru.Type): Boolean                                 = true
+  override def mappingOf(propertyName: String): Option[Mapping[_, _, _]] = metadata.get(propertyName)
+  override def indexType(propertyName: String): IndexType =
+    if (propertyName == "_id") IndexType.basic
+    else if (metadata.contains(propertyName)) IndexType.standard
+    else IndexType.none
 }
 
 trait TraversalSelect {
@@ -145,7 +180,7 @@ class PublicProperties(private val map: Map[String, Seq[PublicProperty]]) {
   def get[V, U](propertyName: String): Option[PublicProperty] =
     map.get(propertyName).flatMap(_.headOption)
   def get[V, U](propertyName: String, tpe: ru.Type): Option[PublicProperty] =
-    map.get(propertyName).flatMap(_.find(_.typeFilter(tpe)))
+    map.get(propertyName).flatMap(_.find(_.propertyOwner.is(tpe)))
   def get[V, U](propertyPath: FPath, tpe: ru.Type): Option[PublicProperty] =
     get[V, U](propertyPath.toString, tpe) orElse propertyPath.headOption.flatMap(get[V, U](_, tpe))
 

@@ -19,6 +19,7 @@ object IndexType {
   final case object unique       extends IndexType
   final case object fulltext     extends IndexType
   final case object fulltextOnly extends IndexType
+  final case object none         extends IndexType
 }
 
 class DefineIndex(indexType: IndexType, fields: String*) extends StaticAnnotation
