@@ -525,10 +525,11 @@ trait TraversalOps extends TraversalPrinter {
     def isEmptyId(selector: D => EntityId)(implicit ev: G <:< Element): Traversal[D, G, C] = macro TraversalMacro.isEmptyId
     def nonEmptyId(selector: D => EntityId)(implicit ev: G <:< Element): Traversal[D, G, C] = macro TraversalMacro.nonEmptyId
 
-    def unsafeHas[A](key: String, predicate: P[A])(implicit ev: G <:< Element): Traversal[D, G, C] = traversal.onRaw(_.has(key, predicate))
-    def unsafeHas[A](key: String, value: A)(implicit ev: G <:< Element): Traversal[D, G, C]        = unsafeHas(key, P.eq[A](value))
-    def unsafeHas[A](key: String)(implicit ev: G <:< Element): Traversal[D, G, C]                  = traversal.onRaw(_.has(key))
-    def unsafeHasNot[A](key: String)(implicit ev: G <:< Element): Traversal[D, G, C]               = traversal.onRaw(_.hasNot(key))
+    def unsafeHas[A](key: String, predicate: P[A])(implicit ev: G <:< Element): Traversal[D, G, C] =
+      traversal.onRaw(_.has(key, traversal.graph.db.mapPredicate(predicate)))
+    def unsafeHas[A](key: String, value: A)(implicit ev: G <:< Element): Traversal[D, G, C] = unsafeHas(key, P.eq[A](value))
+    def unsafeHas[A](key: String)(implicit ev: G <:< Element): Traversal[D, G, C]           = traversal.onRaw(_.has(key))
+    def unsafeHasNot[A](key: String)(implicit ev: G <:< Element): Traversal[D, G, C]        = traversal.onRaw(_.hasNot(key))
 
     def hasId(ids: EntityId*)(implicit ev: G <:< Element): Traversal[D, G, C] =
       ids.map(_.value) match {

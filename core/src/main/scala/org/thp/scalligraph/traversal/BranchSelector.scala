@@ -16,14 +16,14 @@ class BranchSelectorOn[D, G, C <: Converter[D, G], S, GG](
     new BranchSelectorOn[D, G, C, S, GG](
       traversal,
       on,
-      options.asInstanceOf[Seq[(Either[Pick, S], Traversal[D, G, C] => Traversal[_, GG, _])]] :+ (Right(o) -> f)
+      options :+ (Right(o) -> f)
     )
 
   def any(f: Traversal[D, G, C] => Traversal[_, GG, _]) =
     new BranchSelectorOn[D, G, C, S, GG](
       traversal,
       on,
-      options.asInstanceOf[Seq[(Either[Pick, S], Traversal[D, G, C] => Traversal[_, GG, _])]] :+ (Left(Pick.any) -> f)
+      options :+ (Left(Pick.any) -> f)
     )
 
   def none(f: Traversal[D, G, C] => Traversal[_, GG, _]) =
