@@ -5,7 +5,10 @@ import org.apache.tinkerpop.gremlin.process.traversal.Step;
 import org.apache.tinkerpop.gremlin.process.traversal.Traversal;
 import org.apache.tinkerpop.gremlin.process.traversal.TraversalStrategy.ProviderOptimizationStrategy;
 import org.apache.tinkerpop.gremlin.process.traversal.lambda.ElementValueTraversal;
+import org.apache.tinkerpop.gremlin.process.traversal.step.HasContainerHolder;
 import org.apache.tinkerpop.gremlin.process.traversal.step.filter.HasStep;
+import org.apache.tinkerpop.gremlin.process.traversal.step.filter.OrStep;
+import org.apache.tinkerpop.gremlin.process.traversal.step.filter.RangeGlobalStep;
 import org.apache.tinkerpop.gremlin.process.traversal.step.map.GraphStep;
 import org.apache.tinkerpop.gremlin.process.traversal.step.map.NoOpBarrierStep;
 import org.apache.tinkerpop.gremlin.process.traversal.step.sideEffect.IdentityStep;
@@ -18,13 +21,17 @@ import org.apache.tinkerpop.gremlin.structure.Graph;
 import org.janusgraph.core.Cardinality;
 import org.janusgraph.core.JanusGraphTransaction;
 import org.janusgraph.core.PropertyKey;
+import org.janusgraph.graphdb.query.JanusGraphPredicateUtils;
+import org.janusgraph.graphdb.query.QueryUtil;
 import org.janusgraph.graphdb.tinkerpop.ElementUtils;
 import org.janusgraph.graphdb.tinkerpop.optimize.HasStepFolder;
+import org.janusgraph.graphdb.tinkerpop.optimize.JanusGraphStep;
 import org.janusgraph.graphdb.tinkerpop.optimize.JanusGraphTraversalUtil;
 import org.javatuples.Pair;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 // from https://raw.githubusercontent.com/JanusGraph/janusgraph/v0.5.3/janusgraph-core/src/main/java/org/janusgraph/graphdb/tinkerpop/optimize/JanusGraphStepStrategy.java
 public class JanusGraphAcceptNullStrategy extends AbstractTraversalStrategy<ProviderOptimizationStrategy> implements ProviderOptimizationStrategy {
@@ -54,9 +61,9 @@ public class JanusGraphAcceptNullStrategy extends AbstractTraversalStrategy<Prov
                     JanusGraphStepAcceptNull<?, ?> janusGraphStep = new JanusGraphStepAcceptNull(originalGraphStep);
                     TraversalHelper.replaceStep(originalGraphStep, janusGraphStep, traversal);
                     HasStepFolder.foldInIds(janusGraphStep, traversal);
-                    HasStepFolder.foldInHasContainer(janusGraphStep, traversal, traversal);
+                    foldInHasContainer(janusGraphStep, traversal, traversal);
                     foldInOrder(janusGraphStep, janusGraphStep.getNextStep(), traversal, traversal, janusGraphStep.returnsVertex(), (List) null);
-                    HasStepFolder.foldInRange(janusGraphStep, JanusGraphTraversalUtil.getNextNonIdentityStep(janusGraphStep), traversal, (List) null);
+                    foldInRange(janusGraphStep, JanusGraphTraversalUtil.getNextNonIdentityStep(janusGraphStep), traversal, (List) null);
                 }
 
             });
@@ -67,6 +74,55 @@ public class JanusGraphAcceptNullStrategy extends AbstractTraversalStrategy<Prov
         return INSTANCE;
     }
 
+    private void foldInHasContainer(final HasStepFolder janusgraphStep, final Traversal.Admin<?, ?> traversal,
+                                    final Traversal<?, ?> rootTraversal) {
+        Step<?, ?> currentStep = janusgraphStep.getNextStep();
+        while (true) {
+            if (currentStep instanceof OrStep && (janusgraphStep instanceof JanusGraphStep || janusgraphStep instanceof  JanusGraphStepAcceptNull)) {
+                for (final Traversal.Admin<?, ?> child : ((OrStep<?>) currentStep).getLocalChildren()) {
+                    if (!HasStepFolder.validFoldInHasContainer(child.getStartStep(), false)){
+                        return;
+                    }
+                }
+                ((OrStep<?>) currentStep).getLocalChildren().forEach(t ->HasStepFolder.localFoldInHasContainer(janusgraphStep, t.getStartStep(), t, rootTraversal));
+                currentStep.getLabels().forEach(janusgraphStep::addLabel);
+                traversal.removeStep(currentStep);
+            } else if (currentStep instanceof HasContainerHolder){
+                final Iterable<HasContainer> containers = ((HasContainerHolder) currentStep).getHasContainers().stream().map(c -> JanusGraphPredicateUtils.convert(c)).collect(Collectors.toList());
+                if  (HasStepFolder.validFoldInHasContainer(currentStep, true)) {
+                    janusgraphStep.addAll(containers);
+                    currentStep.getLabels().forEach(janusgraphStep::addLabel);
+                    traversal.removeStep(currentStep);
+                }
+            } else if (!(currentStep instanceof IdentityStep) && !(currentStep instanceof NoOpBarrierStep) && !(currentStep instanceof HasContainerHolder)) {
+                break;
+            }
+            currentStep = currentStep.getNextStep();
+        }
+    }
+
+    private void foldInRange(final HasStepFolder janusgraphStep, final Step<?, ?>  tinkerpopStep, final Traversal.Admin<?, ?> traversal, final List<HasContainer> hasContainers) {
+        final Step<?, ?> nextStep = tinkerpopStep instanceof IdentityStep ? JanusGraphTraversalUtil.getNextNonIdentityStep(tinkerpopStep): tinkerpopStep;
+        if (nextStep instanceof RangeGlobalStep) {
+            final RangeGlobalStep range = (RangeGlobalStep) nextStep;
+            int low = 0;
+            if (janusgraphStep instanceof JanusGraphStep || janusgraphStep instanceof JanusGraphStepAcceptNull) {
+                low = QueryUtil.convertLimit(range.getLowRange());
+                low = QueryUtil.mergeLowLimits(low, hasContainers == null ? janusgraphStep.getLowLimit(): janusgraphStep.getLocalLowLimit(hasContainers));
+            }
+            int high = QueryUtil.convertLimit(range.getHighRange());
+            high = QueryUtil.mergeHighLimits(high, hasContainers == null ? janusgraphStep.getHighLimit(): janusgraphStep.getLocalHighLimit(hasContainers));
+            if (hasContainers == null) {
+                janusgraphStep.setLimit(low, high);
+            } else {
+                janusgraphStep.setLocalLimit(hasContainers, low, high);
+            }
+            if (janusgraphStep instanceof JanusGraphStep || janusgraphStep instanceof JanusGraphStepAcceptNull || range.getLowRange() == 0) { //Range can be removed since there is JanusGraphStep or no offset
+                nextStep.getLabels().forEach(janusgraphStep::addLabel);
+                traversal.removeStep(nextStep);
+            }
+        }
+    }
 
     private Step<?, ?> foldInOrder(final HasStepFolder janusgraphStep, final Step<?, ?> tinkerpopStep, final Traversal.Admin<?, ?> traversal,
                                    final Traversal<?, ?> rootTraversal, boolean isVertexOrder, final List<HasContainer> hasContainers) {
