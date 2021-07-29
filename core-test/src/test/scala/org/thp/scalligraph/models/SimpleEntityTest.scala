@@ -13,7 +13,7 @@ import play.api.{Configuration, Environment}
 import scala.util.Try
 
 @BuildVertexEntity
-case class MyEntity(name: String, value: Int)
+case class MyEntity(name: String, value: Int, p1: Option[String] = None, p2: Option[String] = None)
 
 object MyEntity {
   val initialValues: Seq[MyEntity] = Seq(MyEntity("ini1", 1), MyEntity("ini1", 2))
