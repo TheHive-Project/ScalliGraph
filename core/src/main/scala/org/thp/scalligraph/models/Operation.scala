@@ -30,6 +30,11 @@ case class AddProperty(model: String, propertyName: String, mapping: Mapping[_, 
   override def execute(db: Database, logger: String => Unit): Try[Unit] = db.addProperty(model, propertyName, mapping)
 }
 
+case class AddIndexedProperty(model: String, propertyName: String, mapping: Mapping[_, _, _], indexType: IndexType) extends Operation {
+  override def info: String                                             = s"Add property $propertyName to $model"
+  override def execute(db: Database, logger: String => Unit): Try[Unit] = db.addIndexedProperty(model, propertyName, mapping, indexType)
+}
+
 case class RemoveProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean, mapping: Mapping[_, _, _]) extends Operation {
   override def info: String                                             = s"Remove property $propertyName from $model"
   override def execute(db: Database, logger: String => Unit): Try[Unit] = db.removeProperty(model, propertyName, usedOnlyByThisModel, mapping)
@@ -114,6 +119,16 @@ case class DBOperation[DB <: Database: ClassTag](comment: String, op: DB => Try[
     else Success(())
 }
 
+case class RemoveVertexLabel(label: String) extends Operation {
+  override def info: String                                             = s"Remove vertex label $label"
+  override def execute(db: Database, logger: String => Unit): Try[Unit] = db.removeVertexModel(label)
+}
+
+case class RemoveEdgeLabel(label: String) extends Operation {
+  override def info: String                                             = s"Remove edge label $label"
+  override def execute(db: Database, logger: String => Unit): Try[Unit] = db.removeEdgeModel(label)
+}
+
 object Operations {
   def apply(schemaName: String): Operations = new Operations(schemaName, Nil)
 }
@@ -122,12 +137,18 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) e
   lazy val logger: Logger                               = Logger(getClass)
   val lastVersion: Int                                  = operations.length + 2
   private def addOperations(op: Operation*): Operations = copy(operations = operations ++ op)
-  def addVertexModel[T](label: String): Operations =
+  def addVertexModel(label: String): Operations =
     addOperations(AddVertexModel(label))
+  def removeVertexLabel(label: String): Operations =
+    addOperations(RemoveVertexLabel(label))
   def addEdgeModel[T](label: String, properties: Seq[String])(implicit mapping: UMapping[T]): Operations =
     addOperations(AddEdgeModel(label, properties.map(p => p -> mapping.toMapping).toMap))
+  def removeEdgeLabel(label: String): Operations =
+    addOperations(RemoveEdgeLabel(label))
   def addProperty[T](model: String, propertyName: String)(implicit mapping: UMapping[T]): Operations =
     addOperations(AddProperty(model, propertyName, mapping.toMapping))
+  def addIndexedProperty[T](model: String, propertyName: String, indexType: IndexType)(implicit mapping: UMapping[T]): Operations =
+    addOperations(AddIndexedProperty(model, propertyName, mapping.toMapping, indexType))
   def removeProperty[T](model: String, propertyName: String, usedOnlyByThisModel: Boolean)(implicit mapping: UMapping[T]): Operations =
     addOperations(RemoveProperty(model, propertyName, usedOnlyByThisModel, mapping.toMapping))
   def updateGraphVertices(comment: String, model: String)(update: Traversal[Vertex, Vertex, Converter.Identity[Vertex]] => Try[Unit]): Operations =

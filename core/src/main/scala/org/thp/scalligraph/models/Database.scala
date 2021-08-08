@@ -50,11 +50,14 @@ trait Database {
   def createSchema(model: Model, models: Model*): Try[Unit] = createSchema(model +: models)
   def createSchema(models: Seq[Model]): Try[Unit]
   def addVertexModel(label: String, properties: Map[String, Mapping[_, _, _]]): Try[Unit]
+  def removeVertexModel(label: String): Try[Unit]
   def addEdgeModel(label: String, properties: Map[String, Mapping[_, _, _]]): Try[Unit]
+  def removeEdgeModel(label: String): Try[Unit]
   def addSchemaIndexes(schemaObject: Schema): Try[Unit]
   def addSchemaIndexes(model: Model, models: Model*): Try[Unit] = addSchemaIndexes(model +: models)
   def addSchemaIndexes(models: Seq[Model]): Try[Unit]
   def addProperty(model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit]
+  def addIndexedProperty(model: String, propertyName: String, mapping: Mapping[_, _, _], indexType: IndexType): Try[Unit]
   def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean, mapping: Mapping[_, _, _]): Try[Unit]
   def addIndex(model: String, indexDefinition: Seq[(IndexType, Seq[String])]): Try[Unit]
   def removeIndex(model: String, indexType: IndexType, fields: Seq[String]): Try[Unit]

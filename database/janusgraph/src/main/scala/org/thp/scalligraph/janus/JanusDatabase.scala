@@ -10,11 +10,12 @@ import org.apache.tinkerpop.gremlin.structure.Transaction.READ_WRITE_BEHAVIOR
 import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex, Graph => TinkerGraph}
 import org.janusgraph.core._
 import org.janusgraph.core.attribute.{Text => JanusText}
-import org.janusgraph.core.schema.{Mapping => _, _}
+import org.janusgraph.core.schema.{JanusGraphManagement, SchemaAction, SchemaStatus, Mapping => JanusMapping}
 import org.janusgraph.diskstorage.PermanentBackendException
 import org.janusgraph.diskstorage.locking.PermanentLockingException
 import org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration
 import org.janusgraph.graphdb.database.StandardJanusGraph
+import org.janusgraph.graphdb.database.management.ManagementSystem
 import org.janusgraph.graphdb.relations.RelationIdentifier
 import org.janusgraph.graphdb.tinkerpop.optimize.JanusGraphStepStrategy
 import org.slf4j.MDC
@@ -327,6 +328,11 @@ class JanusDatabase(
       }
     }.map(_ => ())
 
+  override def removeVertexModel(label: String): Try[Unit] =
+    managementTransaction { mgmt =>
+      Option(mgmt.getVertexLabel(label)).fold(Success(()))(l => Success(l.remove()))
+    }
+
   override def addEdgeModel(label: String, properties: Map[String, Mapping[_, _, _]]): Try[Unit] =
     managementTransaction { mgmt =>
       mgmt.getOrCreateEdgeLabel(label)
@@ -334,6 +340,11 @@ class JanusDatabase(
         case (property, mapping) => addProperty(mgmt, property, mapping)
       }
     }.map(_ => ())
+
+  override def removeEdgeModel(label: String): Try[Unit] =
+    managementTransaction { mgmt =>
+      Option(mgmt.getEdgeLabel(label)).fold(Success(()))(l => Success(l.remove()))
+    }
 
   private def createEntityProperties(mgmt: JanusGraphManagement): Unit =
     if (Option(mgmt.getPropertyKey("_label")).isEmpty) {
@@ -399,10 +410,54 @@ class JanusDatabase(
           }
       }
 
-  def addProperty(model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit] =
+  override def addProperty(model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit] =
     managementTransaction { mgmt =>
       addProperty(mgmt, propertyName, mapping)
     }
+
+  override def addIndexedProperty(model: String, propertyName: String, mapping: Mapping[_, _, _], indexType: IndexType): Try[Unit] =
+    managementTransaction { mgmt =>
+      addProperty(mgmt, propertyName, mapping)
+        .flatMap { _ =>
+          lazy val propertyKey = mgmt.getPropertyKey(propertyName)
+          (indexType match {
+            case IndexType.none                                                                    => None
+            case IndexType.unique                                                                  => None
+            case IndexType.standard | IndexType.basic if propertyKey.dataType() == classOf[String] => Some(JanusMapping.STRING.asParameter())
+            case IndexType.standard | IndexType.basic                                              => Some(JanusMapping.DEFAULT.asParameter())
+            case IndexType.fulltext                                                                => Some(JanusMapping.TEXTSTRING.asParameter())
+            case IndexType.fulltextOnly                                                            => Some(JanusMapping.TEXT.asParameter())
+          })
+            .fold[Try[Option[String]]](Success(None)) { param =>
+              findFirstAvailableMixedIndex(mgmt, "global") match {
+                case Right(indexName) =>
+                  val index = mgmt.getGraphIndex(indexName)
+                  if (index.getFieldKeys.exists(_.name() == propertyName))
+                    Success(None)
+                  else {
+                    // If some fields are not enabled, full reindex is required
+                    val allStatuses         = index.getFieldKeys.map(index.getIndexStatus)
+                    val allFieldsAreEnabled = allStatuses.forall(_ == SchemaStatus.ENABLED)
+                    mgmt.addIndexKey(index, propertyKey, param)
+                    if (allFieldsAreEnabled)
+                      Success(Some(index.name()))
+                    else
+                      Success(None)
+                  }
+                case Left(_) => Success(None)
+              }
+            }
+        }
+    }
+      .map(_.foreach { indexName =>
+        scala.concurrent.blocking {
+          ManagementSystem.awaitGraphIndexStatus(janusGraph, indexName).status(SchemaStatus.REGISTERED, SchemaStatus.ENABLED).call()
+        }
+        managementTransaction { mgmt =>
+          Option(mgmt.updateIndex(mgmt.getGraphIndex(indexName), SchemaAction.ENABLE_INDEX)).foreach(_.get())
+          Success(())
+        }
+      })
 
   def adaptCardinality(cardinality: MappingCardinality.Value): Cardinality =
     cardinality match {
