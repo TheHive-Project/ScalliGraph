@@ -63,7 +63,7 @@ class VertexPropertyOwner[E <: Product: ru.TypeTag](implicit model: Model.Vertex
 }
 
 class MetadataPropertyOwner extends PropertyOwner {
-  val metadata = Map(
+  val metadata: Map[String, Mapping[_, _, _]] = Map(
     "_id"        -> UMapping.entityId.toMapping,
     "_createdAt" -> UMapping.date.toMapping,
     "_createdBy" -> UMapping.string.toMapping,
