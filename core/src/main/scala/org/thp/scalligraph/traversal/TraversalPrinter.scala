@@ -18,14 +18,29 @@ import org.apache.tinkerpop.gremlin.process.traversal.step.sideEffect.{
 import org.apache.tinkerpop.gremlin.process.traversal.step.util.ComputerAwareStep.EndStep
 import org.apache.tinkerpop.gremlin.process.traversal.{P, Pop, Step, Traversal => TinkerTraversal}
 import org.apache.tinkerpop.gremlin.structure.PropertyType
+import play.api.Logger
 
 import java.util.{Comparator, Date}
 import scala.jdk.CollectionConverters._
 import scala.util.Try
 
-trait TraversalPrinter {
+trait TraversalPrinter { _: TraversalOps =>
+  private val loggerBaseName: String           = "org.thp.scalligraph.traversal"
+  private lazy val loggerForGremlin: Logger    = Logger(loggerBaseName + ".Gremlin")
+  private lazy val loggerForByteCode: Logger   = Logger(loggerBaseName + ".ByteCode")
+  private lazy val loggerForStrategies: Logger = Logger(loggerBaseName + ".Strategies")
+  private lazy val loggerForProfile: Logger    = Logger(loggerBaseName + ".Profile")
+  private lazy val loggerForExplain: Logger    = Logger(loggerBaseName + ".Explain")
 
   implicit class TraversalPrinterDefs(traversal: Traversal[_, _, _]) {
+    def debug(message: String): Unit = {
+      loggerForGremlin.debug(s"Execute($message): ${traversal.printGremlin}")
+      loggerForByteCode.debug(s"Execute($message): ${traversal.printByteCode}")
+      loggerForStrategies.trace(s"Execute($message): ${traversal.printStrategies}")
+      loggerForProfile.trace(s"Execute($message): ${traversal.printProfile}")
+      loggerForExplain.trace(s"Execute($message): ${traversal.printExplain}")
+    }
+
     def printGremlin: String = printTraversal(traversal.raw.asAdmin())
 
     def printByteCode: String = traversal.raw.toString
@@ -198,5 +213,4 @@ trait TraversalPrinter {
         case other              => other.toString
       }
   }
-
 }

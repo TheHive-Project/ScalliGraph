@@ -4,34 +4,27 @@ import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, GraphTraver
 import org.apache.tinkerpop.gremlin.process.traversal.step.map.{OrderGlobalStep, OrderLocalStep}
 import org.apache.tinkerpop.gremlin.process.traversal.{P, Scope}
 import org.apache.tinkerpop.gremlin.structure._
-import org.thp.scalligraph.`macro`.TraversalMacro
 import org.thp.scalligraph.controllers.Renderer
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.traversal.Converter.CMap
-import org.thp.scalligraph.utils.Retry
-import org.thp.scalligraph.{AuthorizationError, EntityId, InternalError, NotFoundError}
+import org.thp.scalligraph.utils.{FieldSelector, Retry}
+import org.thp.scalligraph.{AuthorizationError, InternalError, NotFoundError}
 import play.api.Logger
 import shapeless.ops.hlist.{Mapper, RightFolder, ToTraversable, Tupler}
 import shapeless.syntax.std.tuple._
 import shapeless.{Generic, HList, HNil}
 
 import java.lang.{Double => JDouble, Long => JLong}
-import java.util.{Date, NoSuchElementException, UUID, Collection => JCollection, List => JList, Map => JMap}
+import java.util.{NoSuchElementException, UUID, Collection => JCollection, List => JList, Map => JMap}
 import scala.collection.{AbstractIterator, IterableOnce}
 import scala.jdk.CollectionConverters._
-import scala.language.experimental.macros
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
 
 object NO_VALUE
-trait TraversalOps extends TraversalPrinter {
-  val loggerBaseName: String                   = "org.thp.scalligraph.traversal"
-  private lazy val logger: Logger              = Logger(loggerBaseName)
-  private lazy val loggerForGremlin: Logger    = Logger(loggerBaseName + ".Gremlin")
-  private lazy val loggerForByteCode: Logger   = Logger(loggerBaseName + ".ByteCode")
-  private lazy val loggerForStrategies: Logger = Logger(loggerBaseName + ".Strategies")
-  private lazy val loggerForProfile: Logger    = Logger(loggerBaseName + ".Profile")
-  private lazy val loggerForExplain: Logger    = Logger(loggerBaseName + ".Explain")
+trait TraversalOps extends TraversalPrinter with ElementTraversalOps {
+  private val loggerBaseName: String = "org.thp.scalligraph.traversal"
+  private lazy val logger: Logger    = Logger(loggerBaseName)
 
   implicit class TraversalCaster(traversal: Traversal[_, _, _]) {
     def cast[D, G]: Traversal[D, G, Converter[D, G]]                              = traversal.asInstanceOf[Traversal[D, G, Converter[D, G]]]
@@ -46,13 +39,6 @@ trait TraversalOps extends TraversalPrinter {
     def raw: GraphTraversal[_, G] = traversal.raw
     def toDomain(g: G): D         = traversal.converter(g)
 
-    def debug(message: String): Unit = {
-      loggerForGremlin.debug(s"Execute($message): ${traversal.printGremlin}")
-      loggerForByteCode.debug(s"Execute($message): ${traversal.printByteCode}")
-      loggerForStrategies.trace(s"Execute($message): ${traversal.printStrategies}")
-      loggerForProfile.trace(s"Execute($message): ${traversal.printProfile}")
-      loggerForExplain.trace(s"Execute($message): ${traversal.printExplain}")
-    }
     private def safeIterator[A](ite: Iterator[A]): Iterator[A] =
       new AbstractIterator[A] {
         private var cur: Option[A] = None
@@ -87,12 +73,12 @@ trait TraversalOps extends TraversalPrinter {
       }
 
     def toIterator: Iterator[D] = {
-      debug("toIterator")
+      traversal.debug("toIterator")
       _toIterator
     }
 
     def foreach[U](body: D => U): Unit = {
-      debug("foreach")
+      traversal.debug("foreach")
       traversal.converter match {
         case _: IdentityConverter[_] => raw.asScala.asInstanceOf[Iterator[D]].foreach(body)
         case _                       => raw.asScala.map(traversal.converter).foreach(body)
@@ -106,7 +92,7 @@ trait TraversalOps extends TraversalPrinter {
       }
 
     def toSeq: Seq[D] = {
-      debug("toSeq")
+      traversal.debug("toSeq")
       _toIterator.toVector
     }
 
@@ -123,24 +109,24 @@ trait TraversalOps extends TraversalPrinter {
     }
 
     def head: D = {
-      debug("head")
+      traversal.debug("head")
       _toIterator.next()
     }
 
     def headOption: Option[D] = {
-      debug("headOption")
+      traversal.debug("headOption")
       val ite = _toIterator
       if (ite.hasNext) Some(ite.next())
       else None
     }
 
     def toList: List[D] = {
-      debug("toList")
+      traversal.debug("toList")
       _toIterator.toList
     }
 
     def toSet: Set[D] = {
-      debug("toSet")
+      traversal.debug("toSet")
       toIterator.toSet
     }
 
@@ -149,17 +135,11 @@ trait TraversalOps extends TraversalPrinter {
     def orFail(ex: Exception): Try[D] = headOption.fold[Try[D]](Failure(ex))(Success.apply)
 
     def exists: Boolean = {
-      debug("exists")
+      traversal.debug("exists")
       traversal.raw.hasNext
     }
 
     def existsOrFail: Try[Unit] = if (exists) Success(()) else Failure(AuthorizationError("Unauthorized action"))
-
-    def remove(): Unit = {
-      debug("drop")
-      traversal.raw.drop().iterate()
-      ()
-    }
 
     def richPage[DD: Renderer, GG, CC <: Converter[DD, GG]](from: Long, to: Long, withTotal: Boolean)(
         f: Traversal[D, G, C] => Traversal[DD, GG, CC]
@@ -424,148 +404,12 @@ trait TraversalOps extends TraversalPrinter {
       )((m: JMap[String, Any]) => labels.zip(projections).map { case (l, p) => p.converter(m.get(l).asInstanceOf[PG]) })
     }
 
-    def out[E <: Product: ru.TypeTag](implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
-      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.out(ru.typeOf[E].typeSymbol.name.toString))(Converter.identity[Vertex])
-    def out(label: String)(implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
-      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.out(label))(Converter.identity[Vertex])
-    def out()(implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
-      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.out())(Converter.identity[Vertex])
-
-    def outE[E <: Product: ru.TypeTag](implicit ev: G <:< Vertex, model: Model.Edge[E]): Traversal.E[E] =
-      traversal.onRawMap[E with Entity, Edge, Converter[E with Entity, Edge]](_.outE(ru.typeOf[E].typeSymbol.name.toString))(model.converter)
-    def outE(label: String)(implicit ev: G <:< Vertex): Traversal[Edge, Edge, IdentityConverter[Edge]] =
-      traversal.onRawMap[Edge, Edge, IdentityConverter[Edge]](_.outE(label))(Converter.identity[Edge])
-    def outE()(implicit ev: G <:< Vertex): Traversal[Edge, Edge, IdentityConverter[Edge]] =
-      traversal.onRawMap[Edge, Edge, IdentityConverter[Edge]](_.outE())(Converter.identity[Edge])
-
-    def in[E <: Product: ru.TypeTag](implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
-      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.in(ru.typeOf[E].typeSymbol.name.toString))(Converter.identity[Vertex])
-    def in(label: String)(implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
-      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.in(label))(Converter.identity[Vertex])
-    def in()(implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
-      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.in())(Converter.identity[Vertex])
-
-    def inE[E <: Product: ru.TypeTag](implicit ev: G <:< Vertex, model: Model.Edge[E]): Traversal.E[E] =
-      traversal.onRawMap[E with Entity, Edge, Converter[E with Entity, Edge]](_.inE(ru.typeOf[E].typeSymbol.name.toString))(model.converter)
-    def inE(label: String)(implicit ev: G <:< Vertex): Traversal[Edge, Edge, IdentityConverter[Edge]] =
-      traversal.onRawMap[Edge, Edge, IdentityConverter[Edge]](_.inE(label))(Converter.identity[Edge])
-    def inE()(implicit ev: G <:< Vertex): Traversal[Edge, Edge, IdentityConverter[Edge]] =
-      traversal.onRawMap[Edge, Edge, IdentityConverter[Edge]](_.inE())(Converter.identity[Edge])
-
-    def inV(implicit ev: G <:< Edge): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
-      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.inV())(Converter.identity[Vertex])
-    def outV(implicit ev: G <:< Edge): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
-      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.outV())(Converter.identity[Vertex])
-    def otherV()(implicit ev: G <:< Edge): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
-      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.otherV())(Converter.identity[Vertex])
-
-    def both[E <: Product: ru.TypeTag](implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
-      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.both(ru.typeOf[E].typeSymbol.name.toString))(Converter.identity[Vertex])
-    def both(label: String)(implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
-      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.both(label))(Converter.identity[Vertex])
-    def both()(implicit ev: G <:< Vertex): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
-      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.both())(Converter.identity[Vertex])
-
-    def v[E <: Product](implicit
-        ev: G <:< Vertex,
-        model: Model.Vertex[E]
-    ): Traversal.V[E] =
-      traversal.onRawMap[E with Entity, Vertex, Converter[E with Entity, Vertex]](_.asInstanceOf[GraphTraversal[_, Vertex]])(
-        model.converter
-      )
-
-//    def e[E <: Product](implicit
-//        ev: G <:< Edge,
-//        model: Model.Edge[E]
-//    ): Traversal.E[E] =
-//      traversal.onRawMap[E with Entity, Edge, Converter[E with Entity, Edge]](_.asInstanceOf[GraphTraversal[_, Edge]])(
-//        model.converter
-//      )
-
     def V[E](ids: String*): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
       traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.V(ids: _*))(Converter.identity)
-
-    def entity(implicit ev: G <:< Element): Traversal[Product with Entity, Element, Converter[Product with Entity, Element]] =
-      traversal.onRawMap[Product with Entity, Element, Converter[Product with Entity, Element]](_.asInstanceOf[GraphTraversal[_, Element]]) {
-        (element: Element) =>
-          new Product with Entity {
-            override def productElement(n: Int): Any = throw new NoSuchElementException(s"Product0.productElement($n)")
-
-            override def productArity: Int = 0
-
-            override val _id: EntityId              = EntityId(element.id())
-            override val _label: String             = element.label()
-            override val _createdBy: String         = UMapping.string.getProperty(element, "_createdBy")
-            override val _updatedBy: Option[String] = UMapping.string.optional.getProperty(element, "_updatedBy")
-            override val _createdAt: Date           = UMapping.date.getProperty(element, "_createdAt")
-            override val _updatedAt: Option[Date]   = UMapping.date.optional.getProperty(element, "_createdAt")
-
-            override def canEqual(that: Any): Boolean =
-              that match {
-                case entity: Entity => entity._id == _id
-                case _              => false
-              }
-          }
-      }
-
-    def hasLabel(name: String): Traversal[D, G, C] = traversal.onRaw(_.hasLabel(name))
-
-    def has(accessor: T, predicate: P[_])(implicit ev: G <:< Element): Traversal[D, G, C] =
-      traversal.onRaw(_.has(accessor, traversal.graph.db.mapPredicate(predicate)))
-    def has[A, B](selector: D => A, value: B)(implicit mapping: Mapping[A, B, _], ev: G <:< Element): Traversal[D, G, C] =
-      macro TraversalMacro.hasV[A, B]
-    def has[A, B](selector: D => A, predicate: P[B])(implicit mapping: Mapping[A, B, _], ev: G <:< Element): Traversal[D, G, C] =
-      macro TraversalMacro.hasP[A, B]
-    def has[A](selector: D => A)(implicit ev: G <:< Element): Traversal[D, G, C] = macro TraversalMacro.has[A]
-    def hasNot[A, B](selector: D => A, predicate: P[B])(implicit mapping: Mapping[A, B, _], ev: G <:< Element): Traversal[D, G, C] =
-      macro TraversalMacro.hasNotP[A, B]
-    def hasNot[A, B](selector: D => A, value: B)(implicit mapping: Mapping[A, B, _], ev: G <:< Element): Traversal[D, G, C] =
-      macro TraversalMacro.hasNotV[A, B]
-    def hasNot[A](selector: D => A): Traversal[D, G, C] = macro TraversalMacro.hasNot[A]
-    def isEmptyId(selector: D => EntityId)(implicit ev: G <:< Element): Traversal[D, G, C] = macro TraversalMacro.isEmptyId
-    def nonEmptyId(selector: D => EntityId)(implicit ev: G <:< Element): Traversal[D, G, C] = macro TraversalMacro.nonEmptyId
-
-    def unsafeHas[A](key: String, predicate: P[A])(implicit ev: G <:< Element): Traversal[D, G, C] =
-      traversal.onRaw(_.has(key, traversal.graph.db.mapPredicate(predicate)))
-    def unsafeHas[A](key: String, value: A)(implicit ev: G <:< Element): Traversal[D, G, C] = unsafeHas(key, P.eq[A](value))
-    def unsafeHas[A](key: String)(implicit ev: G <:< Element): Traversal[D, G, C]           = traversal.onRaw(_.has(key))
-    def unsafeHasNot[A](key: String)(implicit ev: G <:< Element): Traversal[D, G, C]        = traversal.onRaw(_.hasNot(key))
-
-    def hasId(ids: EntityId*)(implicit ev: G <:< Element): Traversal[D, G, C] =
-      ids.map(_.value) match {
-        case Seq(head, tail @ _*) => traversal.onRaw(_.hasId(head, tail: _*))
-        case _                    => empty.asInstanceOf[Traversal[D, G, C]]
-      }
-
-    def hasNotId(ids: EntityId*)(implicit ev: G <:< Element): Traversal[D, G, C] =
-      if (ids.isEmpty) traversal
-      else if (ids.sizeIs == 1) traversal.onRaw(_.hasId(P.neq(ids.head.value)))
-      else traversal.onRaw(_.hasId(P.without(ids.map(_.value): _*)))
 
     def where(predicate: P[String]): Traversal[D, G, C] = traversal.onRaw(_.where(predicate))
     def where[DD, GG, CC <: Converter[DD, GG]](f: Traversal[D, G, C] => Traversal[DD, GG, CC]): Traversal[D, G, C] =
       traversal.onRaw(_.where(f(traversal.start).raw))
-
-    def label(implicit ev: G <:< Element): Traversal[String, String, IdentityConverter[String]] =
-      traversal.onRawMap[String, String, IdentityConverter[String]](_.label())(Converter.identity[String])
-
-    def _id(implicit ev: G <:< Element): Traversal[EntityId, AnyRef, Converter[EntityId, AnyRef]] =
-      traversal.onRawMap[EntityId, AnyRef, Converter[EntityId, AnyRef]](_.id())(EntityId.apply _)
-
-    def update[V](selector: D => V, value: V)(implicit mapping: Mapping[V, _, _], ev: G <:< Element): Traversal[D, G, C] =
-      macro TraversalMacro.update[V]
-
-    def addValue[V](selector: D => Seq[V], value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
-      macro TraversalMacro.addValue[V]
-
-    def addValue[V](selector: D => Set[V], value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
-      macro TraversalMacro.addValue[V]
-
-    def removeValue[V](selector: D => Seq[V], value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
-      macro TraversalMacro.removeValue[V]
-
-    def removeValue[V](selector: D => Set[V], value: V)(implicit ev1: G <:< Element, ev2: D <:< Product with Entity): Traversal[D, G, C] =
-      macro TraversalMacro.removeValue[V]
 
     def iterate(): Unit = {
       raw.iterate()
@@ -577,14 +421,6 @@ trait TraversalOps extends TraversalPrinter {
     def sideEffect[DD, GG, CC <: Converter[DD, GG]](effect: Traversal[D, G, C] => Traversal[DD, GG, CC]): Traversal[D, G, C] =
       traversal.onRaw(_.sideEffect(effect(traversal.start).raw))
 
-    def value[DD](
-        selector: D => DD
-    )(implicit
-        mapping: UMapping[DD],
-        ev1: G <:< Element,
-        ev2: D <:< Product with Entity
-    ): Traversal[mapping.SingleType, mapping.GraphType, Converter[mapping.SingleType, mapping.GraphType]] = macro TraversalMacro.getValue[DD]
-
     def valueMap(propertyKeys: String*): Traversal[Map[String, Any], JMap[AnyRef, Any], Converter[Map[String, Any], JMap[AnyRef, Any]]] =
       traversal.onRawMap[Map[String, Any], JMap[AnyRef, Any], Converter[Map[String, Any], JMap[AnyRef, Any]]](_.valueMap[Any](propertyKeys: _*))(
         _.asScala.map(kv => kv._1.asInstanceOf[String] -> kv._2.asInstanceOf[JList[Any]].get(0)).toMap
@@ -594,19 +430,6 @@ trait TraversalOps extends TraversalPrinter {
       traversal.sideEffect(
         _.onRaw(t => t.properties[Any](name).drop().asInstanceOf[t.type])
       )
-
-    def property[DD, GG](name: String, converter: Converter[DD, GG])(implicit ev: G <:< Element): Traversal[DD, GG, Converter[DD, GG]] =
-      traversal.onRawMap[DD, GG, Converter[DD, GG]](_.values[GG](name))(converter)
-//    def property[DD, GG](name: String, mapping: Mapping[DD, GG])(implicit ev: G <:< Element): Traversal[DD, GG, Converter[DD, GG]] =
-//      new Traversal[DD, GG, Converter[DD, GG]](raw.values[GG](name), mapping)
-    def _createdBy(implicit ev: G <:< Element): Traversal[String, String, Converter[String, String]] = property("_createdBy", UMapping.string)
-    def _createdAt(implicit ev: G <:< Element): Traversal[Date, Date, Converter[Date, Date]]         = property("_createdAt", UMapping.date)
-    def _updatedBy(implicit ev: G <:< Element): Traversal[String, String, Converter[String, String]] = property("_updatedBy", UMapping.string)
-    def _updatedAt(implicit ev: G <:< Element): Traversal[Date, Date, Converter[Date, Date]]         = property("_updatedAt", UMapping.date)
-
-    def getEntity(entity: D with Entity)(implicit ev: G <:< Element): Traversal[D, G, C] = getByIds(entity._id)
-    def getElement(element: Element): Traversal[D, G, C]                                 = traversal.onRaw(_.hasId(element.id()))
-    def getByIds(ids: EntityId*)(implicit ev: G <:< Element): Traversal[D, G, C]         = hasId(ids: _*)
 
     def page(from: Long, to: Long, withTotal: Boolean)(implicit renderer: Renderer[D]): IteratorOutput =
       richPage(from, to, withTotal)(Predef.identity)
@@ -664,5 +487,56 @@ trait TraversalOps extends TraversalPrinter {
     private def genericBySelector: GenericBySelector[D, G, C] = new GenericBySelector[D, G, C](traversal)
     private def groupBySelector: GroupBySelector[D, G, C]     = new GroupBySelector[D, G, C](traversal)
     private def sortBySelector: SortBySelector[D, G, C]       = new SortBySelector[D, G, C](traversal)
+  }
+
+  implicit class EdgeTraversalOpsDefs[D, C <: Converter[D, Edge]](val traversal: Traversal[D, Edge, C]) {
+    def inV: Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
+      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.inV())(Converter.identity[Vertex])
+    def outV: Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
+      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.outV())(Converter.identity[Vertex])
+    def otherV(): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
+      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.otherV())(Converter.identity[Vertex])
+  }
+
+  implicit class VertexTraversalOpsDefs[D, C <: Converter[D, Vertex]](val traversal: Traversal[D, Vertex, C]) {
+    def outE[E <: Product: ru.TypeTag](implicit model: Model.Edge[E]): Traversal.E[E] =
+      traversal.onRawMap[E with Entity, Edge, Converter[E with Entity, Edge]](_.outE(ru.typeOf[E].typeSymbol.name.toString))(model.converter)
+    def inE[E <: Product: ru.TypeTag](implicit model: Model.Edge[E]): Traversal.E[E] =
+      traversal.onRawMap[E with Entity, Edge, Converter[E with Entity, Edge]](_.inE(ru.typeOf[E].typeSymbol.name.toString))(model.converter)
+    def out[E <: Product: ru.TypeTag]: Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
+      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.out(ru.typeOf[E].typeSymbol.name.toString))(Converter.identity[Vertex])
+    def out(label: String): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
+      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.out(label))(Converter.identity[Vertex])
+    def out(): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
+      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.out())(Converter.identity[Vertex])
+    def outE(label: String): Traversal[Edge, Edge, IdentityConverter[Edge]] =
+      traversal.onRawMap[Edge, Edge, IdentityConverter[Edge]](_.outE(label))(Converter.identity[Edge])
+    def outE(): Traversal[Edge, Edge, IdentityConverter[Edge]] =
+      traversal.onRawMap[Edge, Edge, IdentityConverter[Edge]](_.outE())(Converter.identity[Edge])
+    def in[E <: Product: ru.TypeTag]: Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
+      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.in(ru.typeOf[E].typeSymbol.name.toString))(Converter.identity[Vertex])
+    def in(label: String): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
+      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.in(label))(Converter.identity[Vertex])
+    def in(): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
+      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.in())(Converter.identity[Vertex])
+    def inE(label: String): Traversal[Edge, Edge, IdentityConverter[Edge]] =
+      traversal.onRawMap[Edge, Edge, IdentityConverter[Edge]](_.inE(label))(Converter.identity[Edge])
+    def inE(): Traversal[Edge, Edge, IdentityConverter[Edge]] =
+      traversal.onRawMap[Edge, Edge, IdentityConverter[Edge]](_.inE())(Converter.identity[Edge])
+    def both[E <: Product: ru.TypeTag]: Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
+      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.both(ru.typeOf[E].typeSymbol.name.toString))(Converter.identity[Vertex])
+    def both(label: String): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
+      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.both(label))(Converter.identity[Vertex])
+    def both(): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
+      traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.both())(Converter.identity[Vertex])
+    def v[E <: Product](implicit model: Model.Vertex[E]): Traversal.V[E] =
+      traversal.onRawMap[E with Entity, Vertex, Converter[E with Entity, Vertex]](v => v)(model.converter)
+  }
+
+  implicit class VertexEntityTraversalOpsDefs[E <: Product](val traversal: Traversal.V[E]) {
+    def addValue[V](fieldSelect: E => FieldSelector[E, Iterable[V]], value: V)(implicit mapping: Mapping[_, V, _]): Traversal.V[E] =
+      mapping.asInstanceOf[MultiValueMapping[V, _]].addValue(traversal, fieldSelect(null.asInstanceOf[E]).name, value)
+    def removeValue[V](fieldSelect: E => FieldSelector[E, Iterable[V]], value: V)(implicit mapping: Mapping[_, V, _]): Traversal.V[E] =
+      mapping.asInstanceOf[MultiValueMapping[V, _]].removeValue(traversal, fieldSelect(null.asInstanceOf[E]).name, value)
   }
 }
