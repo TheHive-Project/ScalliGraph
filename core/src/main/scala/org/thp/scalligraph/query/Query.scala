@@ -91,7 +91,7 @@ object Query {
     new Query {
       override val name: String                   = "output"
       override def checkFrom(t: ru.Type): Boolean = SubType(t, ru.typeOf[E])
-      override def toType(t: ru.Type): ru.Type    = ru.typeOf[Output[_]]
+      override def toType(t: ru.Type): ru.Type    = ru.typeOf[Output]
       override def apply(param: Unit, fromType: ru.Type, from: Any, authContext: AuthContext): Any =
         implicitly[Renderer[E]].toOutput(from.asInstanceOf[E])
     }
@@ -172,7 +172,7 @@ class AggregationQuery(publicProperties: PublicProperties, filterQuery: FilterQu
   override def paramParser(tpe: ru.Type): FieldsParser[Aggregation] = Aggregation.fieldsParser(filterQuery.paramParser(tpe))
   override val name: String                                         = "aggregation"
   override def checkFrom(t: ru.Type): Boolean                       = SubType(t, ru.typeOf[Traversal[_, _, _]])
-  override def toType(t: ru.Type): ru.Type                          = ru.typeOf[Output[_]]
+  override def toType(t: ru.Type): ru.Type                          = ru.typeOf[Output]
   override def apply(aggregation: Aggregation, fromType: ru.Type, from: Any, authContext: AuthContext): Any =
     aggregation(
       publicProperties,

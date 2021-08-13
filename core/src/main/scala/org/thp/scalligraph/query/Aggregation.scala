@@ -119,21 +119,24 @@ object Aggregation {
     }
 }
 
-abstract class Aggregation(val name: String) extends InputQuery[Traversal.Unk, Output[_]] with TraversalOps {
+abstract class Aggregation(val name: String) extends InputQuery[Traversal.Unk, Output] with TraversalOps {
 
   override def apply(
       publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
-  ): Output[_] = getTraversal(publicProperties, traversalType, traversal, authContext).headOption.getOrElse(Output(null, JsNull))
+  ): Output =
+    getTraversal(publicProperties, traversalType, traversal, authContext)
+      .headOption
+      .fold[Output](Output(JsNull))(Output(_))
 
   def getTraversal(
       publicProperties: PublicProperties,
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
-  ): Traversal.Domain[Output[_]]
+  ): Traversal.Domain[JsValue]
 }
 
 case class AggSum(aggName: Option[String], fieldName: String, filter: Option[InputFilter]) extends Aggregation(aggName.getOrElse(s"sum_$fieldName")) {
@@ -142,7 +145,8 @@ case class AggSum(aggName: Option[String], fieldName: String, filter: Option[Inp
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
-  ): Traversal.Domain[Output[_]] = {
+  ): Traversal.Domain[JsValue] = {
+    val fieldPath = FPath(fieldName)
     val property = publicProperties
       .get[Traversal.UnkD, Traversal.UnkDU](fieldName, traversalType)
       .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
@@ -153,9 +157,9 @@ case class AggSum(aggName: Option[String], fieldName: String, filter: Option[Inp
           property
             .select(FPath(fieldName), t, authContext)
             .sum
-            .domainMap(sum => Output(sum, Json.obj(name -> JsNumber(BigDecimal(sum.toString)))))
-            .castDomain[Output[_]],
-        Output(null, JsNull)
+            .domainMap(sum => JsNumber(BigDecimal(sum.toString)))
+            .castDomain,
+        JsNull
       )
   }
 }
@@ -166,20 +170,22 @@ case class AggAvg(aggName: Option[String], fieldName: String, filter: Option[Inp
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
-  ): Traversal.Domain[Output[_]] = {
+  ): Traversal.Domain[JsValue] = {
+    val fieldPath = FPath(fieldName)
     val property = publicProperties
-      .get[Traversal.UnkD, Traversal.UnkDU](fieldName, traversalType)
+      .get[Traversal.UnkD, Traversal.UnkDU](fieldPath, traversalType)
       .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
     filter
       .fold(traversal)(_(publicProperties, traversalType, traversal, authContext))
+      .fold
       .coalesce(
         t =>
           property
-            .select(FPath(fieldName), t, authContext)
+            .select(fieldPath, t.unfold, authContext)
             .mean
-            .domainMap(avg => Output(Json.obj(name -> avg)))
-            .asInstanceOf[Traversal.Domain[Output[_]]],
-        Output(null, JsNull)
+            .domainMap(mean => JsNumber(BigDecimal(mean.toString)))
+            .castDomain,
+        JsNull
       )
   }
 }
@@ -190,19 +196,22 @@ case class AggMin(aggName: Option[String], fieldName: String, filter: Option[Inp
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
-  ): Traversal.Domain[Output[_]] = {
+  ): Traversal.Domain[JsValue] = {
+    val fieldPath = FPath(fieldName)
     val property = publicProperties
-      .get[Traversal.UnkD, Traversal.UnkDU](fieldName, traversalType)
+      .get[Traversal.UnkD, Traversal.UnkDU](fieldPath, traversalType)
       .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
     filter
       .fold(traversal)(_(publicProperties, traversalType, traversal, authContext))
+      .fold
       .coalesce(
         t =>
           property
-            .select(FPath(fieldName), t, authContext)
+            .select(fieldPath, t.unfold, authContext)
             .min
-            .domainMap(min => Output(min, Json.obj(name -> property.toJson(min)))),
-        Output(null, JsNull)
+            .domainMap(property.toJson)
+            .castDomain,
+        JsNull
       )
   }
 }
@@ -213,19 +222,22 @@ case class AggMax(aggName: Option[String], fieldName: String, filter: Option[Inp
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
-  ): Traversal.Domain[Output[_]] = {
+  ): Traversal.Domain[JsValue] = {
+    val fieldPath = FPath(fieldName)
     val property = publicProperties
-      .get[Traversal.UnkD, Traversal.UnkDU](fieldName, traversalType)
+      .get[Traversal.UnkD, Traversal.UnkDU](fieldPath, traversalType)
       .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
     filter
       .fold(traversal)(_(publicProperties, traversalType, traversal, authContext))
+      .fold
       .coalesce(
         t =>
           property
-            .select(FPath(fieldName), t, authContext)
+            .select(fieldPath, t.unfold, authContext)
             .max
-            .domainMap(max => Output(max, Json.obj(name -> property.toJson(max)))),
-        Output(null, JsNull)
+            .domainMap(property.toJson)
+            .castDomain,
+        JsNull
       )
   }
 }
@@ -236,12 +248,12 @@ case class AggCount(aggName: Option[String], filter: Option[InputFilter]) extend
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
-  ): Traversal.Domain[Output[_]] =
+  ): Traversal.Domain[JsValue] =
     filter
       .fold(traversal)(_(publicProperties, traversalType, traversal, authContext))
       .count
-      .domainMap(count => Output(count.longValue(), Json.obj(name -> count)))
-      .castDomain[Output[_]]
+      .domainMap(count => JsNumber(count.longValue()))
+      .castDomain
 }
 
 //case class AggTop[T](fieldName: String) extends AggFunction[T](s"top_$fieldName")
@@ -261,14 +273,17 @@ case class FieldAggregation(
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
-  ): Traversal.Domain[Output[_]] = {
-    val label = StepLabel[Traversal.UnkD, Traversal.UnkG, Converter[Traversal.UnkD, Traversal.UnkG]]
+  ): Traversal.Domain[JsValue] = {
+    val label     = StepLabel[Traversal.UnkD, Traversal.UnkG, Converter[Traversal.UnkD, Traversal.UnkG]]
+    val fieldPath = FPath(fieldName)
     val property = publicProperties
-      .get[Traversal.UnkD, Traversal.UnkDU](fieldName, traversalType)
+      .get[Traversal.UnkD, Traversal.UnkDU](fieldPath, traversalType)
       .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
     val filteredTraversal = filter.fold(traversal)(_(publicProperties, traversalType, traversal, authContext))
-    val groupedVertices   = property.select(FPath(fieldName), filteredTraversal.as(label), authContext).group(_.by, _.by(_.select(label).fold)).unfold
-//    val groupedVertices = traversal.group(_.by(t => property.select(FPath(fieldName), t).cast[Any, Any])).unfold
+    val groupedVertices = property
+      .select(fieldPath, filteredTraversal.as(label), authContext)
+      .group(_.by, _.by(_.select(label).fold))
+      .unfold
     val sortedAndGroupedVertex = orders
       .map {
         case order if order.headOption.contains('-') => order.tail -> Order.desc
@@ -276,8 +291,8 @@ case class FieldAggregation(
         case order                                   => order      -> Order.asc
       }
       .foldLeft(groupedVertices) {
-        case (acc, (field, order)) if field == fieldName => acc.sort(_.by(_.selectKeys, order))
-        case (acc, (field, order)) if field == "count"   => acc.sort(_.by(_.selectValues.localCount, order))
+        case (acc, (field, order)) if field == fieldName                    => acc.sort(_.by(_.selectKeys, order))
+        case (acc, (field, order)) if field == "count" || field == "_count" => acc.sort(_.by(_.selectValues.localCount, order))
         case (acc, (field, _)) =>
           logger.warn(s"In field aggregation you can only sort by the field ($fieldName) or by count, not by $field")
           acc
@@ -288,7 +303,11 @@ case class FieldAggregation(
         Traversal.UnkD,
         Traversal.UnkG
       ]]]) =>
-        s.by(t => agg.getTraversal(publicProperties, traversalType, t.unfold, authContext).castDomain[Output[_]])
+        s.by(t =>
+          agg
+            .getTraversal(publicProperties, traversalType, t.unfold, authContext)
+            .domainMap(v => Json.obj(agg.name -> v))
+        )
     }
 
     sizedSortedAndGroupedVertex
@@ -297,21 +316,21 @@ case class FieldAggregation(
           .by(
             _.selectValues
               .flatProject(subAggProjection: _*)
-              .domainMap { aggResult =>
-                val outputs = aggResult.asInstanceOf[Seq[Output[_]]]
-                val json = outputs.map(_.toJson).foldLeft(JsObject.empty) {
-                  case (acc, jsObject: JsObject) => acc ++ jsObject
-                  case (acc, r) =>
-                    logger.warn(s"Invalid stats result: $r")
-                    acc
-                }
-                Output(outputs.map(_.toValue), json)
-              }
+              .domainMap(
+                _.asInstanceOf[Seq[JsObject]]
+                  .reduceOption(_ ++ _)
+                  .getOrElse(JsObject.empty)
+              )
           )
       )
       .fold
-      .domainMap(x => Output(x.map(kv => kv._1 -> kv._2.toValue).toMap, JsObject(x.map(kv => kv._1.toString -> kv._2.toJson))))
-      .castDomain[Output[_]]
+      .domainMap(kvs =>
+        JsObject(kvs.map {
+          case (JsString(k), v) => k          -> v
+          case (k, v)           => k.toString -> v
+        })
+      )
+      .castDomain
   }
 }
 
@@ -364,14 +383,15 @@ case class TimeAggregation(
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
-  ): Traversal.Domain[Output[_]] = {
+  ): Traversal.Domain[JsValue] = {
+    val fieldPath = FPath(fieldName)
     val property = publicProperties
-      .get[Traversal.UnkD, Traversal.UnkDU](fieldName, traversalType)
+      .get[Traversal.UnkD, Traversal.UnkDU](fieldPath, traversalType)
       .getOrElse(throw BadRequestError(s"Property $fieldName for type $traversalType not found"))
     val label             = StepLabel[Traversal.UnkD, Traversal.UnkG, Converter[Traversal.UnkD, Traversal.UnkG]]
     val filteredTraversal = filter.fold(traversal)(_(publicProperties, traversalType, traversal, authContext))
     val groupedVertex = property
-      .select(FPath(fieldName), filteredTraversal.as(label), authContext)
+      .select(fieldPath, filteredTraversal.as(label), authContext)
       .cast[Date, Date]
       .graphMap[Long, JLong, Converter[Long, JLong]](dateToKey, Converter.long)
       .group(_.by, _.by(_.select(label).fold))
@@ -382,7 +402,11 @@ case class TimeAggregation(
         Traversal.UnkD,
         Traversal.UnkG
       ]]]) =>
-        s.by(t => agg.getTraversal(publicProperties, traversalType, t.unfold, authContext).castDomain[Output[_]])
+        s.by(t =>
+          agg
+            .getTraversal(publicProperties, traversalType, t.unfold, authContext)
+            .domainMap(v => Json.obj(agg.name -> v))
+        )
     }
 
     groupedVertex
@@ -391,20 +415,15 @@ case class TimeAggregation(
           .by(
             _.selectValues
               .flatProject(subAggProjection: _*)
-              .domainMap { aggResult =>
-                val outputs = aggResult.asInstanceOf[Seq[Output[_]]]
-                val json = outputs.map(_.toJson).foldLeft(JsObject.empty) {
-                  case (acc, jsObject: JsObject) => acc ++ jsObject
-                  case (acc, r) =>
-                    Aggregation.logger.warn(s"Invalid stats result: $r")
-                    acc
-                }
-                Output(outputs.map(_.toValue), json)
-              }
+              .domainMap(
+                _.asInstanceOf[Seq[JsObject]]
+                  .reduceOption(_ ++ _)
+                  .getOrElse(JsObject.empty)
+              )
           )
       )
       .fold
-      .domainMap(x => Output(x.map(kv => kv._1 -> kv._2.toValue).toMap, JsObject(x.map(kv => kv._1.toString -> kv._2.toJson))))
-      .castDomain[Output[_]]
+      .domainMap(x => JsObject(x.map(kv => kv._1.toString -> kv._2)))
+      .castDomain
   }
 }

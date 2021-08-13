@@ -3,9 +3,8 @@ package org.thp.scalligraph.traversal
 import org.thp.scalligraph.controllers.{Output, Renderer}
 import play.api.libs.json.{JsArray, JsValue}
 
-class IteratorOutput(val iterator: Iterator[JsValue], val totalSize: Option[() => Long]) extends Output[JsValue] {
-  override def toValue: JsValue = toJson
-  override def toJson: JsValue  = JsArray(iterator.toSeq)
+class IteratorOutput(val iterator: Iterator[JsValue], val totalSize: Option[() => Long]) extends Output {
+  override def content: JsValue = JsArray(iterator.toSeq)
 }
 
 object IteratorOutput extends TraversalOps {

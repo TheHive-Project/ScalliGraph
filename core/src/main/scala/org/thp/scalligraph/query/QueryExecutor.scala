@@ -49,10 +49,10 @@ abstract class QueryExecutor { executor =>
           }
       }
 
-//  final def execute(q: Query)(implicit authGraph: AuthGraph): Try[Output[_]] =
+//  final def execute(q: Query)(implicit authGraph: AuthGraph): Try[Output] =
 //    execute(q, authGraph.graph, authGraph.auth)
 
-  final def execute(q: Query, graph: Graph, authContext: AuthContext): Try[Output[_]] = {
+  final def execute(q: Query, graph: Graph, authContext: AuthContext): Try[Output] = {
     val outputType  = q.toType(graphType)
     val outputValue = q((), graphType, graph, authContext)
     getRenderer(outputType, authContext).map(_.toOutput(outputValue))
@@ -60,25 +60,25 @@ abstract class QueryExecutor { executor =>
 
   private def getRenderer(tpe: ru.Type, authContext: AuthContext): Try[Renderer[Any]] =
     if (SubType(tpe, ru.typeOf[IteratorOutput])) Success(Renderer.stream(value => value.asInstanceOf[IteratorOutput]))
-    else if (SubType(tpe, ru.typeOf[Output[_]])) Success(Renderer[Any](_.asInstanceOf[Output[Any]]))
+    else if (SubType(tpe, ru.typeOf[Output])) Success(Renderer[Any](_.asInstanceOf[Output]))
     else if (SubType(tpe, ru.typeOf[AnyVal])) Success(Renderer[Any] {
       case l: Long    => Output(l)
       case d: Double  => Output(d)
       case f: Float   => Output(f)
       case i: Int     => Output(i)
-      case c: Char    => Output(c, JsString(c.toString))
+      case c: Char    => Output(c.toString)
       case s: Short   => Output(s)
       case b: Byte    => Output(b)
-      case u: Unit    => Output(u, JsNull)
+      case _: Unit    => Output(JsNull)
       case b: Boolean => Output(b)
       case other      => Output(other.toString)
     })
-    else if (SubType(tpe, ru.typeOf[Number])) Success(Renderer(n => Output(n, JsNumber(BigDecimal(n.toString)))))
+    else if (SubType(tpe, ru.typeOf[Number])) Success(Renderer(n => Output(JsNumber(BigDecimal(n.toString)))))
     else if (SubType(tpe, ru.typeOf[Seq[_]])) {
       val subType = RichType.getTypeArgs(tpe, ru.typeOf[Seq[_]]).head
       getRenderer(subType, authContext).map { subRenderer =>
         Renderer[Any] { value =>
-          Output(value, JsArray(value.asInstanceOf[Seq[Any]].map(v => subRenderer.toJson(v))))
+          Output(JsArray(value.asInstanceOf[Seq[Any]].map(v => subRenderer.toJson(v))))
         }
       }
     } else if (SubType(tpe, ru.typeOf[Option[_]])) {
@@ -87,14 +87,14 @@ abstract class QueryExecutor { executor =>
         Renderer[Any] { value =>
           value
             .asInstanceOf[Option[Any]]
-            .fold[Output[_]](Output(None, JsNull))(v => subRenderer.toOutput(v))
+            .fold[Output](Output(JsNull))(v => subRenderer.toOutput(v))
         }
       }
     } else if (SubType(tpe, ru.typeOf[JsValue]))
       Success(Renderer[Any](value => Output(value.asInstanceOf[JsValue])))
     else
       allQueries
-        .find(q => q.checkFrom(tpe) && SubType(q.toType(tpe), ru.typeOf[Output[_]]) && q.paramType == ru.typeOf[Unit])
+        .find(q => q.checkFrom(tpe) && SubType(q.toType(tpe), ru.typeOf[Output]) && q.paramType == ru.typeOf[Unit])
         .fold[Try[Renderer[Any]]] {
           val traversalType = ru.typeOf[Traversal[_, _, _]]
           if (SubType(tpe, traversalType)) {
@@ -107,7 +107,7 @@ abstract class QueryExecutor { executor =>
           case q if SubType(q.toType(tpe), ru.typeOf[IteratorOutput]) =>
             Success(Renderer.stream(value => q.asInstanceOf[Query]((), tpe, value, authContext).asInstanceOf[IteratorOutput]))
           case q =>
-            Success(Renderer(value => q.asInstanceOf[Query]((), tpe, value, authContext).asInstanceOf[Output[Any]]))
+            Success(Renderer(value => q.asInstanceOf[Query]((), tpe, value, authContext).asInstanceOf[Output]))
         }
 
   private def getQuery(tpe: ru.Type, field: Field): Or[Query, Every[AttributeError]] = {

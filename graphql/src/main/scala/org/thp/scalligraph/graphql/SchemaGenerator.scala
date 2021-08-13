@@ -24,7 +24,7 @@ object SchemaGenerator {
     )
   )
 
-  val outputType: ru.Type = ru.typeOf[Output[_]]
+  val outputType: ru.Type = ru.typeOf[Output]
 
   case class FieldFilter[V](
       property: PublicProperty[Element, _, _],
@@ -180,7 +180,7 @@ object SchemaGenerator {
                           resolve = { ctx =>
                             val output = q
                               .asInstanceOf[Query]((), duplicate(ctx.value), ctx.ctx.auth) // TODO check if q requires param
-                              .asInstanceOf[Output[_]]
+                              .asInstanceOf[Output]
                               .toOutput
                             output.getClass.getMethod(s.name.toString).invoke(output)
                           }

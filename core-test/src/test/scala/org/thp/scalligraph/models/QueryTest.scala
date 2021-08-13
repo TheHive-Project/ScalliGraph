@@ -41,7 +41,7 @@ class QueryTest extends PlaySpecification {
               )
             )
           val result = queryExecutor.parser(input).flatMap { query =>
-            Or.from(queryExecutor.execute(query, graph, userSrv.getSystemAuthContext).map(_.toJson))
+            Or.from(queryExecutor.execute(query, graph, userSrv.getSystemAuthContext).map(_.content))
           }
           result must_=== Good(
             Json.arr(
@@ -65,7 +65,7 @@ class QueryTest extends PlaySpecification {
             )
           )
           val result = queryExecutor.parser(input).flatMap { query =>
-            Or.from(queryExecutor.execute(query, graph, userSrv.getSystemAuthContext).map(_.toJson))
+            Or.from(queryExecutor.execute(query, graph, userSrv.getSystemAuthContext).map(_.content))
           }
           result must_== Good(
             Json.obj(
@@ -89,7 +89,7 @@ class QueryTest extends PlaySpecification {
             )
           )
           val result = queryExecutor.parser(input).flatMap { query =>
-            Or.from(queryExecutor.execute(query, graph, userSrv.getSystemAuthContext).map(_.toJson))
+            Or.from(queryExecutor.execute(query, graph, userSrv.getSystemAuthContext).map(_.content))
           }
           result must_== Good(
             Json.obj(
