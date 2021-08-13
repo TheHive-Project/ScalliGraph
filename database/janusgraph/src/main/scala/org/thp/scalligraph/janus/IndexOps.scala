@@ -279,6 +279,7 @@ trait IndexOps {
           findFirstAvailableCompositeIndex(mgmt, baseIndexName)
         case IndexType.standard | IndexType.fulltext | IndexType.fulltextOnly =>
           findFirstAvailableMixedIndex(mgmt, model)
+        case IndexType.none => Left("")
       }
       Success {
         eitherIndex

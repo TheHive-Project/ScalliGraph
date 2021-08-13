@@ -296,7 +296,7 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps with MapMerge
   def getDuplicates[A](properties: Seq[String]): Seq[Seq[E with Entity]] =
     if (properties.isEmpty) Nil
     else {
-      val singleProperty = properties.lengthCompare(1) == 0
+      val singleProperty = properties.sizeIs == 1
       val getValues: Vertex => Any =
         if (singleProperty) (_: Vertex).value[Any](properties.head)
         else (v: Vertex) => properties.map(v.property[Any](_).orElse(noValue))
@@ -311,7 +311,7 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps with MapMerge
         map
           .values
           .collect {
-            case vertexIds if vertexIds.lengthCompare(1) > 0 => service.getByIds(vertexIds.toSeq: _*).toList
+            case vertexIds if vertexIds.sizeIs > 1 => service.getByIds(vertexIds.toSeq: _*).toList
           }
           .toSeq
       }
