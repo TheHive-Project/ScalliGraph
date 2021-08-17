@@ -301,17 +301,18 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps with MapMerge
         if (singleProperty) (_: Vertex).value[Any](properties.head)
         else (v: Vertex) => properties.map(v.property[Any](_).orElse(noValue))
       db.roTransaction { implicit graph =>
-        val map = mutable.Map.empty[Any, mutable.Buffer[EntityId]]
+        val map = mutable.Map.empty[Any, mutable.HashSet[EntityId]]
         service
           .startTraversal
           .setConverter[Vertex, IdentityConverter[Vertex]](Converter.identity)
           .foreach { v =>
-            map.getOrElseUpdate(getValues(v), mutable.Buffer.empty[EntityId]) += EntityId(v.id)
+            val hashSet = map.getOrElseUpdate(getValues(v), mutable.HashSet.empty[EntityId])
+            hashSet += EntityId(v.id)
           }
         map
           .values
           .collect {
-            case vertexIds if vertexIds.lengthCompare(1) > 0 => service.getByIds(vertexIds: _*).toList
+            case vertexIds if vertexIds.size > 1 => service.getByIds(vertexIds.toSeq: _*).toList
           }
           .toSeq
       }
@@ -419,7 +420,7 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps with MapMerge
     duplicates
       .foreach { entities =>
         db.tryTransaction { implicit graph =>
-          logger.info(s"Found duplicate entities:${entities.map(e => s"\n - $e").mkString}")
+          logger.info(s"Found duplicate entities:${entities.map(e => s"\n - ${e._id} $e").mkString}")
           resolve(entities)
         }
       }
