@@ -6,6 +6,7 @@ import org.apache.tinkerpop.gremlin.structure.Property;
 import java.io.Serializable;
 import java.util.Comparator;
 
+// From https://github.com/apache/tinkerpop/blob/3.5.1/gremlin-core/src/main/java/org/apache/tinkerpop/gremlin/process/traversal/step/util/ElementValueComparator.java
 public final class ElementValueComparatorAcceptNull<V> implements Comparator<Element>, Serializable {
 
     private final String propertyKey;

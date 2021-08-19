@@ -17,7 +17,7 @@ import org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration
 import org.janusgraph.graphdb.database.StandardJanusGraph
 import org.janusgraph.graphdb.database.management.ManagementSystem
 import org.janusgraph.graphdb.relations.RelationIdentifier
-import org.janusgraph.graphdb.tinkerpop.optimize.JanusGraphStepStrategy
+import org.janusgraph.graphdb.tinkerpop.optimize.strategy.JanusGraphStepStrategy
 import org.slf4j.MDC
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.janus.strategies._
@@ -556,36 +556,32 @@ class JanusDatabase(
     traversal.onRaw(_.hasLabel(label).has("_label", label))
 
   override def mapPredicate[T](predicate: P[T]): P[T] =
-    predicate.getBiPredicate match {
-      case TextPredicate.containsPredicate   => JanusText.textContains(predicate.getValue) // this doesn't use index.
+    (predicate.getBiPredicate match {
+      case TextPredicate.containsPredicate   => JanusText.textContains(predicate.getValue)
       case TextPredicate.startsWithPredicate => JanusText.textPrefix(predicate.getValue)
-      case TextPredicate.endsWithPredicate =>
-        JanusText.textRegex(s".*${predicate.getValue}").asInstanceOf[P[T]] // may not work if value contain control chars
-      case TextPredicate.regexPredicate => JanusText.textRegex(predicate.getValue)
-      case TextPredicate.fuzzyPredicate => JanusText.textFuzzy(predicate.getValue)
+      case TextPredicate.endsWithPredicate   => JanusText.textRegex(s".*${predicate.getValue}")
+      case TextPredicate.regexPredicate      => JanusText.textRegex(predicate.getValue)
+      case TextPredicate.fuzzyPredicate      => JanusText.textFuzzy(predicate.getValue)
 
       case FullTextPredicate.containsPredicate   => JanusText.textContains(predicate.getValue)
       case FullTextPredicate.startsWithPredicate => JanusText.textContainsPrefix(predicate.getValue)
-      case FullTextPredicate.endsWithPredicate =>
-        JanusText.textContainsRegex(s".*${predicate.getValue}").asInstanceOf[P[T]] // doesn't work if value contain control chars
-      case FullTextPredicate.regexPredicate => JanusText.textContainsRegex(predicate.getValue)
-      case FullTextPredicate.fuzzyPredicate => JanusText.textContainsFuzzy(predicate.getValue)
+      case FullTextPredicate.endsWithPredicate   => JanusText.textContainsRegex(s".*${predicate.getValue}")
+      case FullTextPredicate.regexPredicate      => JanusText.textContainsRegex(predicate.getValue)
+      case FullTextPredicate.fuzzyPredicate      => JanusText.textContainsFuzzy(predicate.getValue)
 
-//      case TextPredicate.notContainsPredicate   => JanusText.textContains(predicate.getValue) // this doesn't use index.
-//      case TextPredicate.notStartsWithPredicate => JanusText.textPrefix(predicate.getValue)
-//      case TextPredicate.notEndsWithPredicate =>
-//        JanusText.textRegex(s".*${predicate.getValue}").asInstanceOf[P[T]] // may not work if value contain control chars
-//      case TextPredicate.notRegexPredicate          => JanusText.textRegex(predicate.getValue)
-//      case TextPredicate.notFuzzyPredicate          => JanusText.textFuzzy(predicate.getValue)
-//
-//      case FullTextPredicate.notContainsPredicate   => JanusText.textContains(predicate.getValue)
-//      case FullTextPredicate.notStartsWithPredicate => JanusText.textContainsPrefix(predicate.getValue)
-//      case FullTextPredicate.notEndsWithPredicate =>
-//        JanusText.textContainsRegex(s".*${predicate.getValue}").asInstanceOf[P[T]] // doesn't work if value contain control chars
-//      case FullTextPredicate.notRegexPredicate => JanusText.textContainsRegex(predicate.getValue)
-//      case FullTextPredicate.notFuzzyPredicate => JanusText.textContainsFuzzy(predicate.getValue)
-      case _ => predicate
-    }
+      case TextPredicate.notContainsPredicate   => JanusText.textNotContains(predicate.getValue)
+      case TextPredicate.notStartsWithPredicate => JanusText.textNotPrefix(predicate.getValue)
+      case TextPredicate.notEndsWithPredicate   => JanusText.textNotRegex(s".*${predicate.getValue}")
+      case TextPredicate.notRegexPredicate      => JanusText.textNotRegex(predicate.getValue)
+      case TextPredicate.notFuzzyPredicate      => JanusText.textNotFuzzy(predicate.getValue)
+
+      case FullTextPredicate.notContainsPredicate   => JanusText.textNotContains(predicate.getValue)
+      case FullTextPredicate.notStartsWithPredicate => JanusText.textNotContainsPrefix(predicate.getValue)
+      case FullTextPredicate.notEndsWithPredicate   => JanusText.textNotContainsRegex(s".*${predicate.getValue}")
+      case FullTextPredicate.notRegexPredicate      => JanusText.textNotContainsRegex(predicate.getValue)
+      case FullTextPredicate.notFuzzyPredicate      => JanusText.textNotContainsFuzzy(predicate.getValue)
+      case _                                        => predicate
+    }).asInstanceOf[P[T]]
 
   override def V[D <: Product](ids: EntityId*)(implicit model: Model.Vertex[D], graph: Graph): Traversal.V[D] =
     new Traversal[D with Entity, Vertex, Converter[D with Entity, Vertex]](
@@ -633,7 +629,8 @@ class JanusDatabase(
       .traversal()
       .asInstanceOf[TraversalSource]
       .withoutStrategies(classOf[JanusGraphStepStrategy])
-      .withStrategies(IndexOptimizerStrategy.instance(), JanusGraphAcceptNullStrategy.instance(), OrderAcceptNullStrategy.instance())
+//      .withStrategies(IndexOptimizerStrategy.instance(), JanusGraphAcceptNullStrategy.instance(), OrderAcceptNullStrategy.instance())
+      .withStrategies(JanusGraphAcceptNullStrategy.instance())
       .asInstanceOf[GraphTraversalSource]
 
   override def toId(id: Any): JLong = id.toString.toLong

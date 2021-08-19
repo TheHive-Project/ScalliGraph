@@ -37,7 +37,7 @@ class QueryTest extends PlaySpecification {
             Field(
               Json.arr(
                 Json.obj("_name" -> "allPeople"),
-                Json.obj("_name" -> "sort", "_fields" -> Json.arr(Json.obj("age" -> "incr")))
+                Json.obj("_name" -> "sort", "_fields" -> Json.arr(Json.obj("age" -> "asc")))
               )
             )
           val result = queryExecutor.parser(input).flatMap { query =>

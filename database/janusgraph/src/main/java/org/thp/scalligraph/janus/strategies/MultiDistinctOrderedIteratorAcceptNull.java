@@ -1,29 +1,40 @@
 package org.thp.scalligraph.janus.strategies;
 
+import org.apache.tinkerpop.gremlin.process.traversal.step.util.ElementValueComparator;
+import org.apache.tinkerpop.gremlin.structure.Element;
 import org.apache.tinkerpop.gremlin.structure.util.CloseableIterator;
 import org.apache.tinkerpop.gremlin.util.function.MultiComparator;
-import org.janusgraph.graphdb.tinkerpop.optimize.HasStepFolder.OrderEntry;
+import org.janusgraph.graphdb.tinkerpop.optimize.step.HasStepFolder.OrderEntry;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 
-// from: https://raw.githubusercontent.com/JanusGraph/janusgraph/v0.5.3/janusgraph-core/src/main/java/org/janusgraph/graphdb/util/MultiDistinctOrderedIterator.java
-public class MultiDistinctOrderedIteratorAcceptNull<E> implements CloseableIterator<E> {
+// From https://github.com/JanusGraph/janusgraph/blob/v0.6.0/janusgraph-core/src/main/java/org/janusgraph/graphdb/util/MultiDistinctOrderedIterator.java
+// s/ElementValueComparator/ElementValueComparatorAcceptNull/g
+public class MultiDistinctOrderedIteratorAcceptNull<E extends Element> implements CloseableIterator<E> {
 
     private final Map<Integer, Iterator<E>> iterators = new LinkedHashMap<>();
     private final Map<Integer, E> values = new LinkedHashMap<>();
     private final TreeMap<E, Integer> currentElements;
-    private final Set<E> allElements = new HashSet<>();
+    private final Set<Object> allElements = new HashSet<>();
     private final Integer limit;
     private long count = 0;
 
     public MultiDistinctOrderedIteratorAcceptNull(final Integer lowLimit, final Integer highLimit, final List<Iterator<E>> iterators, final List<OrderEntry> orders) {
         this.limit = highLimit;
-                final List<Comparator<E>> comp = new ArrayList<>();
+        final List<Comparator<E>> comp = new ArrayList<>();
         orders.forEach(o -> comp.add(new ElementValueComparatorAcceptNull(o.key, o.order)));
         Comparator<E> comparator = new MultiComparator<>(comp);
         for (int i = 0; i < iterators.size(); i++) {
             this.iterators.put(i, iterators.get(i));
-         }
+        }
         currentElements = new TreeMap<>(comparator);
         long i = 0;
         while (i < lowLimit && this.hasNext()) {
@@ -42,14 +53,14 @@ public class MultiDistinctOrderedIteratorAcceptNull<E> implements CloseableItera
                 E element = null;
                 do {
                     element = iterators.get(i).next();
-                    if (allElements.contains(element)) {
+                    if (allElements.contains(element.id())) {
                         element = null;
                     }
                 } while (element == null && iterators.get(i).hasNext());
                 if (element != null) {
                     values.put(i, element);
                     currentElements.put(element, i);
-                    allElements.add(element);
+                    allElements.add(element.id());
                 }
             }
         }
@@ -67,4 +78,3 @@ public class MultiDistinctOrderedIteratorAcceptNull<E> implements CloseableItera
         iterators.values().forEach(CloseableIterator::closeIterator);
     }
 }
-

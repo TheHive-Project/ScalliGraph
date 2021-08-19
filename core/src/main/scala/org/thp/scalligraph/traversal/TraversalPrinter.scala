@@ -1,20 +1,12 @@
 package org.thp.scalligraph.traversal
 
-import org.apache.tinkerpop.gremlin.process.traversal.lambda.{ColumnTraversal, ElementValueTraversal, IdentityTraversal, TokenTraversal}
+import org.apache.tinkerpop.gremlin.process.traversal.lambda.{ColumnTraversal, IdentityTraversal, TokenTraversal}
 import org.apache.tinkerpop.gremlin.process.traversal.step.TraversalParent
 import org.apache.tinkerpop.gremlin.process.traversal.step.branch.{ChooseStep, OptionalStep, UnionStep}
 import org.apache.tinkerpop.gremlin.process.traversal.step.filter.WhereTraversalStep.{WhereEndStep, WhereStartStep}
 import org.apache.tinkerpop.gremlin.process.traversal.step.filter._
 import org.apache.tinkerpop.gremlin.process.traversal.step.map._
-import org.apache.tinkerpop.gremlin.process.traversal.step.sideEffect.{
-  AddPropertyStep,
-  AggregateStep,
-  IdentityStep,
-  InjectStep,
-  StartStep,
-  StoreStep,
-  TraversalSideEffectStep
-}
+import org.apache.tinkerpop.gremlin.process.traversal.step.sideEffect.{AddPropertyStep, IdentityStep, InjectStep, StartStep, TraversalSideEffectStep}
 import org.apache.tinkerpop.gremlin.process.traversal.step.util.ComputerAwareStep.EndStep
 import org.apache.tinkerpop.gremlin.process.traversal.{P, Pop, Step, Traversal => TinkerTraversal}
 import org.apache.tinkerpop.gremlin.structure.PropertyType
@@ -39,10 +31,9 @@ trait TraversalPrinter {
 
     def printTraversal[A, B](traversal: TinkerTraversal.Admin[A, B]): String =
       traversal match {
-        case e: ElementValueTraversal[_] => s"""values("${e.getPropertyKey}")"""
-        case e: TokenTraversal[_, _]     => s"${e.getToken}"
-        case _: IdentityTraversal[_]     => s"identity()"
-        case e: ColumnTraversal          => s"${e.getColumn}"
+        case e: TokenTraversal[_, _] => s"${e.getToken}"
+        case _: IdentityTraversal[_] => s"identity()"
+        case e: ColumnTraversal      => s"${e.getColumn}"
         case t =>
           t.getSteps
             .asScala
@@ -126,10 +117,6 @@ trait TraversalPrinter {
               if (s.getPop == Pop.last) ""
               else s"${s.getPop}, "
             s"select($pop${s.getScopeKeys.asScala.map(k => s""""$k"""").mkString(", ")})${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"
-          case s: StoreStep[_] =>
-            s"""aggregate(local, "${s.getSideEffectKey}")${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"""
-          case s: AggregateStep[_] =>
-            s"""aggregate(global, "${s.getSideEffectKey}")${s.getLocalChildren.asScala.map(printBy(_, None)).mkString}"""
           case s: OrderGlobalStep[_, _] => s"order()${s.getComparators.asScala.map(p => printBy(p.getValue0, Some(p.getValue1))).mkString}"
           case s: PropertiesStep[_] =>
             s.getReturnType match {
@@ -177,12 +164,11 @@ trait TraversalPrinter {
     def printBy[A, B, C](traversal: TinkerTraversal.Admin[A, B], comparator: Option[Comparator[C]]): String = {
       val cmpStr = comparator.fold("")(c => s", $c")
       traversal match {
-        case e: ElementValueTraversal[_] => s""".by("${e.getPropertyKey}"$cmpStr)"""
-        case e: TokenTraversal[_, _]     => s".by(${e.getToken}$cmpStr)"
-        case _: IdentityTraversal[_]     => s".by(${comparator.getOrElse("")})"
-        case e: ColumnTraversal          => s".by(${e.getColumn}$cmpStr)"
-        case null                        => "by()"
-        case t                           => s".by(__.${printTraversal(t)}$cmpStr)"
+        case e: TokenTraversal[_, _] => s".by(${e.getToken}$cmpStr)"
+        case _: IdentityTraversal[_] => s".by(${comparator.getOrElse("")})"
+        case e: ColumnTraversal      => s".by(${e.getColumn}$cmpStr)"
+        case null                    => "by()"
+        case t                       => s".by(__.${printTraversal(t)}$cmpStr)"
       }
     }
 

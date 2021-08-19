@@ -1,6 +1,6 @@
 package org.thp.scalligraph.traversal
 
-import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource
+import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, GraphTraversalSource}
 import org.apache.tinkerpop.gremlin.structure.{Edge, Transaction, Vertex, Graph => TinkerGraph}
 import org.slf4j.MDC
 import org.thp.scalligraph.EntityId
@@ -35,7 +35,7 @@ trait Graph {
       travFun: (Traversal[Vertex, Vertex, IdentityConverter[Vertex]] => Traversal[D, G, C])*
   ): Traversal[D, G, C] = {
     val traversals: Seq[Traversal[D, G, C]] = travFun.map { t =>
-      val from = new Traversal[Vertex, Vertex, IdentityConverter[Vertex]](this, traversal().V(), Converter.identity[Vertex])
+      val from = new Traversal[Vertex, Vertex, IdentityConverter[Vertex]](this, __.start(), Converter.identity[Vertex])
       t(from)
     }
     new Traversal[D, G, C](this, traversal().inject(1).union(traversals.map(_.raw): _*), traversals.head.converter)

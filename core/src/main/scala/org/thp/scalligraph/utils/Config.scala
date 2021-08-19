@@ -1,10 +1,13 @@
 package org.thp.scalligraph.utils
 
-import org.apache.commons.configuration.{Configuration => ApacheConfig}
+import org.apache.commons.configuration2.interpol.{ConfigurationInterpolator, Lookup}
+import org.apache.commons.configuration2.sync.{LockMode, Synchronizer}
+import org.apache.commons.configuration2.{ConfigurationDecoder, ImmutableConfiguration, Configuration => ApacheConfig}
 import play.api.{Configuration => PlayConfig}
 
 import java.lang.{Boolean => JBoolean, Byte => JByte, Double => JDouble, Float => JFloat, Long => JLong, Short => JShort}
 import java.math.{BigInteger, BigDecimal => JBigDecimal}
+import java.util
 import java.util.{Properties, Iterator => JIterator, List => JList}
 import scala.jdk.CollectionConverters._
 
@@ -54,4 +57,43 @@ class Config(config: PlayConfig) extends ApacheConfig {
       case v           => Seq(v).asJava
     }
   override def getList(key: String, defaultValue: JList[_]): JList[AnyRef] = ???
+
+  override def getInterpolator: ConfigurationInterpolator = ???
+
+  override def setInterpolator(configurationInterpolator: ConfigurationInterpolator): Unit = ???
+
+  override def installInterpolator(map: util.Map[String, _ <: Lookup], collection: util.Collection[_ <: Lookup]): Unit = ???
+
+  override def size(): Int = ???
+
+  override def getEncodedString(s: String, configurationDecoder: ConfigurationDecoder): String = ???
+
+  override def getEncodedString(s: String): String = ???
+
+  override def get[T](aClass: Class[T], s: String): T = ???
+
+  override def get[T](aClass: Class[T], s: String, t: T): T = ???
+
+  override def getArray(aClass: Class[_], s: String): AnyRef = ???
+
+  override def getArray(aClass: Class[_], s: String, o: Any): AnyRef = ???
+
+  override def getList[T](aClass: Class[T], s: String): JList[T] = ???
+
+  override def getList[T](aClass: Class[T], s: String, list: JList[T]): JList[T] = ???
+
+  override def getCollection[T](aClass: Class[T], s: String, collection: util.Collection[T]): util.Collection[T] = ???
+
+  override def getCollection[T](aClass: Class[T], s: String, collection: util.Collection[T], collection1: util.Collection[T]): util.Collection[T] =
+    ???
+
+  override def immutableSubset(s: String): ImmutableConfiguration = ???
+
+  override def getSynchronizer: Synchronizer = ???
+
+  override def setSynchronizer(synchronizer: Synchronizer): Unit = ???
+
+  override def lock(lockMode: LockMode): Unit = ???
+
+  override def unlock(lockMode: LockMode): Unit = ???
 }
