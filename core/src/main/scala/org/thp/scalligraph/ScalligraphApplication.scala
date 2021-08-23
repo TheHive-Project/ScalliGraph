@@ -175,6 +175,7 @@ class ScalligraphApplicationImpl(val context: Context)
 
   val routers: LazyMutableSeq[Router] = LazyMutableSeq[Router]
   override lazy val router: Router = initCheck {
+    val prefix = httpConfiguration.context
     routers()
       .reduceOption(_ orElse _)
       .getOrElse(Router.empty)
@@ -183,6 +184,7 @@ class ScalligraphApplicationImpl(val context: Context)
           case _ => authAction
         }
       }
+      .withPrefix(prefix)
   }
 
   lazy val defaultAction: ActionFunction[Request, AuthenticatedRequest] = new ActionFunction[Request, AuthenticatedRequest] {
