@@ -31,8 +31,7 @@ object ElementSelector {
     if (elements.isEmpty) None
     else {
       val selected = select(elements)
-      val (a, b)   = elements.span(_ != selected)
-      Some((selected, a ++ b.tail))
+      Some((selected, elements.filterNot(_.id() == selected.id())))
     }
   }
   def firstCreatedElement[ELEMENT <: Element]: ElementSelector[ELEMENT] = generic(_.minBy(e => UMapping.date.getProperty(e, "_createdAt")))
@@ -47,8 +46,7 @@ object EntitySelector {
       if (entities.isEmpty) None
       else {
         val selected = select(entities)
-        val (a, b)   = entities.span(_ != selected)
-        Some((selected, a ++ b.tail))
+        Some((selected, entities.filterNot(_._id == selected._id)))
       }
   def lastCreatedEntity[E]: EntitySelector[E]  = generic(_.maxBy(_._createdAt))
   def firstCreatedEntity[E]: EntitySelector[E] = generic(_.minBy(_._createdAt))
@@ -301,17 +299,19 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps with MapMerge
         if (singleProperty) (_: Vertex).value[Any](properties.head)
         else (v: Vertex) => properties.map(v.property[Any](_).orElse(noValue))
       db.roTransaction { implicit graph =>
-        val map = mutable.Map.empty[Any, mutable.Buffer[EntityId]]
+        val map = mutable.Map.empty[Any, mutable.Builder[EntityId, Set[EntityId]]]
         service
           .startTraversal
           .setConverter[Vertex, IdentityConverter[Vertex]](Converter.identity)
           .foreach { v =>
-            map.getOrElseUpdate(getValues(v), mutable.Buffer.empty[EntityId]) += EntityId(v.id)
+            map.getOrElseUpdate(getValues(v), Set.newBuilder[EntityId]) += EntityId(v.id)
           }
         map
           .values
+          .view
+          .map(_.result())
           .collect {
-            case vertexIds if vertexIds.lengthCompare(1) > 0 => service.getByIds(vertexIds: _*).toList
+            case vertexIds if vertexIds.size > 1 => service.getByIds(vertexIds.toSeq: _*).toList
           }
           .toSeq
       }
