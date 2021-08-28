@@ -171,7 +171,7 @@ trait TraversalOps extends TraversalPrinter {
 
     def limit(max: Long): Traversal[D, G, C] = traversal.onRaw(_.limit(max))
 
-    def empty: Traversal[D, G, Converter[D, G]] = traversal.limit(0)
+    def empty: Traversal[D, G, C] = traversal.limit(0)
 
     def range(low: Long, high: Long): Traversal[D, G, C] = traversal.onRaw(_.range(low, high))
 

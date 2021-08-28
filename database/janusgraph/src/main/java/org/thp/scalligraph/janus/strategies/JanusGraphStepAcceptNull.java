@@ -4,14 +4,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
 import org.apache.tinkerpop.gremlin.process.traversal.Order;
-import org.apache.tinkerpop.gremlin.process.traversal.Step;
-import org.apache.tinkerpop.gremlin.process.traversal.Traversal;
-import org.apache.tinkerpop.gremlin.process.traversal.step.HasContainerHolder;
-import org.apache.tinkerpop.gremlin.process.traversal.step.Profiling;
-import org.apache.tinkerpop.gremlin.process.traversal.step.filter.OrStep;
 import org.apache.tinkerpop.gremlin.process.traversal.step.map.GraphStep;
-import org.apache.tinkerpop.gremlin.process.traversal.step.map.NoOpBarrierStep;
-import org.apache.tinkerpop.gremlin.process.traversal.step.sideEffect.IdentityStep;
 import org.apache.tinkerpop.gremlin.process.traversal.step.util.HasContainer;
 import org.apache.tinkerpop.gremlin.process.traversal.util.MutableMetrics;
 import org.apache.tinkerpop.gremlin.structure.Element;
@@ -30,12 +23,12 @@ import org.janusgraph.graphdb.tinkerpop.optimize.JanusGraphStep;
 import org.janusgraph.graphdb.tinkerpop.optimize.JanusGraphTraversalUtil;
 import org.janusgraph.graphdb.tinkerpop.optimize.QueryInfo;
 import org.janusgraph.graphdb.tinkerpop.profile.TP3ProfileWrapper;
+import org.janusgraph.graphdb.util.MultiDistinctUnorderedIterator;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 // from https://raw.githubusercontent.com/JanusGraph/janusgraph/v0.5.3/janusgraph-core/src/main/java/org/janusgraph/graphdb/tinkerpop/optimize/JanusGraphStep.java
-public class JanusGraphStepAcceptNull<S, E extends Element> extends GraphStep<S, E> implements HasStepFolder<S, E>, Profiling, HasContainerHolder {
+public class JanusGraphStepAcceptNull<S, E extends Element> extends JanusGraphStep<S, E>  {
 
     private final List<HasContainer> hasContainers = new ArrayList<>();
     private final Map<List<HasContainer>, QueryInfo> hasLocalContainers = new LinkedHashMap<>();
@@ -46,14 +39,14 @@ public class JanusGraphStepAcceptNull<S, E extends Element> extends GraphStep<S,
 
 
     public JanusGraphStepAcceptNull(final GraphStep<S, E> originalStep) {
-        super(originalStep.getTraversal(), originalStep.getReturnClass(), originalStep.isStartStep(), originalStep.getIds());
-        originalStep.getLabels().forEach(this::addLabel);
+        super(originalStep);
         this.setIteratorSupplier(() -> {
             if (this.ids == null) {
                 return Collections.emptyIterator();
-            } else if (this.ids.length > 0) {
-                final Graph graph = (Graph) traversal.asAdmin().getGraph().get();
-                return iteratorList((Iterator) graph.vertices(this.ids));
+            }
+            else if (this.ids.length > 0) {
+                final Graph graph = (Graph)traversal.asAdmin().getGraph().get();
+                return iteratorList((Iterator)graph.vertices(this.ids));
             }
             if (hasLocalContainers.isEmpty()) {
                 hasLocalContainers.put(new ArrayList<>(), new QueryInfo(new ArrayList<>(), 0, BaseQuery.NO_LIMIT));
@@ -70,18 +63,19 @@ public class JanusGraphStepAcceptNull<S, E extends Element> extends GraphStep<S,
 
             final GraphCentricQueryBuilder builder = (GraphCentricQueryBuilder) tx.query();
             final List<Iterator<E>> responses = new ArrayList<>();
-            queries.entries().forEach(q -> executeGraphCentricQuery(builder, responses, q));
+            queries.entries().forEach(q ->  executeGraphCentricQuery(builder, responses, q));
 
-            if (orders.isEmpty() || responses.size() == 1)
-                return new LimitedIterator<E>(lowLimit, highLimit, responses.get(0));
-            else
+            if (orders.isEmpty()) {
+                return new MultiDistinctUnorderedIterator<E>(lowLimit, highLimit, responses);
+            } else {
                 return new MultiDistinctOrderedIteratorAcceptNull<E>(lowLimit, highLimit, responses, orders);
+            }
         });
     }
 
     private GraphCentricQuery buildGlobalGraphCentricQuery(final JanusGraphTransaction tx) {
         //If a query have a local offset or have a local order without a global order and if a query have a limit lower than the global different from other query we can not build globalquery
-        final Iterator<QueryInfo> itQueryInfo = hasLocalContainers.values().iterator();
+        final Iterator<QueryInfo> itQueryInfo =  hasLocalContainers.values().iterator();
         QueryInfo queryInfo = itQueryInfo.next();
         if (queryInfo.getLowLimit() > 0 || orders.isEmpty() && !queryInfo.getOrders().isEmpty()) {
             return null;
@@ -94,7 +88,7 @@ public class JanusGraphStepAcceptNull<S, E extends Element> extends GraphStep<S,
             }
         }
         final JanusGraphQuery query = tx.query();
-        for (final List<HasContainer> localContainers : hasLocalContainers.keySet()) {
+        for(final List<HasContainer> localContainers : hasLocalContainers.keySet()) {
             final JanusGraphQuery localQuery = tx.query();
             addConstraint(localQuery, localContainers);
             query.or(localQuery);
@@ -104,7 +98,7 @@ public class JanusGraphStepAcceptNull<S, E extends Element> extends GraphStep<S,
         Preconditions.checkArgument(query instanceof GraphCentricQueryBuilder);
         final GraphCentricQueryBuilder centricQueryBuilder = ((GraphCentricQueryBuilder) query);
         centricQueryBuilder.profiler(queryProfiler);
-        final GraphCentricQuery graphCentricQuery = centricQueryBuilder.constructQuery(Vertex.class.isAssignableFrom(this.returnClass) ? ElementCategory.VERTEX : ElementCategory.EDGE);
+        final GraphCentricQuery graphCentricQuery = centricQueryBuilder.constructQuery(Vertex.class.isAssignableFrom(this.returnClass) ? ElementCategory.VERTEX: ElementCategory.EDGE);
         return graphCentricQuery;
     }
 
@@ -123,18 +117,17 @@ public class JanusGraphStepAcceptNull<S, E extends Element> extends GraphStep<S,
         addConstraint(query, containers.getKey());
         final List<OrderEntry> realOrders = orders.isEmpty() ? containers.getValue().getOrders() : orders;
         for (final OrderEntry order : realOrders) query.orderBy(order.key, order.order);
-        if (highLimit != BaseQuery.NO_LIMIT || containers.getValue().getHighLimit() != BaseQuery.NO_LIMIT)
-            query.limit(Math.min(containers.getValue().getHighLimit(), highLimit));
+        if (highLimit != BaseQuery.NO_LIMIT || containers.getValue().getHighLimit() != BaseQuery.NO_LIMIT) query.limit(Math.min(containers.getValue().getHighLimit(), highLimit));
         Preconditions.checkArgument(query instanceof GraphCentricQueryBuilder);
         final GraphCentricQueryBuilder centricQueryBuilder = ((GraphCentricQueryBuilder) query);
         centricQueryBuilder.profiler(queryProfiler);
-        final GraphCentricQuery graphCentricQuery = centricQueryBuilder.constructQuery(Vertex.class.isAssignableFrom(this.returnClass) ? ElementCategory.VERTEX : ElementCategory.EDGE);
+        final GraphCentricQuery graphCentricQuery = centricQueryBuilder.constructQuery(Vertex.class.isAssignableFrom(this.returnClass) ? ElementCategory.VERTEX: ElementCategory.EDGE);
         return graphCentricQuery;
     }
 
     private void executeGraphCentricQuery(final GraphCentricQueryBuilder builder, final List<Iterator<E>> responses,
                                           final Map.Entry<Integer, GraphCentricQuery> query) {
-        final Class<? extends JanusGraphElement> graphClass = Vertex.class.isAssignableFrom(this.returnClass) ? JanusGraphVertex.class : JanusGraphEdge.class;
+        final Class<? extends JanusGraphElement> graphClass = Vertex.class.isAssignableFrom(this.returnClass) ? JanusGraphVertex.class: JanusGraphEdge.class;
         final Iterator<E> response = (Iterator<E>) builder.iterables(query.getValue(), graphClass).iterator();
         long i = 0;
         while (i < query.getKey() && response.hasNext()) {
@@ -146,13 +139,13 @@ public class JanusGraphStepAcceptNull<S, E extends Element> extends GraphStep<S,
 
     @Override
     public String toString() {
-        if (hasLocalContainers.isEmpty() && hasContainers.isEmpty()) {
+        if (hasLocalContainers.isEmpty() && hasContainers.isEmpty()){
             return super.toString();
         }
         if (hasLocalContainers.isEmpty()) {
             return StringFactory.stepString(this, Arrays.toString(this.ids), hasContainers);
         }
-        if (hasLocalContainers.size() == 1) {
+        if (hasLocalContainers.size() == 1){
             final List<HasContainer> containers = new ArrayList<>(hasContainers);
             containers.addAll(hasLocalContainers.keySet().iterator().next());
             return StringFactory.stepString(this, Arrays.toString(this.ids), containers);
@@ -164,7 +157,7 @@ public class JanusGraphStepAcceptNull<S, E extends Element> extends GraphStep<S,
         sb.append("Or(");
         final Iterator<List<HasContainer>> itContainers = this.hasLocalContainers.keySet().iterator();
         sb.append(StringFactory.stepString(this, Arrays.toString(this.ids), itContainers.next()));
-        while (itContainers.hasNext()) {
+        while(itContainers.hasNext()){
             sb.append(",").append(StringFactory.stepString(this, Arrays.toString(this.ids), itContainers.next()));
         }
         sb.append(")");
