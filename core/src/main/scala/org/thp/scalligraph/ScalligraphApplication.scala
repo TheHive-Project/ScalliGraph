@@ -99,7 +99,9 @@ class ScalligraphApplicationLoader extends ApplicationLoader {
     }
     val app = new ScalligraphApplicationImpl(context)
     try {
-      app.init()
+      app.initializeLogger()
+      app.loadModules()
+      app.initModules()
       app.router
       app.application
     } catch {
@@ -251,16 +253,14 @@ class ScalligraphApplicationImpl(val context: Context)
     }
   }
 
-  def init(): Unit = {
-    initializeLogger()
-
+  def loadModules(): Unit =
     configuration
       .get[Seq[String]]("scalligraph.modules")
       .distinct
       .foreach(loadModule)
+
+  def initModules(): Unit =
     loadedModules.foreach(_.init())
-    ()
-  }
 
   override lazy val configActor: ActorRef @@ ConfigTag = wireActorSingleton(actorSystem, wireProps[ConfigActor], "config-actor").taggedWith[ConfigTag]
 
