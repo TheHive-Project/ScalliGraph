@@ -557,7 +557,7 @@ class JanusDatabase(
 
   override def mapPredicate[T](predicate: P[T]): P[T] =
     predicate.getBiPredicate match {
-      case TextPredicate.containsPredicate   => JanusText.textContains(predicate.getValue) // this doesn't use index.
+      case TextPredicate.containsPredicate   => P.eq(predicate.getValue)
       case TextPredicate.startsWithPredicate => JanusText.textPrefix(predicate.getValue)
       case TextPredicate.endsWithPredicate =>
         JanusText.textRegex(s".*${predicate.getValue}").asInstanceOf[P[T]] // may not work if value contain control chars
