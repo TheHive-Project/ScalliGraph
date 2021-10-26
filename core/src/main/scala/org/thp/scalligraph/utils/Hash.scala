@@ -17,8 +17,11 @@ case class Hasher(algorithms: String*) {
 
   val bufferSize = 4096
 
-  def fromPath(path: Path): Seq[Hash] =
-    fromInputStream(Files.newInputStream(path))
+  def fromPath(path: Path): Seq[Hash] = {
+    val is = Files.newInputStream(path)
+    try fromInputStream(is)
+    finally is.close()
+  }
 
   def fromInputStream(is: InputStream): Seq[Hash] = {
     val mds = algorithms.map(algo => MessageDigest.getInstance(algo))
@@ -76,21 +79,23 @@ class MultiHash(algorithms: String)(implicit mat: Materializer, ec: ExecutionCon
 case class Hash(data: Array[Byte]) {
   override def toString: String = data.map(b => f"$b%02x").mkString
 
-  override def equals(obj: scala.Any): Boolean = obj match {
-    case Hash(d) => d.sameElements(data)
-    case _       => false
-  }
+  override def equals(obj: scala.Any): Boolean =
+    obj match {
+      case Hash(d) => d.sameElements(data)
+      case _       => false
+    }
 }
 
 object Hash {
 
-  def apply(s: String): Hash = Hash {
-    s.grouped(2)
-      .map { cc =>
-        (Character.digit(cc(0), 16) << 4 | Character.digit(cc(1), 16)).toByte
-      }
-      .toArray
-  }
+  def apply(s: String): Hash =
+    Hash {
+      s.grouped(2)
+        .map { cc =>
+          (Character.digit(cc(0), 16) << 4 | Character.digit(cc(1), 16)).toByte
+        }
+        .toArray
+    }
 
   val hashReads: Reads[Hash]            = Reads(json => json.validate[String].map(h => Hash(h)))
   val hashWrites: Writes[Hash]          = Writes[Hash](h => JsString(h.toString()))
