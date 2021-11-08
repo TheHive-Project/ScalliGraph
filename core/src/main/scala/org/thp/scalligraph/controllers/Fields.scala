@@ -76,7 +76,7 @@ object Field {
         }
         files.foldLeft(FObject(dataFields)) {
           case (obj, MultipartFormData.FilePart(key, filename, contentType, file, _, _)) =>
-            obj.set(FPath(key), FFile(filename.split("[/\\\\]").last, file, contentType.getOrElse("application/octet-stream")))
+            obj.set(FPath(key), FFile(filename, file, contentType.getOrElse("application/octet-stream")))
         }
       case AnyContentAsRaw(raw) =>
         if (raw.size > 0)
