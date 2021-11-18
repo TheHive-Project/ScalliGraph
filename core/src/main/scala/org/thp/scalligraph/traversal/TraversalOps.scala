@@ -1,9 +1,8 @@
 package org.thp.scalligraph.traversal
 
-import java.lang.{Double => JDouble, Long => JLong}
-import java.util.{Date, NoSuchElementException, UUID, Collection => JCollection, List => JList, Map => JMap}
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.{__, GraphTraversal}
 import org.apache.tinkerpop.gremlin.process.traversal.step.map.{OrderGlobalStep, OrderLocalStep}
+import org.apache.tinkerpop.gremlin.process.traversal.step.util.WithOptions
 import org.apache.tinkerpop.gremlin.process.traversal.{P, Scope}
 import org.apache.tinkerpop.gremlin.structure._
 import org.thp.scalligraph.`macro`.TraversalMacro
@@ -17,8 +16,10 @@ import shapeless.ops.hlist.{Mapper, RightFolder, ToTraversable, Tupler}
 import shapeless.syntax.std.tuple._
 import shapeless.{Generic, HList, HNil}
 
-import scala.collection.{AbstractIterator, GenTraversableOnce}
+import java.lang.{Double => JDouble, Long => JLong}
+import java.util.{Date, NoSuchElementException, UUID, Collection => JCollection, List => JList, Map => JMap}
 import scala.collection.JavaConverters._
+import scala.collection.{AbstractIterator, GenTraversableOnce}
 import scala.language.experimental.macros
 import scala.reflect.runtime.{universe => ru}
 import scala.util.{Failure, Success, Try}
@@ -483,6 +484,41 @@ object TraversalOps extends TraversalPrinter {
     def V[E](ids: String*): Traversal[Vertex, Vertex, IdentityConverter[Vertex]] =
       traversal.onRawMap[Vertex, Vertex, IdentityConverter[Vertex]](_.V(ids: _*))(Converter.identity)
 
+    def entityMap(implicit
+        ev: G <:< Vertex
+    ): Traversal[Map[String, Seq[Any]] with Product with Entity, JMap[AnyRef, Any], Converter[
+      Map[String, Seq[Any]] with Product with Entity,
+      JMap[AnyRef, Any]
+    ]] =
+      traversal.onRawMap[Map[String, Seq[Any]] with Product with Entity, JMap[AnyRef, Any], Converter[
+        Map[String, Seq[Any]] with Product with Entity,
+        JMap[AnyRef, Any]
+      ]](_.valueMap[Any]().`with`(WithOptions.tokens)) { m =>
+        new Map[String, Seq[Any]] with Product with Entity {
+          override def productElement(n: Int): Any = throw new NoSuchElementException(s"Product0.productElement($n)")
+
+          override def productArity: Int = 0
+
+          override val _id: EntityId              = EntityId(m.get(T.id).asInstanceOf[AnyRef])
+          override val _label: String             = m.get(T.label).asInstanceOf[String]
+          override val _createdBy: String         = m.get("_createdBy").asInstanceOf[JList[String]].get(0)
+          override val _updatedBy: Option[String] = Try(m.get("_updatedBy").asInstanceOf[JList[String]].get(0)).toOption
+          override val _createdAt: Date           = m.get("_createdAt").asInstanceOf[JList[Date]].get(0)
+          override val _updatedAt: Option[Date]   = Try(m.get("_createdAt").asInstanceOf[JList[Date]].get(0)).toOption
+
+          private lazy val scalaMap: Map[String, Seq[Any]] = m.asScala.collect { case (k, v: JList[_]) => k.toString -> v.asScala }.toMap
+          override def canEqual(that: Any): Boolean =
+            that match {
+              case entity: Entity => entity._id == _id
+              case _              => false
+            }
+
+          override def +[V1 >: Seq[Any]](kv: (String, V1)): Map[String, V1] = scalaMap + kv
+          override def iterator: Iterator[(String, Seq[Any])]               = scalaMap.toIterator
+          override def -(key: String): Map[String, Seq[Any]]                = scalaMap - key
+          override def get(key: String): Option[Seq[Any]]                   = Try(m.get(key).asInstanceOf[JList[Any]].asScala).toOption
+        }
+      }
     def entity(implicit ev: G <:< Element): Traversal[Product with Entity, Element, Converter[Product with Entity, Element]] =
       traversal.onRawMap[Product with Entity, Element, Converter[Product with Entity, Element]](_.asInstanceOf[GraphTraversal[_, Element]]) {
         (element: Element) =>
