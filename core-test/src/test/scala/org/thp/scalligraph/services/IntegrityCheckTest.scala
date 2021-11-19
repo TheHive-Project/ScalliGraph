@@ -93,7 +93,7 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
         {
           case (b, as) => i.singleIdLink[A]("oneA", aSrv)(_.outEdge[BAOne], _.set(EntityId.empty)).check(b, b.oneA, as)
         }
-      } must beEqualTo(Map("B-oneA-removeOrphan" -> 1))
+      } must beEqualTo(Map("B-oneA-setEmptyOrphan" -> 1))
       val bSrv = new BSrv
       database.roTransaction(implicit graph => bSrv.getByName("b1").value(_.oneA).toSeq) must beEqualTo(Seq(EntityId.empty))
     }

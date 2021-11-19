@@ -150,18 +150,18 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps with MapMerge
       }
   }
 
-  class OrphanStrategySelector[I](fieldName: String)(implicit graph: Graph) {
+  class OrphanStrategySelector[I](fieldName: String)(implicit graph: Graph, mapping: UMapping[I]) {
     def remove: OrphanStrategy[E, I] = {
       case (_, entity) =>
         service.get(entity).remove()
         Map(s"$name-$fieldName-removeOrphan" -> 1)
     }
 
-    def set(emptyValue: I)(implicit mapping: UMapping[I]): OrphanStrategy[E, I] = {
+    def set(emptyValue: I): OrphanStrategy[E, I] = {
       case (fieldValue, _) if fieldValue == emptyValue => Map.empty
       case (_, entity) =>
         mapping.toMapping.setProperty(service.get(entity), fieldName, emptyValue).iterate()
-        Map(s"$name-$fieldName-removeOrphan" -> 1)
+        Map(s"$name-$fieldName-setEmptyOrphan" -> 1)
     }
   }
 
@@ -202,7 +202,7 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps with MapMerge
       linkValue: L with Entity => I
   )(
       linkRemover: LinkRemoverSelector => LinkRemover,
-      orphanStrategy: OrphanStrategySelector[Option[I]] => OrphanStrategy[E, Option[I]] = (_: OrphanStrategySelector[Option[I]]).remove,
+      orphanStrategy: OrphanStrategySelector[Option[I]] => OrphanStrategy[E, Option[I]] = (_: OrphanStrategySelector[Option[I]]).set(None),
       entitySelector: E with Entity => EntitySelector[L] = (_: E with Entity) => EntitySelector.firstCreatedEntity[L]
   )(implicit graph: Graph, mapping: UMapping[Option[I]]) =
     new SingleLinkChecker[L, Option[I], I](

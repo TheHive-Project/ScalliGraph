@@ -16,8 +16,11 @@ case class Hasher(algorithms: String*) {
 
   val bufferSize = 4096
 
-  def fromPath(path: Path): Seq[Hash] =
-    fromInputStream(Files.newInputStream(path))
+  def fromPath(path: Path): Seq[Hash] = {
+    val is = Files.newInputStream(path)
+    try fromInputStream(is)
+    finally is.close()
+  }
 
   def fromInputStream(is: InputStream): Seq[Hash] = {
     val mds = algorithms.map(algo => MessageDigest.getInstance(algo))
