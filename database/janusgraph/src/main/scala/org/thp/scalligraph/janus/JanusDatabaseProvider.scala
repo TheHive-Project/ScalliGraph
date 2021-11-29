@@ -8,18 +8,19 @@ import org.janusgraph.core.JanusGraph
 import org.janusgraph.diskstorage.configuration.{Configuration => JanusConfiguration}
 import org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration
 import org.janusgraph.graphdb.database.StandardJanusGraph
-import org.thp.scalligraph.{InternalError, SingleInstance}
 import org.thp.scalligraph.janus.JanusClusterManagerActor._
 import org.thp.scalligraph.models.{Database, UpdatableSchema}
 import org.thp.scalligraph.traversal.TraversalOps.logger
-import play.api.{Application, Configuration}
+import org.thp.scalligraph.{InternalError, SingleInstance}
 import play.api.inject.ApplicationLifecycle
+import play.api.{Application, Configuration}
 
 import javax.inject.{Inject, Provider, Singleton}
 import scala.collection.JavaConverters._
 import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.util.{Success, Try}
 
 @Singleton
 class JanusDatabaseProvider @Inject() (
@@ -120,9 +121,26 @@ class JanusDatabaseProvider @Inject() (
                 system,
                 singleInstance
               )
-              schemas
-                .toTry(_.update(db))
-                .flatMap(_ => schemas.toTry(db.addSchemaIndexes))
+              val models                   = schemas.flatMap(_.modelList).toSeq
+              val rebuildIndexOnFailure    = configuration.get[Boolean]("db.janusgraph.dropAndRebuildIndexOnFailure")
+              val forceDropAndRebuildIndex = configuration.get[Boolean]("db.janusgraph.forceDropAndRebuildIndex")
+              // - add all missing fields in schema
+              // - add index if not present and enable it
+              // - if already present and if it is not available then stop the application or drop the index and rebuild it (depending on configuration)
+              // - apply schema definition operation
+              db.createSchema(models)
+                .flatMap(_ => if (forceDropAndRebuildIndex) db.removeAllIndex() else Success(()))
+                .flatMap { _ =>
+                  db.addSchemaIndexes(models)
+                    .recoverWith { case _ if rebuildIndexOnFailure => db.removeAllIndex().flatMap(_ => db.addSchemaIndexes(models)) }
+                }
+                .flatMap { indexIsUpdated =>
+                  Try(db.roTransaction(_.V("dummy").raw.hasNext)) // This fails if the configured index engine is not available
+                    .recoverWith {
+                      case _ if !indexIsUpdated && rebuildIndexOnFailure => db.removeAllIndex().flatMap(_ => db.addSchemaIndexes(models))
+                    }
+                }
+                .flatMap(_ => schemas.toTry(_.update(db)))
                 .fold(
                   { error =>
                     janusClusterManager ! ClusterInitFailure
