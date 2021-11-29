@@ -313,7 +313,7 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps with MapMerge
           .collect {
             case vertexIds if vertexIds.size > 1 => service.getByIds(vertexIds.toSeq: _*).toList
           }
-          .toSeq
+          .toList
       }
     }
 
