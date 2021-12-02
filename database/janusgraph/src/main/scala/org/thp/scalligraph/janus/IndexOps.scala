@@ -218,9 +218,10 @@ trait IndexOps {
 
   override def removeIndex(model: String, indexType: IndexType.Value, fields: Seq[String]): Try[Unit] =
     managementTransaction { mgmt =>
+      val indexPrefix = model.toLowerCase.capitalize
       listIndexesWithStatus(SchemaStatus.ENABLED, SchemaStatus.INSTALLED, SchemaStatus.REGISTERED).map { indexes =>
         indexes
-          .filter(_.startsWith(model))
+          .filter(_.startsWith(indexPrefix))
           .flatMap(indexName => Option(mgmt.getGraphIndex(indexName)))
           .map { index =>
             logger.info(s"Disable index ${index.name()}")
