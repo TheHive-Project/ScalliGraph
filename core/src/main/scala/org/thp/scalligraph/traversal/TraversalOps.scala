@@ -162,10 +162,10 @@ trait TraversalOps extends TraversalPrinter {
       ()
     }
 
-    def richPage[DD: Renderer, GG, CC <: Converter[DD, GG]](from: Long, to: Long, withTotal: Boolean)(
+    def richPage[DD: Renderer, GG, CC <: Converter[DD, GG]](from: Long, to: Long, withTotal: Boolean, limitedCountThreshold: Long)(
         f: Traversal[D, G, C] => Traversal[DD, GG, CC]
     ): IteratorOutput = {
-      val size   = if (withTotal) Some(() => traversal.count.head) else None
+      val size   = if (withTotal) Some(() => traversal.getLimitedCount(limitedCountThreshold)) else None
       val values = f(traversal.clone().range(from, to))
       IteratorOutput(values, size)
     }
@@ -644,8 +644,8 @@ trait TraversalOps extends TraversalPrinter {
     def getElement(element: Element): Traversal[D, G, C]                                 = traversal.onRaw(_.hasId(element.id()))
     def getByIds(ids: EntityId*)(implicit ev: G <:< Element): Traversal[D, G, C]         = hasId(ids: _*)
 
-    def page(from: Long, to: Long, withTotal: Boolean)(implicit renderer: Renderer[D]): IteratorOutput =
-      richPage(from, to, withTotal)(Predef.identity)
+    def page(from: Long, to: Long, withTotal: Boolean, limitedCountThreshold: Long)(implicit renderer: Renderer[D]): IteratorOutput =
+      richPage(from, to, withTotal, limitedCountThreshold)(Predef.identity)
 
     def filter(f: Traversal[D, G, C] => Traversal[_, _, _]): Traversal[D, G, C] = traversal.onRaw(_.filter(f(traversal.start).raw))
     def filterNot(f: Traversal[D, G, C] => Traversal[_, _, _]): Traversal[D, G, C] =

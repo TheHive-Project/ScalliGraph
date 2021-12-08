@@ -97,9 +97,9 @@ case class AddIndex(model: String, indexType: IndexType, properties: Seq[String]
   override def execute(db: Database, logger: String => Unit): Try[Unit] = db.addIndex(model, Seq(indexType -> properties))
 }
 
-object RebuildIndexes extends Operation {
-  override def info: String                                             = "Rebuild all indexes"
-  override def execute(db: Database, logger: String => Unit): Try[Unit] = Try(db.rebuildIndexes())
+object ReindexData extends Operation {
+  override def info: String                                             = "Reindex all data"
+  override def execute(db: Database, logger: String => Unit): Try[Unit] = Try(db.reindexData())
 }
 
 object NoOperation extends Operation {
@@ -160,7 +160,7 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) e
   def dbOperation[DB <: Database: ClassTag](comment: String)(op: DB => Try[Unit]): Operations =
     addOperations(DBOperation[DB](comment, op))
   def noop: Operations                                                              = addOperations(NoOperation)
-  def rebuildIndexes: Operations                                                    = addOperations(RebuildIndexes)
+  def reindexData: Operations                                                       = addOperations(ReindexData)
   def removeIndex(model: String, indexType: IndexType, fields: String*): Operations = addOperations(RemoveIndex(model, indexType, fields))
 
   def execute(db: Database, schema: Schema)(implicit authContext: AuthContext): Try[Unit] =

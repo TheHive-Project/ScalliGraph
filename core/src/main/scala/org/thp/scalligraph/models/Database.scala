@@ -53,16 +53,17 @@ trait Database {
   def removeVertexModel(label: String): Try[Unit]
   def addEdgeModel(label: String, properties: Map[String, Mapping[_, _, _]]): Try[Unit]
   def removeEdgeModel(label: String): Try[Unit]
-  def addSchemaIndexes(schemaObject: Schema): Try[Unit]
-  def addSchemaIndexes(model: Model, models: Model*): Try[Unit] = addSchemaIndexes(model +: models)
-  def addSchemaIndexes(models: Seq[Model]): Try[Unit]
+  def addSchemaIndexes(schemaObject: Schema): Try[Boolean]
+  def addSchemaIndexes(model: Model, models: Model*): Try[Boolean] = addSchemaIndexes(model +: models)
+  def addSchemaIndexes(models: Seq[Model]): Try[Boolean]
   def addProperty(model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit]
   def addIndexedProperty(model: String, propertyName: String, mapping: Mapping[_, _, _], indexType: IndexType): Try[Unit]
   def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean, mapping: Mapping[_, _, _]): Try[Unit]
   def addIndex(model: String, indexDefinition: Seq[(IndexType, Seq[String])]): Try[Unit]
   def removeIndex(model: String, indexType: IndexType, fields: Seq[String]): Try[Unit]
+  def removeAllIndex(): Try[Unit]
   def reindexData(model: String): Try[Unit]
-  def rebuildIndexes(): Unit
+  def reindexData(): Unit
 //  def removeIndex(model: String, properties: Seq[String]): Try[Unit]
   val fullTextIndexAvailable: Boolean
 
@@ -144,7 +145,7 @@ abstract class BaseDatabase extends Database with TraversalOps {
       _ <- tryTransaction(graph => schemaObject.init(this)(graph, authContext))
     } yield ()
 
-  override def addSchemaIndexes(schemaObject: Schema): Try[Unit] = addSchemaIndexes(schemaObject.modelList ++ extraModels)
+  override def addSchemaIndexes(schemaObject: Schema): Try[Boolean] = addSchemaIndexes(schemaObject.modelList ++ extraModels)
 
   protected case class DummyEntity(
       _label: String,

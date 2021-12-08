@@ -1,25 +1,27 @@
 package org.thp.scalligraph.janus
 
 import akka.Done
-import akka.actor.{ActorSystem, CoordinatedShutdown}
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.adapter._
 import akka.actor.typed.{ActorRef, Scheduler}
+import akka.actor.{ActorSystem, CoordinatedShutdown}
 import akka.util.Timeout
 import org.janusgraph.core.JanusGraph
 import org.janusgraph.diskstorage.configuration.{Configuration => JanusConfiguration}
 import org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration
 import org.janusgraph.graphdb.database.StandardJanusGraph
 import org.thp.scalligraph.janus.JanusClusterManagerActor._
-import org.thp.scalligraph.models.{Database, UpdatableSchema}
-import org.thp.scalligraph.{InternalError, ScalligraphApplication, SingleInstance}
+import org.thp.scalligraph.models.{Database, Model, UpdatableSchema}
+import org.thp.scalligraph.{GenericError, InternalError, ScalligraphApplication, SingleInstance}
 import play.api.{Configuration, Logger}
 
 import javax.inject.Provider
-import scala.jdk.CollectionConverters._
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.jdk.CollectionConverters._
+import scala.util.{Failure, Success, Try}
 
+class IndexNotAvailable(cause: Throwable) extends GenericError("IndexNotAvailable", "The index are not available", cause)
 class JanusDatabaseProvider(app: ScalligraphApplication) extends Provider[Database] {
   val logger: Logger                           = Logger("org.thp.scalligraph.models.Database")
   val configuration: Configuration             = app.configuration
@@ -87,6 +89,11 @@ class JanusDatabaseProvider(app: ScalligraphApplication) extends Provider[Databa
     }
   }
 
+  private def dropAndRebuildIndex(db: JanusDatabase, models: Seq[Model]): Try[Boolean] =
+    db.removeAllIndex()
+      .flatMap(_ => db.addSchemaIndexes(models))
+      .recoverWith { case error => Failure(new IndexNotAvailable(error)) }
+
   override lazy val get: JanusDatabase = {
     val dbInitialisationTimeout   = configuration.get[FiniteDuration]("db.initialisationTimeout")
     implicit val timeout: Timeout = Timeout(dbInitialisationTimeout)
@@ -119,16 +126,41 @@ class JanusDatabaseProvider(app: ScalligraphApplication) extends Provider[Databa
                 actorSystem,
                 singleInstance
               )
-              schemas
-                .toTry(_.update(db))
-                .flatMap(_ => schemas.toTry(db.addSchemaIndexes))
+              val models                   = schemas.flatMap(_.modelList)
+              val rebuildIndexOnFailure    = configuration.get[Boolean]("db.janusgraph.dropAndRebuildIndexOnFailure")
+              val forceDropAndRebuildIndex = configuration.get[Boolean]("db.janusgraph.forceDropAndRebuildIndex")
+              // - add all missing fields in schema
+              // - add index if not present and enable it
+              // - if already present and if it is not available then stop the application or drop the index and rebuild it (depending on configuration)
+              // - apply schema definition operation
+              db.createSchema(models)
+                .flatMap(_ => if (forceDropAndRebuildIndex) db.removeAllIndex() else Success(()))
+                .flatMap { _ =>
+                  db.addSchemaIndexes(models)
+                    .recoverWith { case _ if rebuildIndexOnFailure => dropAndRebuildIndex(db, models) }
+                }
+                .flatMap { indexIsUpdated =>
+                  Try(db.roTransaction(_.V("dummy").raw.hasNext)) // This fails if the configured index engine is not available
+                    .recoverWith { case _ if !indexIsUpdated && rebuildIndexOnFailure => dropAndRebuildIndex(db, models) }
+                }
+                .flatMap(_ => schemas.toTry(_.update(db)))
                 .fold(
-                  { error =>
-                    janusClusterManager ! ClusterInitFailure
-                    logger.error("***********************************************************************")
-                    logger.error("* Database initialisation has failed. Restart application to retry it *")
-                    logger.error("***********************************************************************")
-                    throw InternalError("Database initialisation failure", error)
+                  {
+                    case error: IndexNotAvailable =>
+                      janusClusterManager ! ClusterInitFailure
+                      logger.error("**************************************************************************")
+                      logger.error("* Database initialisation has failed because the index is not available. *")
+                      logger.error("* Ensure that index engine is reachable.                                 *")
+                      logger.error("* If the index need to be rebuilt add:                                   *")
+                      logger.error("* 'db.janusgraph.dropAndRebuildIndexOnFailure' in configuration          *")
+                      logger.error("**************************************************************************")
+                      throw error
+                    case error =>
+                      janusClusterManager ! ClusterInitFailure
+                      logger.error("***********************************************************************")
+                      logger.error("* Database initialisation has failed. Restart application to retry it *")
+                      logger.error("***********************************************************************")
+                      throw InternalError("Database initialisation failure", error)
                   },
                   { _ =>
                     janusClusterManager ! ClusterInitSuccess

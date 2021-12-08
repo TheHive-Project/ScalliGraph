@@ -29,7 +29,7 @@ import play.api.{Configuration, Logger}
 
 import java.lang.{Long => JLong}
 import java.nio.file.{Files, Paths}
-import java.util.{Date, Properties}
+import java.util.Properties
 import scala.concurrent.duration.FiniteDuration
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
@@ -266,7 +266,7 @@ class JanusDatabase(
     result
   }
 
-  lazy val globalIndexName: String = managementTransaction(mgmt => Try(findFirstAvailableMixedIndex(mgmt, "global")))
+  lazy val globalIndexName: String = managementTransaction(mgmt => Try(findFirstAvailableIndex(mgmt, "global")))
     .toOption
     .flatMap(_.toOption)
     .getOrElse("global")
@@ -314,10 +314,11 @@ class JanusDatabase(
   override def createSchema(models: Seq[Model]): Try[Unit] =
     managementTransaction { mgmt =>
       logger.info("Creating database schema")
-      createElementLabels(mgmt, models)
-      createEntityProperties(mgmt)
-      addProperties(mgmt, models)
-      Success(())
+      for {
+        _ <- createElementLabels(mgmt, models)
+        _ <- createEntityProperties(mgmt)
+        _ <- addProperties(mgmt, models)
+      } yield ()
     }
 
   override def addVertexModel(label: String, properties: Map[String, Mapping[_, _, _]]): Try[Unit] =
@@ -346,69 +347,50 @@ class JanusDatabase(
       Option(mgmt.getEdgeLabel(label)).fold(Success(()))(l => Success(l.remove()))
     }
 
-  private def createEntityProperties(mgmt: JanusGraphManagement): Unit =
-    if (Option(mgmt.getPropertyKey("_label")).isEmpty) {
-      mgmt
-        .makePropertyKey("_label")
-        .dataType(classOf[String])
-        .cardinality(Cardinality.SINGLE)
-        .make()
-      mgmt
-        .makePropertyKey("_createdBy")
-        .dataType(classOf[String])
-        .cardinality(Cardinality.SINGLE)
-        .make()
-      mgmt
-        .makePropertyKey("_createdAt")
-        .dataType(classOf[Date])
-        .cardinality(Cardinality.SINGLE)
-        .make()
-      mgmt
-        .makePropertyKey("_updatedBy")
-        .dataType(classOf[String])
-        .cardinality(Cardinality.SINGLE)
-        .make()
-      mgmt
-        .makePropertyKey("_updatedAt")
-        .dataType(classOf[Date])
-        .cardinality(Cardinality.SINGLE)
-        .make()
-      ()
-    }
+  private def createEntityProperties(mgmt: JanusGraphManagement): Try[Unit] =
+    for {
+      _ <- addProperty(mgmt, "_label", UMapping.string)
+      _ <- addProperty(mgmt, "_createdBy", UMapping.string)
+      _ <- addProperty(mgmt, "_createdAt", UMapping.date)
+      _ <- addProperty(mgmt, "_updatedBy", UMapping.string.optional)
+      _ <- addProperty(mgmt, "_updatedAt", UMapping.date.optional)
+    } yield ()
 
-  private def createElementLabels(mgmt: JanusGraphManagement, models: Seq[Model]): Unit =
-    models.foreach {
-      case m: VertexModel if Option(mgmt.getVertexLabel(m.label)).isEmpty =>
-        logger.trace(s"mgmt.getOrCreateVertexLabel(${m.label})")
-        mgmt.getOrCreateVertexLabel(m.label)
-      case m: EdgeModel if Option(mgmt.getEdgeLabel(m.label)).isEmpty =>
-        logger.trace(s"mgmt.getOrCreateEdgeLabel(${m.label})")
-        mgmt.getOrCreateEdgeLabel(m.label)
-      case m =>
-        logger.info(s"Model ${m.label} already exists, ignore it")
-    }
+  private def createElementLabels(mgmt: JanusGraphManagement, models: Seq[Model]): Try[Unit] =
+    models
+      .toTry {
+        case m: VertexModel if Option(mgmt.getVertexLabel(m.label)).isEmpty =>
+          logger.trace(s"mgmt.getOrCreateVertexLabel(${m.label})")
+          Try(mgmt.getOrCreateVertexLabel(m.label))
+        case m: EdgeModel if Option(mgmt.getEdgeLabel(m.label)).isEmpty =>
+          logger.trace(s"mgmt.getOrCreateEdgeLabel(${m.label})")
+          Try(mgmt.getOrCreateEdgeLabel(m.label))
+        case m =>
+          logger.debug(s"Model ${m.label} already exists, ignore it")
+          Success(())
+      }
+      .map(_ => ())
 
-  private def addProperties(mgmt: JanusGraphManagement, models: Seq[Model]): Unit =
+  private def addProperties(mgmt: JanusGraphManagement, models: Seq[Model]): Try[Unit] =
     models
       .flatMap(model => model.fields.map(f => (f._1, model, f._2)))
       .groupBy(_._1)
-      .map {
+      .toTry {
         case (fieldName, mappings) =>
           val firstMapping = mappings.head._3
           if (!mappings.tail.forall(_._3 isCompatibleWith firstMapping)) {
             val msg = mappings.map {
               case (_, model, mapping) => s"  in model ${model.label}: ${mapping.graphTypeClass} (${mapping.cardinality})"
             }
-            throw InternalError(s"Mapping of `$fieldName` has incompatible types:\n${msg.mkString("\n")}")
-          }
-          fieldName -> firstMapping
+            Failure(InternalError(s"Mapping of `$fieldName` has incompatible types:\n${msg.mkString("\n")}"))
+          } else
+            addProperty(mgmt, fieldName, firstMapping).recoverWith {
+              case error =>
+                logger.error(s"Unable to add property $fieldName", error)
+                Failure(error)
+            }
       }
-      .foreach {
-        case (propertyName, mapping) =>
-          addProperty(mgmt, propertyName, mapping).failed.foreach { error =>
-            logger.error(s"Unable to add property $propertyName", error)
-          }
-      }
+      .map(_ => ())
 
   override def addProperty(model: String, propertyName: String, mapping: Mapping[_, _, _]): Try[Unit] =
     managementTransaction { mgmt =>
@@ -429,7 +411,7 @@ class JanusDatabase(
             case IndexType.fulltextOnly                                                            => Some(JanusMapping.TEXT.asParameter())
           })
             .fold[Try[Option[String]]](Success(None)) { param =>
-              findFirstAvailableMixedIndex(mgmt, "global") match {
+              findFirstAvailableIndex(mgmt, "global") match {
                 case Right(indexName) =>
                   val index = mgmt.getGraphIndex(indexName)
                   if (index.getFieldKeys.exists(_.name() == propertyName))
@@ -484,7 +466,7 @@ class JanusDatabase(
         }
       case Some(p) =>
         if (p.dataType() == mapping.graphTypeClass && p.cardinality() == cardinality) {
-          logger.info(s"Property $propertyName $cardinality:${mapping.graphTypeClass} already exists, ignore it")
+          logger.debug(s"Property $propertyName $cardinality:${mapping.graphTypeClass} already exists, ignore it")
           Success(())
         } else
           Failure(
@@ -553,7 +535,7 @@ class JanusDatabase(
   }
 
   override def labelFilter[D, G, C <: Converter[D, G]](label: String, traversal: Traversal[D, G, C]): Traversal[D, G, C] =
-    traversal.onRaw(_.hasLabel(label).has("_label", label))
+    traversal.onRaw(_.has("_label", label))
 
   override def mapPredicate[T](predicate: P[T]): P[T] =
     predicate.getBiPredicate match {
@@ -592,7 +574,6 @@ class JanusDatabase(
       graph,
       traversal()
         .V(ids.map(_.value): _*)
-        .hasLabel(model.label)
         .has("_label", model.label),
       model.converter
     )
@@ -602,7 +583,6 @@ class JanusDatabase(
       graph,
       traversal()
         .E(ids.map(_.value): _*)
-        .hasLabel(model.label)
         .has("_label", model.label),
       model.converter
     )
@@ -612,7 +592,6 @@ class JanusDatabase(
       graph,
       traversal()
         .V(ids.map(_.value): _*)
-        .hasLabel(label)
         .has("_label", label),
       Converter.identity[Vertex]
     )
@@ -622,7 +601,6 @@ class JanusDatabase(
       graph,
       traversal()
         .E(ids.map(_.value): _*)
-        .hasLabel(label)
         .has("_label", label),
       Converter.identity[Edge]
     )

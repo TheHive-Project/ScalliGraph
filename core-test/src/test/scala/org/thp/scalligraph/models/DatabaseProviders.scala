@@ -13,7 +13,11 @@ class DatabaseProviders(config: Configuration, system: ActorSystem) {
 
   def this(system: ActorSystem) =
     this(
-      Configuration(ConfigFactory.parseString(s"db.janusgraph.storage.directory = target/janusgraph-test-database-${math.random()}.db")) withFallback
+      Configuration(ConfigFactory.parseString(s"""
+                                                 |db.janusgraph.storage.directory = target/janusgraph-test-database-${math.random()}.db
+                                                 |db.janusgraph.index.search.backend = lucene
+                                                 |db.janusgraph.index.search.directory = target/janusgraph-test-database-${math.random}.idx
+                                                 |""".stripMargin)) withFallback
         Configuration.load(Environment.simple()),
       system
     )
