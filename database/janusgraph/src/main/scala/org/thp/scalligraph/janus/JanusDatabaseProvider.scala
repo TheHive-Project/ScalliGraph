@@ -10,10 +10,9 @@ import org.janusgraph.graphdb.configuration.GraphDatabaseConfiguration
 import org.janusgraph.graphdb.database.StandardJanusGraph
 import org.thp.scalligraph.janus.JanusClusterManagerActor._
 import org.thp.scalligraph.models.{Database, Model, UpdatableSchema}
-import org.thp.scalligraph.traversal.TraversalOps.logger
 import org.thp.scalligraph.{GenericError, InternalError, SingleInstance}
 import play.api.inject.ApplicationLifecycle
-import play.api.{Application, Configuration}
+import play.api.{Application, Configuration, Logger}
 
 import javax.inject.{Inject, Provider, Singleton}
 import scala.collection.JavaConverters._
@@ -34,7 +33,7 @@ class JanusDatabaseProvider @Inject() (
     implicit val scheduler: Scheduler,
     implicit val ec: ExecutionContext
 ) extends Provider[Database] {
-
+  lazy val logger: Logger                         = Logger("org.thp.scalligraph.models.Database")
   lazy val janusClusterManager: ActorRef[Command] = JanusClusterManagerActor.getClusterManagerActor(system)
 
   def dropOtherConnections(db: JanusGraph): Unit = {
@@ -130,11 +129,14 @@ class JanusDatabaseProvider @Inject() (
               val models                   = schemas.flatMap(_.modelList).toSeq
               val rebuildIndexOnFailure    = configuration.get[Boolean]("db.janusgraph.dropAndRebuildIndexOnFailure")
               val forceDropAndRebuildIndex = configuration.get[Boolean]("db.janusgraph.forceDropAndRebuildIndex")
+              val immenseTermsConfig       = configuration.get[Map[String, String]]("db.janusgraph.immenseTermProcessing")
+
               // - add all missing fields in schema
               // - add index if not present and enable it
               // - if already present and if it is not available then stop the application or drop the index and rebuild it (depending on configuration)
               // - apply schema definition operation
               db.createSchema(models)
+                .flatMap(_ => ImmenseTermProcessor.process(db, immenseTermsConfig))
                 .flatMap(_ => if (forceDropAndRebuildIndex) db.removeAllIndex() else Success(()))
                 .flatMap { _ =>
                   db.addSchemaIndexes(models)
