@@ -2,6 +2,7 @@ package org.thp.scalligraph.janus
 
 import org.apache.tinkerpop.gremlin.structure.{Vertex, VertexProperty}
 import org.thp.scalligraph.BadConfigurationError
+import org.thp.scalligraph.models.Model
 import play.api.Logger
 
 import scala.collection.JavaConverters._
@@ -19,8 +20,9 @@ object ImmenseTermProcessor {
   private val immenseTermProcessorRegex2 = """(\p{Alpha}+)\((.*)\)""".r
   private var registeredStrategies: Map[String, Seq[String] => ImmenseTermProcessor] =
     Map(
-      "truncate" -> ((params: Seq[String]) => new TruncateField(params)),
-      "delete"   -> ((params: Seq[String]) => new DeleteVertex(params))
+      "truncate" -> (new TruncateField(_)),
+      "delete"   -> (new DeleteVertex(_)),
+      "log"      -> (new LogData(_))
     )
 
   def registerStrategy(name: String, factory: Seq[String] => ImmenseTermProcessor): Unit = {
@@ -111,4 +113,11 @@ class DeleteVertex(val termSizeLimit: Int) extends ImmenseTermProcessor with Imm
       true
     }
   override def toString: String = "delete"
+}
+class LogData(val termSizeLimit: Int) extends ImmenseTermProcessor with ImmenseStringTermFilter {
+  def this(params: Seq[String]) = this(params.headOption.flatMap(p => Try(p.toInt).toOption).getOrElse(ImmenseTermProcessor.defaultThreshold))
+  override def apply[V](vertex: Vertex, property: VertexProperty[V]): Boolean = {
+    collect(vertex, property).foreach(_ => logger.info(s"Found immense term in property ${property.key()} in ${Model.printElement(vertex)}"))
+    false
+  }
 }
