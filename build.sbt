@@ -52,7 +52,10 @@ libraryDependencies in ThisBuild ++= {
   }
 }
 
-dependencyOverrides in ThisBuild += "io.netty" % "netty-all" % "4.0.56.Final"
+dependencyOverrides in ThisBuild ++= Seq(
+  "io.netty" % "netty-all" % "4.0.56.Final",
+  logbackClassic
+)
 
 lazy val scalligraph = (project in file("."))
   .dependsOn(core, /*graphql, */ janus /* , orientdb , neo4j, coreTest*/ )
