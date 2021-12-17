@@ -36,7 +36,10 @@ val defaultSettings = Seq(
   ),
   scalafmtConfig := (ThisBuild / baseDirectory).value / ".scalafmt.conf",
   Test / fork := true,
-  dependencyOverrides += "io.netty" % "netty-all" % "4.0.56.Final",
+  dependencyOverrides ++= Seq(
+    "io.netty" % "netty-all" % "4.0.56.Final",
+    logbackClassic
+  ),
   Compile / packageDoc / publishArtifact := false,
   Compile / doc / sources := Nil,
   Test / packageDoc / publishArtifact := false,

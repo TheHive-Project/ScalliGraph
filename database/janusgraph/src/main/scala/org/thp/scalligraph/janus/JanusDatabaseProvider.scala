@@ -30,9 +30,8 @@ class JanusDatabaseProvider(app: ScalligraphApplication) extends Provider[Databa
   val singleInstance: SingleInstance           = app.singleInstance
   val coordinatedShutdown: CoordinatedShutdown = CoordinatedShutdown(actorSystem)
 
-  implicit val scheduler: Scheduler = actorSystem.toTyped.scheduler
-  implicit val ec: ExecutionContext = actorSystem.dispatcher
-
+  implicit val scheduler: Scheduler               = actorSystem.toTyped.scheduler
+  implicit val ec: ExecutionContext               = actorSystem.dispatcher
   lazy val janusClusterManager: ActorRef[Command] = JanusClusterManagerActor.getClusterManagerActor(actorSystem)
 
   def dropOtherConnections(db: JanusGraph): Unit = {
@@ -129,11 +128,14 @@ class JanusDatabaseProvider(app: ScalligraphApplication) extends Provider[Databa
               val models                   = schemas.flatMap(_.modelList)
               val rebuildIndexOnFailure    = configuration.get[Boolean]("db.janusgraph.dropAndRebuildIndexOnFailure")
               val forceDropAndRebuildIndex = configuration.get[Boolean]("db.janusgraph.forceDropAndRebuildIndex")
+              val immenseTermsConfig       = configuration.get[Map[String, String]]("db.janusgraph.immenseTermProcessing")
+
               // - add all missing fields in schema
               // - add index if not present and enable it
               // - if already present and if it is not available then stop the application or drop the index and rebuild it (depending on configuration)
               // - apply schema definition operation
               db.createSchema(models)
+                .flatMap(_ => ImmenseTermProcessor.process(db, immenseTermsConfig))
                 .flatMap(_ => if (forceDropAndRebuildIndex) db.removeAllIndex() else Success(()))
                 .flatMap { _ =>
                   db.addSchemaIndexes(models)
