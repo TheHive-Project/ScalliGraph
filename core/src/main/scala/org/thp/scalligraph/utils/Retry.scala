@@ -49,8 +49,9 @@ class Retry(maxTries: Int, exceptions: Seq[Class[_]]) {
     try f
     catch {
       case e: Throwable if currentTry < maxTries && exceptionCheck(exceptions)(e) =>
-        if (logger.isDebugEnabled) logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying ($currentTry)", e)
-        else logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying ($currentTry)")
+        if (logger.isDebugEnabled)
+          logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying ($currentTry/$maxTries)", e)
+        else logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying ($currentTry/$maxTries)")
         run(currentTry + 1, f)
       case e: Throwable if currentTry < maxTries =>
         logger.error("uncaught error, not retrying", e)
@@ -60,8 +61,9 @@ class Retry(maxTries: Int, exceptions: Seq[Class[_]]) {
   private def runTry[T](currentTry: Int, fn: => Try[T]): Try[T] =
     Try(fn).flatten.recoverWith {
       case e: Throwable if currentTry < maxTries && exceptionCheck(exceptions)(e) =>
-        if (logger.isDebugEnabled) logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying ($currentTry)", e)
-        else logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying ($currentTry)")
+        if (logger.isDebugEnabled)
+          logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying ($currentTry/$maxTries)", e)
+        else logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying ($currentTry/$maxTries)")
         runTry(currentTry + 1, fn)
       case e: Throwable if currentTry < maxTries =>
         logger.error("uncaught error, not retrying", e)
@@ -78,8 +80,8 @@ class DelayRetry(maxTries: Int, exceptions: Seq[Class[_]], scheduler: Scheduler,
     try fn
     catch {
       case e: Throwable if 1 < maxTries && exceptionCheck(exceptions)(e) =>
-        if (logger.isDebugEnabled) logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying (1)", e)
-        else logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying (1)")
+        if (logger.isDebugEnabled) logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying (1/$maxTries)", e)
+        else logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying (1/$maxTries)")
         runSync(2, fn)
       case e: Throwable if 1 < maxTries =>
         logger.error("uncaught error, not retrying", e)
@@ -92,8 +94,8 @@ class DelayRetry(maxTries: Int, exceptions: Seq[Class[_]], scheduler: Scheduler,
   def withTry[T](fn: => Try[T]): Try[T] =
     Try(fn).flatten.recoverWith {
       case e: Throwable if 1 < maxTries && exceptionCheck(exceptions)(e) =>
-        if (logger.isDebugEnabled) logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying (1)", e)
-        else logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying (1)")
+        if (logger.isDebugEnabled) logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying (1/$maxTries)", e)
+        else logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying (1/$maxTries)")
         Try(runSync(2, fn.get))
       case e: Throwable if 1 < maxTries =>
         logger.error("uncaught error, not retrying", e)
@@ -110,8 +112,9 @@ class DelayRetry(maxTries: Int, exceptions: Seq[Class[_]], scheduler: Scheduler,
     try fn
     catch {
       case e if currentTry < maxTries && exceptionCheck(exceptions)(e) =>
-        if (logger.isDebugEnabled) logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying ($currentTry)", e)
-        else logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying ($currentTry)")
+        if (logger.isDebugEnabled)
+          logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying ($currentTry/$maxTries)", e)
+        else logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying ($currentTry/$maxTries)")
         Thread.sleep(delay(currentTry).toMillis)
         runSync(currentTry + 1, fn)
       case e: Throwable if currentTry < maxTries =>
@@ -125,8 +128,9 @@ class DelayRetry(maxTries: Int, exceptions: Seq[Class[_]], scheduler: Scheduler,
   private def run[T](currentTry: Int, fn: => Future[T]): Future[T] =
     fn recoverWith {
       case e if currentTry < maxTries && exceptionCheck(exceptions)(e) =>
-        if (logger.isDebugEnabled) logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying ($currentTry)", e)
-        else logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying ($currentTry)")
+        if (logger.isDebugEnabled)
+          logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying ($currentTry/$maxTries)", e)
+        else logger.warn(s"An error occurs (${e.getClass.getCanonicalName}: ${e.getMessage}), retrying ($currentTry/$maxTries)")
         after(delay(currentTry), scheduler)(run(currentTry + 1, fn))
       case e: Throwable if currentTry < maxTries =>
         logger.error("uncaught error, not retrying", e)

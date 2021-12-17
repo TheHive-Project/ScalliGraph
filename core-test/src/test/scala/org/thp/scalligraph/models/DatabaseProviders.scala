@@ -9,26 +9,26 @@ import javax.inject.Provider
 //import org.thp.scalligraph.neo4j.Neo4jDatabase
 //import org.thp.scalligraph.orientdb.OrientDatabase
 
-class DatabaseProviders(config: Configuration, system: ActorSystem) {
+class DatabaseProviders(config: Option[Configuration], system: ActorSystem) {
 
-  def this(system: ActorSystem) =
-    this(
-      Configuration(ConfigFactory.parseString(s"""
-                                                 |db.janusgraph.storage.directory = target/janusgraph-test-database-${math.random()}.db
-                                                 |db.janusgraph.index.search.backend = lucene
-                                                 |db.janusgraph.index.search.directory = target/janusgraph-test-database-${math.random}.idx
-                                                 |""".stripMargin)) withFallback
-        Configuration.load(Environment.simple()),
-      system
-    )
+  def this(system: ActorSystem) = this(None, system)
 
   def this() = this(ActorSystem("DatabaseProviders"))
 
   lazy val logger: Logger = Logger(getClass)
 
-  lazy val janus: DatabaseProvider = new DatabaseProvider("janus", new JanusDatabase(config, system, fullTextIndexAvailable = false))
+  def defaultConfig: Configuration =
+    Configuration(ConfigFactory.parseString(s"""
+                                               |db.janusgraph.storage.backend = berkeleyje
+                                               |db.janusgraph.storage.directory = target/janusgraph-test-database-${math.random()}.db
+                                               |db.janusgraph.index.search.backend = lucene
+                                               |db.janusgraph.index.search.directory = target/janusgraph-test-database-${math.random()}.idx
+                                               |""".stripMargin)) withFallback
+      Configuration.load(Environment.simple())
+  lazy val janus: DatabaseProvider =
+    new DatabaseProvider("janus", new JanusDatabase(config.getOrElse(defaultConfig), system, fullTextIndexAvailable = false))
 
-//  lazy val orientdb: DatabaseProvider = new DatabaseProvider("orientdb", new OrientDatabase(config, system))
+  //  lazy val orientdb: DatabaseProvider = new DatabaseProvider("orientdb", new OrientDatabase(config, system))
 //
 //  lazy val neo4j: DatabaseProvider = new DatabaseProvider("neo4j", new Neo4jDatabase(config, system))
 

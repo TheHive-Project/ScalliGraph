@@ -15,16 +15,16 @@ import scala.util.{Success, Try}
 class IntegrityCheckTest extends PlaySpecification with ModernOps {
   (new LogbackLoggerConfigurator).configure(Environment.simple(), Configuration.empty, Map.empty)
   implicit val authContext: AuthContext = AuthContextImpl("me", "", EntityName(""), "", Set.empty)
-  val userSrv: UserSrv = new DummyUserSrv
+  val userSrv: UserSrv                  = new DummyUserSrv
 
   Fragments.foreach(new DatabaseProviders().list) { databaseProvider =>
     s"[${databaseProvider.name}] integrity check" should {
       "copy edges vertex" in {
         val database = databaseProvider.get
         ModernDatabaseBuilder.build(database)(userSrv.getSystemAuthContext)
-        val personSrv                   = new PersonSrv
-        val softwareSrv                 = new SoftwareSrv
-        val createdSrv                  = new EdgeSrv[Created, Person, Software]
+        val personSrv   = new PersonSrv
+        val softwareSrv = new SoftwareSrv
+        val createdSrv  = new EdgeSrv[Created, Person, Software]
         val newLop = database.tryTransaction { implicit graph =>
           val lop   = softwareSrv.create(Software("lop", "asm")).get
           val vadas = personSrv.getByName("vadas").head
@@ -98,7 +98,6 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
       database.roTransaction(implicit graph => bSrv.getByName("b1").value(_.oneA).toSeq) must beEqualTo(Seq(EntityId.empty))
     }
 
-
     s"[${databaseProvider.name}] remove extra links (byId)" in {
       val database = databaseProvider.get
       MeshDatabaseBuilder.build(database, authContext).get
@@ -123,7 +122,6 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
         aSrv.getByIds(aIds: _*).value(_.name).toSeq
       } must beEqualTo(Seq("a"))
     }
-
 
     s"[${databaseProvider.name}] update field (keep last created) (byId)" in {
       val database = databaseProvider.get
@@ -151,7 +149,6 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
         aSrv.getByIds(aIds: _*).value(_.name).toSeq
       } must beEqualTo(Seq("c"))
     }
-
 
     s"[${databaseProvider.name}] update field (keep first created) (byId)" in {
       val database = databaseProvider.get
@@ -181,7 +178,7 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
       } must beEqualTo(Seq("a"))
     }
 
-  /* use name field */
+    /* use name field */
 
     s"[${databaseProvider.name}] do nothing if mandatory field id is present (byName)" in {
       val database = databaseProvider.get
@@ -193,7 +190,6 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
         }
       } must beEqualTo(Map.empty)
     }
-
 
     s"[${databaseProvider.name}] remove entity if link has been removed (byName)" in {
       val database = databaseProvider.get
@@ -208,7 +204,6 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
       val bSrv = new BSrv
       database.roTransaction(implicit graph => bSrv.getByName("b1").getCount) must beEqualTo(0)
     }
-
 
     s"[${databaseProvider.name}] remove extra links (byName)" in {
       val database = databaseProvider.get
@@ -235,7 +230,6 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
       } must beEqualTo(Seq("c"))
     }
 
-
     s"[${databaseProvider.name}] update field (keep last created) (byName)" in {
       val database = databaseProvider.get
       MeshDatabaseBuilder.build(database, authContext).get
@@ -253,15 +247,16 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
             i.singleLink[A, String]("aName", aSrv.getByName(_).head, _.name)(
               _.outEdge[BAName],
               _.remove,
-              { bb => aa =>
-                val baNames = bSrv.get(bb).outE[BAName].filter(_.inV.getByIds(aa.map(_._id): _*)).project(_.by.by(_.inV.v[A])).toSeq
-                if (baNames.isEmpty) None
-                else {
-                  val selected = baNames.maxBy(_._1._createdAt)._2
-                  val (x, y) = baNames.map(_._2).span(_._id != selected._id)
-                  Some((selected, x ++ y.tail))
+              bb =>
+                aa => {
+                  val baNames = bSrv.get(bb).outE[BAName].filter(_.inV.getByIds(aa.map(_._id): _*)).project(_.by.by(_.inV.v[A])).toSeq
+                  if (baNames.isEmpty) None
+                  else {
+                    val selected = baNames.maxBy(_._1._createdAt)._2
+                    val (x, y)   = baNames.map(_._2).span(_._id != selected._id)
+                    Some((selected, x ++ y.tail))
+                  }
                 }
-              }
             ).check(b, b.aName, as)
         }
       } must beEqualTo(Map("B-A-unlink" -> 2, "B-A-setField" -> 1))
@@ -273,7 +268,6 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
           .toSeq
       } must beEqualTo(Seq("b"))
     }
-
 
     s"[${databaseProvider.name}] update field (keep first created) (byName)" in {
       val database = databaseProvider.get
