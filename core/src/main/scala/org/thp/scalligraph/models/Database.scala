@@ -2,11 +2,12 @@ package org.thp.scalligraph.models
 
 import akka.NotUsed
 import akka.stream.scaladsl.Source
-import org.apache.tinkerpop.gremlin.process.traversal.P
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource
+import org.apache.tinkerpop.gremlin.process.traversal.{Order, P}
 import org.apache.tinkerpop.gremlin.structure.Transaction.Status
-import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex}
+import org.apache.tinkerpop.gremlin.structure.{Edge, Element, T, Vertex}
 import org.thp.scalligraph.auth.AuthContext
+import org.thp.scalligraph.traversal.Traversal.Identity
 import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.traversal.{Converter, Graph, Traversal}
 import org.thp.scalligraph.{EntityId, InternalError}
@@ -14,6 +15,7 @@ import play.api.Logger
 
 import java.util.Date
 import java.util.function.Consumer
+import scala.collection.{AbstractIterator, Iterator}
 import scala.util.{Success, Try}
 
 class DatabaseException(message: String = "Violation of database schema", cause: Exception) extends Exception(message, cause)
@@ -86,6 +88,20 @@ trait Database {
   def E[D <: Product](ids: EntityId*)(implicit model: Model.Edge[D], graph: Graph): Traversal.E[D]
   def E(label: String, ids: EntityId*)(implicit graph: Graph): Traversal[Edge, Edge, Converter.Identity[Edge]]
   def traversal()(implicit graph: Graph): GraphTraversalSource
+
+  def pagedTraversal[R](
+      pageSize: Long,
+      filter: Traversal.Identity[Vertex] => Traversal.Identity[Vertex]
+  )(
+      process: Identity[Vertex] => Try[R]
+  ): Iterator[Try[R]]
+
+  def pagedTraversalIds[R](
+      pageSize: Long,
+      filter: Traversal.Identity[Vertex] => Traversal.Identity[Vertex]
+  )(
+      process: Seq[EntityId] => R
+  ): Iterator[R]
 
   val extraModels: Seq[Model]
   val binaryLinkModel: Model.Edge[BinaryLink]
@@ -201,7 +217,83 @@ abstract class BaseDatabase extends Database {
 
   override val extraModels: Seq[Model] = Seq(binaryModel, binaryLinkModel)
 
+  override def pagedTraversal[R](
+      pageSize: Long,
+      filter: Traversal.Identity[Vertex] => Traversal.Identity[Vertex]
+  )(
+      process: Identity[Vertex] => Try[R]
+  ): Iterator[Try[R]] =
+    pagedTraversalIds(pageSize, filter) { ids =>
+      tryTransaction { implicit graph =>
+        process(graph.VV(ids: _*))
+      }
+    }
+
+  final private class UnfoldIterator[A, S](init: Option[S])(f: Option[S] => Option[(A, S)]) extends AbstractIterator[A] {
+    private[this] var state: Option[S]           = init
+    private[this] var nextResult: Option[(A, S)] = null
+
+    override def hasNext: Boolean = {
+      if (nextResult eq null) {
+        nextResult = {
+          val res = f(state)
+          if (res eq null) throw new NullPointerException("null during unfold")
+          res
+        }
+        state = null.asInstanceOf[Option[S]] // allow GC
+      }
+      nextResult.isDefined
+    }
+
+    override def next(): A =
+      if (hasNext) {
+        val (value, newState) = nextResult.get
+        state = Some(newState)
+        nextResult = null
+        value
+      } else Iterator.empty.next()
+  }
+
+  override def pagedTraversalIds[R](
+      pageSize: Long,
+      filter: Traversal.Identity[Vertex] => Traversal.Identity[Vertex]
+  )(
+      process: Seq[EntityId] => R
+  ): Iterator[R] = {
+//    def unfold[A, B](a: Option[A])(f: Option[A] => Option[(A, B)]): Stream[B] = f(a).fold(Stream.empty[B]) { case (a, b) => b #:: unfold(Some(a))(f) }
+    def unfold[A, B](init: Option[A])(f: Option[A] => Option[(B, A)]) = new UnfoldIterator(init)(f)
+    def getPage(date: Date, excludeIds: Seq[EntityId], count: Long)(implicit graph: Graph): Seq[EntityId] =
+      filter(graph.VV())
+        .unsafeHas("_createdAt", P.lte(date))
+        .has(T.id, P.without(excludeIds))
+        .sort(_.by("_createdAt", Order.desc))
+        .limit(count)
+        ._id
+        .toSeq
+    def getFirstPage(count: Long)(implicit graph: Graph): Seq[EntityId] =
+      filter(graph.VV())
+        .sort(_.by("_createdAt", Order.desc))
+        .limit(count)
+        ._id
+        .toSeq
+    def getDate(id: EntityId)(implicit graph: Graph): Date = graph.VV(id).property("_createdAt", UMapping.date).head
+
+    unfold[(Date, Seq[EntityId]), R](None) { refDate =>
+      roTransaction { implicit graph =>
+        val ids = refDate.fold(getFirstPage(pageSize)) { case (d, i) => getPage(d, i, pageSize) }
+        if (ids.isEmpty) None
+        else {
+          val lastDate   = getDate(ids.last)
+          val reverseIds = ids.reverseIterator
+          reverseIds.next()
+          val sameDateIds = reverseIds.takeWhile(getDate(_) == lastDate).toSeq :+ ids.last
+          Some((process(ids), (lastDate, sameDateIds)))
+        }
+      }
+    }
+  }
 }
+
 case class Binary(attachmentId: Option[String], folder: Option[String], data: Array[Byte])
 object Binary {
   val model: Model.Vertex[Binary] = new VertexModel {

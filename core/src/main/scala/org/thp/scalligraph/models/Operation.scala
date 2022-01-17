@@ -3,8 +3,7 @@ package org.thp.scalligraph.models
 import org.apache.tinkerpop.gremlin.structure.Vertex
 import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.traversal.{Converter, Traversal}
+import org.thp.scalligraph.traversal.Traversal
 import play.api.Logger
 
 import scala.reflect.{classTag, ClassTag}
@@ -35,29 +34,28 @@ case class RemoveProperty(model: String, propertyName: String, usedOnlyByThisMod
   override def execute(db: Database, logger: String => Unit): Try[Unit] = db.removeProperty(model, propertyName, usedOnlyByThisModel, mapping)
 }
 
-case class UpdateGraph(model: String, update: Traversal.Identity[Vertex] => Try[Unit], comment: String, pageSize: Int = 100) extends Operation {
+case class UpdateGraph(
+    model: String,
+    filter: Traversal.Identity[Vertex] => Traversal.Identity[Vertex],
+    update: Traversal.Identity[Vertex] => Try[Unit],
+    comment: String,
+    pageSize: Long = 100
+) extends Operation {
   override def info: String = s"Update graph: $comment"
 
   override def execute(db: Database, logger: String => Unit): Try[Unit] =
     db
-      .roTransaction { roGraph =>
-        db
-          .V(model)(roGraph)
-          ._id
-          .toSeq
+      .pagedTraversal(pageSize, filter)(update)
+      .zipWithIndex
+      .map {
+        case (t, i) =>
+          logger(s"Update graph in progress (${i * pageSize}): $comment")
+          t
       }
-      .toIterator
-      .grouped(pageSize)
-      .foldLeft[Try[Int]](Success(0)) {
-        case (Success(count), page) =>
-          logger(s"Update graph in progress ($count): $comment")
-          db.tryTransaction { rwGraph =>
-            update(db.V(model, page: _*)(rwGraph))
-          }.map(_ => count + pageSize)
-        case (failure, _) => failure
-      }
-      .map(_ => ())
-      .recoverWith { case error => Failure(InternalError(s"Unable to execute migration operation: $comment", error)) }
+      .find(_.isFailure)
+      .fold[Try[Unit]](Success(()))(_.recoverWith {
+        case error => Failure(InternalError(s"Unable to execute migration operation: $comment", error))
+      })
 }
 
 case class AddIndex(model: String, indexType: IndexType.Value, properties: Seq[String]) extends Operation {
@@ -103,8 +101,10 @@ case class Operations private (schemaName: String, operations: Seq[Operation]) {
     addOperations(AddProperty(model, propertyName, mapping.toMapping))
   def removeProperty[T](model: String, propertyName: String, usedOnlyByThisModel: Boolean)(implicit mapping: UMapping[T]): Operations =
     addOperations(RemoveProperty(model, propertyName, usedOnlyByThisModel, mapping.toMapping))
-  def updateGraph(comment: String, model: String)(update: Traversal[Vertex, Vertex, Converter.Identity[Vertex]] => Try[Unit]): Operations =
-    addOperations(UpdateGraph(model, update, comment))
+  def updateGraph(comment: String, model: String, filter: Traversal.Identity[Vertex] => Traversal.Identity[Vertex] = identity)(
+      update: Traversal.Identity[Vertex] => Try[Unit]
+  ): Operations =
+    addOperations(UpdateGraph(model, filter, update, comment))
   def addIndex(model: String, indexType: IndexType.Value, properties: String*): Operations =
     addOperations(AddIndex(model, indexType, properties))
   def dbOperation[DB <: Database: ClassTag](comment: String)(op: DB => Try[Unit]): Operations =
