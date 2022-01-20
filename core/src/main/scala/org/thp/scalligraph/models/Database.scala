@@ -15,7 +15,7 @@ import play.api.Logger
 
 import java.util.Date
 import java.util.function.Consumer
-import scala.collection.{AbstractIterator, Iterator}
+import scala.collection.{AbstractIterator, Iterator, TraversableOnce}
 import scala.util.{Success, Try}
 
 class DatabaseException(message: String = "Violation of database schema", cause: Exception) extends Exception(message, cause)
@@ -90,14 +90,14 @@ trait Database {
   def traversal()(implicit graph: Graph): GraphTraversalSource
 
   def pagedTraversal[R](
-      pageSize: Long,
+      pageSize: Int,
       filter: Traversal.Identity[Vertex] => Traversal.Identity[Vertex]
   )(
       process: Identity[Vertex] => Try[R]
   ): Iterator[Try[R]]
 
   def pagedTraversalIds[R](
-      pageSize: Long,
+      pageSize: Int,
       filter: Traversal.Identity[Vertex] => Traversal.Identity[Vertex]
   )(
       process: Seq[EntityId] => R
@@ -218,7 +218,7 @@ abstract class BaseDatabase extends Database {
   override val extraModels: Seq[Model] = Seq(binaryModel, binaryLinkModel)
 
   override def pagedTraversal[R](
-      pageSize: Long,
+      pageSize: Int,
       filter: Traversal.Identity[Vertex] => Traversal.Identity[Vertex]
   )(
       process: Identity[Vertex] => Try[R]
@@ -255,42 +255,61 @@ abstract class BaseDatabase extends Database {
   }
 
   override def pagedTraversalIds[R](
-      pageSize: Long,
+      pageSize: Int,
       filter: Traversal.Identity[Vertex] => Traversal.Identity[Vertex]
   )(
       process: Seq[EntityId] => R
   ): Iterator[R] = {
-//    def unfold[A, B](a: Option[A])(f: Option[A] => Option[(A, B)]): Stream[B] = f(a).fold(Stream.empty[B]) { case (a, b) => b #:: unfold(Some(a))(f) }
+    require(pageSize > 1)
     def unfold[A, B](init: Option[A])(f: Option[A] => Option[(B, A)]) = new UnfoldIterator(init)(f)
-    def getPage(date: Date, excludeIds: Seq[EntityId], count: Long)(implicit graph: Graph): Seq[EntityId] =
+    def getFirstPage(count: Int)(implicit graph: Graph): Seq[EntityId] =
       filter(graph.VV())
-        .unsafeHas("_createdAt", P.lte(date))
-        .has(T.id, P.without(excludeIds))
         .sort(_.by("_createdAt", Order.desc))
         .limit(count)
         ._id
         .toSeq
-    def getFirstPage(count: Long)(implicit graph: Graph): Seq[EntityId] =
+    def getPage(date: Date, excludeIds: Seq[EntityId], count: Int)(implicit graph: Graph): Seq[EntityId] =
       filter(graph.VV())
+        .unsafeHas("_createdAt", P.lte(date))
+        .has(T.id, P.without(excludeIds.map(idMapping.reverse): _*))
         .sort(_.by("_createdAt", Order.desc))
         .limit(count)
+        ._id
+        .toSeq
+    def getPageOfDate(date: Date, excludeIds: Seq[EntityId])(implicit graph: Graph): Seq[EntityId] =
+      filter(graph.VV())
+        .unsafeHas("_createdAt", P.eq(date))
+        .has(T.id, P.without(excludeIds.map(idMapping.reverse): _*))
         ._id
         .toSeq
     def getDate(id: EntityId)(implicit graph: Graph): Date = graph.VV(id).property("_createdAt", UMapping.date).head
 
-    unfold[(Date, Seq[EntityId]), R](None) { refDate =>
+    // Iterator.unfold[(Date, Seq[String]), TraversableOnce[R]](None) { refDate =>
+    unfold[(Date, Seq[EntityId]), TraversableOnce[R]](None) { state =>
       roTransaction { implicit graph =>
-        val ids = refDate.fold(getFirstPage(pageSize)) { case (d, i) => getPage(d, i, pageSize) }
+        val ids = state.fold(getFirstPage(pageSize))(s => getPage(s._1, s._2, pageSize))
+
         if (ids.isEmpty) None
         else {
-          val lastDate   = getDate(ids.last)
-          val reverseIds = ids.reverseIterator
-          reverseIds.next()
-          val sameDateIds = reverseIds.takeWhile(getDate(_) == lastDate).toSeq :+ ids.last
-          Some((process(ids), (lastDate, sameDateIds)))
+          val lastId   = ids.last
+          val lastDate = getDate(lastId)
+          if (ids.size > 1 && lastDate == getDate(ids.head))
+            Some((getPageOfDate(lastDate, state.fold(Seq.empty[EntityId])(_._2)), new Date(lastDate.getTime - 1), Nil))
+          else {
+            val reverseIds = ids.reverseIterator
+            reverseIds.next()
+            val sameDateIds = reverseIds.takeWhile(getDate(_) == lastDate).toVector :+ lastId
+            Some((ids, lastDate, sameDateIds))
+          }
         }
+      }.map {
+        case (ids, lastDate, sameDateIds) =>
+          if (ids.size <= pageSize)
+            (Seq(process(ids)), (lastDate, sameDateIds))
+          else
+            (ids.grouped(pageSize).map(process), (lastDate, sameDateIds))
       }
-    }
+    }.flatten
   }
 }
 

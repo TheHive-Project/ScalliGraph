@@ -17,7 +17,7 @@ abstract class VertexSrv[V <: Product](implicit val model: Model.Vertex[V]) exte
   override def startTraversal(implicit graph: Graph): Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]] =
     graph.V[V]()(model)
 
-  def pagedTraversal[R](db: Database, pageSize: Long, filter: Traversal.V[V] => Traversal.V[V] = identity)(
+  def pagedTraversal[R](db: Database, pageSize: Int, filter: Traversal.V[V] => Traversal.V[V] = identity)(
       process: Traversal.V[V] => Try[R]
   ): Iterator[Try[R]] =
     pagedTraversalIds(db, pageSize, filter) { ids =>
@@ -25,13 +25,15 @@ abstract class VertexSrv[V <: Product](implicit val model: Model.Vertex[V]) exte
         process(getByIds(ids: _*))
       }
     }
-  def pagedTraversalIds[R](db: Database, pageSize: Long, filter: Traversal.V[V] => Traversal.V[V] = identity)(
+  def pagedTraversalIds[R](db: Database, pageSize: Int, filter: Traversal.V[V] => Traversal.V[V] = identity)(
       process: Seq[EntityId] => R
   ): Iterator[R] =
     db.pagedTraversalIds[R](
       pageSize,
       filter
-        .compose[Traversal.Identity[Vertex]](_.setConverter[V with Entity, Converter[V with Entity, Vertex]](model.converter))
+        .compose[Traversal.Identity[Vertex]](
+          db.labelFilter(model.label, _).setConverter[V with Entity, Converter[V with Entity, Vertex]](model.converter)
+        )
         .andThen(_.unsetConverter)
     )(process)
 
