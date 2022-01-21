@@ -57,9 +57,11 @@ class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
   override def loadBinary(folder: String, id: String): InputStream =
     Files.newInputStream(directory.resolve(folder).resolve(id))
 
-  override def saveBinary(folder: String, id: String, is: InputStream)(implicit graph: Graph): Try[Unit] =
-    Try {
-      Files.copy(is, directory.resolve(folder).resolve(id))
+  override def saveBinary(folder: String, id: String, is: InputStream)(implicit graph: Graph): Try[Unit] = {
+    val result = Try {
+      val f = directory.resolve(folder).resolve(id)
+      if (!Files.exists(f))
+        Files.copy(is, directory.resolve(folder).resolve(id))
       ()
     }.recover {
       case _: NoSuchFileException =>
@@ -68,6 +70,9 @@ class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
         ()
       case _: FileAlreadyExistsException => ()
     }
+    is.close()
+    result
+  }
 
   override def exists(folder: String, id: String): Boolean = Files.exists(directory.resolve(folder).resolve(id))
 
