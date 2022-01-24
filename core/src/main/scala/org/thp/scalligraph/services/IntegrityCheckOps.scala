@@ -71,9 +71,8 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps with MapMerge
   val db: Database
   val service: VertexSrv[E]
 
-  lazy val name: String     = service.model.label
-  lazy val logger: Logger   = Logger(getClass)
-  final private val noValue = new Object
+  lazy val name: String   = service.model.label
+  lazy val logger: Logger = Logger(getClass)
 
   class LinkRemoverSelector {
     def outEdge[EDGE <: Product: ru.TypeTag](implicit graph: Graph): LinkRemover = {
