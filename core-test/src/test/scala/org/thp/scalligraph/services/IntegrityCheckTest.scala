@@ -42,7 +42,7 @@ class IntegrityCheckTest extends PlaySpecification {
 
           override def resolve(entities: Seq[Software with Entity])(implicit graph: Graph): Try[Unit] = Success(())
 
-          override def globalCheck(): Map[String, Int] = Map.empty
+          override def globalCheck(stopAt: Long): Map[String, Int] = Map.empty
         }
         val duplicates = integrityCheckOps.getDuplicates(Seq("name"))
         duplicates must have size 1
@@ -338,7 +338,7 @@ class IntegrityCheckTest extends PlaySpecification {
       override val service: VertexSrv[B]                                                   = new BSrv
       override def resolve(entities: Seq[B with Entity])(implicit graph: Graph): Try[Unit] = Success(())
 
-      override def globalCheck(): Map[String, Int] =
+      override def globalCheck(stopAt: Long): Map[String, Int] =
         db.tryTransaction { implicit graph =>
           Try {
             service
@@ -351,8 +351,8 @@ class IntegrityCheckTest extends PlaySpecification {
           }
         }.getOrElse(Map("globalFailure" -> 1))
     }
-    val result = ic.globalCheck()
-    ic.globalCheck() must beEqualTo(Map.empty)
+    val result = ic.globalCheck(Long.MaxValue)
+    ic.globalCheck(Long.MaxValue) must beEqualTo(Map.empty)
     result
   }
 

@@ -45,7 +45,7 @@ case class UpdateGraph(
 
   override def execute(db: Database, logger: String => Unit): Try[Unit] =
     db
-      .pagedTraversal(pageSize.toInt, db.labelFilter(model, _))(update)
+      .pagedTraversal(pageSize.toInt, db.labelFilter(model, _))(update.andThen(Some(_)))
       .zipWithIndex
       .map {
         case (t, i) =>

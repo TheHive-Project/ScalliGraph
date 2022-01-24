@@ -10,18 +10,23 @@ import org.thp.scalligraph.traversal._
 import org.thp.scalligraph.utils.FunctionalCondition.When
 import play.api.Logger
 
-import java.util.{Collection => JCollection, List => JList}
+import java.util.{Date, Collection => JCollection, List => JList}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.compat.java8.OptionConverters.RichOptionalGeneric
+import scala.concurrent.duration._
 import scala.reflect.runtime.{universe => ru}
 import scala.util.Try
 
 sealed trait GenIntegrityCheckOps {
+  type E
   def name: String
   def duplicationCheck(): Map[String, Int]
   def initialCheck()(implicit graph: Graph, authContext: AuthContext): Unit
-  def globalCheck(): Map[String, Int]
+  def globalCheck(traversal: Traversal.V[E])(implicit graph: Graph): Map[String, Int]
 }
+
+case class CheckPerformance(period: Option[Long], duration: Option[Long])
 
 trait EntitySelector[E]             extends (Seq[E with Entity] => Option[(E with Entity, Seq[E with Entity])])
 trait ElementSelector[E <: Element] extends (Seq[E] => Option[(E, Seq[E])])
@@ -65,7 +70,8 @@ trait MapMerger {
 }
 object MapMerger extends MapMerger
 
-trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps with MapMerger {
+trait IntegrityCheckOps[EE <: Product] extends GenIntegrityCheckOps with MapMerger {
+  type E = EE
   val db: Database
   val service: VertexSrv[E]
 
@@ -428,5 +434,53 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps with MapMerge
 
   def resolve(entities: Seq[E with Entity])(implicit graph: Graph): Try[Unit]
 
-  def globalCheck(): Map[String, Int]
+  def globalCheck(traversal: Traversal.V[E])(implicit graph: Graph): Map[String, Int]
+
+  def getPerformanceIndicator: CheckPerformance
+
+  def prettyPrintDuration(d: FiniteDuration): Unit = {
+    val timeUnitList: Seq[TimeUnit] =
+      Seq(DAYS, HOURS, MINUTES, SECONDS, MILLISECONDS, MICROSECONDS, NANOSECONDS)
+  }
+  def runGlobalCheck(maxDuration: FiniteDuration): Map[String, Int] = {
+    logger.info(s"Starting $name integrity check for $maxDuration")
+    val startAt = System.currentTimeMillis()
+    val stopAt  = startAt + maxDuration.toMillis
+    val createdAtCursor = Try(
+      db.roTransaction(_.variables.get[Date](s"integrityCheckState-$name-createdAtCursor").asScala)
+    ).toOption.flatten
+    val result = service
+      .pagedTraversalIds(db, 100, t => createdAtCursor.fold(t)(c => t.has(_._createdAt, P.lt(c)))) { ids =>
+        if (System.currentTimeMillis() > stopAt) {
+          db.tryTransaction { implicit graph =>
+            Try {
+              val newCursor = service.getByIds(ids.head).value(_._createdAt).head
+              val period    = createdAtCursor.fold(System.currentTimeMillis())(_.getTime) - newCursor.getTime
+              graph.variables.set[Long](s"integrityCheckState-$name-duration", stopAt - startAt)
+              graph.variables.set[Date](s"integrityCheckState-$name-createdAtCursor", newCursor)
+              graph.variables.set[Long](s"integrityCheckState-$name-period", period)
+            }
+          }
+          None
+        } else
+          Some {
+            db.tryTransaction { implicit graph =>
+              Try(globalCheck(service.getByIds(ids: _*)))
+            }.getOrElse(Map("globalFailure" -> 1))
+          }
+      }
+      .reduceOption(_ <+> _)
+      .getOrElse(Map.empty)
+    if (System.currentTimeMillis() <= stopAt) // all data has been processed
+      db.tryTransaction { implicit graph =>
+        Try {
+          graph.variables.remove(s"integrityCheckState-$name-createdAtCursor")
+          if (createdAtCursor.isEmpty) {
+            graph.variables.set[Long](s"integrityCheckState-$name-duration", stopAt - startAt)
+            graph.variables.remove(s"integrityCheckState-$name-period")
+          }
+        }
+      }
+    result
+  }
 }
