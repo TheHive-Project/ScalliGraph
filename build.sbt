@@ -1,4 +1,4 @@
-import Dependencies._
+import Dependencies.{bloomFilter, _}
 
 val scalligraphVersion     = "0.1.0-SNAPSHOT"
 val scala212               = "2.12.13"
@@ -91,7 +91,8 @@ lazy val core = (project in file("core"))
       playLogback % Test,
       scalaCompiler(scalaVersion.value),
       scalaReflect(scalaVersion.value),
-      ws
+      ws,
+      bloomFilter
     )
   )
 

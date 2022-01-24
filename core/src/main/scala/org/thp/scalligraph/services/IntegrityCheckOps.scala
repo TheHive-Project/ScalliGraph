@@ -1,5 +1,8 @@
 package org.thp.scalligraph.services
 
+import bloomfilter.CanGenerateHashFrom
+import bloomfilter.CanGenerateHashFrom.CanGenerateHashFromLong
+import bloomfilter.mutable.BloomFilter
 import org.apache.tinkerpop.gremlin.process.traversal.P
 import org.apache.tinkerpop.gremlin.structure.{Edge, Element, Vertex}
 import org.thp.scalligraph.EntityId
@@ -12,7 +15,6 @@ import play.api.Logger
 
 import java.util.{Collection => JCollection, List => JList}
 import scala.collection.JavaConverters._
-import scala.collection.mutable
 import scala.reflect.runtime.{universe => ru}
 import scala.util.Try
 
@@ -294,27 +296,50 @@ trait IntegrityCheckOps[E <: Product] extends GenIntegrityCheckOps with MapMerge
   def getDuplicates[A](properties: Seq[String]): Seq[Seq[E with Entity]] =
     if (properties.isEmpty) Nil
     else {
-      val singleProperty = properties.lengthCompare(1) == 0
-      val getValues: Vertex => Any =
-        if (singleProperty) (_: Vertex).value[Any](properties.head)
-        else (v: Vertex) => properties.map(v.property[Any](_).orElse(noValue))
-      db.roTransaction { implicit graph =>
-        val map = mutable.Map.empty[Any, mutable.Builder[EntityId, Set[EntityId]]]
+      implicit val CanGenerateHashFromVertex: CanGenerateHashFrom[Vertex] = (vertex: Vertex) =>
+        properties.foldLeft(0L) { (h, p) =>
+          vertex.property[Any](p).orElse(NO_VALUE) match {
+            case s: String => CanGenerateHashFrom.canGenerateHashFromString.generateHash(s) ^ h
+            case l: Long   => CanGenerateHashFromLong.generateHash(l) ^ h
+            case other     => other.##.toLong ^ h
+          }
+        }
+
+      val bloomFilter = BloomFilter[Vertex](100000, 0.1)
+      try db.roTransaction { implicit graph =>
         service
           .startTraversal
-          .setConverter[Vertex, IdentityConverter[Vertex]](Converter.identity)
-          .foreach { v =>
-            map.getOrElseUpdate(getValues(v), Set.newBuilder[EntityId]) += EntityId(v.id)
+          .unsetConverter
+          .toIterator
+          .flatMap { vertex =>
+            if (bloomFilter.mightContain(vertex)) {
+              val entities = properties
+                .foldLeft(service.startTraversal) { (t, p) =>
+                  if (vertex.property[Any](p).isPresent)
+                    t.unsafeHas(p, vertex.value[Any](p))
+                  else
+                    t.unsafeHasNot(p)
+                }
+                .toSeq
+              if (entities.lengthCompare(1) > 0) Seq(entities)
+              else Nil
+            } else {
+              bloomFilter.add(vertex)
+              Nil
+            }
           }
-        map
-          .values
-          .view
-          .map(_.result())
-          .collect {
-            case vertexIds if vertexIds.size > 1 => service.getByIds(vertexIds.toSeq: _*).toList
+          .foldLeft((List.empty[Seq[E with Entity]], Set.empty[Set[EntityId]])) {
+            case ((uniqueEntities, entityIds), es) =>
+              val ids = es.map(_._id).toSet
+              if (entityIds.contains(ids))
+                (uniqueEntities, entityIds)
+              else
+                (es :: uniqueEntities, entityIds + ids)
           }
-          .toList
-      }
+          ._1
+//          .distinctBy(_.map(_._id).toSet)
+//          .toList
+      } finally bloomFilter.dispose()
     }
 
   def copyEdge(from: E with Entity, to: E with Entity, predicate: Edge => Boolean = _ => true)(implicit graph: Graph): Unit = {
