@@ -271,11 +271,13 @@ class S3StorageSrv @Inject() (configuration: Configuration, system: ActorSystem,
       override def getRegion: Region = Region.of(region)
     })
 
-  override def loadBinary(folder: String, id: String): InputStream =
-    S3
-      .download(bucketName, s"$folder/$id")
+  override def source(folder: String, id: String): Source[ByteString, _] =
+    S3.download(bucketName, s"$folder/$id")
       .withAttributes(S3Attributes.settings(settings))
       .flatMapConcat(_.get._1)
+
+  override def loadBinary(folder: String, id: String): InputStream =
+    source(folder, id)
       .runWith(
         StreamConverters.asInputStream(readTimeout)
       )
