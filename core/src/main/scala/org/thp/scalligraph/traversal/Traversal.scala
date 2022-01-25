@@ -32,6 +32,7 @@ class Traversal[+D, G, +C <: Converter[D, G]](val graph: Graph, val raw: GraphTr
   def graphMap[DD, GG, CC <: Converter[DD, GG]](d: G => GG, conv: CC): Traversal[DD, GG, CC] =
     new Traversal[DD, GG, CC](graph, raw.map[GG]((t: Traverser[G]) => d(t.get)), conv)
   def setConverter[DD, CC <: Converter[DD, G]](conv: CC): Traversal[DD, G, CC] = new Traversal[DD, G, CC](graph, raw, conv)
+  def unsetConverter                                                           = new Traversal[G, G, IdentityConverter[G]](graph, raw, Converter.identity)
   def start                                                                    = new Traversal[D, G, C](graph, __.start[G](), converter)
   def mapAsNumber(
       f: Traversal[Number, Number, IdentityConverter[Number]] => Traversal[Number, Number, IdentityConverter[Number]]

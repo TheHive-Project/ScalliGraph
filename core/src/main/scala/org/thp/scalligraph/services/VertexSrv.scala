@@ -9,11 +9,32 @@ import org.thp.scalligraph.{EntityId, EntityIdOrName, NotFoundError}
 import play.api.libs.json.JsObject
 
 import java.util.Date
+import scala.collection.Iterator
 import scala.util.{Failure, Success, Try}
 
 abstract class VertexSrv[V <: Product](implicit val model: Model.Vertex[V]) extends ElementSrv[V, Vertex] {
   override def startTraversal(implicit graph: Graph): Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]] =
     graph.V[V]()(model)
+
+  def pagedTraversal[R](db: Database, pageSize: Int, filter: Traversal.V[V] => Traversal.V[V] = identity)(
+      process: Traversal.V[V] => Try[R]
+  ): Iterator[Try[R]] =
+    pagedTraversalIds(db, pageSize, filter) { ids =>
+      db.tryTransaction { implicit graph =>
+        process(getByIds(ids: _*))
+      }
+    }
+  def pagedTraversalIds[R](db: Database, pageSize: Int, filter: Traversal.V[V] => Traversal.V[V] = identity)(
+      process: Seq[EntityId] => R
+  ): Iterator[R] =
+    db.pagedTraversalIds[R](
+      pageSize,
+      filter
+        .compose[Traversal.Identity[Vertex]](
+          db.labelFilter(model.label, _).setConverter[V with Entity, Converter[V with Entity, Vertex]](model.converter)
+        )
+        .andThen(_.unsetConverter)
+    )(process)
 
 //  override def startTraversal(strategy: GraphStrategy)(implicit graph: Graph): Traversal.V[V] =
 //    filterTraversal(Traversal.strategedV(strategy))

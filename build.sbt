@@ -1,4 +1,4 @@
-import Dependencies._
+import Dependencies.{bloomFilter, _}
 
 val defaultSettings = Seq(
   version := "0.1.0-SNAPSHOT",
@@ -95,7 +95,8 @@ lazy val scalligraph = (project in file("core"))
       macWireMacrosakka,
       macWireUtil,
       macWireProxy,
-      refined
+      refined,
+      bloomFilter
     )
   )
 

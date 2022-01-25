@@ -454,8 +454,18 @@ class JanusDatabase(
 
     val cardinality = adaptCardinality(mapping.cardinality)
     logger.trace(s"mgmt.makePropertyKey($propertyName).dataType(${mapping.graphTypeClass.getSimpleName}.class).cardinality($cardinality).make()")
-    Option(mgmt.getPropertyKey(propertyName)) match {
-      case None =>
+    Option(mgmt.getPropertyKey(propertyName))
+      .flatMap {
+        case p if p.dataType() == mapping.graphTypeClass && p.cardinality() == cardinality => Some(Success(()))
+        case p =>
+          logger.warn(
+            s"Property $propertyName exists with incompatible type: $cardinality:${mapping.graphTypeClass} Vs ${p.cardinality()}:${p.dataType()} => replace the previous property"
+          )
+          val newName = s"$propertyName-removed-${System.currentTimeMillis()}"
+          mgmt.changeName(p, newName)
+          None
+      }
+      .getOrElse {
         Try {
           mgmt
             .makePropertyKey(propertyName)
@@ -464,17 +474,7 @@ class JanusDatabase(
             .make()
           ()
         }
-      case Some(p) =>
-        if (p.dataType() == mapping.graphTypeClass && p.cardinality() == cardinality) {
-          logger.debug(s"Property $propertyName $cardinality:${mapping.graphTypeClass} already exists, ignore it")
-          Success(())
-        } else
-          Failure(
-            InternalError(
-              s"Property $propertyName exists with incompatible type: $cardinality:${mapping.graphTypeClass} Vs ${p.cardinality()}:${p.dataType()}"
-            )
-          )
-    }
+      }
   }
 
   override def removeProperty(model: String, propertyName: String, usedOnlyByThisModel: Boolean, mapping: Mapping[_, _, _]): Try[Unit] =

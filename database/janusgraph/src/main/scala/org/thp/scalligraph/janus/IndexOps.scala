@@ -36,6 +36,14 @@ trait IndexOps {
       }
     }
 
+  def fieldIsIndexed(fieldName: String): Boolean = {
+    val indices = listIndexesWithStatus(SchemaStatus.ENABLED).getOrElse(Nil)
+    managementTransaction { mgmt =>
+      Try(indices.exists(i => mgmt.getGraphIndex(i).getFieldKeys.exists(_.name() == fieldName)))
+    }
+      .getOrElse(false)
+  }
+
   private def waitRegistration(indexName: String): Unit =
     scala.concurrent.blocking {
       logger.info(s"Wait for the index $indexName to become available")

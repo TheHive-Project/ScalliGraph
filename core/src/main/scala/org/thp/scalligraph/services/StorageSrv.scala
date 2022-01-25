@@ -76,9 +76,11 @@ class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
   override def loadBinary(folder: String, id: String): InputStream =
     Files.newInputStream(directory.resolve(folder).resolve(id))
 
-  override def saveBinary(folder: String, id: String, is: InputStream)(implicit graph: Graph): Try[Unit] =
-    Try {
-      Files.copy(is, directory.resolve(folder).resolve(id))
+  override def saveBinary(folder: String, id: String, is: InputStream)(implicit graph: Graph): Try[Unit] = {
+    val result = Try {
+      val f = directory.resolve(folder).resolve(id)
+      if (!Files.exists(f))
+        Files.copy(is, directory.resolve(folder).resolve(id))
       ()
     }.recover {
       case _: NoSuchFileException =>
@@ -87,6 +89,9 @@ class LocalFileSystemStorageSrv(directory: Path) extends StorageSrv {
         ()
       case _: FileAlreadyExistsException => ()
     }
+    is.close()
+    result
+  }
 
   override def exists(folder: String, id: String): Boolean = Files.exists(directory.resolve(folder).resolve(id))
 
@@ -277,11 +282,13 @@ class S3StorageSrv(configuration: Configuration, system: ActorSystem, implicit v
       override def getRegion: Region = Region.of(region)
     })
 
-  override def loadBinary(folder: String, id: String): InputStream =
-    S3
-      .download(bucketName, s"$folder/$id")
+  override def source(folder: String, id: String): Source[ByteString, _] =
+    S3.download(bucketName, s"$folder/$id")
       .withAttributes(S3Attributes.settings(settings))
       .flatMapConcat(_.get._1)
+
+  override def loadBinary(folder: String, id: String): InputStream =
+    source(folder, id)
       .runWith(
         StreamConverters.asInputStream(readTimeout)
       )
