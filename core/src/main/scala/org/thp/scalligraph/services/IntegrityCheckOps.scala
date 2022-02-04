@@ -426,7 +426,7 @@ trait DedupCheck[E <: Product] extends IntegrityCheck with IntegrityCheckOps[E] 
             1000000L
         }
 
-      val bloomFilter = BloomFilter[Vertex](numberOfElements, 0.1)
+      val bloomFilter = BloomFilter[Vertex](math.max(numberOfElements, 1L), 0.1)
       try db.roTransaction { implicit graph =>
         service
           .startTraversal
@@ -474,7 +474,7 @@ trait DedupCheck[E <: Product] extends IntegrityCheck with IntegrityCheckOps[E] 
       .takeWhile(_ => killSwitch.continueProcess)
       .foreach { entities =>
         db.tryTransaction { implicit graph =>
-          logger.info(s"Found duplicate entities:${entities.map(e => s"\n - $e").mkString}")
+          logger.debug(s"Found duplicate entities:${entities.map(e => s"\n - $e").mkString}")
           resolve(entities)
         }
       }
