@@ -4,7 +4,7 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.services.{EdgeSrv, VertexSrv}
 import org.thp.scalligraph.traversal.{Graph, Traversal}
 import org.thp.scalligraph.traversal.TraversalOps._
-import org.thp.scalligraph.{BuildEdgeEntity, BuildVertexEntity, EntityId, RichSeq}
+import org.thp.scalligraph.{BuildEdgeEntity, BuildVertexEntity, EntityId}
 
 import scala.util.Try
 
