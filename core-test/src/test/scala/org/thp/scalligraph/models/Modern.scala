@@ -66,13 +66,12 @@ class SoftwareSrv @Inject() extends VertexSrv[Software] {
 
 @Singleton
 class ModernSchema @Inject() extends Schema {
-  val personSrv                                    = new PersonSrv
-  val softwareSrv                                  = new SoftwareSrv
-  val knowsSrv                                     = new EdgeSrv[Knows, Person, Person]
-  val createdSrv                                   = new EdgeSrv[Created, Person, Software]
-  val vertexServices: Seq[VertexSrv[_]]            = Seq(personSrv, softwareSrv)
-  override def modelList: Seq[Model]               = (vertexServices :+ knowsSrv :+ createdSrv).map(_.model)
-  override def initialValues: Seq[InitialValue[_]] = vertexServices.map(_.model.getInitialValues).flatten
+  val personSrv                         = new PersonSrv
+  val softwareSrv                       = new SoftwareSrv
+  val knowsSrv                          = new EdgeSrv[Knows, Person, Person]
+  val createdSrv                        = new EdgeSrv[Created, Person, Software]
+  val vertexServices: Seq[VertexSrv[_]] = Seq(personSrv, softwareSrv)
+  override def modelList: Seq[Model]    = (vertexServices :+ knowsSrv :+ createdSrv).map(_.model)
 }
 
 object ModernDatabaseBuilder {

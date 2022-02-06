@@ -80,7 +80,8 @@ trait IntegrityCheck {
   lazy val name: String = service.model.label
   val db: Database
   val service: VertexSrv[ENTITY]
-  def initialCheck()(implicit graph: Graph, authContext: AuthContext): Unit = ()
+  def initialCheck()(implicit graph: Graph, authContext: AuthContext): Unit =
+    service.model.initialValues.filterNot(service.exists(_)).foreach(service.createEntity(_))
 }
 
 trait IntegrityCheckOps[E <: Product] extends IntegrityCheck with MapMerger {

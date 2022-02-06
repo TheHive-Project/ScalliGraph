@@ -79,8 +79,7 @@ abstract class Model {
 abstract class VertexModel extends Model {
   override type ElementType = Vertex
 
-  val initialValues: Seq[E]                  = Nil
-  def getInitialValues: Seq[InitialValue[E]] = initialValues.map(iv => InitialValue(this.asInstanceOf[Model.Vertex[E]], iv))
+  val initialValues: Seq[E] = Nil
 
   def create(e: E)(implicit graph: Graph): Vertex
 

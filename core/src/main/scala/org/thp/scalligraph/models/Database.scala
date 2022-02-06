@@ -147,16 +147,17 @@ abstract class BaseDatabase extends Database {
   override def addTransactionListener(listener: Consumer[Status])(implicit graph: Graph): Unit = graph.addTransactionListener(listener)
 
   override def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Try[Unit] =
-    for {
-      _ <- createSchema(schemaObject.modelList ++ extraModels)
-      _ = schemaObject.initialValues.foreach { iv =>
-        tryTransaction { graph =>
-          Try(iv.create()(graph, authContext))
-          Success(())
+    createSchema(schemaObject.modelList ++ extraModels)
+      .map { _ =>
+        schemaObject.modelList.foreach {
+          case model: VertexModel =>
+            tryTransaction { implicit graph =>
+              model.initialValues.foreach(model.create(_))
+              Success(())
+            }
+          case _ => Nil
         }
       }
-      _ <- tryTransaction(graph => schemaObject.init(this)(graph, authContext))
-    } yield ()
 
   override def addSchemaIndexes(schemaObject: Schema): Try[Boolean] = addSchemaIndexes(schemaObject.modelList ++ extraModels)
 

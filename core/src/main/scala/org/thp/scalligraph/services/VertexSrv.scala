@@ -14,6 +14,7 @@ import scala.collection.Iterator
 import scala.util.{Failure, Success, Try}
 
 abstract class VertexSrv[V <: Product](implicit val model: Model.Vertex[V]) extends ElementSrv[V, Vertex] {
+
   override def startTraversal(implicit graph: Graph): Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]] =
     graph.V[V]()(model)
 
