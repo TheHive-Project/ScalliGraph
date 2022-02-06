@@ -150,9 +150,9 @@ abstract class BaseDatabase extends Database {
     createSchema(schemaObject.modelList ++ extraModels)
       .map { _ =>
         schemaObject.modelList.foreach {
-          case model: VertexModel =>
-            tryTransaction { implicit graph =>
-              model.initialValues.foreach(model.create(_))
+          case model: Model.Vertex[_] =>
+            tryTransaction { graph =>
+              model.initialValues.foreach(createVertex(graph, authContext, model, _))
               Success(())
             }
           case _ => Nil
