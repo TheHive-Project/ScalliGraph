@@ -91,7 +91,7 @@ object Operations {
 
 case class Operations private (schemaName: String, operations: Seq[Operation]) {
   lazy val logger: Logger                               = Logger(getClass)
-  val lastVersion: Int                                  = operations.length + 2
+  val lastVersion: Int                                  = operations.length + 1
   private def addOperations(op: Operation*): Operations = copy(operations = operations ++ op)
   def addVertexModel[T](label: String): Operations =
     addOperations(AddVertexModel(label))
