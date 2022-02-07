@@ -8,14 +8,13 @@ import org.apache.tinkerpop.gremlin.structure.Transaction.Status
 import org.apache.tinkerpop.gremlin.structure.{Edge, Element, T, Vertex}
 import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.traversal.Traversal.Identity
-import org.thp.scalligraph.traversal.TraversalOps
-import org.thp.scalligraph.traversal.{Converter, Graph, Traversal}
-import org.thp.scalligraph.{EntityId, InternalError}
+import org.thp.scalligraph.traversal.{Converter, Graph, Traversal, TraversalOps}
+import org.thp.scalligraph.{EntityId, InternalError, RichOptionTry, RichTryOption}
 import play.api.Logger
 
 import java.util.Date
 import java.util.function.Consumer
-import scala.collection.{AbstractIterator, Iterator, TraversableOnce}
+import scala.collection.Iterator
 import scala.util.{Success, Try}
 
 class DatabaseException(message: String = "Violation of database schema", cause: Exception) extends Exception(message, cause)
@@ -85,7 +84,7 @@ trait Database {
   def toId(id: Any): Any
 
   def labelFilter[D, G, C <: Converter[D, G]](label: String, traversal: Traversal[D, G, C]): Traversal[D, G, C]
-  def mapPredicate[T](predicate: P[T]): P[T]
+  def mapPredicate[A](predicate: P[A]): P[A]
   def V[D <: Product](ids: EntityId*)(implicit model: Model.Vertex[D], graph: Graph): Traversal.V[D]
   def V(label: String, ids: EntityId*)(implicit graph: Graph): Traversal[Vertex, Vertex, Converter.Identity[Vertex]]
   def E[D <: Product](ids: EntityId*)(implicit model: Model.Edge[D], graph: Graph): Traversal.E[D]
@@ -96,14 +95,14 @@ trait Database {
       pageSize: Int,
       filter: Traversal.Identity[Vertex] => Traversal.Identity[Vertex]
   )(
-      process: Identity[Vertex] => Try[R]
+      process: Identity[Vertex] => Option[Try[R]]
   ): Iterator[Try[R]]
 
   def pagedTraversalIds[R](
       pageSize: Int,
       filter: Traversal.Identity[Vertex] => Traversal.Identity[Vertex]
   )(
-      process: Seq[EntityId] => R
+      process: Seq[EntityId] => Option[R]
   ): Iterator[R]
 
   val extraModels: Seq[Model]
@@ -150,16 +149,17 @@ abstract class BaseDatabase extends Database with TraversalOps {
   override def addTransactionListener(listener: Consumer[Status])(implicit graph: Graph): Unit = graph.addTransactionListener(listener)
 
   override def createSchemaFrom(schemaObject: Schema)(implicit authContext: AuthContext): Try[Unit] =
-    for {
-      _ <- createSchema(schemaObject.modelList ++ extraModels)
-      _ = schemaObject.initialValues.foreach { iv =>
-        tryTransaction { graph =>
-          Try(iv.create()(graph, authContext))
-          Success(())
+    createSchema(schemaObject.modelList ++ extraModels)
+      .map { _ =>
+        schemaObject.modelList.foreach {
+          case model: Model.Vertex[_] =>
+            tryTransaction { graph =>
+              model.initialValues.foreach(createVertex(graph, authContext, model, _))
+              Success(())
+            }
+          case _ => Nil
         }
       }
-      _ <- tryTransaction(graph => schemaObject.init(this)(graph, authContext))
-    } yield ()
 
   override def addSchemaIndexes(schemaObject: Schema): Try[Boolean] = addSchemaIndexes(schemaObject.modelList ++ extraModels)
 
@@ -215,7 +215,7 @@ abstract class BaseDatabase extends Database with TraversalOps {
   override val binaryModel: Model.Vertex[Binary]       = Binary.model
   def labelFilter[D, G <: Element, C <: Converter[D, G]](label: String): Traversal[D, G, C] => Traversal[D, G, C] =
     _.onRaw(_.hasLabel(label))
-  override def mapPredicate[T](predicate: P[T]): P[T] = predicate
+  override def mapPredicate[A](predicate: P[A]): P[A] = predicate
   override def toId(id: Any): Any                     = id
 
   override val extraModels: Seq[Model] = Seq(binaryModel, binaryLinkModel)
@@ -224,51 +224,25 @@ abstract class BaseDatabase extends Database with TraversalOps {
       pageSize: Int,
       filter: Traversal.Identity[Vertex] => Traversal.Identity[Vertex]
   )(
-      process: Identity[Vertex] => Try[R]
+      process: Identity[Vertex] => Option[Try[R]]
   ): Iterator[Try[R]] =
     pagedTraversalIds(pageSize, filter) { ids =>
       tryTransaction { implicit graph =>
-        process(graph.VV(ids: _*))
-      }
+        process(graph.VV(ids: _*)).flip
+      }.flip
     }
-
-  final private class UnfoldIterator[A, S](init: Option[S])(f: Option[S] => Option[(A, S)]) extends AbstractIterator[A] {
-    private[this] var state: Option[S]           = init
-    private[this] var nextResult: Option[(A, S)] = null
-
-    override def hasNext: Boolean = {
-      if (nextResult eq null) {
-        nextResult = {
-          val res = f(state)
-          if (res eq null) throw new NullPointerException("null during unfold")
-          res
-        }
-        state = null.asInstanceOf[Option[S]] // allow GC
-      }
-      nextResult.isDefined
-    }
-
-    override def next(): A =
-      if (hasNext) {
-        val (value, newState) = nextResult.get
-        state = Some(newState)
-        nextResult = null
-        value
-      } else Iterator.empty.next()
-  }
 
   override def pagedTraversalIds[R](
       pageSize: Int,
       filter: Traversal.Identity[Vertex] => Traversal.Identity[Vertex]
   )(
-      process: Seq[EntityId] => R
+      process: Seq[EntityId] => Option[R]
   ): Iterator[R] = {
     require(pageSize > 1)
-    def unfold[A, B](init: Option[A])(f: Option[A] => Option[(B, A)]) = new UnfoldIterator(init)(f)
     def getFirstPage(count: Int)(implicit graph: Graph): Seq[EntityId] =
       filter(graph.VV())
         .sort(_.by("_createdAt", Order.desc))
-        .limit(count)
+        .limit(count.toLong)
         ._id
         .toSeq
     def getPage(date: Date, excludeIds: Seq[EntityId], count: Int)(implicit graph: Graph): Seq[EntityId] =
@@ -276,7 +250,7 @@ abstract class BaseDatabase extends Database with TraversalOps {
         .unsafeHas("_createdAt", P.lte(date))
         .has(T.id, P.without(excludeIds.map(idMapping.reverse): _*))
         .sort(_.by("_createdAt", Order.desc))
-        .limit(count)
+        .limit(count.toLong)
         ._id
         .toSeq
     def getPageOfDate(date: Date, excludeIds: Seq[EntityId])(implicit graph: Graph): Seq[EntityId] =
@@ -287,32 +261,38 @@ abstract class BaseDatabase extends Database with TraversalOps {
         .toSeq
     def getDate(id: EntityId)(implicit graph: Graph): Date = graph.VV(id).property("_createdAt", UMapping.date).head
 
-    // Iterator.unfold[(Date, Seq[String]), TraversableOnce[R]](None) { refDate =>
-    unfold[(Date, Seq[EntityId]), TraversableOnce[R]](None) { state =>
-      roTransaction { implicit graph =>
-        val ids = state.fold(getFirstPage(pageSize))(s => getPage(s._1, s._2, pageSize))
+    Iterator
+      .unfold[IterableOnce[R], Option[(Date, Seq[EntityId])]](None) { state =>
+        roTransaction { implicit graph =>
+          val ids = state.fold(getFirstPage(pageSize))(s => getPage(s._1, s._2, pageSize))
 
-        if (ids.isEmpty) None
-        else {
-          val lastId   = ids.last
-          val lastDate = getDate(lastId)
-          if (ids.size > 1 && lastDate == getDate(ids.head))
-            Some((getPageOfDate(lastDate, state.fold(Seq.empty[EntityId])(_._2)), new Date(lastDate.getTime - 1), Nil))
+          if (ids.isEmpty) None
           else {
-            val reverseIds = ids.reverseIterator
-            reverseIds.next()
-            val sameDateIds = reverseIds.takeWhile(getDate(_) == lastDate).toVector :+ lastId
-            Some((ids, lastDate, sameDateIds))
+            val lastId   = ids.last
+            val lastDate = getDate(lastId)
+            if (ids.size > 1 && lastDate == getDate(ids.head))
+              Some((getPageOfDate(lastDate, state.fold(Seq.empty[EntityId])(_._2)), new Date(lastDate.getTime - 1), Seq.empty))
+            else {
+              val reverseIds = ids.reverseIterator
+              reverseIds.next()
+              val sameDateIds = reverseIds.takeWhile(getDate(_) == lastDate).toVector :+ lastId
+              Some((ids, lastDate, sameDateIds))
+            }
           }
+        }.flatMap {
+          case (ids, lastDate, sameDateIds) =>
+            if (ids.size <= pageSize)
+              process(ids).map { r =>
+                (Seq(r), Some((lastDate, sameDateIds)))
+              }
+            else
+              ids
+                .grouped(pageSize)
+                .foldLeft[Option[List[R]]](Some(Nil))((a, i) => a.flatMap(r => process(i).map(_ :: r)))
+                .map(r => (r, Some((new Date(lastDate.getTime - 1), sameDateIds))))
         }
-      }.map {
-        case (ids, lastDate, sameDateIds) =>
-          if (ids.size <= pageSize)
-            (Seq(process(ids)), (lastDate, sameDateIds))
-          else
-            (ids.grouped(pageSize).map(process), (lastDate, sameDateIds))
       }
-    }.flatten
+      .flatten
   }
 }
 

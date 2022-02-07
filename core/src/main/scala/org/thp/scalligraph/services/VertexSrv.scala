@@ -5,7 +5,7 @@ import org.thp.scalligraph.auth.AuthContext
 import org.thp.scalligraph.models._
 import org.thp.scalligraph.query.PropertyUpdater
 import org.thp.scalligraph.traversal.{Converter, Graph, IdentityConverter, Traversal}
-import org.thp.scalligraph.{EntityId, EntityIdOrName, NotFoundError}
+import org.thp.scalligraph.{EntityId, EntityIdOrName, NotFoundError, RichOptionTry, RichTryOption}
 import play.api.libs.json.JsObject
 
 import java.util.Date
@@ -13,19 +13,20 @@ import scala.collection.Iterator
 import scala.util.{Failure, Success, Try}
 
 abstract class VertexSrv[V <: Product](implicit val model: Model.Vertex[V]) extends ElementSrv[V, Vertex] {
+
   override def startTraversal(implicit graph: Graph): Traversal[V with Entity, Vertex, Converter[V with Entity, Vertex]] =
     graph.V[V]()(model)
 
   def pagedTraversal[R](db: Database, pageSize: Int, filter: Traversal.V[V] => Traversal.V[V] = identity)(
-      process: Traversal.V[V] => Try[R]
+      process: Traversal.V[V] => Option[Try[R]]
   ): Iterator[Try[R]] =
     pagedTraversalIds(db, pageSize, filter) { ids =>
       db.tryTransaction { implicit graph =>
-        process(getByIds(ids: _*))
-      }
+        process(getByIds(ids: _*)).flip
+      }.flip
     }
   def pagedTraversalIds[R](db: Database, pageSize: Int, filter: Traversal.V[V] => Traversal.V[V] = identity)(
-      process: Seq[EntityId] => R
+      process: Seq[EntityId] => Option[R]
   ): Iterator[R] =
     db.pagedTraversalIds[R](
       pageSize,

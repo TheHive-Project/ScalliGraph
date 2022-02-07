@@ -8,7 +8,6 @@ import org.apache.tinkerpop.gremlin.structure._
 import org.thp.scalligraph.`macro`.TraversalMacro
 import org.thp.scalligraph.controllers.Renderer
 import org.thp.scalligraph.models._
-import org.thp.scalligraph.traversal.Converter.CMap
 import org.thp.scalligraph.utils.Retry
 import org.thp.scalligraph.{AuthorizationError, EntityId, InternalError, NotFoundError}
 import play.api.Logger
@@ -162,6 +161,9 @@ trait TraversalOps extends TraversalPrinter {
       ()
     }
 
+    def drop(): Traversal[D, G, C] =
+      traversal.onRaw(_.drop())
+
     def richPage[DD: Renderer, GG, CC <: Converter[DD, GG]](from: Long, to: Long, withTotal: Boolean, limitedCountThreshold: Long)(
         f: Traversal[D, G, C] => Traversal[DD, GG, CC]
     ): IteratorOutput = {
@@ -262,7 +264,7 @@ trait TraversalOps extends TraversalPrinter {
 
     def groupCount[KD, KG, KC <: Converter[KD, KG]](
         keysBy: GenericBySelector[D, G, C] => ByResult[G, KD, KG, KC]
-    ): Traversal[Map[KD, Long], JMap[KG, JLong], CMap[KD, Long, KG, JLong, KC, Converter[Long, JLong]]] = {
+    ): Traversal[Map[KD, Long], JMap[KG, JLong], Converter.CMap[KD, Long, KG, JLong, KC, Converter[Long, JLong]]] = {
       val keyByResult = keysBy(genericBySelector)
       traversal.onRawMap[Map[KD, Long], JMap[KG, JLong], Converter.CMap[KD, Long, KG, JLong, KC, Converter[Long, JLong]]](t =>
         keyByResult(t.groupCount.asInstanceOf[GraphTraversal[_, G]]).asInstanceOf[GraphTraversal[_, JMap[KG, JLong]]]
@@ -288,15 +290,16 @@ trait TraversalOps extends TraversalPrinter {
 
     def `match`(
         elements: (MatchElementBuilder.type => MatchElement)*
-    ): Traversal[Map[String, Any], JMap[String, Any], CMap[String, Any, String, Any, IdentityConverter[String], IdentityConverter[Any]]] =
-      traversal.onRawMap[Map[String, Any], JMap[String, Any], CMap[String, Any, String, Any, IdentityConverter[String], IdentityConverter[Any]]](
-        _.`match`(elements.map(_.apply(MatchElementBuilder).traversal): _*)
-      )(
-        Converter.cmap[String, Any, String, Any, IdentityConverter[String], IdentityConverter[Any]](
-          Converter.identity[String],
-          Converter.identity[Any]
+    ): Traversal[Map[String, Any], JMap[String, Any], Converter.CMap[String, Any, String, Any, IdentityConverter[String], IdentityConverter[Any]]] =
+      traversal
+        .onRawMap[Map[String, Any], JMap[String, Any], Converter.CMap[String, Any, String, Any, IdentityConverter[String], IdentityConverter[Any]]](
+          _.`match`(elements.map(_.apply(MatchElementBuilder).traversal): _*)
+        )(
+          Converter.cmap[String, Any, String, Any, IdentityConverter[String], IdentityConverter[Any]](
+            Converter.identity[String],
+            Converter.identity[Any]
+          )
         )
-      )
 
     def select[DD, GG, CC <: Converter[DD, GG]](label: StepLabel[DD, GG, CC]): Traversal[DD, GG, CC] =
       traversal.onRawMap[DD, GG, CC](_.select(label.name).asInstanceOf[GraphTraversal[DD, GG]])(label.converter)
@@ -516,7 +519,7 @@ trait TraversalOps extends TraversalPrinter {
             }
 
           override def updated[V1 >: Seq[Any]](key: String, value: V1): Map[String, V1] = scalaMap.updated(key, value)
-          override def iterator: Iterator[(String, Seq[Any])]                           = scalaMap.toIterator
+          override def iterator: Iterator[(String, Seq[Any])]                           = scalaMap.iterator
           override def removed(key: String): Map[String, Seq[Any]]                      = scalaMap.removed(key)
           override def get(key: String): Option[Seq[Any]]                               = Try(m.get(key).asInstanceOf[JList[Any]].asScala.toSeq).toOption
         }

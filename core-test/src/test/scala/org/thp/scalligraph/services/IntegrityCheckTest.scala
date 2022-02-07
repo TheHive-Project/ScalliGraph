@@ -2,14 +2,15 @@ package org.thp.scalligraph.services
 
 import org.apache.tinkerpop.gremlin.structure.Vertex
 import org.specs2.specification.core.Fragments
-import org.thp.scalligraph.{EntityId, EntityName}
 import org.thp.scalligraph.auth.{AuthContext, AuthContextImpl, UserSrv}
-import org.thp.scalligraph.models.{ModernOps, _}
-import org.thp.scalligraph.traversal.{Converter, Graph, ProjectionBuilder}
+import org.thp.scalligraph.models._
+import org.thp.scalligraph.traversal.{Converter, Graph, ProjectionBuilder, Traversal}
+import org.thp.scalligraph.{EntityId, EntityName}
 import play.api.libs.logback.LogbackLoggerConfigurator
 import play.api.test.PlaySpecification
 import play.api.{Configuration, Environment}
 
+import scala.concurrent.duration.DurationInt
 import scala.util.{Success, Try}
 
 class IntegrityCheckTest extends PlaySpecification with ModernOps {
@@ -33,22 +34,18 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
             .map(_ => lop)
         }.get
 
-        val integrityCheckOps: IntegrityCheckOps[Software] = new IntegrityCheckOps[Software] {
+        val dedupCheck: DedupCheck[Software] = new DedupCheck[Software] {
           override val db: Database         = database
           override val service: SoftwareSrv = softwareSrv
-
-          override def resolve(entities: Seq[Software with Entity])(implicit graph: Graph): Try[Unit] = Success(())
-
-          override def globalCheck(): Map[String, Int] = Map.empty
         }
-        val duplicates = integrityCheckOps.getDuplicates(Seq("name"))
+        val duplicates = dedupCheck.getDuplicates(Seq("name"), KillSwitch.alwaysOn)
         duplicates must have size 1
         duplicates.head.map(s => s.name -> s.lang) must contain(exactly("lop" -> "java", "lop" -> "asm"))
         database.tryTransaction { implicit graph =>
           EntitySelector.lastCreatedEntity(duplicates.head).foreach {
             case (lastCreated, others) =>
               println(s"copy edge from ${others.map(v => s"$v(${v._id})").mkString(", ")} to $lastCreated(${lastCreated._id})")
-              others.foreach(integrityCheckOps.copyEdge(_, lastCreated))
+              others.foreach(dedupCheck.copyEdge(_, lastCreated))
           }
           Success(())
         }
@@ -307,28 +304,21 @@ class IntegrityCheckTest extends PlaySpecification with ModernOps {
         Vertex,
         Converter[B with Entity, Vertex]
       ]
-  )(check: Graph => IntegrityCheckOps[B] => D => Map[String, Int]): Map[String, Int] = {
-    val ic = new IntegrityCheckOps[B] {
-      override val db: Database                                                            = database
-      override val service: VertexSrv[B]                                                   = new BSrv
-      override def resolve(entities: Seq[B with Entity])(implicit graph: Graph): Try[Unit] = Success(())
+  )(check: Graph => IntegrityCheckOps[B] => D => Map[String, Long]): Map[String, Long] = {
+    val ic = new GlobalCheck[B] with IntegrityCheckOps[B] {
+      override val db: Database          = database
+      override val service: VertexSrv[B] = new BSrv
 
-      override def globalCheck(): Map[String, Int] =
-        db.tryTransaction { implicit graph =>
-          Try {
-            service
-              .startTraversal
-              .project(proj)
-              .toIterator
-              .map(check(graph)(this))
-              .reduceOption(_ <+> _)
-              .getOrElse(Map.empty)
-          }
-        }.getOrElse(Map("globalFailure" -> 1))
+      override def globalCheck(traversal: Traversal.V[ENTITY])(implicit graph: Graph): Map[String, Long] =
+        traversal
+          .project(proj)
+          .toIterator
+          .map(check(graph)(this))
+          .reduceOption(_ <+> _)
+          .getOrElse(Map.empty)
     }
-    val result = ic.globalCheck()
-    ic.globalCheck() must beEqualTo(Map.empty)
+    val result = ic.runGlobalCheck(5.minutes, KillSwitch.alwaysOn) - "duration"
+    (ic.runGlobalCheck(5.minutes, KillSwitch.alwaysOn) - "duration") must beEqualTo(Map.empty)
     result
   }
-
 }

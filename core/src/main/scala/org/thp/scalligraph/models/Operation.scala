@@ -3,8 +3,7 @@ package org.thp.scalligraph.models
 import org.apache.tinkerpop.gremlin.structure.{Edge, Vertex}
 import org.thp.scalligraph.InternalError
 import org.thp.scalligraph.auth.AuthContext
-import org.thp.scalligraph.traversal.TraversalOps
-import org.thp.scalligraph.traversal.{Converter, Traversal}
+import org.thp.scalligraph.traversal.{Converter, Traversal, TraversalOps}
 import play.api.Logger
 
 import scala.reflect.{classTag, ClassTag}
@@ -52,7 +51,7 @@ case class UpdateGraphVertices(
 
   override def execute(db: Database, logger: String => Unit): Try[Unit] =
     db
-      .pagedTraversal(pageSize.toInt, db.labelFilter(model, _))(update)
+      .pagedTraversal(pageSize.toInt, db.labelFilter(model, _))(update.andThen(Some(_)))
       .zipWithIndex
       .map {
         case (t, i) =>
@@ -134,7 +133,7 @@ object Operations {
 
 case class Operations private (schemaName: String, operations: Seq[Operation]) extends TraversalOps {
   lazy val logger: Logger                               = Logger(getClass)
-  val lastVersion: Int                                  = operations.length + 2
+  val lastVersion: Int                                  = operations.length + 1
   private def addOperations(op: Operation*): Operations = copy(operations = operations ++ op)
   def addVertexModel(label: String): Operations =
     addOperations(AddVertexModel(label))
