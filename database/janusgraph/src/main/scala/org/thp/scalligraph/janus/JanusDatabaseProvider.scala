@@ -33,7 +33,7 @@ class JanusDatabaseProvider @Inject() (
     implicit val scheduler: Scheduler,
     implicit val ec: ExecutionContext
 ) extends Provider[Database] {
-  lazy val logger: Logger                         = Logger("org.thp.scalligraph.models.Database")
+  val logger: Logger                              = Logger("org.thp.scalligraph.models.Database")
   lazy val janusClusterManager: ActorRef[Command] = JanusClusterManagerActor.getClusterManagerActor(system)
 
   def dropOtherConnections(db: JanusGraph): Unit = {
