@@ -56,6 +56,12 @@ dependencyOverrides in ThisBuild ++= Seq(
   "io.netty" % "netty-all" % "4.0.56.Final",
   logbackClassic
 )
+val securityUpdates = Seq(
+  "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.12.6",
+  "com.fasterxml.jackson.core"    % "jackson-databind"     % "2.12.6.1",
+  "org.yaml"                      % "snakeyaml"            % "1.30"
+)
+dependencyOverrides in ThisBuild ++= securityUpdates
 
 lazy val scalligraph = (project in file("."))
   .dependsOn(core, /*graphql, */ janus /* , orientdb , neo4j, coreTest*/ )
