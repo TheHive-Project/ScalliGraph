@@ -103,6 +103,7 @@ class Entrypoint @Inject() (
         .andThen(authSrv.actionFunction(AuthenticationFailureActionFunction))
         .async { request =>
           DiagnosticContext.withRequest(request) {
+            logger.info(s"${request.remoteAddress} ${request.method} ${request.uri}")
             fieldsParser(Field(request))
               .fold(v => block(request.map(_ => Record(v))), e => errorHandler.onServerError(request, AttributeCheckingError(e.toSeq)))
           }

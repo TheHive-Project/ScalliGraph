@@ -87,7 +87,8 @@ object YesFilter extends InputQuery[Traversal.Unk, Traversal.Unk] {
       traversalType: ru.Type,
       traversal: Traversal.Unk,
       authContext: AuthContext
-  ): Traversal.Unk = traversal
+  ): Traversal.Unk              = traversal
+  override def toString: String = "YesFilter"
 }
 
 class IdFilter(id: EntityId) extends InputQuery[Traversal.Unk, Traversal.Unk] {

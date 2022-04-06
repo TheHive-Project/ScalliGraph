@@ -32,7 +32,8 @@ abstract class QueryExecutor { executor =>
 
   def versionCheck(v: Int): Boolean = version._1 <= v && v <= version._2
 
-  final def execute(query: Query, authContext: AuthContext): Try[Result] =
+  final def execute(query: Query, authContext: AuthContext): Try[Result] = {
+    logger.debug(s"Execute query $query")
     getRenderer(query.toType(graphType), authContext)
       .map {
         case renderer: StreamRenderer[Any] =>
@@ -48,11 +49,13 @@ abstract class QueryExecutor { executor =>
             Results.Ok(renderer.toJson(value))
           }
       }
+  }
 
 //  final def execute(q: Query)(implicit authGraph: AuthGraph): Try[Output[_]] =
 //    execute(q, authGraph.graph, authGraph.auth)
 
   final def execute(q: Query, graph: Graph, authContext: AuthContext): Try[Output[_]] = {
+    logger.debug(s"Execute query $q")
     val outputType  = q.toType(graphType)
     val outputValue = q((), graphType, graph, authContext)
     getRenderer(outputType, authContext).map(_.toOutput(outputValue))
