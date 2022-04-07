@@ -31,7 +31,7 @@ object Dependencies {
   lazy val apacheConfiguration     = "commons-configuration"       % "commons-configuration"              % "1.10"
   lazy val chimney                 = "io.scalaland"               %% "chimney"                            % "0.6.1"
   lazy val reflections             = "org.reflections"             % "reflections"                        % "0.9.12"
-  lazy val hadoopClient            = "org.apache.hadoop"           % "hadoop-client"                      % "3.3.1" exclude ("log4j", "log4j")
+  lazy val hadoopClient            = "org.apache.hadoop"           % "hadoop-client"                      % "3.3.2" exclude ("log4j", "log4j")
   lazy val zip4j                   = "net.lingala.zip4j"           % "zip4j"                              % "2.9.0"
   lazy val alpakka                 = "com.lightbend.akka"         %% "akka-stream-alpakka-json-streaming" % "3.0.3"
   lazy val handlebars              = "com.github.jknack"           % "handlebars"                         % "4.2.0"
@@ -52,6 +52,7 @@ object Dependencies {
   lazy val playRefined             = "be.venneborg"               %% "play27-refined"                     % "0.6.0"
   lazy val passay                  = "org.passay"                  % "passay"                             % "1.6.1"
   lazy val bloomFilter             = "com.github.alexandrnikitin" %% "bloom-filter"                       % "0.13.1"
+  lazy val quartzScheduler         = "org.quartz-scheduler"        % "quartz"                             % "2.3.2"
 
   def scalaReflect(scalaVersion: String)  = "org.scala-lang" % "scala-reflect"  % scalaVersion
   def scalaCompiler(scalaVersion: String) = "org.scala-lang" % "scala-compiler" % scalaVersion

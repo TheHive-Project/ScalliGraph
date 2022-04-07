@@ -55,6 +55,12 @@ val noPackageSettings = Seq(
   Rpm / packageBin := file(""),
   publish / skip := true
 )
+val securityUpdates = Seq(
+  "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.12.6",
+  "com.fasterxml.jackson.core"    % "jackson-databind"     % "2.12.6.1",
+  "org.yaml"                      % "snakeyaml"            % "1.30"
+)
+dependencyOverrides in ThisBuild ++= securityUpdates
 
 lazy val scalligraphRoot = (project in file("."))
 //  .dependsOn(core, /*graphql, */ janus /* , orientdb , neo4j, coreTest*/ )

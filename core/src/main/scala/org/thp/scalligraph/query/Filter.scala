@@ -89,6 +89,7 @@ case class IdFilter(id: EntityId) extends InputFilter with TraversalOps {
   ): Traversal.Unk =
     if (isNegate) traversal.cast[Traversal.UnkD, Element].hasNotId(id).asInstanceOf[Traversal.Unk]
     else traversal.cast[Traversal.UnkD, Element].hasId(id).asInstanceOf[Traversal.Unk]
+  override def toString: String = if (isNegate) "NoFilter" else "YesFilter"
 }
 
 trait InputFilter extends InputQuery[Traversal.Unk, Traversal.Unk] {

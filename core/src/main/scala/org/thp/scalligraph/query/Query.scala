@@ -23,12 +23,13 @@ abstract class ParamQuery[P: ru.TypeTag] { q =>
 
   def toQuery(param: P): Query =
     new Query {
-      override val name: String                                                                        = q.name
+      override val name: String                                                                        = q.name + "(" + param + ")"
       override def checkFrom(t: ru.Type): Boolean                                                      = q.checkFrom(t)
       override def toType(t: ru.Type): ru.Type                                                         = q.toType(t)
       override def apply(unitParam: Unit, fromType: ru.Type, from: Any, authContext: AuthContext): Any = q(param, fromType, from, authContext)
     }
   def apply(param: P, fromType: ru.Type, from: Any, authContext: AuthContext): Any
+  override def toString: String = name
 }
 
 abstract class Query extends ParamQuery[Unit] { q =>

@@ -2,10 +2,10 @@ package org.thp.scalligraph
 
 import java.util.concurrent.TimeUnit
 import java.util.{Map => JMap}
-
 import akka.dispatch._
 import com.typesafe.config.Config
 import org.slf4j.MDC
+import org.thp.scalligraph.auth.AuthContext
 import play.api.mvc.RequestHeader
 
 import scala.concurrent.ExecutionContext
@@ -97,6 +97,12 @@ object DiagnosticContext {
   def withRequest[T](requestHeader: RequestHeader)(block: => T): T = {
     assert(requestHeader != null, "RequestHeader must not be null")
     saveDiagnosticContext {
+      requestHeader match {
+        case authContext: AuthContext =>
+          MDC.put("userId", authContext.userId)
+          MDC.put("organisation", authContext.organisation.toString)
+        case _ => ()
+      }
       MDC.put("request", f"${requestHeader.id}%08x")
       MDC.remove("tx")
       block
