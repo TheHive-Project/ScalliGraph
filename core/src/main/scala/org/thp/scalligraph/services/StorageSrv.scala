@@ -4,9 +4,10 @@ import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.Materializer
 import akka.stream.alpakka.s3.scaladsl.S3
-import akka.stream.alpakka.s3.{S3Attributes, S3Ext, S3Settings}
+import akka.stream.alpakka.s3.{S3Attributes, S3Settings}
 import akka.stream.scaladsl.{Sink, Source, StreamConverters}
 import akka.util.ByteString
+import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.hadoop.conf.{Configuration => HadoopConfig}
 import org.apache.hadoop.fs.{FileAlreadyExistsException => HadoopFileAlreadyExistsException, FileSystem => HDFileSystem, Path => HDPath}
 import org.apache.hadoop.io.IOUtils
@@ -16,15 +17,13 @@ import org.thp.scalligraph.models._
 import org.thp.scalligraph.traversal.TraversalOps._
 import org.thp.scalligraph.traversal.{Graph, Traversal}
 import play.api.{Configuration, Logger}
-import software.amazon.awssdk.auth.credentials.{AwsCredentials, AwsCredentialsProvider}
-import software.amazon.awssdk.regions.Region
-import software.amazon.awssdk.regions.providers.AwsRegionProvider
 
 import java.io.{ByteArrayInputStream, InputStream}
 import java.net.URI
 import java.nio.file._
 import java.util.Base64
 import javax.inject.{Inject, Singleton}
+import scala.collection.JavaConverters._
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import scala.concurrent.{Await, ExecutionContext}
 import scala.util.{Success, Try}
@@ -247,34 +246,71 @@ class DatabaseStorageSrv(chunkSize: Int, userSrv: UserSrv, implicit val db: Data
 @Singleton
 class S3StorageSrv @Inject() (configuration: Configuration, system: ActorSystem, implicit val ec: ExecutionContext, implicit val mat: Materializer)
     extends StorageSrv {
+  private val logger                       = Logger(getClass)
   private val bucketName: String           = configuration.get[String]("storage.s3.bucket")
   private val readTimeout: FiniteDuration  = configuration.get[FiniteDuration]("storage.s3.readTimeout")
   private val writeTimeout: FiniteDuration = configuration.get[FiniteDuration]("storage.s3.writeTimeout")
   private val chunkSize: Int               = configuration.underlying.getBytes("storage.s3.chunkSize").toInt
-  private val endpoint: String             = configuration.get[String]("storage.s3.endpoint")
-  private val region: String               = configuration.get[String]("storage.s3.region")
-  private val accessKey: String            = configuration.get[String]("storage.s3.accessKey")
-  private val secretKey: String            = configuration.get[String]("storage.s3.secretKey")
+  private val baseFolder: String           = configuration.getOptional[String]("storage.s3.folder").getOrElse("")
 
-  private val credentialsProvider: AwsCredentialsProvider = new AwsCredentialsProvider {
-    override def resolveCredentials: AwsCredentials =
-      new AwsCredentials {
-        override def accessKeyId: String     = accessKey
-        override def secretAccessKey: String = secretKey
+  private val settings: S3Settings = {
+    val defaultConfig         = system.settings.config.getConfig(S3Settings.ConfigPath)
+    val deprecatedEndpointKey = "storage.s3.endpoint"
+    val endpointConfig = configuration
+      .getOptional[String](deprecatedEndpointKey)
+      .fold(ConfigFactory.empty()) { endpoint =>
+        val origin = configuration.underlying.getValue(deprecatedEndpointKey).origin
+        logger.warn(s"${origin.description}: $deprecatedEndpointKey is deprecated, use storage.s3.endpoint-url instead")
+        ConfigFactory.parseMap(Map("endpoint-url" -> endpoint).asJava)
       }
-  }
-  private val settings: S3Settings = S3Ext(system)
-    .settings
-    .withEndpointUrl(endpoint)
-    .withCredentialsProvider(credentialsProvider)
-    .withS3RegionProvider(new AwsRegionProvider {
-      override def getRegion: Region = Region.of(region)
-    })
+    val deprecatedRegionKey = "storage.s3.region"
+    val regionConfig = configuration
+      .getOptional[String](deprecatedRegionKey)
+      .fold(ConfigFactory.empty()) { region =>
+        val origin = configuration.underlying.getValue(deprecatedRegionKey).origin
+        logger.warn(
+          s"${origin.description}: $deprecatedRegionKey is deprecated, set storage.s3.aws.region.provider to `static` and use storage.s3.aws.region.default-region instead"
+        )
+        ConfigFactory.parseMap(Map("aws.region.provider" -> "static", "aws.region.default-region" -> region).asJava)
+      }
+    val deprecatedAccessKey = "storage.s3.accessKey"
+    val accessKeyConfig = configuration
+      .getOptional[String](deprecatedAccessKey)
+      .fold(ConfigFactory.empty()) { accessKey =>
+        val origin = configuration.underlying.getValue(deprecatedAccessKey).origin
+        logger.warn(
+          s"${origin.description}: $deprecatedAccessKey is deprecated, set storage.s3.aws.credentials.provider to `static` and use storage.s3.aws.credentials.access-key-id instead"
+        )
+        ConfigFactory.parseMap(Map("aws.credentials.provider" -> "static", "aws.credentials.access-key-id" -> accessKey).asJava)
+      }
+    val deprecatedSecretKey = "storage.s3.secretKey"
+    val secretKeyConfig = configuration
+      .getOptional[String](deprecatedSecretKey)
+      .fold(ConfigFactory.empty()) { secretKey =>
+        val origin = configuration.underlying.getValue(deprecatedSecretKey).origin
+        logger.warn(
+          s"${origin.description}: $deprecatedSecretKey is deprecated, set storage.s3.aws.credentials.provider to `static` and use storage.s3.aws.credentials.secret-access-key instead"
+        )
+        ConfigFactory.parseMap(Map("aws.credentials.provider" -> "static", "aws.credentials.secret-access-key" -> secretKey).asJava)
+      }
 
-  override def source(folder: String, id: String): Source[ByteString, _] =
-    S3.download(bucketName, s"$folder/$id")
+    S3Settings {
+      configuration
+        .get[Config]("storage.s3")
+        .withFallback(endpointConfig)
+        .withFallback(regionConfig)
+        .withFallback(accessKeyConfig)
+        .withFallback(secretKeyConfig)
+        .withFallback(defaultConfig)
+    }
+  }
+
+  override def source(folder: String, id: String): Source[ByteString, _] = {
+    val filename = s"$baseFolder/$folder/$id"
+    S3.download(bucketName, filename)
       .withAttributes(S3Attributes.settings(settings))
-      .flatMapConcat(_.get._1)
+      .flatMapConcat(_.getOrElse(throw new NoSuchFileException(filename))._1)
+  }
 
   override def loadBinary(folder: String, id: String): InputStream =
     source(folder, id)
@@ -287,7 +323,7 @@ class S3StorageSrv @Inject() (configuration: Configuration, system: ActorSystem,
       Await.result(
         StreamConverters
           .fromInputStream(() => is, chunkSize)
-          .runWith(S3.multipartUpload(bucketName, s"$folder/$id").withAttributes(S3Attributes.settings(settings))),
+          .runWith(S3.multipartUpload(bucketName, s"$baseFolder/$folder/$id").withAttributes(S3Attributes.settings(settings))),
         writeTimeout
       )
       ()
@@ -296,7 +332,7 @@ class S3StorageSrv @Inject() (configuration: Configuration, system: ActorSystem,
   override def exists(folder: String, id: String): Boolean =
     Try {
       Await.result(
-        S3.getObjectMetadata(bucketName, s"$folder/$id")
+        S3.getObjectMetadata(bucketName, s"$baseFolder/$folder/$id")
           .withAttributes(S3Attributes.settings(settings))
           .runWith(Sink.head)
           .map(_.isDefined),
@@ -307,7 +343,7 @@ class S3StorageSrv @Inject() (configuration: Configuration, system: ActorSystem,
   override def delete(folder: String, id: String)(implicit graph: Graph): Try[Unit] =
     Try {
       Await.ready(
-        S3.deleteObject(bucketName, s"$folder/$id")
+        S3.deleteObject(bucketName, s"$baseFolder/$folder/$id")
           .withAttributes(S3Attributes.settings(settings))
           .runWith(Sink.ignore),
         readTimeout
@@ -319,7 +355,7 @@ class S3StorageSrv @Inject() (configuration: Configuration, system: ActorSystem,
     Try {
       Await
         .result(
-          S3.getObjectMetadata(bucketName, s"folder/$id")
+          S3.getObjectMetadata(bucketName, s"$baseFolder/$folder/$id")
             .withAttributes(S3Attributes.settings(settings))
             .runWith(Sink.head),
           readTimeout
