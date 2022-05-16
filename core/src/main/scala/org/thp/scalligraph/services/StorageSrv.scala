@@ -23,6 +23,7 @@ import java.nio.file._
 import java.util.Base64
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import scala.concurrent.{Await, ExecutionContext}
+import scala.jdk.CollectionConverters._
 import scala.util.{Success, Try}
 
 trait StorageSrv {
