@@ -305,8 +305,10 @@ class S3StorageSrv @Inject() (configuration: Configuration, system: ActorSystem,
     }
   }
 
+  private def path(folder: String, id: String): String = s"$baseFolder/$folder/$id".replaceAll("/+", "/").replaceFirst("^/", "")
+
   override def source(folder: String, id: String): Source[ByteString, _] = {
-    val filename = s"$baseFolder/$folder/$id"
+    val filename = path(folder, id)
     S3.download(bucketName, filename)
       .withAttributes(S3Attributes.settings(settings))
       .flatMapConcat(_.getOrElse(throw new NoSuchFileException(filename))._1)
@@ -323,7 +325,7 @@ class S3StorageSrv @Inject() (configuration: Configuration, system: ActorSystem,
       Await.result(
         StreamConverters
           .fromInputStream(() => is, chunkSize)
-          .runWith(S3.multipartUpload(bucketName, s"$baseFolder/$folder/$id").withAttributes(S3Attributes.settings(settings))),
+          .runWith(S3.multipartUpload(bucketName, path(folder, id)).withAttributes(S3Attributes.settings(settings))),
         writeTimeout
       )
       ()
@@ -332,7 +334,7 @@ class S3StorageSrv @Inject() (configuration: Configuration, system: ActorSystem,
   override def exists(folder: String, id: String): Boolean =
     Try {
       Await.result(
-        S3.getObjectMetadata(bucketName, s"$baseFolder/$folder/$id")
+        S3.getObjectMetadata(bucketName, path(folder, id))
           .withAttributes(S3Attributes.settings(settings))
           .runWith(Sink.head)
           .map(_.isDefined),
@@ -343,7 +345,7 @@ class S3StorageSrv @Inject() (configuration: Configuration, system: ActorSystem,
   override def delete(folder: String, id: String)(implicit graph: Graph): Try[Unit] =
     Try {
       Await.ready(
-        S3.deleteObject(bucketName, s"$baseFolder/$folder/$id")
+        S3.deleteObject(bucketName, path(folder, id))
           .withAttributes(S3Attributes.settings(settings))
           .runWith(Sink.ignore),
         readTimeout
@@ -355,7 +357,7 @@ class S3StorageSrv @Inject() (configuration: Configuration, system: ActorSystem,
     Try {
       Await
         .result(
-          S3.getObjectMetadata(bucketName, s"$baseFolder/$folder/$id")
+          S3.getObjectMetadata(bucketName, path(folder, id))
             .withAttributes(S3Attributes.settings(settings))
             .runWith(Sink.head),
           readTimeout
