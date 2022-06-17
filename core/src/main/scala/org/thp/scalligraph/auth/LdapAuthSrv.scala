@@ -51,25 +51,27 @@ class LdapAuthSrv(ldapConfig: LdapConfig, userSrv: UserSrv) extends AuthSrv {
     }
 
   private def connect[A](username: String, password: String)(f: InitialDirContext => Try[A]): Try[A] =
-    ldapConfig.hosts.foldLeft[Try[A]](Failure(noLdapServerAvailableException)) {
-      case (Failure(e), host) if !isFatal(e) =>
-        val protocol = if (ldapConfig.useSSL) "ldaps://" else "ldap://"
-        val env      = new util.Hashtable[Any, Any]
-        env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.ldap.LdapCtxFactory")
-        env.put(Context.PROVIDER_URL, protocol + host)
-        env.put(Context.SECURITY_AUTHENTICATION, "simple")
-        env.put(Context.SECURITY_PRINCIPAL, username)
-        env.put(Context.SECURITY_CREDENTIALS, password)
-        Try {
-          val ctx = new InitialDirContext(env)
-          try f(ctx)
-          finally ctx.close()
-        }.flatten
-      case (failure @ Failure(e), _) =>
-        logger.debug("LDAP connect error", e)
-        failure
-      case (r, _) => r
-    }
+    if (password.isEmpty) Failure(AuthenticationError("Authentication failure"))
+    else
+      ldapConfig.hosts.foldLeft[Try[A]](Failure(noLdapServerAvailableException)) {
+        case (Failure(e), host) if !isFatal(e) =>
+          val protocol = if (ldapConfig.useSSL) "ldaps://" else "ldap://"
+          val env      = new util.Hashtable[Any, Any]
+          env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.ldap.LdapCtxFactory")
+          env.put(Context.PROVIDER_URL, protocol + host)
+          env.put(Context.SECURITY_AUTHENTICATION, "simple")
+          env.put(Context.SECURITY_PRINCIPAL, username)
+          env.put(Context.SECURITY_CREDENTIALS, password)
+          Try {
+            val ctx = new InitialDirContext(env)
+            try f(ctx)
+            finally ctx.close()
+          }.flatten
+        case (failure @ Failure(e), _) =>
+          logger.debug("LDAP connect error", e)
+          failure
+        case (r, _) => r
+      }
 
   private def getUserDN(ctx: InitialDirContext, username: String): Try[String] =
     Try {

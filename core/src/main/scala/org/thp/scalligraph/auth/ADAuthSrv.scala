@@ -1,15 +1,15 @@
 package org.thp.scalligraph.auth
 
-import java.net.ConnectException
-import java.util
-
-import javax.inject.{Inject, Singleton}
-import javax.naming.Context
-import javax.naming.directory._
 import org.thp.scalligraph.{AuthenticationError, AuthorizationError, EntityIdOrName}
 import play.api.mvc.RequestHeader
 import play.api.{Configuration, Logger}
 
+import java.net.ConnectException
+import java.nio.charset.StandardCharsets
+import java.util
+import javax.inject.{Inject, Singleton}
+import javax.naming.Context
+import javax.naming.directory._
 import scala.util.{Failure, Success, Try}
 
 case class ADConfig(dnsDomain: String, winDomain: String, hosts: Seq[String], useSSL: Boolean)
@@ -26,21 +26,24 @@ class ADAuthSrv(adConfig: ADConfig, userSrv: UserSrv) extends AuthSrv {
       .flatMap(_ => userSrv.getAuthContext(request, username, organisation))
       .recoverWith { case t => Failure(AuthenticationError("Authentication failure", t)) }
 
-  override def changePassword(username: String, oldPassword: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] = {
-    val unicodeOldPassword = ("\"" + oldPassword + "\"").getBytes("UTF-16LE")
-    val unicodeNewPassword = ("\"" + newPassword + "\"").getBytes("UTF-16LE")
-    connect(adConfig.winDomain + "\\" + username, oldPassword) { ctx =>
-      getUserDN(ctx, username).map { userDN =>
-        val mods = Array(
-          new ModificationItem(DirContext.REMOVE_ATTRIBUTE, new BasicAttribute("unicodePwd", unicodeOldPassword)),
-          new ModificationItem(DirContext.ADD_ATTRIBUTE, new BasicAttribute("unicodePwd", unicodeNewPassword))
-        )
-        ctx.modifyAttributes(userDN, mods)
+  override def changePassword(username: String, oldPassword: String, newPassword: String)(implicit authContext: AuthContext): Try[Unit] =
+    if (oldPassword.isEmpty || newPassword.isEmpty)
+      Failure(AuthorizationError("Change password failure"))
+    else {
+      val unicodeOldPassword = ("\"" + oldPassword + "\"").getBytes(StandardCharsets.UTF_16LE)
+      val unicodeNewPassword = ("\"" + newPassword + "\"").getBytes(StandardCharsets.UTF_16LE)
+      connect(adConfig.winDomain + "\\" + username, oldPassword) { ctx =>
+        getUserDN(ctx, username).map { userDN =>
+          val mods = Array(
+            new ModificationItem(DirContext.REMOVE_ATTRIBUTE, new BasicAttribute("unicodePwd", unicodeOldPassword)),
+            new ModificationItem(DirContext.ADD_ATTRIBUTE, new BasicAttribute("unicodePwd", unicodeNewPassword))
+          )
+          ctx.modifyAttributes(userDN, mods)
+        }
+      }.recoverWith {
+        case t => Failure(AuthorizationError("Change password failure", t))
       }
-    }.recoverWith {
-      case t => Failure(AuthorizationError("Change password failure", t))
     }
-  }
 
   private val noADServerAvailableException = AuthenticationError("No AD server found")
 
@@ -54,25 +57,27 @@ class ADAuthSrv(adConfig: ADConfig, userSrv: UserSrv) extends AuthSrv {
     }
 
   private def connect[A](username: String, password: String)(f: InitialDirContext => Try[A]): Try[A] =
-    adConfig.hosts.foldLeft[Try[A]](Failure(noADServerAvailableException)) {
-      case (Failure(e), serverName) if !isFatal(e) =>
-        val protocol = if (adConfig.useSSL) "ldaps://" else "ldap://"
-        val env      = new util.Hashtable[Any, Any]
-        env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.ldap.LdapCtxFactory")
-        env.put(Context.PROVIDER_URL, protocol + serverName)
-        env.put(Context.SECURITY_AUTHENTICATION, "simple")
-        env.put(Context.SECURITY_PRINCIPAL, username)
-        env.put(Context.SECURITY_CREDENTIALS, password)
-        Try {
-          val ctx = new InitialDirContext(env)
-          try f(ctx)
-          finally ctx.close()
-        }.flatten
-      case (failure @ Failure(e), _) =>
-        logger.debug("LDAP connect error", e)
-        failure
-      case (r, _) => r
-    }
+    if (password.isEmpty) Failure(AuthenticationError("Authentication failure"))
+    else
+      adConfig.hosts.foldLeft[Try[A]](Failure(noADServerAvailableException)) {
+        case (Failure(e), serverName) if !isFatal(e) =>
+          val protocol = if (adConfig.useSSL) "ldaps://" else "ldap://"
+          val env      = new util.Hashtable[Any, Any]
+          env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.ldap.LdapCtxFactory")
+          env.put(Context.PROVIDER_URL, protocol + serverName)
+          env.put(Context.SECURITY_AUTHENTICATION, "simple")
+          env.put(Context.SECURITY_PRINCIPAL, username)
+          env.put(Context.SECURITY_CREDENTIALS, password)
+          Try {
+            val ctx = new InitialDirContext(env)
+            try f(ctx)
+            finally ctx.close()
+          }.flatten
+        case (failure @ Failure(e), _) =>
+          logger.debug("LDAP connect error", e)
+          failure
+        case (r, _) => r
+      }
 
   def getUserDN(ctx: InitialDirContext, username: String): Try[String] =
     Try {
